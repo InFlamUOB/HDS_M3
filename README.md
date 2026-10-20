@@ -1,5 +1,7 @@
 # HDS MSc · Module 3 — interactive exercise booklet
 
+**Live: <https://inflamuob.github.io/HDS_M3/>**
+
 A Quarto book of machine learning exercises for the Health Data Science MSc,
 organised by teaching day. **Every code cell runs in the reader's browser** —
 R via webR, Python via Pyodide — so students install nothing before the first
@@ -33,8 +35,8 @@ The repository ships a GitHub Actions workflow, `.github/workflows/publish.yml`,
 that renders the student booklet and deploys it to GitHub Pages on every push to
 `main`. It needs no secrets and no R or Python, and it runs in under a minute.
 
-One-time setup: in the repository, **Settings → Pages → Build and deployment →
-Source: GitHub Actions**. After that, adding a day is `git push` and the site
+This is already configured for this repository (Settings → Pages → Build and
+deployment → Source: GitHub Actions); a fresh fork needs that setting once. After that, adding a day is `git push` and the site
 rebuilds itself. The instructor build is deliberately *not* produced in CI — it
 is local-only, so solutions cannot reach the public site.
 
