@@ -1,0 +1,378 @@
+---
+engine: knitr
+---
+
+# Exercise 1.3 — When the patients change {#sec-shift}
+
+**60 minutes · pairs, then plenary**
+
+## Objectives
+
+::: {.objective-list}
+- Evaluate a fixed model on data it was not trained on, without refitting it.
+- Distinguish a change in **who the patients are** from a change in **how the
+  outcome arises**, using evidence from the data rather than the story.
+- Say which of the two a given model can survive, and why.
+- Name the one kind of shift you can detect without ever seeing an outcome.
+:::
+
+## The situation
+
+Your model from @sec-pipeline went into use. Twelve months later three monthly
+extracts arrive from the data warehouse: `extract_A.csv`, `extract_B.csv`,
+`extract_C.csv`, 400 admissions each, same three columns.
+
+Nobody tells you what happened in between. Exactly one of these is true of each
+extract:
+
+| | |
+|---|---|
+| **no shift** | same patients, same relationship. The model should still work. |
+| **covariate shift** | the patients changed — $P(X)$ is different — but the relationship between predictors and outcome, $P(Y \mid X)$, is unchanged. |
+| **covariate and concept shift** | the patients changed *and* the relationship changed. |
+
+: {tbl-colwidths="[28,72]"}
+
+That distinction is the exercise, so be clear before you start. *Covariate
+shift* means you are being asked about different people. *Concept shift* means
+the rules moved: the same patient would now have a different length of stay. A
+model is a frozen claim about $P(Y \mid X)$. When only $P(X)$ moves the claim may
+still be true. When $P(Y \mid X)$ moves it is false, and no amount of data about
+the new patients will tell you so unless you also have their outcomes.
+
+## The model you are testing
+
+Each page of this booklet is a fresh session, so the cell below rebuilds the
+model exactly as you fitted it in @sec-pipeline — same data, same seed. Run it,
+then leave it alone. **Do not refit it on the new extracts.** The whole point is
+that the model is frozen and the world moved.
+
+```{webr}
+#| autorun: true
+library(readr); library(dplyr); library(ggplot2)
+library(parsnip); library(rsample); library(yardstick)
+
+los <- read_csv("data/los_data.csv")
+set.seed(42)
+split   <- initial_split(los, prop = 0.8)
+los_fit <- linear_reg() |> set_engine("lm") |>
+  fit(LOS ~ Age + Severity, data = training(split))
+
+test_mae <- mae(bind_cols(predict(los_fit, testing(split)), testing(split)),
+                truth = LOS, estimate = .pred)$.estimate
+round(test_mae, 2)   # your reference number from Exercise 1.2
+```
+
+## Worked example — extract A
+
+```{webr}
+#| autorun: true
+A <- read_csv("data/extract_A.csv")
+preds_A <- predict(los_fit, new_data = A) |> bind_cols(A)
+mae(preds_A, truth = LOS, estimate = .pred)
+```
+
+::: {.callout-warning}
+## The error that will cost you ten minutes
+`predict()` on a `parsnip` fit wants `new_data =`, with an underscore. Passing
+`newdata =` silently predicts on the training data and returns the wrong number
+of rows.
+:::
+
+## Task 1 — Did performance survive?
+
+Compute the MAE of the frozen model on all three extracts, with the test MAE
+above as the reference. Four numbers, in a table.
+
+::: {.panel-tabset}
+## R
+
+```{webr}
+#| exercise: mae_all_r
+source("checks/checks.R")
+B <- read_csv("data/extract_B.csv")
+C <- read_csv("data/extract_C.csv")
+
+mae_on <- function(d) {
+  mae(bind_cols(predict(los_fit, new_data = ______), d), truth = LOS, estimate = .pred)$.estimate
+}
+c(test = test_mae, A = mae_on(A), B = mae_on(B), C = mae_on(C)) |> round(2)
+```
+
+```{webr}
+#| exercise: mae_all_r
+#| solution: true
+source("checks/checks.R")
+B <- read_csv("data/extract_B.csv")
+C <- read_csv("data/extract_C.csv")
+
+mae_on <- function(d) {
+  mae(bind_cols(predict(los_fit, new_data = d), d), truth = LOS, estimate = .pred)$.estimate
+}
+res <- c(test = test_mae, A = mae_on(A), B = mae_on(B), C = mae_on(C))
+check_metric_range(res[["A"]], 2, 6, "MAE on extract A")
+check_metric_range(res[["C"]], 15, 30, "MAE on extract C")
+round(res, 2)
+```
+
+## Python
+
+```{pyodide}
+#| exercise: mae_all_py
+import pandas as pd, sys; sys.path.append("checks")
+from checks import *
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error
+
+los = pd.read_csv("data/los_data.csv")
+X_tr, X_te, y_tr, y_te = train_test_split(los[["Age","Severity"]], los["LOS"],
+                                          test_size=0.2, random_state=42)
+model = LinearRegression().fit(X_tr, y_tr)
+
+def mae_on(name):
+    d = pd.read_csv(f"data/extract_{name}.csv")
+    return mean_absolute_error(d["LOS"], model.predict(______))
+
+{n: round(mae_on(n), 2) for n in "ABC"}
+```
+
+```{pyodide}
+#| exercise: mae_all_py
+#| solution: true
+import pandas as pd, sys; sys.path.append("checks")
+from checks import *
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error
+
+los = pd.read_csv("data/los_data.csv")
+X_tr, X_te, y_tr, y_te = train_test_split(los[["Age","Severity"]], los["LOS"],
+                                          test_size=0.2, random_state=42)
+model = LinearRegression().fit(X_tr, y_tr)
+
+def mae_on(name):
+    d = pd.read_csv(f"data/extract_{name}.csv")
+    return mean_absolute_error(d["LOS"], model.predict(d[["Age", "Severity"]]))
+
+{n: round(mae_on(n), 2) for n in "ABC"}
+```
+:::
+
+One extract is obviously broken. Resist stopping there: the interesting result is
+which of the other two is *also* different, and in what way.
+
+## Task 2 — Did the patients change?
+
+Compare the distribution of `Age` and of `Severity` in each extract against the
+original. A summary table and a plot.
+
+```{webr}
+#| exercise: dists
+combined <- bind_rows(
+  los |> mutate(source = "original"),
+  A |> mutate(source = "A"), B |> mutate(source = "B"), C |> mutate(source = "C")
+)
+
+combined |> group_by(source) |> summarise(______)
+
+ggplot(combined, aes(x = Age, fill = source)) +
+  geom_density(alpha = 0.35) + labs(x = "Age (years)")
+```
+
+```{webr}
+#| exercise: dists
+#| solution: true
+combined <- bind_rows(
+  los |> mutate(source = "original"),
+  A |> mutate(source = "A"), B |> mutate(source = "B"), C |> mutate(source = "C")
+)
+
+combined |> group_by(source) |>
+  summarise(across(c(Age, Severity, LOS), list(mean = mean, sd = sd)), .groups = "drop")
+
+ggplot(combined, aes(x = Age, fill = source)) +
+  geom_density(alpha = 0.35) + labs(x = "Age (years)")
+```
+
+Write down which extracts have a different case-mix from the original. This
+question has a clean answer, and it is not the same as the answer to Task 1.
+
+::: {.callout-note appearance="simple"}
+## Make it a number, not an impression
+Density plots are a good way to see a shift and a bad way to report one. Add one
+quantitative statement per extract — the difference in means expressed in
+standard deviations of the original, or the proportion of new patients outside
+the 1st–99th percentile range of the training ages. "The curves look different"
+is not a finding.
+:::
+
+## Task 3 — Did the rules change?
+
+This is the task that settles the exercise. For each extract, **refit** a linear
+model on that extract alone and compare its coefficients with the original. You
+are no longer asking how well the old model predicts; you are asking whether the
+relationship it encodes is still the relationship in the data.
+
+```{webr}
+#| exercise: coefs
+coefs <- function(d) coef(lm(LOS ~ Age + Severity, data = d))
+rbind(original = coefs(los), A = ______, B = ______, C = ______) |> round(2)
+```
+
+```{webr}
+#| exercise: coefs
+#| solution: true
+coefs <- function(d) coef(lm(LOS ~ Age + Severity, data = d))
+rbind(original = coefs(los), A = coefs(A), B = coefs(B), C = coefs(C)) |> round(2)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck on how to judge "different"?
+Compare each coefficient against the spread of the original estimate. A change
+from 0.93 to 0.95 is noise; a change from 0.93 to 0.13 is not. To be precise,
+put a confidence interval round the original with `confint(lm(LOS ~ Age +
+Severity, los))` and ask whether the extract's estimate falls inside it.
+:::
+
+## Task 4 — Commit to an answer
+
+Classify each extract as `"none"`, `"covariate"` or `"concept"`.
+
+::: {.panel-tabset}
+## R
+
+```{webr}
+#| exercise: classify_r
+source("checks/checks.R")
+check_shift_answers(c(A = "______", B = "______", C = "______"))
+```
+
+## Python
+
+```{pyodide}
+#| exercise: classify_py
+import sys; sys.path.append("checks")
+from checks import *
+check_shift_answers({"A": "______", "B": "______", "C": "______"})
+```
+:::
+
+Before you look: write one sentence per extract naming **which piece of evidence
+settled it**. If your evidence is "the MAE was high", you have not done Task 3.
+
+## The result that should bother you
+
+One extract contains patients unlike anything in the training data — markedly
+younger, markedly sicker — and the frozen model predicts their length of stay
+about as accurately as it predicted the original test set.
+
+Five minutes on why, because the reasoning transfers.
+
+1. The model is a straight line in age and severity, and the true relationship in
+   that extract is the *same* straight line. Asking it about a 25-year-old is
+   asking it to extrapolate, and a correctly specified linear model extrapolates
+   correctly.
+2. So covariate shift is not inherently harmful. It is harmful when the model is
+   wrong in exactly the region the new patients occupy — which you cannot check,
+   because you had no patients there.
+3. Which is why "the input distribution has shifted" is a reason to look, not a
+   verdict. Stretch 1 shows a model for which the same shift is damaging.
+
+::: {.callout-important}
+## The asymmetry to remember
+You can detect covariate shift with no outcomes at all — age and severity arrive
+with the referral. You cannot detect concept shift without outcomes, because it
+is a statement about the relationship between inputs and outcome. In a deployed
+clinical model the outcomes arrive weeks or months late, so the dangerous shift
+is the one you learn about last [@finlayson2021].
+:::
+
+## Reflection
+
+Answer in writing; this is the assessable part.
+
+1. Which extract would be most dangerous in clinical use, and why? "The one with
+   the worst MAE" is only right if you can say why worst-MAE is the right
+   criterion here.
+2. Your model is in use. You see `Age` and `Severity` for every new referral, and
+   true length of stay only after discharge. Which of the three situations could
+   you detect *this week*, and which would you learn about in three months?
+3. A colleague proposes refitting monthly on the most recent extract. Name one
+   problem this solves and one it creates.
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**The key.** A = no shift (the control: a fresh draw from the original
+population, original coefficients). B = covariate shift only (age mean moves
+from ≈60 to ≈27, severity from ≈5.4 to ≈7.3; coefficients unchanged).
+C = covariate **and** concept shift (same new case-mix as B, but the generating
+coefficients change from intercept −8.5 / Age 0.94 / Severity 3.37 to
+intercept +4.0 / Age 0.15 / Severity 1.60 — an age effect that has essentially
+vanished, as if early supported discharge had been introduced).
+
+**Observed numbers.** Linear model MAE ≈ 3.6 on A, ≈ 3.5 on B, ≈ 22.7 on C,
+against a test MAE of ≈ 3.4. Refitted coefficients: A and B recover Age ≈ 0.95
+and Severity ≈ 3.3–3.5; C returns Age ≈ 0.13, Severity ≈ 1.60.
+
+**Where the class divides.** Most students call B the dangerous one, because the
+case-mix change is the visible thing. Hold a show of hands before the reveal.
+The moment the B result lands — unfamiliar patients, unharmed predictions — is
+the moment the distinction becomes real rather than terminological.
+
+**Reflection answers.** (1) C, because the error is roughly six times the margin
+by which the model beat its baseline, and it is systematic: it over-predicts,
+which in capacity planning means beds held empty and in discharge planning means
+patients told the wrong thing. (2) B and C are both detectable this week from
+inputs alone; A is confirmed as "no shift" only once outcomes arrive. The crucial
+point: input monitoring cannot tell B from C, and B needs no action while C needs
+the model withdrawn. (3) Monthly refitting tracks concept shift automatically,
+but it destroys the stable reference against which you detect that anything
+changed, it silently learns any feedback loop the model itself created, and the
+model in use on 1 March is not the model that was validated.
+
+**Timing.** If short, cut Task 2's plots (keep the summary table) and the
+stretches. Never Task 3.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — The same shift, a different model
+Refit @sec-pipeline's **decision tree** on the original training data and run it
+on all three extracts. Linear regression lost nothing on the covariate-shifted
+extract; the tree roughly doubles its error. Explain why, in terms of what a tree
+does outside the range of its training data — then say which model you would
+rather deploy, and under what monitoring.
+
+(Ours: tree test MAE ≈ 5.9, A ≈ 5.9, B ≈ 9.9, C ≈ 29.9.)
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Design the monitoring
+Specify what the hospital should monitor monthly to catch this automatically.
+Five lines: what is measured, on what data, compared with what reference, what
+threshold triggers a look, and who looks. Specific enough for a data engineer to
+build. Then mark your own specification against the one thing it cannot catch.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 3 — Read one of these
+Futoma and colleagues argue that generalisability as usually claimed in health ML
+is a myth, and that models should be validated where they will be used
+[@futoma2020]. Yang and colleagues measured it across hospital sites for
+COVID-19 screening [@yang2022]. Read one; bring a sentence connecting it to
+extract C.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that this model's accuracy depends on an assumption you can state
+precisely — that $P(Y \mid X)$ is the same in deployment as in training — and
+that you can test it when outcomes are available and partly monitor it when they
+are not.
+
+**Cannot:** that a model surviving all three extracts is safe to deploy. These
+extracts contain the shifts we built into them. Real services shift in ways
+nobody simulated, including in response to the model itself.

@@ -1,0 +1,63 @@
+# Renders the student booklet and publishes it to GitHub Pages on every push to
+# main. Nothing in the booklet executes at render time - every code cell runs in
+# the reader's browser - so this job needs Quarto and nothing else: no R, no
+# Python, no package cache. It finishes in well under a minute.
+#
+# One-time setup, in the repository: Settings -> Pages -> Build and deployment
+# -> Source: GitHub Actions.
+#
+# The instructor build is deliberately NOT produced here. It is rendered locally
+# with `make instructor`, so solutions cannot reach the public site by accident.
+
+name: Publish booklet
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'print/**'
+      - '**/*.pdf'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: 1.7.32
+
+      - name: Check that no chapter executes at render time
+        run: |
+          if grep -rEn '^```\{(r|python)[,}]' --include='day*.qmd' --include='index.qmd' . ; then
+            echo "::error::A chapter contains a server-executed chunk. Use {webr} or {pyodide} so the cell runs in the reader's browser."
+            exit 1
+          fi
+
+      - name: Render student booklet
+        run: quarto render --to live-html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _book
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

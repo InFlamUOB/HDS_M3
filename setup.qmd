@@ -1,0 +1,83 @@
+---
+engine: knitr
+---
+
+# Running it on your own machine {#sec-setup}
+
+You do not need any of this to work through the booklet — the exercises run in
+the browser. You do need it for the assignment, and for any analysis larger than
+a teaching dataset, because the browser runtime has a memory ceiling and no
+access to your files.
+
+## What you are installing, and why
+
+| Tool | Used for | You already met it in |
+|------|----------|----------------------|
+| R + RStudio | data management, statistics, `tidymodels` | Modules 1 and 2 |
+| Python + conda | `scikit-learn`, the dominant ML library | this module |
+| Quarto | turns `.qmd` files into reports with code and output together | this module |
+
+: {tbl-colwidths="[20,48,32]"}
+
+## Installation
+
+```r
+install.packages(c("tidymodels", "tidyverse", "data.table", "rpart"))
+```
+
+Install [Miniforge](https://conda-forge.org/download/) (or Miniconda), then from
+a terminal:
+
+```bash
+conda create -n hds-python python=3.11 numpy pandas matplotlib seaborn scikit-learn joblib jupyter
+conda activate hds-python
+```
+
+## Check that it works
+
+Clone the booklet repository, then run this in R from the project root:
+
+```r
+source("checks/checks.R")
+check_setup()
+```
+
+and this in Python:
+
+```python
+import sys; sys.path.append("checks")
+from checks import *
+check_setup()
+```
+
+Every line should start with `[ok]`. Where one starts with `[fix]`, the hint
+beside it names the install command.
+
+## The one difference from the browser version
+
+In the browser, the booklet loads individual `tidymodels` packages — `parsnip`,
+`rsample`, `yardstick` — rather than the `tidymodels` metapackage, because the
+metapackage pulls in 81 WebAssembly packages (82 MB) against 50 (48 MB) for the
+components actually used. On your own machine, `library(tidymodels)` loads all of
+them at once and is what you should use. Nothing else about the code changes.
+
+## Regenerating the data
+
+```bash
+Rscript scripts/make_data.R
+```
+
+Writes every CSV from a fixed seed, so your copies match everyone else's. If
+`data/` already holds the files, you do not need to run it.
+
+## Reproducibility habits to start now
+
+Three things, each costing seconds, which save a day later in the module.
+
+1. **Set a seed** before anything random, and say so in the text: `set.seed(42)`
+   in R, `random_state=42` in scikit-learn. Different values are fine; silence is
+   not.
+2. **Record your environment** at the end of any analysis you will show someone:
+   `sessionInfo()` in R, `conda list --export` in Python.
+3. **Never edit a data file by hand.** If a value needs changing, change it in
+   code, so the change is visible to the next reader — including you, in March.

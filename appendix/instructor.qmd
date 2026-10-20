@@ -1,0 +1,107 @@
+---
+engine: knitr
+---
+
+# Instructor guide {#sec-instructor}
+
+::: {.content-hidden when-profile="instructor"}
+This chapter is for teaching staff. Worked solutions, expected values and
+timings appear only in the instructor build:
+
+```bash
+quarto render --profile instructor
+```
+
+which writes to `_book-instructor/`. Students are not missing anything they need.
+:::
+
+::: {.content-visible when-profile="instructor"}
+
+## Before the day
+
+- Render and skim `_book-instructor/` — the per-exercise answers live in the
+  chapters themselves, not here, so that an answer is never far from the task it
+  belongs to.
+- Run `Rscript scripts/make_data.R` and commit the CSVs, so that every student
+  has byte-identical files and the expected values below hold.
+- Print the worksheets: `python3 scripts/make_worksheet.py --day 1 --profile
+  student`, then `quarto render print/day1-student.qmd --to typst`. Fourteen
+  pages, double-sided.
+- Open one chapter on the room's wifi and press Run. The first cell fetches about
+  48 MB; if the network throttles that, ask students to open the page before they
+  sit down. Nothing else needs installing — that is the point of the live cells.
+
+## Shape of the day
+
+The three exercises are 45, 60 and 60 minutes plus a 20-minute plenary, which
+fits a three-hour session with one break. Two compressions work:
+
+**90 minutes.** Exercise 1.2 Tasks 1–2 and Exercise 1.3 Tasks 1, 3 and 4. Drop
+Exercise 1.1 entirely and set it as pre-work; drop every stretch task. The day
+still lands if, and only if, the baseline comparison and the refitted
+coefficients survive.
+
+**Two 90-minute sessions.** Session one: 1.1 and 1.2 with stretches. Session
+two: 1.3 with Stretch 1 (the decision tree), which is the strongest single
+result in the day and is usually cut for time.
+
+## Mixed cohorts
+
+This cohort splits predictably into students who arrive fluent in R from
+Modules 1–2 and students who arrive fluent in Python from a computing
+background. Pair across the divide in 1.1 and 1.3, and let them work in their
+own language in 1.2, where the task is the pipeline rather than the syntax.
+
+The statistically strong students are the ones most likely to object that this
+is "just regression with extra steps". That objection is correct about the
+model and wrong about the question, and it is worth answering in plenary rather
+than at a desk: Module 2 asked whether age is associated with length of stay,
+this module asks whether a number produced for a patient who was not in the
+dataset is close enough to act on. Same estimator, different claim, different
+evidence required.
+
+## Expected values, all in one place
+
+Regenerated data varies in the last digit; quote ranges to students.
+
+| Quantity | Value |
+|---|---|
+| Original coefficients (intercept, Age, Severity) | −8.4, 0.93, 3.44 |
+| Test MAE, linear model (R split) | ≈ 3.4 days |
+| Test MAE, linear model (Python split) | ≈ 3.2 days |
+| Baseline (predict-the-mean) MAE | ≈ 13.0 days |
+| Test MAE across 20 seeds | 3.0 – 3.7 days |
+| 5-fold CV MAE (mean, sd) | 3.41, 0.16 |
+| MAE on extract A / B / C | ≈ 3.6 / 3.5 / 22.7 |
+| Refitted Age coefficient, A / B / C | 0.95 / 0.95 / 0.13 |
+| Decision tree MAE: test / A / B / C | 5.9 / 5.9 / 9.9 / 29.9 |
+| Birth weight: test MAE / baseline MAE | ≈ 190–220 g / ≈ 310–340 g |
+
+: {tbl-colwidths="[62,38]"}
+
+The three rows that carry the day's teaching are the baseline comparison
+(13.0 against 3.4), extract B (covariate shift, no loss of accuracy) and the
+tree on extract B (covariate shift, accuracy halved).
+
+## The one thing not to rush
+
+Exercise 1.3 Task 3 — refitting on each extract and comparing coefficients.
+Everything before it can be done by pattern-matching the worked example. Task 3
+is the only point in the day where a student must decide what evidence would
+answer a question, and the plenary depends on it. If the session is running
+late, cut Task 2's plots and the stretches, never Task 3.
+
+## Known rough edges
+
+- The simulated LOS is implausible (median ≈ 66 days, symmetric). This is
+  deliberate and is Task 1 of Exercise 1.2, but say so in plenary; otherwise a
+  clinically trained student spends the morning quietly assuming the whole
+  exercise is nonsense.
+- `scripts/make_data.R` contains the Exercise 1.3 key. Exclude `scripts/` from
+  the published site if that matters to you.
+- Clicking *Solution* in a live cell replaces what the student wrote. Tell them
+  to copy their attempt out first if they want to compare.
+- Students who complete Stretch 2 of Exercise 1.2 will report a different test
+  MAE from the booklet's. That is the stretch task working.
+
+:::

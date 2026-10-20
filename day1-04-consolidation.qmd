@@ -1,0 +1,110 @@
+---
+engine: knitr
+---
+
+# Day 1 — Consolidation {#sec-consolidation}
+
+**20 minutes · plenary**
+
+## Say it in one sentence
+
+Without notes, write the single sentence you would say to a ward manager who
+asks what your model does. It must contain a number, the units of that number,
+and the condition under which the number holds.
+
+A sentence that meets the bar:
+
+> On patients like the ones we trained on, it predicts length of stay to within
+> about three days on average — roughly a quarter of the error you would make by
+> guessing the average — and we have no evidence it holds if the case-mix or the
+> discharge pathway changes.
+
+Count how many of the three elements your own sentence has.
+
+## Self-assessment
+
+Tick honestly. Anything unticked is what to review before Day 2.
+
+- [ ] I can write a filter, a group-level summary and a linear fit in **both** languages.
+- [ ] I can name the five pipeline steps and what each protects against.
+- [ ] I can explain why a score computed on training rows is not evidence.
+- [ ] I compared my model against a baseline and can state the ratio.
+- [ ] I can define covariate shift and concept shift without using the word "distribution" twice.
+- [ ] I can say which of the two is detectable without outcomes.
+- [ ] I can state the assumption my model's accuracy depends on, in words.
+
+## Five questions
+
+Answer in a sentence each. These are the form the written assessment takes.
+
+1. Your test MAE is 3 days and your baseline MAE is 13 days. A colleague says
+   the model is "77% accurate". What is wrong with that sentence?
+2. You split 80/20 and get a test MAE of 3.0. Your colleague splits 80/20 on the
+   same data and gets 3.7. Who made the mistake?
+3. A model is fitted on 2019 admissions and used in 2021. Age and severity at
+   admission look exactly as they did in 2019, but the model's errors have
+   doubled. What kind of shift is this, and what must have been available to you
+   in order to notice?
+4. Give one reason a model might predict length of stay well using a variable
+   that would be useless to act on.
+5. You are handed a model with a test MAE better than anything you can
+   reproduce. What two things do you ask for before believing it?
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Answers.** (1) "Accurate" has no meaning for a continuous outcome and 77% is a
+ratio of two errors, not a proportion of correct predictions; the defensible
+phrasing is "its average error is about a quarter of the baseline's". (2)
+Neither. A single split is a noisy estimate; the spread they measured in
+Stretch 2 is 0.7 days wide, so 3.0 and 3.7 are the same result. This question
+is the one that most reliably separates students who did the stretch task.
+(3) Concept shift with no covariate shift; noticing it required *outcomes* —
+observed lengths of stay — because nothing in the inputs changed. (4) Prediction
+exploits association, intervention requires causation: a variable can be a
+marker of the process that drives the outcome (e.g. number of prior referrals)
+without being a lever on it. (5) The split — was the test set held out before
+any fitting, and was it used once — and the baseline. Anyone who asks for the
+code rather than those two has not got the point of today.
+
+**Rubric** (if the day is assessed, 20 marks):
+
+| | Marks |
+|---|---|
+| Pipeline runs end to end on the birth-weight data, correct split, evaluated once | 6 |
+| Baseline computed and the comparison stated as a ratio | 3 |
+| Residual plot with a statement about *whose* predictions are worst | 3 |
+| Correct classification of A, B and C | 3 |
+| Evidence named for each classification (distributions for case-mix, refitted coefficients for the relationship) | 3 |
+| One-sentence claim containing a number, its units and its condition | 2 |
+
+: {tbl-colwidths="[80,20]"}
+
+Mark the evidence, not the classification: a student who reasons from refitted
+coefficients and mislabels one extract has understood more than one who guessed
+all three from the MAE column.
+:::
+:::
+
+## What carries into Day 2
+
+Three loose ends were left deliberately, and each opens the next session.
+
+1. **One split is a noisy estimate.** The fix is resampling — cross-validation,
+   repeated splits, the bootstrap.
+2. **MAE was chosen for us.** It treats a 1-day error and a 30-day error as
+   proportionally equal, which is a clinical assumption nobody checked.
+3. **The outcome is implausible.** Real length of stay is right-skewed with a
+   median of a few days. `data/los_data_skewed.csv` is waiting for the session
+   where that matters.
+
+## Further reading
+
+Two papers that make today's lesson concrete at the scale of a health system.
+Futoma and colleagues argue that generalisability as usually claimed is a myth
+and that validation belongs in the setting of use [@futoma2020]. Wynants and
+colleagues appraised every covid-19 prediction model published in the first
+months of the pandemic and found almost all of them at high risk of bias,
+mostly for reasons you met today — no baseline, no genuine held-out
+evaluation, no account of who the patients were [@wynants2020]. TRIPOD+AI
+[@collins2024] is the reporting standard you will be held to; skim the
+checklist now and notice how much of it is about the split.

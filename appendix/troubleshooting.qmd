@@ -1,0 +1,83 @@
+---
+engine: knitr
+---
+
+# Troubleshooting {#sec-troubleshooting}
+
+## In the browser
+
+**The first cell sits on "Downloading webR" for a long time**
+: It is fetching about 48 MB of R packages. On a slow connection this is a
+  minute or two, once per browser. It is cached afterwards, including between
+  pages. If it never finishes, your network may be blocking
+  `repo.r-wasm.org` or `cdn.jsdelivr.net`.
+
+**`object 'los' not found`, in a cell that worked a minute ago**
+: Each *page* is a separate session, and cells run in the order you run them,
+  not the order they appear. Scroll up and run the worked-example cells on this
+  page first.
+
+**`cannot open file 'data/los_data.csv'`**
+: The page mounts its data files into the browser's virtual filesystem when it
+  starts. If a cell runs before that finishes, it will not find them — wait for
+  the status line to clear and run it again.
+
+**My plot does not appear**
+: In R, the plot must be the value of the last expression, or printed
+  explicitly. In Python, end the cell with `plt.show()`.
+
+**A package I want is not available**
+: The page loads a fixed list (see `_quarto.yml`). You can add one in a cell with
+  `webr::install("pkgname")` in R or `import micropip; await
+  micropip.install("pkgname")` in Python, but not every package has a
+  WebAssembly build. If it does not, that analysis belongs on your own machine.
+
+## Modelling
+
+**R: `predict()` returns 800 rows when the new data has 400**
+: `parsnip` wants `new_data =`. With `newdata =` the argument is swallowed and
+  you silently predict on the training data. The most expensive typo in the
+  module.
+
+**Python: `ValueError: Expected 2D array, got 1D array instead`**
+: `X = df["Age"]` gives a Series; scikit-learn wants a frame. Use `df[["Age"]]`,
+  with two sets of brackets.
+
+**The test MAE is suspiciously good (below 3 days)**
+: You fitted on the full dataset rather than on `train`. Check the `data =`
+  argument of `fit()`.
+
+**The two languages give different numbers for the same model**
+: Expected, if a random split is involved: `set.seed(42)` and `random_state=42`
+  select different rows. See the callout in @sec-pipeline. Not expected for
+  coefficients, which should agree to several decimals.
+
+## On your own machine
+
+**`Unable to locate conda environment 'hds-python'`**
+: The name in `.Renviron` does not match the one you gave `conda create`. Run
+  `reticulate::conda_list()` to see what R can see, then set
+  `HDS_PYTHON_ENV=<name>` and **restart R** — that file is read only at startup.
+
+**`No such file or directory: 'data/los_data.csv'` locally**
+: Paths are relative to the project root. Open the `.Rproj`, or check `getwd()`.
+
+**A column arrived as text**
+: `read_csv()` prints what it guessed; read that message. The usual culprit is a
+  sentinel such as `"unknown"` in a numeric column. Fix it in the `col_types =`
+  argument, not by editing the file.
+
+## Rendering the booklet
+
+**`quarto render` cannot find the live format**
+: The Quarto Live extension must be present in `_extensions/live/`. Reinstall
+  with `quarto add r-wasm/quarto-live`.
+
+**Rendering is slow**
+: It should not be: no code executes at render time, because every cell runs in
+  the reader's browser. If it is slow, something has been left as a knitr chunk
+  (` ```{r} ` rather than ` ```{webr} `).
+
+**The printed worksheet is missing the tasks**
+: `scripts/make_worksheet.py` builds it from the chapter sources. Re-run it after
+  editing a chapter; the generated file in `print/` is not meant to be edited.

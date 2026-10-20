@@ -1,0 +1,85 @@
+---
+engine: knitr
+---
+
+# The datasets {#sec-data}
+
+Every dataset in this booklet is simulated by `scripts/make_data.R`, from seed
+2025. Run `Rscript scripts/make_data.R` from the project root to regenerate all
+of them; `data/PROVENANCE.txt` records when and with which R version.
+
+Simulation is deliberate, for three reasons. The generating process is known, so
+every diagnostic question has a checkable answer. No information governance
+approval is needed, so the files can live in a public repository. And the
+defects are the ones we chose, so they can be taught.
+
+## `los_data.csv` — the training world
+
+1000 admissions. Used in Exercises 1.2 and 1.3.
+
+| Column | Meaning | Generating process |
+|---|---|---|
+| `Age` | years | Normal(60, 15), truncated below at 18, **not truncated above** |
+| `Severity` | severity score, 1–10 | Normal(5.4, 2.07), clipped to [1, 10] |
+| `LOS` | length of stay, days | $-8.5 + 0.94\,\text{Age} + 3.37\,\text{Severity} + \varepsilon$, $\varepsilon \sim N(0, 4.3)$ |
+
+: {tbl-colwidths="[14,30,56]"}
+
+**Known defects, retained on purpose.**
+
+- The maximum age is just over 109, and 26 patients are aged 90 or more. Nothing
+  truncates the upper tail, exactly as in extracts
+  where a default or mistyped date of birth survives into the warehouse.
+- Typical LOS is about 66 days, which is wrong for acute medicine by an order of
+  magnitude.
+- `LOS` is symmetric. Real length of stay is strongly right-skewed. This is the
+  single most recognisable difference between this file and a real one.
+- Severity piles up at exactly 1 and 10 because the draw is clipped, not
+  bounded: 2.0% of rows sit at 1 and 1.6% at 10.
+
+Both of the first two are the subject of Exercise 1.2, Task 1.
+
+These parameters match the `los_data.csv` distributed in earlier years of the
+module, so answers stated as ranges are unaffected by which copy a student has.
+
+## `extract_A.csv`, `extract_B.csv`, `extract_C.csv` — the later extracts
+
+400 admissions each. Used in Exercise 1.3. Students are told only that they are
+monthly extracts taken after the model went live, and must diagnose what
+changed. The mechanisms are in `scripts/make_data.R` and in the instructor
+chapter.
+
+::: {.callout-warning}
+## Publishing note
+`scripts/make_data.R` contains the answer to Exercise 1.3. If you publish the
+student site from the same repository, either exclude `scripts/` from the
+published output or accept that a determined student can read the key. Nothing
+else in the booklet gives it away.
+:::
+
+## `los_data_skewed.csv` — the realistic variant
+
+1000 admissions, same predictors, but LOS is drawn from a Gamma distribution
+with a multiplicative mean, $\mathbb{E}[\text{LOS}] = \exp(0.15 + 0.012\,\text{Age} + 0.17\,\text{Severity})$,
+shape 2. Median around four days, with a long right tail. Not used on Day 1;
+it exists for the sessions on metrics and on generalised linear models, where
+the difference between a symmetric and a skewed outcome changes the answer.
+
+## `birthweight.csv` — the transfer task
+
+600 pregnancies. `bpd` (biparietal diameter, mm) and `ad` (abdominal diameter,
+mm) predict `bw` (birth weight, g) through
+$-1700 + 30\,\text{bpd} + 25\,\text{ad} + \varepsilon$, $\varepsilon \sim N(0, 250)$.
+Units and magnitudes are plausible; the numbers are invented. Used in Exercise
+1.2 Task 4 so that students rerun the pipeline on columns whose names bear no
+resemblance to the ones they just used.
+
+## Using real data instead
+
+Any of these can be swapped for a real dataset, and the booklet's structure
+survives it, but two things change and should be said out loud when you do it.
+The known answer disappears, so the self-checks that compare against a key
+(`check_shift_answers()`) no longer apply; and the defects become the ones the
+extract happens to have rather than the ones the exercise needs. Teaching
+diagnosis first on data with a known answer, then on real data, is the order
+that works.

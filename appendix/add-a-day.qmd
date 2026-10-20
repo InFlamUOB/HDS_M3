@@ -1,0 +1,140 @@
+---
+engine: knitr
+---
+
+# Adding a day {#sec-add-a-day}
+
+A new teaching day is five files and a block of configuration. This chapter is
+the procedure.
+
+## 1. Scaffold it
+
+```bash
+make day DAY=2 TITLE="Validation you can defend"
+```
+
+or, equivalently:
+
+```bash
+python3 scripts/new_day.py --day 2 --title "Validation you can defend" \
+    --exercises resampling,metrics
+```
+
+That writes `day2-00-overview.qmd`, one chapter per exercise named, and
+`day2-99-consolidation.qmd` from `_templates/exercise.qmd`, and registers the
+`part:` block in `_quarto.yml`. Re-running it leaves existing files alone, so it
+is safe to use again when you add a fourth exercise to a day.
+
+Chapter files live at the **project root**, named `day<N>-<nn>-<slug>.qmd`. They
+are not in folders, and that is deliberate: the live code cells fetch
+`data/los_data.csv` over HTTP relative to the page, and they write it into the
+browser's filesystem at the same path. Keeping pages at the root means one path
+string works in the browser, in RStudio and in the worksheet. Put the chapters
+one directory down and you need `../data/...` in the browser and `data/...`
+locally, which students will trip over for the rest of the module.
+
+## 2. Check it before you publish
+
+```bash
+make check
+```
+
+`scripts/check_cells.py` catches the faults that render cleanly and then fail in
+front of a student: a missing `engine: knitr`, a duplicated exercise key, a
+hint or solution with no exercise, an exercise with no `______`, a solution that
+cannot run standalone, a data file not mounted into the browser, and a package
+missing from the runtime list. The publish workflow runs the same check, so a
+push with any of these fails before it reaches students.
+
+## 3. Add any new data to the generator
+
+Append to `scripts/make_data.R`; do not write a second script. One generator
+with one seed is what makes every student's copy identical and every expected
+value quotable. Then add the new file in two places in `_quarto.yml`: under
+`project: resources:` so it is published, and under the top-level `resources:`
+so the live cells mount it into the browser filesystem.
+
+## 4. Add a check, if the exercise needs one
+
+`checks/checks.R` and `checks/checks.py` are deliberately small. A new check
+wraps `hds_check()`:
+
+```r
+check_folds <- function(folds, n_expected = 5) {
+  hds_check(paste0("there are ", n_expected, " folds"),
+            nrow(folds) == n_expected,
+            hint = "check the v = argument of vfold_cv()",
+            detail = paste(nrow(folds), "folds"))
+}
+```
+
+Write the Python twin at the same time. A check that exists in one language only
+quietly turns the booklet into a single-language course.
+
+## 5. Build
+
+```bash
+quarto render                                      # student site  -> _book/
+quarto render --profile instructor                 # staff copy    -> _book-instructor/
+python3 scripts/make_worksheet.py --day 2 --profile student
+quarto render print/day2-student.qmd --to typst    # printable worksheet
+```
+
+Only `_book/` is published. The instructor profile writes elsewhere precisely so
+that publishing cannot leak solutions.
+
+## Writing live cells
+
+| You want | Cell header |
+|---|---|
+| a worked example that runs itself on page load | `#\| autorun: true` |
+| a task the student fills in | `#\| exercise: unique-key` |
+| the answer, shown behind a button | `#\| exercise: unique-key` + `#\| solution: true` |
+| a nudge, shown behind a button | `#\| exercise: unique-key` + `#\| hint: true` |
+
+: {tbl-colwidths="[52,48]"}
+
+Three rules, each learnt the hard way.
+
+1. **Exercise keys must be unique within a page**, and the R and Python versions
+   of the same task need different keys — `baseline_r` and `baseline_py`.
+2. **A solution cell must run on its own.** Clicking *Solution* replaces the
+   editor contents and runs them, so a solution that depends on an import made
+   in the exercise cell it replaced will fail. Anything an autorun cell created
+   earlier on the page is fine.
+3. **Mark blanks `______`**, six underscores. The worksheet generator leaves them
+   as they are, so they print as a line to write on.
+
+## Keeping the worksheet under twenty pages
+
+`scripts/make_worksheet.py` drops solutions, hints, instructor blocks and
+browser-only notes, and flattens the R/Python tabs into labels, which is most of
+the saving. Day 1 comes out at 14 pages for students and 16 for staff. If a day
+runs long, the thing to cut is narrative, not tasks: move the discussion into a
+`::: {.web-only}` block, where it stays on the site and leaves the paper.
+
+## The house structure, and why each piece is there
+
+| Element | Purpose | What breaks without it |
+|---|---|---|
+| Objectives as can-do statements | the student can self-assess | "I attended" substitutes for "I can" |
+| Worked example with nothing hidden | a correct pipeline seen before one is built | students debug syntax instead of learning the idea |
+| Numbered tasks with a stated deliverable | unambiguous done-ness | the strong students finish and the rest stall |
+| *Hint*, behind a button | unblocks without answering | either hand-holding or silence |
+| *Check yourself* | catches silently wrong objects in seconds | a plausible wrong number survives to the report |
+| A control in every exercise | belief in the method, not the output | students trust pipelines because they ran |
+| Instructor block, profile-gated | answers, ranges, failures, timings | the answers are either lost or published |
+| *Can and cannot claim* | scope discipline, and the hook to the next day | exercises feel like unrelated notebooks |
+
+: {tbl-colwidths="[30,38,32]"}
+
+## Two conventions worth keeping
+
+**Solutions go in `solution: true` cells and instructor commentary in
+`content-visible when-profile="instructor"`, never in a collapsed callout.** A
+collapsed callout still ships the text inside the student HTML, two clicks away
+in the page source.
+
+**Quote expected values as ranges.** `make_data.R` is reproducible, but anyone
+who changes an `n` or adds a draw shifts the random stream downstream.
+"MAE ≈ 3.2–3.4 days" survives that; "MAE = 3.423" does not.
