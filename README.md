@@ -121,7 +121,7 @@ It is safe to re-run: existing files are left alone.
 
 `make check` is the part worth knowing about. It catches six faults that render
 cleanly and then fail in front of a student: a chapter missing its `engine:
-knitr` front matter, two exercises sharing a key on one page, a hint or solution
+markdown` front matter, two exercises sharing a key on one page, a hint or solution
 whose key has no exercise, an exercise with no `______` to fill in, a solution
 that cannot run standalone because the cell it replaces did the imports, a data
 file used but not mounted into the browser, and a package used but absent from

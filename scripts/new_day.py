@@ -18,7 +18,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 OVERVIEW = """---
-engine: knitr
+engine: markdown
 ---
 
 # Day {day} — Overview {{#sec-day{day}}}
@@ -61,7 +61,7 @@ By the end of the day you should be able to, without looking anything up:
 """
 
 CONSOLIDATION = """---
-engine: knitr
+engine: markdown
 ---
 
 # Day {day} — Consolidation {{#sec-day{day}-consolidation}}

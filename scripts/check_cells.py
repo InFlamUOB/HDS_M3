@@ -4,8 +4,8 @@
 Catches the mistakes that are invisible at render time and only show up when a
 student clicks something:
 
-  * a chapter missing its `engine: knitr` front matter (Quarto then reaches for
-    Jupyter and the render fails);
+  * a chapter missing its `engine: markdown` front matter (Quarto then reaches
+    for knitr or Jupyter, and the render needs R or Python it will not find);
   * two exercises sharing a key on one page (the Quarto Live filter errors);
   * a hint or solution cell whose key has no exercise;
   * an exercise cell with no `______` for the student to fill in;
@@ -57,9 +57,10 @@ def main() -> int:
         name = chapter.name
 
         if not text.startswith("---"):
-            fail(name, "missing front matter; add `engine: knitr`")
-        elif "engine: knitr" not in text.split("---", 2)[1]:
-            fail(name, "front matter does not pin `engine: knitr`")
+            fail(name, "missing front matter; add `engine: markdown`")
+        elif "engine: markdown" not in text.split("---", 2)[1]:
+            fail(name, "front matter does not pin `engine: markdown`; with any other "
+                       "engine the render needs R or Python installed")
 
         keys: dict[str, list[str]] = {}
         for eng, opts, body in ((m.group(1), m.group(2), m.group(3))
