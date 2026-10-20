@@ -6,7 +6,8 @@
 #   make worksheets DAY=1   printable PDFs for one day
 #   make day DAY=2 TITLE="..."  scaffold the next day and register it
 #   make data               regenerate every dataset from scripts/make_data.R
-#   make check              the checks CI runs, before you push
+#   make check              source checks (live cells, links), before you push
+#   make links              check the built site for dead links
 #   make all DAY=1          data + site + instructor + worksheets
 #   make clean              remove build output
 
@@ -17,7 +18,7 @@ PYTHON ?= python3
 RSCRIPT ?= Rscript
 
 .DEFAULT_GOAL := help
-.PHONY: help preview site instructor worksheets day data check all clean
+.PHONY: help preview site instructor worksheets day data check links all clean
 
 help:
 	@grep -E '^#   make' $(MAKEFILE_LIST) | sed 's/^#   //'
@@ -55,7 +56,12 @@ check:
 	  || (echo 'A chapter has a server-executed chunk; use {webr} or {pyodide}.'; exit 1)
 	@$(PYTHON) scripts/check_cells.py
 
-all: data site instructor worksheets
+# Needs a build: checks the rendered HTML for links whose target is missing and
+# for cross-references Quarto could not resolve.
+links:
+	@$(PYTHON) scripts/check_links.py _book
+
+all: data site links instructor worksheets
 
 clean:
 	rm -rf _book _book-instructor _freeze .quarto print/.quarto print/*.typ

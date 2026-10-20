@@ -11,6 +11,8 @@ student clicks something:
   * an exercise cell with no `______` for the student to fill in;
   * a solution cell that cannot run on its own, because the exercise cell it
     replaces did the imports;
+  * a link to a chapter file that does not exist, usually a rename that left a
+    link behind;
   * a data file used in a cell but not mounted into the browser filesystem;
   * a library or module used in a cell but absent from the runtime package list.
 """
@@ -61,6 +63,10 @@ def main() -> int:
         elif "engine: markdown" not in text.split("---", 2)[1]:
             fail(name, "front matter does not pin `engine: markdown`; with any other "
                        "engine the render needs R or Python installed")
+
+        for link in re.findall(r"\]\(([\w./-]+\.qmd)(?:#[\w-]+)?\)", text):
+            if not (ROOT / link).exists():
+                fail(name, f"link to `{link}`, which does not exist")
 
         keys: dict[str, list[str]] = {}
         for eng, opts, body in ((m.group(1), m.group(2), m.group(3))
