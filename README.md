@@ -58,6 +58,12 @@ so rendering cleanly is no evidence that it works.
 
 ## Working on this together
 
+**New to this, or to git? Read [CONTRIBUTING.md](CONTRIBUTING.md)** — a
+step-by-step tutorial covering the three places the booklet lives, your first
+change keystroke by keystroke, the two errors you will actually hit, how pull
+requests reach you, and running R and the booklet's checks from the terminal.
+The rest of this section is the summary.
+
 This repository is the single source of truth. Two people edit it — whoever is
 at the keyboard, and an assistant working through the GitHub API — and anything
 that reaches `main` is published automatically. That works as long as both
@@ -69,6 +75,7 @@ sides follow the same small discipline.
 git pull                       # ALWAYS first: the assistant may have pushed
 # ... edit the .qmd files, `make preview` to see them ...
 make check                     # catches the faults that only show up in a browser
+make test-cells DAY=1          # if you touched code: runs the live cells for real
 git add -A && git commit -m "what changed and why"
 git pull --rebase              # again, in case something landed while you worked
 git push
