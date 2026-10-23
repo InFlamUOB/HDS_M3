@@ -1,21 +1,17 @@
-# Installs everything the booklet needs on your own machine: the R packages, and
-# a small Python environment that R can see.
+# Installs everything the booklet needs on your own machine, and proves it works.
 #
 #   Rscript scripts/setup_local.R      # or: make setup-r
 #
-# Run it once, then restart R. It is safe to run again; it only adds what is
-# missing.
+# Safe to run again; it only adds what is missing.
 #
-# Why a Python environment at all: the {python} cells in the chapters are
-# executed through reticulate, which needs to be told which Python to use. Left
-# to itself it finds whichever Python the operating system ships — on a Mac,
-# usually one with no pandas — and the first `import pandas` fails. This script
-# builds a dedicated environment and records it, so that question is settled
-# once rather than every time you open the project.
+# The R packages are installed from CRAN. The Python side needs no action from
+# you: .Rprofile declares the libraries the {python} cells use, and reticulate
+# assembles a Python environment to match — downloading Python itself if your
+# machine has none. This script simply triggers that once, so the first cell you
+# run in a session is not the one that waits for the download.
 
 r_pkgs  <- c("tidymodels", "tidyverse", "data.table", "rpart", "reticulate")
 py_pkgs <- c("pandas", "numpy", "matplotlib", "seaborn", "scikit-learn", "joblib")
-venv    <- "hds-python"
 
 # ---- R side ----------------------------------------------------------------
 missing <- r_pkgs[!vapply(r_pkgs, requireNamespace, logical(1), quietly = TRUE)]
@@ -32,52 +28,35 @@ if (length(missing) == 0) {
 }
 
 # ---- Python side -----------------------------------------------------------
-# virtualenv_starter() asks reticulate for a Python it considers usable as a
-# base; Sys.which() is the fallback when it finds none.
-base <- tryCatch(reticulate::virtualenv_starter(), error = function(e) NULL)
-if (length(base) == 0 || is.na(base[1]) || !nzchar(base[1])) {
-  base <- Sys.which("python3")
-}
-if (!nzchar(base[1])) {
-  stop("No Python found to build the environment from.\n",
-       "Install Python 3 (python.org, or `brew install python` on a Mac), ",
-       "then run this script again.")
-}
-base <- as.character(base[1])
-
-if (reticulate::virtualenv_exists(venv)) {
-  message("Python environment '", venv, "': exists, checking packages")
+if (nzchar(Sys.getenv("RETICULATE_PYTHON"))) {
+  message("\nRETICULATE_PYTHON is set, so that Python is used as is:\n  ",
+          Sys.getenv("RETICULATE_PYTHON"),
+          "\nUnset it (or clear it from .Renviron) to let reticulate manage one.")
+} else if (exists("py_require", envir = asNamespace("reticulate"))) {
+  message("\nPython: asking reticulate for an environment with ",
+          paste(py_pkgs, collapse = ", "))
+  message("The first time, this downloads Python and the libraries — a few minutes.")
+  reticulate::py_require(py_pkgs)
+  ok <- tryCatch({
+    reticulate::py_run_string("import pandas, numpy, matplotlib, seaborn, sklearn, joblib")
+    TRUE
+  }, error = function(e) {
+    message("\nCould not build the Python environment:\n  ", conditionMessage(e))
+    message("\nThe usual cause is the network: a proxy that intercepts HTTPS will ",
+            "break\nthe download. Try again off VPN, or ask IT for the proxy settings.")
+    FALSE
+  })
+  if (!ok) stop("Python environment not ready; see above.")
+  cfg <- reticulate::py_config()
+  message("Python ready: ", cfg$python)
+  message("pandas ", reticulate::py_eval("__import__('pandas').__version__"),
+          ", scikit-learn ", reticulate::py_eval("__import__('sklearn').__version__"))
 } else {
-  message("Python environment '", venv, "': creating from ", base)
-  reticulate::virtualenv_create(venv, python = base)
+  # reticulate older than 1.41 cannot assemble an environment on its own.
+  message("\nreticulate ", as.character(utils::packageVersion("reticulate")),
+          " is older than 1.41.")
+  message("Update it with install.packages(\"reticulate\"), restart R, and run ",
+          "this again\n— that is much easier than building an environment by hand.")
 }
-ok <- tryCatch({
-  reticulate::virtualenv_install(venv, packages = py_pkgs)
-  TRUE
-}, error = function(e) {
-  message("\nInstalling the Python packages failed:\n  ", conditionMessage(e))
-  message("\nThe two usual causes:")
-  message("  * no network, or a proxy that intercepts HTTPS — on a university")
-  message("    network pip may report an SSL certificate error. Try again off VPN,")
-  message("    or ask IT for the pip proxy settings.")
-  message("  * the base Python is too old. Check with: ", base, " --version")
-  message("\nYou can also install them by hand and re-run this script:")
-  message("  ", reticulate::virtualenv_python(venv),
-          " -m pip install ", paste(py_pkgs, collapse = " "))
-  FALSE
-})
-if (!ok) stop("Python packages not installed; see above.")
 
-# ---- Tell every R session in this project which Python to use --------------
-# .Renviron is read by R at startup. It holds a path specific to this machine,
-# so it is not committed.
-py_path <- reticulate::virtualenv_python(venv)
-line    <- sprintf('RETICULATE_PYTHON="%s"', py_path)
-existing <- if (file.exists(".Renviron")) readLines(".Renviron", warn = FALSE) else character()
-keep <- existing[!grepl("^\\s*RETICULATE_PYTHON\\s*=", existing)]
-writeLines(c(keep, line), ".Renviron")
-
-message("\nPython: ", py_path)
-message("Recorded in .Renviron (this machine only; not committed).")
-message("\nNow restart R — Session > Restart R, or the circular arrow in the\n",
-        "console pane — so it picks that up. Then run the checks in setup.qmd.")
+message("\nDone. Restart R, then open a chapter and run its first cell.")

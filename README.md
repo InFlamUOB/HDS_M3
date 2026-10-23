@@ -49,10 +49,11 @@ Or do both in one step, including the Python side, with:
 source("scripts/setup_local.R")   # or: make setup-r
 ```
 
-It builds a Python environment called `hds-python` from whatever Python you
-have, installs the six libraries, and writes `RETICULATE_PYTHON` into
-`.Renviron` so every R session in the project uses it. Restart R afterwards.
-`.Renviron` is machine-specific and is not committed.
+The Python side needs no decisions: `.Rprofile` declares the six libraries the
+`{python}` cells use, and `reticulate` (1.41 or later) assembles a Python
+environment to match on first use, fetching Python itself if the machine has
+none. `scripts/setup_local.R` triggers that once so the download does not land
+mid-exercise. Nothing to activate, and nothing machine-specific to commit.
 
 ```bash
 make preview        # http://localhost:4200, reloads as you edit

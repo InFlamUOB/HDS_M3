@@ -3,16 +3,13 @@
 # Shared setup, included at the top of every chapter.
 knitr::opts_chunk$set(comment = "#>", fig.align = "center", dpi = 150)
 
-# Point R at the Python used for the {python} cells. RETICULATE_PYTHON, written
-# into .Renviron by scripts/setup_local.R, takes precedence; the fallbacks are
-# for a machine where that has not been run.
+# Which Python runs the {python} cells. .Rprofile declares the same libraries for
+# interactive work; this repeats it so that a render does not depend on a startup
+# file being read. RETICULATE_PYTHON, if set, wins over both.
 if (requireNamespace("reticulate", quietly = TRUE) &&
-    Sys.getenv("RETICULATE_PYTHON") == "") {
-  env <- Sys.getenv("HDS_PYTHON_ENV", "hds-python")
-  if (reticulate::virtualenv_exists(env)) {
-    reticulate::use_virtualenv(env, required = TRUE)
-  } else {
-    try(reticulate::use_condaenv(env, required = TRUE), silent = TRUE)
-  }
+    !nzchar(Sys.getenv("RETICULATE_PYTHON")) &&
+    exists("py_require", envir = asNamespace("reticulate"))) {
+  try(reticulate::py_require(c("pandas", "numpy", "matplotlib", "seaborn",
+                               "scikit-learn", "joblib")), silent = TRUE)
 }
 ```
