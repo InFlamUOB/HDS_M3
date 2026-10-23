@@ -39,7 +39,7 @@ def check_setup():
                       detail=getattr(m, "__version__", ""))
         except ImportError:
             hds_check(f"package '{p}' available", False,
-                      hint=f"conda install {p}  (see the Setup chapter)")
+                      hint=f"pip install {p}  (see the Setup chapter)")
 
 
 def check_data(df, n_expected=1000):

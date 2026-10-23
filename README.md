@@ -43,12 +43,16 @@ a Python environment, since the chapters execute when rendered:
 install.packages(c("tidymodels", "tidyverse", "data.table", "rpart", "reticulate"))
 ```
 
-```bash
-conda create -n hds-python python=3.11 numpy pandas matplotlib seaborn scikit-learn joblib
+Or do both in one step, including the Python side, with:
+
+```r
+source("scripts/setup_local.R")   # or: make setup-r
 ```
 
-Set `HDS_PYTHON_ENV` in `.Renviron` if your environment has another name;
-`_common.qmd` points `reticulate` at it.
+It builds a Python environment called `hds-python` from whatever Python you
+have, installs the six libraries, and writes `RETICULATE_PYTHON` into
+`.Renviron` so every R session in the project uses it. Restart R afterwards.
+`.Renviron` is machine-specific and is not committed.
 
 ```bash
 make preview        # http://localhost:4200, reloads as you edit

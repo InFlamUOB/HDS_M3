@@ -31,7 +31,7 @@ check_setup <- function() {
     ok <- tryCatch({ reticulate::py_run_string("import sklearn, pandas"); TRUE },
                    error = function(e) FALSE)
     hds_check("Python can be reached from R, with pandas and scikit-learn", ok,
-              hint = "see the Setup chapter; the usual cause is that use_condaenv() names an environment that does not exist")
+              hint = "run source(\"scripts/setup_local.R\") and restart R; check with reticulate::py_config()")
   }
   invisible(NULL)
 }
