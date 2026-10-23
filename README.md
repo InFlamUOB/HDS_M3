@@ -17,6 +17,9 @@ requirement, because nothing in the booklet executes at render time. **Quarto
 1.4 or newer**, which is what the Quarto Live extension needs; CI builds with
 1.7.32. Check yours with `quarto --version`.
 
+`make doctor` reports all of this for your machine and prints the exact install
+command for anything missing. It changes nothing.
+
 R and Python are *not* needed to build or preview the site. They are needed only
 to run `scripts/make_data.R`, or to work through the exercises on your own
 machine rather than in the browser. Nothing here uses `reticulate` or a conda
@@ -33,6 +36,25 @@ make                # the full list
 
 `make preview` is the one you work in: edit a chapter, save, and the page
 reloads with your live cells working exactly as a student will see them.
+
+## Editing in Positron or RStudio
+
+Open `HDS_M3.Rproj`. Both editors then treat this as a project with the working
+directory at the project root, which is what every path in the booklet assumes —
+getting that wrong is the usual cause of "file not found" when editing Quarto by
+hand.
+
+The **Render** and **Preview** buttons act on the whole book, via `_quarto.yml`,
+and are equivalent to `make preview`.
+
+One thing that surprises people: the editor will *not* offer to run the
+` ```{webr} ` and ` ```{pyodide} ` cells in your local R or Python session, and
+there is no "Run cell" button on them. That is correct — those cells exist to be
+executed by the reader's browser, and the chapters pin `engine: markdown` so
+nothing is executed at render time either. To try a cell's code against real R or
+Python, paste it into the console. That is also how changes should be checked
+before they are pushed: the code in a live cell is never exercised by rendering,
+so rendering cleanly is no evidence that it works.
 
 ## Working on this together
 

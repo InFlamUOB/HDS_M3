@@ -1,5 +1,7 @@
 # Everything you need for a teaching day. Run `make` for the list.
 #
+#   make doctor             check this machine has what the booklet needs
+#   make setup-r            install the R packages used off-browser
 #   make preview            live-reloading local site (the one you work in)
 #   make site               build the student booklet into _book/
 #   make instructor         build the staff copy into _book-instructor/
@@ -18,10 +20,16 @@ PYTHON ?= python3
 RSCRIPT ?= Rscript
 
 .DEFAULT_GOAL := help
-.PHONY: help preview site instructor worksheets day data check links all clean
+.PHONY: help doctor setup-r preview site instructor worksheets day data check links all clean
 
 help:
 	@grep -E '^#   make' $(MAKEFILE_LIST) | sed 's/^#   //'
+
+doctor:
+	@$(PYTHON) scripts/doctor.py
+
+setup-r:
+	$(RSCRIPT) scripts/setup_local.R
 
 preview:
 	$(QUARTO) preview
