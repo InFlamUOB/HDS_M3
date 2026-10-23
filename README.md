@@ -29,6 +29,47 @@ make                # the full list
 `make preview` is the one you work in: edit a chapter, save, and the page
 reloads with your live cells working exactly as a student will see them.
 
+## Working on this together
+
+This repository is the single source of truth. Two people edit it — whoever is
+at the keyboard, and an assistant working through the GitHub API — and anything
+that reaches `main` is published automatically. That works as long as both
+sides follow the same small discipline.
+
+**Editing on your machine**
+
+```bash
+git pull                       # ALWAYS first: the assistant may have pushed
+# ... edit the .qmd files, `make preview` to see them ...
+make check                     # catches the faults that only show up in a browser
+git add -A && git commit -m "what changed and why"
+git pull --rebase              # again, in case something landed while you worked
+git push
+```
+
+The two `git pull`s are the whole protocol. Skipping the first means editing a
+stale file; skipping the second means a rejected push and a merge to untangle.
+
+**When the assistant edits**
+
+It reads the current state from GitHub rather than any copy it holds, so it
+cannot overwrite work it has not seen, and it never force-pushes. Anything
+beyond a small fix arrives as a **pull request** rather than a push to `main`,
+so you see the diff and decide what lands. Merge it on GitHub, then `git pull`
+locally.
+
+**If you are both editing at once**
+
+Different files are fine; git merges them without help. The same file at the
+same time is the one case that needs care — say which chapter you are working
+in, and the other side stays out of it. There is no locking.
+
+**What is never committed**
+
+`_book/`, `_book-instructor/`, `_freeze/`, `.quarto/` and `print/` are build
+output, all listed in `.gitignore`. Only sources belong in the repository; the
+site is rebuilt from them on every push.
+
 ## Publishing
 
 The repository ships a GitHub Actions workflow, `.github/workflows/publish.yml`,
