@@ -30,8 +30,8 @@ One line in `_quarto.yml`:
 show-solutions: true
 ```
 
-Commit, push, and the site rebuilds with every worked answer and its output
-visible. Set it back to `false` to hide them again. Until then the answers are
+Then `make site` and push. The site rebuilds with every worked answer and its
+output visible. Set it back to `false`, render and push to hide them again. Until then the answers are
 not merely collapsed — they are not in the page at all.
 
 ## Running it
@@ -59,13 +59,15 @@ make                # every command
 
 ## Publishing
 
-`.github/workflows/publish.yml` renders and deploys to GitHub Pages on every
-push to `main`. It does **not** execute the chapters: the executed results live
-in `_freeze/`, which is committed, so the job needs Quarto alone.
+`.github/workflows/publish.yml` publishes to GitHub Pages on every push to
+`main`. It does **not** build the site: you render on your own machine, where R
+and Python live, and commit `_book/`; the job publishes that folder. Students
+therefore see byte for byte what you saw locally, with no dependence on which
+Quarto version a runner installs.
 
-That is the one obligation this design carries: **after changing a chapter's
-code, render locally (`make site`) and commit `_freeze/`**, or the published
-output will be stale. CI fails if `_freeze/` is missing altogether.
+That is the one obligation this design carries: **after changing a chapter, run
+`make site` and commit `_book/` with it.** CI refuses to publish if `_book/` is
+missing, or if any `.qmd` is newer than the rendered site.
 
 Pull requests get the same checks and the same render with deployment skipped,
 so a change can be proved before it publishes.
@@ -88,7 +90,7 @@ scripts/make_data.R      generates every dataset from one seed
 scripts/check_cells.py   the pre-push check
 scripts/check_links.py   dead links and unresolved cross-references, after a render
 data/                    generated CSVs, published so students can download them
-_freeze/                 executed chapter output, committed so CI need not run code
+_book/                   the rendered site, committed; this is what gets published
 ```
 
 ## Design decisions worth knowing before you edit

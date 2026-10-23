@@ -1,24 +1,21 @@
-# Renders the booklet and publishes it to GitHub Pages on every push to main.
-# The chapters execute when YOU render locally; the results are committed in
-# _freeze/, so this job replays them and needs Quarto alone - no R, no Python.
-# Render locally and commit _freeze/ whenever you change a chapter's code.
+# Publishes the booklet to GitHub Pages.
 #
-# One-time setup, in the repository: Settings -> Pages -> Build and deployment
-# -> Source: GitHub Actions.
+# The site is NOT built here. You render it on your own machine, where R and
+# Python live, and commit the _book/ folder; this job simply publishes that
+# folder. The consequence is worth the trade: what students see is byte for byte
+# what you saw locally, with no dependence on which Quarto version a runner
+# happens to install.
 #
-# The instructor build is deliberately NOT produced here. It is rendered locally
-# with `make instructor`, so solutions cannot reach the public site by accident.
+# So the rule is: after changing a chapter, `make site`, then commit _book/
+# along with your change. `make check` and the link check guard the rest.
+#
+# One-time setup: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
 
 name: Publish booklet
 
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'print/**'
-      - '**/*.pdf'
-  # Pull requests get the same checks and the same render, but are not
-  # deployed - so a change can be proved safe before it is published.
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -38,22 +35,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: quarto-dev/quarto-actions/setup@v2
-        with:
-          version: 1.7.32
-
       - name: Check the chapters
         run: python3 scripts/check_cells.py
 
-      - name: Check that the executed output is committed
+      - name: Check that the rendered site is committed and current
         run: |
-          if [ ! -d _freeze ]; then
-            echo "::error::_freeze/ is missing. Render locally (make site) and commit it, or the published chapters will have no output."
+          if [ ! -f _book/index.html ]; then
+            echo "::error::_book/index.html is missing. Run 'make site' and commit _book/."
             exit 1
           fi
-
-      - name: Render student booklet
-        run: quarto render --to live-html
+          newer=$(find . -name '*.qmd' -newer _book/index.html -not -path './_book/*' -print -quit)
+          if [ -n "$newer" ]; then
+            echo "::error::$newer is newer than the rendered site. Run 'make site' and commit _book/."
+            exit 1
+          fi
 
       - name: Check for dead links and unresolved cross-references
         run: python3 scripts/check_links.py _book
