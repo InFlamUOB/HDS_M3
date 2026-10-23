@@ -58,12 +58,6 @@ so rendering cleanly is no evidence that it works.
 
 ## Working on this together
 
-**New to this, or to git? Read [CONTRIBUTING.md](CONTRIBUTING.md)** — a
-step-by-step tutorial covering the three places the booklet lives, your first
-change keystroke by keystroke, the two errors you will actually hit, how pull
-requests reach you, and running R and the booklet's checks from the terminal.
-The rest of this section is the summary.
-
 This repository is the single source of truth. Two people edit it — whoever is
 at the keyboard, and an assistant working through the GitHub API — and anything
 that reaches `main` is published automatically. That works as long as both
