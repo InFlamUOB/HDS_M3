@@ -17,6 +17,10 @@ on:
     paths-ignore:
       - 'print/**'
       - '**/*.pdf'
+  # Pull requests get the same checks and the same render, but are not
+  # deployed - so a change can be proved safe before it is published.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -55,11 +59,13 @@ jobs:
         run: python3 scripts/check_links.py _book
 
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
         with:
           path: _book
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
