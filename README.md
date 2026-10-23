@@ -55,12 +55,31 @@ environment to match on first use, fetching Python itself if the machine has
 none. `scripts/setup_local.R` triggers that once so the download does not land
 mid-exercise. Nothing to activate, and nothing machine-specific to commit.
 
+These are the commands. The first two are Quarto itself, and the Preview and
+Render buttons in Positron run exactly the same thing:
+
 ```bash
-make preview        # http://localhost:4200, reloads as you edit
-make site           # build into _book/
-make check          # before you push
-make                # every command
+quarto preview                     # local site at :4200, reloads as you edit
+quarto render                      # build into _book/ — commit this with your edit
+python3 scripts/check_cells.py     # before you push: blanks, hidden answers, links
+python3 scripts/check_links.py _book   # after a build: dead links in the HTML
 ```
+
+The rest are the occasional ones:
+
+```bash
+Rscript scripts/setup_local.R                       # install R packages, settle Python
+Rscript scripts/make_data.R                         # regenerate every dataset
+quarto render --profile instructor                  # staff copy, into _book-instructor/
+python3 scripts/make_worksheet.py --day 1 --profile student
+quarto render print/day1-student.qmd --to typst     # then the printable PDF
+python3 scripts/new_day.py --day 2 --title "..." --exercises a,b   # next day
+```
+
+There is a `Makefile` with shortcuts for all of these — `make preview`, `make
+site`, `make check`, `make day DAY=2`, `make` for the list — but it is only a
+convenience. `make` is a general build tool that ships with macOS, nothing to do
+with Quarto, and the commands above are what it runs. Ignore it if you prefer.
 
 ## Publishing
 
@@ -115,9 +134,11 @@ _book/                   the rendered site, committed; this is what gets publish
 ## Adding a day
 
 ```bash
-make day DAY=2 TITLE="Validation you can defend"
+python3 scripts/new_day.py --day 2 --title "Validation you can defend" \
+    --exercises first-exercise,second-exercise
 # write the chapters
-make check
-make site            # executes them; commit _book/ with your changes
+python3 scripts/check_cells.py
+quarto render        # executes them; commit _book/ with your changes
 git push
 ```
+
