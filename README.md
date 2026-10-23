@@ -13,9 +13,14 @@ session. Each exercise has an R path and a Python path.
 ## Running it
 
 Install [Quarto](https://quarto.org/docs/get-started/) — that is the only
-requirement, because nothing in the booklet executes at render time. R and
-Python are not needed to build the site; they are needed only if you want to run
-`scripts/make_data.R` or work through the exercises locally.
+requirement, because nothing in the booklet executes at render time. **Quarto
+1.4 or newer**, which is what the Quarto Live extension needs; CI builds with
+1.7.32. Check yours with `quarto --version`.
+
+R and Python are *not* needed to build or preview the site. They are needed only
+to run `scripts/make_data.R`, or to work through the exercises on your own
+machine rather than in the browser. Nothing here uses `reticulate` or a conda
+environment: the browser runtimes replaced both.
 
 ```bash
 make preview        # local site at http://localhost:4200, reloads as you edit
