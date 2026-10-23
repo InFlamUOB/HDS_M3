@@ -4,33 +4,24 @@ engine: markdown
 
 # Troubleshooting {#sec-troubleshooting}
 
-## In the browser
+## Rendering
 
-**The first cell sits on "Downloading webR" for a long time**
-: It is fetching about 48 MB of R packages. On a slow connection this is a
-  minute or two, once per browser. It is cached afterwards, including between
-  pages. If it never finishes, your network may be blocking
-  `repo.r-wasm.org` or `cdn.jsdelivr.net`.
-
-**`object 'los' not found`, in a cell that worked a minute ago**
-: Each *page* is a separate session, and cells run in the order you run them,
-  not the order they appear. Scroll up and run the worked-example cells on this
-  page first.
+**`there is no package called 'reticulate'`, or the Python chunks fail**
+: The chapters run R and Python side by side, which needs `reticulate` and a
+  conda environment. See @sec-setup; set `HDS_PYTHON_ENV` in `.Renviron` if
+  yours is not called `hds-python`.
 
 **`cannot open file 'data/los_data.csv'`**
-: The page mounts its data files into the browser's virtual filesystem when it
-  starts. If a cell runs before that finishes, it will not find them — wait for
-  the status line to clear and run it again.
+: Paths are relative to the project root. Open `HDS_M3.Rproj` so the working
+  directory is right, or check `getwd()`.
 
-**My plot does not appear**
-: In R, the plot must be the value of the last expression, or printed
-  explicitly. In Python, end the cell with `plt.show()`.
+**The published site shows old numbers**
+: The site replays `_freeze/`, it does not execute anything. Render locally
+  (`make site`) and commit `_freeze/` along with your chapter change.
 
-**A package I want is not available**
-: The page loads a fixed list (see `_quarto.yml`). You can add one in a cell with
-  `webr::install("pkgname")` in R or `import micropip; await
-  micropip.install("pkgname")` in Python, but not every package has a
-  WebAssembly build. If it does not, that analysis belongs on your own machine.
+**A chunk containing `______` fails the render**
+: It needs `#| eval: false`. Task code is shown, never run. `make check` catches
+  this before you push.
 
 ## Modelling
 
@@ -73,12 +64,10 @@ engine: markdown
 : The Quarto Live extension must be present in `_extensions/live/`. Reinstall
   with `quarto add r-wasm/quarto-live`.
 
-**Rendering is slow, or asks for R**
-: It should do neither: no code executes at render time, because every cell runs
-  in the reader's browser, and the chapters pin `engine: markdown`. If Quarto
-  starts looking for R or Python, a chapter has either lost that front matter or
-  gained a server-executed ` ```{r} ` chunk where it wanted ` ```{webr} `.
-  `make check` catches both.
+**Rendering is slow**
+: It executes every chapter the first time. After that `freeze: auto` replays
+  the cached results, and only chapters you changed re-execute. Delete `_freeze/`
+  to force a full rebuild.
 
 **The printed worksheet is missing the tasks**
 : `scripts/make_worksheet.py` builds it from the chapter sources. Re-run it after

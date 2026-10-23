@@ -1,6 +1,8 @@
 ---
-engine: markdown
+engine: knitr
 ---
+
+{{< include _common.qmd >}}
 
 # Exercise 1.2 — Your first ML pipeline {#sec-pipeline}
 
@@ -49,8 +51,7 @@ outcome), `Age` in years, and `Severity`, a 1–10 score. It is simulated
 ::: {.panel-tabset}
 ## R
 
-```{webr}
-#| autorun: true
+```{r}
 library(readr); library(dplyr)
 los <- read_csv("data/los_data.csv")
 summary(los)
@@ -58,8 +59,7 @@ summary(los)
 
 ## Python
 
-```{pyodide}
-#| autorun: true
+```{python}
 import pandas as pd
 los = pd.read_csv("data/los_data.csv")
 los.describe()
@@ -101,8 +101,7 @@ all, which is the most recognisable feature of real LOS data.
 ::: {.panel-tabset}
 ## R
 
-```{webr}
-#| autorun: true
+```{r}
 library(parsnip); library(rsample); library(yardstick)
 
 set.seed(42)
@@ -118,8 +117,7 @@ mae(preds, truth = LOS, estimate = .pred)
 
 ## Python
 
-```{pyodide}
-#| autorun: true
+```{python}
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error
@@ -173,49 +171,58 @@ age and severity — and compute its MAE on the same test set.
 ::: {.panel-tabset}
 ## R
 
-```{webr}
-#| exercise: baseline_r
+```{r}
+#| eval: false
 source("checks/checks.R")
 mae_model    <- mae(preds, truth = LOS, estimate = .pred)$.estimate
 mae_baseline <- mean(abs(test$LOS - ______))
 check_beats_baseline(mae_model, mae_baseline)
 ```
 
-```{webr}
-#| exercise: baseline_r
-#| hint: true
-# The baseline prediction is one number, used for every test patient:
-# the mean outcome of the TRAINING rows.
-mae_baseline <- mean(abs(test$LOS - mean(train$LOS)))
+::: {.callout-tip collapse="true"}
+## Stuck?
+```{r}
+#| eval: false
+# The baseline prediction is ONE number, used for every test patient: the mean
+# outcome of the TRAINING rows. So there is no model to fit - just the mean of
+# one column, and then the average absolute difference from the test outcomes.
+# mean() and abs() are all you need.
 ```
+:::
 
-```{webr}
-#| exercise: baseline_r
-#| solution: true
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
 source("checks/checks.R")
 mae_model    <- mae(preds, truth = LOS, estimate = .pred)$.estimate
 mae_baseline <- mean(abs(test$LOS - mean(train$LOS)))
 check_beats_baseline(mae_model, mae_baseline)
 ```
+:::
+:::
 
 ## Python
 
-```{pyodide}
-#| exercise: baseline_py
+```{python}
+#| eval: false
 import numpy as np, sys; sys.path.append("checks")
 from checks import *
 mae_baseline = mean_absolute_error(y_test, np.full(len(y_test), ______))
 check_beats_baseline(mae_test, mae_baseline)
 ```
 
-```{pyodide}
-#| exercise: baseline_py
-#| solution: true
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
 import numpy as np, sys; sys.path.append("checks")
 from checks import *
 mae_baseline = mean_absolute_error(y_test, np.full(len(y_test), y_train.mean()))
 check_beats_baseline(mae_test, mae_baseline)
 ```
+:::
+:::
 :::
 
 The check prints the model's error as a percentage of the baseline's. Write that
@@ -229,8 +236,8 @@ baseline?** It is a short answer and it is not "the model is bad".
 MAE averages over every patient and so hides who is being badly served. Plot the
 residuals — actual minus predicted — against the prediction.
 
-```{webr}
-#| exercise: resid_r
+```{r}
+#| eval: false
 preds |>
   mutate(resid = ______) |>
   ggplot(aes(x = .pred, y = resid)) +
@@ -239,9 +246,10 @@ preds |>
   labs(x = "Predicted LOS (days)", y = "Residual (days)")
 ```
 
-```{webr}
-#| exercise: resid_r
-#| solution: true
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
 library(ggplot2)
 preds |>
   mutate(resid = LOS - .pred) |>
@@ -250,6 +258,8 @@ preds |>
   geom_hline(yintercept = 0) +
   labs(x = "Predicted LOS (days)", y = "Residual (days)")
 ```
+:::
+:::
 
 Is the error the same size everywhere, or systematically worse for some
 patients? If a clinician asked "can I trust this for my oldest patients?", what
@@ -266,8 +276,8 @@ clinical question are all different and the code is structurally identical. If
 you are rewriting more than the variable names and the file path, stop and ask
 why.
 
-```{webr}
-#| exercise: bwt
+```{r}
+#| eval: false
 source("checks/checks.R")
 bwt <- read_csv("data/birthweight.csv")
 check_data(bwt, n_expected = 600)   # note: this check expects columns Age/Severity/LOS and will complain
@@ -276,19 +286,21 @@ set.seed(42)
 ______
 ```
 
-```{webr}
-#| exercise: bwt
-#| hint: true
-# Same five steps. The split:
-split_bwt <- initial_split(bwt, prop = 0.8)
-train_bwt <- training(split_bwt); test_bwt <- testing(split_bwt)
-# then fit bw ~ bpd + ad, predict on test_bwt, and compare MAE with the
-# predict-the-mean baseline.
+::: {.callout-tip collapse="true"}
+## Stuck?
+```{r}
+#| eval: false
+# Exactly the five steps above, with three names changed. The functions you
+# need are the ones you have already used: initial_split(), training(),
+# testing(), linear_reg() |> set_engine("lm") |> fit(), predict(), mae().
+# The formula is bw ~ bpd + ad.
 ```
+:::
 
-```{webr}
-#| exercise: bwt
-#| solution: true
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
 source("checks/checks.R")
 bwt <- read_csv("data/birthweight.csv")
 
@@ -304,6 +316,8 @@ mae_bwt          <- mae(preds_bwt, truth = bw, estimate = .pred)$.estimate
 mae_bwt_baseline <- mean(abs(test_bwt$bw - mean(train_bwt$bw)))
 check_beats_baseline(mae_bwt, mae_bwt_baseline)
 ```
+:::
+:::
 
 Report the test MAE, the baseline MAE, and one sentence a midwife could use.
 

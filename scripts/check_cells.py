@@ -1,138 +1,65 @@
 #!/usr/bin/env python3
-"""Lint the live code cells. Run with `make check`, before you push.
+"""Check the chapters before you push.  `make check`
 
-Catches the mistakes that are invisible at render time and only show up when a
-student clicks something:
+Three faults that render without complaint:
 
-  * a chapter missing its `engine: markdown` front matter (Quarto then reaches
-    for knitr or Jupyter, and the render needs R or Python it will not find);
-  * two exercises sharing a key on one page (the Quarto Live filter errors);
-  * a hint or solution cell whose key has no exercise;
-  * an exercise cell with no `______` for the student to fill in;
-  * a solution cell that cannot run on its own, because the exercise cell it
-    replaces did the imports;
-  * a link to a chapter file that does not exist, usually a rename that left a
-    link behind;
-  * a data file used in a cell but not mounted into the browser filesystem;
-  * a library or module used in a cell but absent from the runtime package list.
+  * a task chunk (one containing `______`) that is NOT marked `eval: false`,
+    which makes the render fail or, worse, publish a broken result;
+  * a worked answer that is not inside a `when-meta="show-solutions"` block, so
+    it would be published before the session;
+  * a link to a chapter file that does not exist.
+
+It also prints whether solutions are currently released, since that is a
+deliberate switch and worth seeing before a push.
 """
-
-import pathlib
-import re
-import sys
+import pathlib, re, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-CELL = re.compile(r"^```\{(webr|pyodide)\}\n((?:#\|[^\n]*\n)*)(.*?)\n```\s*$",
-                  re.S | re.M)
-
+CHUNK = re.compile(r"^```\{(r|python)\}\n((?:#\|[^\n]*\n)*)(.*?)\n```[ \t]*$", re.S | re.M)
 problems: list[str] = []
-notes: list[str] = []
-
-
-def fail(chapter: str, msg: str) -> None:
-    problems.append(f"{chapter}: {msg}")
-
-
-def runtime_packages() -> tuple[set[str], set[str]]:
-    cfg = (ROOT / "_quarto.yml").read_text()
-    def listed(key: str) -> set[str]:
-        m = re.search(rf"^{key}:\n(?:  .*\n)*?  packages:\s*\[(.*?)\]", cfg, re.M)
-        return {p.strip() for p in m.group(1).split(",")} if m else set()
-    return listed("webr"), listed("pyodide")
-
-
-def mounted_files() -> set[str]:
-    cfg = (ROOT / "_quarto.yml").read_text()
-    tail = cfg.split("\nresources:", 1)[-1]
-    return set(re.findall(r"^\s*-\s*(\S+)\s*$", tail, re.M))
-
 
 def main() -> int:
-    webr_pkgs, pyodide_pkgs = runtime_packages()
-    mounted = mounted_files()
-    stdlib = set(sys.stdlib_module_names) | {"checks"}
-    # names the runtime attaches for us, plus pandas' conventional aliases
-    py_ok = pyodide_pkgs | {"sklearn", "matplotlib", "numpy", "pandas"}
+    cfg = (ROOT / "_quarto.yml").read_text()
+    released = re.search(r"^show-solutions:\s*true", cfg, re.M) is not None
 
     for chapter in sorted(ROOT.glob("day*.qmd")):
-        text = chapter.read_text()
-        name = chapter.name
+        text, name = chapter.read_text(), chapter.name
 
-        if not text.startswith("---"):
-            fail(name, "missing front matter; add `engine: markdown`")
-        elif "engine: markdown" not in text.split("---", 2)[1]:
-            fail(name, "front matter does not pin `engine: markdown`; with any other "
-                       "engine the render needs R or Python installed")
+        # worked answers must sit inside the released-only block
+        spans = [(m.start(), m.end()) for m in
+                 re.finditer(r':::+ \{\.content-visible when-meta="show-solutions"\}.*?\n:::\n:::',
+                             text, re.S)]
+        for m in re.finditer(r"## Worked answer", text):
+            if not any(a <= m.start() <= b for a, b in spans):
+                problems.append(f"{name}: a 'Worked answer' sits outside the "
+                                "when-meta=\"show-solutions\" block, so it would publish early")
+
+        n_task = n_worked = 0
+        for m in CHUNK.finditer(text):
+            opts, body = m.group(2), m.group(3)
+            if "______" in body:
+                n_task += 1
+                if not re.search(r"^#\|\s*eval:\s*false", opts, re.M):
+                    problems.append(f"{name}: a chunk containing ______ is missing "
+                                    "`#| eval: false` and will fail when rendered")
+            else:
+                n_worked += 1
 
         for link in re.findall(r"\]\(([\w./-]+\.qmd)(?:#[\w-]+)?\)", text):
             if not (ROOT / link).exists():
-                fail(name, f"link to `{link}`, which does not exist")
+                problems.append(f"{name}: link to `{link}`, which does not exist")
 
-        keys: dict[str, list[str]] = {}
-        for eng, opts, body in ((m.group(1), m.group(2), m.group(3))
-                               for m in CELL.finditer(text)):
-            key = re.search(r"exercise:\s*(\S+)", opts)
-            key = key.group(1) if key else None
-            kind = ("solution" if "solution: true" in opts
-                    else "hint" if "hint: true" in opts else "main")
-            if key:
-                keys.setdefault(key, []).append(kind)
+        print(f"  {name:<34} {n_worked:>2} worked, {n_task:>2} tasks, "
+              f"{len(spans):>2} worked answers")
 
-            if kind == "main" and key and "______" not in body:
-                fail(name, f"exercise `{key}` has no ______ for the student")
-
-            for f in re.findall(r'["\'](data/[\w./-]+)["\']', body):
-                if f not in mounted and not re.search(r"\{.*\}", f):
-                    fail(name, f"`{f}` is used but not under `resources:` in _quarto.yml")
-
-            if eng == "webr":
-                for lib in re.findall(r"library\((\w+)\)", body):
-                    if lib not in webr_pkgs:
-                        fail(name, f"`library({lib})` but {lib} is not in the webr package list")
-            else:
-                for mod in re.findall(r"^\s*(?:import|from)\s+([\w.]+)", body, re.M):
-                    top = mod.split(".")[0]
-                    if top not in py_ok and top not in stdlib:
-                        fail(name, f"`import {top}` but {top} is not in the pyodide package list")
-
-        for key, kinds in keys.items():
-            if kinds.count("main") == 0:
-                fail(name, f"key `{key}` has a {kinds[0]} cell but no exercise cell")
-            if kinds.count("main") > 1:
-                fail(name, f"key `{key}` is used by {kinds.count('main')} exercise cells")
-
-        # a solution must stand alone: if the cell it replaces imports or sources
-        # something, the solution has to do it too
-        for key in keys:
-            cells = {kind: body for _, opts, body in
-                     ((m.group(1), m.group(2), m.group(3)) for m in CELL.finditer(text))
-                     if (kind := ("solution" if "solution: true" in opts
-                                  else "hint" if "hint: true" in opts else "main"))
-                     and re.search(r"exercise:\s*" + re.escape(key) + r"\b", opts)}
-            main_cell, sol = cells.get("main", ""), cells.get("solution")
-            if sol is None:
-                continue
-            setup = re.findall(r"^\s*(?:import\s+\w+|from\s+[\w.]+\s+import|source\(.*\))",
-                               main_cell, re.M)
-            if setup and not re.findall(
-                    r"^\s*(?:import\s+\w+|from\s+[\w.]+\s+import|source\(.*\))", sol, re.M):
-                fail(name, f"solution for `{key}` omits the imports its exercise cell makes; "
-                           "clicking Solution replaces that cell, so it must run standalone")
-
-        n = len(CELL.findall(text))
-        if n:
-            notes.append(f"{name}: {n} live cells, {len(keys)} exercises")
-
-    for line in notes:
-        print("  " + line)
+    print(f"\nsolutions are {'RELEASED (published to students)' if released else 'hidden'}")
     if problems:
-        print("\nproblems found:", file=sys.stderr)
+        print("\nproblems:", file=sys.stderr)
         for p in problems:
             print("  ✗ " + p, file=sys.stderr)
         return 1
-    print("\nall live cells pass")
+    print("chapters pass")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

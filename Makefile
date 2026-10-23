@@ -1,5 +1,6 @@
 # Everything you need for a teaching day. Run `make` for the list.
 #
+#   make setup-r            install the R packages used off-browser
 #   make preview            live-reloading local site (the one you work in)
 #   make site               build the student booklet into _book/
 #   make instructor         build the staff copy into _book-instructor/
@@ -7,6 +8,7 @@
 #   make day DAY=2 TITLE="..."  scaffold the next day and register it
 #   make data               regenerate every dataset from scripts/make_data.R
 #   make check              source checks (live cells, links), before you push
+#   make code DAY=1         write the day's code out as plain R and Python scripts
 #   make links              check the built site for dead links
 #   make all DAY=1          data + site + instructor + worksheets
 #   make clean              remove build output
@@ -18,19 +20,22 @@ PYTHON ?= python3
 RSCRIPT ?= Rscript
 
 .DEFAULT_GOAL := help
-.PHONY: help preview site instructor worksheets day data check links all clean
+.PHONY: help setup-r preview site instructor worksheets day data check code links all clean
 
 help:
 	@grep -E '^#   make' $(MAKEFILE_LIST) | sed 's/^#   //'
+
+setup-r:
+	$(RSCRIPT) scripts/setup_local.R
 
 preview:
 	$(QUARTO) preview
 
 site:
-	$(QUARTO) render --to live-html
+	$(QUARTO) render --to html
 
 instructor:
-	$(QUARTO) render --to live-html --profile instructor
+	$(QUARTO) render --to html --profile instructor
 
 worksheets:
 	$(PYTHON) scripts/make_worksheet.py --day $(DAY) --profile student
@@ -50,14 +55,15 @@ day:
 data:
 	$(RSCRIPT) scripts/make_data.R
 
-# The same two gates the publish workflow applies.
+# The same gate the publish workflow applies.
 check:
-	@! grep -rEn '^```\{(r|python)[,}]' --include='day*.qmd' --include='index.qmd' . \
-	  || (echo 'A chapter has a server-executed chunk; use {webr} or {pyodide}.'; exit 1)
 	@$(PYTHON) scripts/check_cells.py
 
 # Needs a build: checks the rendered HTML for links whose target is missing and
 # for cross-references Quarto could not resolve.
+code:
+	@$(PYTHON) scripts/make_code.py --day $(DAY)
+
 links:
 	@$(PYTHON) scripts/check_links.py _book
 
