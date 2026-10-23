@@ -1,15 +1,17 @@
 ---
-engine: markdown
+engine: knitr
 ---
+
+{{< include _common.qmd >}}
 
 # Exercise 1.1 — Two languages, one analysis {#sec-two-languages}
 
 **45 minutes · work in pairs, one of you driving each language**
 
 :::: {.web-only}
-Everything on this page runs in your browser. The first cell you run takes a
-little while to start — it is downloading R or Python itself — and everything
-after that is immediate.
+Every cell on this page is a real R or Python cell. Open `day1-01-two-languages.qmd`
+in your editor and run them one at a time — the output printed here is what you
+should get. If a package is missing, see @sec-setup.
 ::::
 
 ## Objectives
@@ -33,8 +35,7 @@ that one difference.
 ::: {.panel-tabset}
 ## R
 
-```{webr}
-#| autorun: true
+```{r}
 library(readr)
 los <- read_csv("data/los_data.csv")
 head(los)
@@ -42,8 +43,7 @@ head(los)
 
 ## Python
 
-```{pyodide}
-#| autorun: true
+```{python}
 import pandas as pd
 los = pd.read_csv("data/los_data.csv")
 los.info()
@@ -62,8 +62,7 @@ This is where the two look least alike.
 ::: {.panel-tabset}
 ## R
 
-```{webr}
-#| autorun: true
+```{r}
 library(dplyr)
 los |>
   mutate(sev_band = if_else(Severity > 7, "high", "low")) |>
@@ -73,8 +72,7 @@ los |>
 
 ## Python
 
-```{pyodide}
-#| autorun: true
+```{python}
 (los
  .assign(sev_band=lambda d: (d["Severity"] > 7).map({True: "high", False: "low"}))
  .groupby("sev_band")["LOS"]
@@ -88,16 +86,14 @@ los |>
 ::: {.panel-tabset}
 ## R
 
-```{webr}
-#| autorun: true
+```{r}
 fit_r <- lm(LOS ~ Age + Severity, data = los)
 coef(fit_r)
 ```
 
 ## Python
 
-```{pyodide}
-#| autorun: true
+```{python}
 from sklearn.linear_model import LinearRegression
 X = los[["Age", "Severity"]]     # 2-D: a frame, not a series
 y = los["LOS"]                   # 1-D
@@ -119,8 +115,7 @@ rows. That is not a difference at all.
 ::: {.panel-tabset}
 ## R
 
-```{webr}
-#| autorun: true
+```{r}
 library(ggplot2)
 ggplot(los, aes(x = Age, y = LOS)) +
   geom_point(alpha = 0.3) +
@@ -130,8 +125,7 @@ ggplot(los, aes(x = Age, y = LOS)) +
 
 ## Python
 
-```{pyodide}
-#| autorun: true
+```{python}
 import matplotlib.pyplot as plt
 fig, ax = plt.subplots()
 ax.scatter(los["Age"], los["LOS"], alpha=0.3)
@@ -171,39 +165,45 @@ languages. Replace each `______`.
 ::: {.panel-tabset}
 ## R
 
-```{webr}
-#| exercise: mean_high_r
+```{r}
+#| eval: false
 source("checks/checks.R")
 mean_los_high <- los |> filter(______) |> pull(LOS) |> ______
 check_metric_range(mean_los_high, 70, 100, "mean LOS, high severity")
 ```
 
-```{webr}
-#| exercise: mean_high_r
-#| solution: true
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
 source("checks/checks.R")
 mean_los_high <- los |> filter(Severity > 7) |> pull(LOS) |> mean()
 check_metric_range(mean_los_high, 70, 100, "mean LOS, high severity")
 ```
+:::
+:::
 
 ## Python
 
-```{pyodide}
-#| exercise: mean_high_py
+```{python}
+#| eval: false
 import sys; sys.path.append("checks")
 from checks import *
 mean_los_high = los.loc[______, "LOS"].______
 check_metric_range(mean_los_high, 70, 100, "mean LOS, high severity")
 ```
 
-```{pyodide}
-#| exercise: mean_high_py
-#| solution: true
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
 import sys; sys.path.append("checks")
 from checks import *
 mean_los_high = los.loc[los["Severity"] > 7, "LOS"].mean()
 check_metric_range(mean_los_high, 70, 100, "mean LOS, high severity")
 ```
+:::
+:::
 :::
 
 The two should agree exactly — same rows, same arithmetic. If they do not, you
@@ -216,8 +216,8 @@ against age. This is not the same as the `geom_smooth()` line above, which fits
 `LOS ~ Age` alone and ignores severity — and the difference is the point of the
 task.
 
-```{webr}
-#| exercise: plot_fitted
+```{r}
+#| eval: false
 los$fitted <- ______
 ggplot(los, aes(x = Age)) +
   geom_point(aes(y = LOS), alpha = 0.3) +
@@ -225,22 +225,27 @@ ggplot(los, aes(x = Age)) +
   labs(x = "Age (years)", y = "Length of stay (days)")
 ```
 
-```{webr}
-#| exercise: plot_fitted
-#| hint: true
+::: {.callout-tip collapse="true"}
+## Stuck?
+```{r}
+#| eval: false
 # `fit_r` is already fitted. You want its predictions for every row.
 los$fitted <- predict(______)
 ```
+:::
 
-```{webr}
-#| exercise: plot_fitted
-#| solution: true
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
 los$fitted <- predict(fit_r)
 ggplot(los, aes(x = Age)) +
   geom_point(aes(y = LOS), alpha = 0.3) +
   geom_point(aes(y = fitted), colour = "red", size = 0.6) +
   labs(x = "Age (years)", y = "Length of stay (days)")
 ```
+:::
+:::
 
 The fitted values do not fall on a single line against age. Why not? Your answer
 to that is worth more than the plot.

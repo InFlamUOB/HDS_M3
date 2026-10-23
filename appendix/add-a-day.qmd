@@ -25,13 +25,9 @@ That writes `day2-00-overview.qmd`, one chapter per exercise named, and
 `part:` block in `_quarto.yml`. Re-running it leaves existing files alone, so it
 is safe to use again when you add a fourth exercise to a day.
 
-Chapter files live at the **project root**, named `day<N>-<nn>-<slug>.qmd`. They
-are not in folders, and that is deliberate: the live code cells fetch
-`data/los_data.csv` over HTTP relative to the page, and they write it into the
-browser's filesystem at the same path. Keeping pages at the root means one path
-string works in the browser, in RStudio and in the worksheet. Put the chapters
-one directory down and you need `../data/...` in the browser and `data/...`
-locally, which students will trip over for the rest of the module.
+Chapter files live at the **project root**, named `day<N>-<nn>-<slug>.qmd`, so
+that `data/los_data.csv` is the correct path everywhere: in the chunk you run in
+Positron, in the rendered page, and in the script a student copies it into.
 
 ## 2. Check it before you publish
 
@@ -40,19 +36,17 @@ make check
 ```
 
 `scripts/check_cells.py` catches the faults that render cleanly and then fail in
-front of a student: a missing `engine: markdown`, a duplicated exercise key, a
-hint or solution with no exercise, an exercise with no `______`, a solution that
-cannot run standalone, a data file not mounted into the browser, and a package
-missing from the runtime list. The publish workflow runs the same check, so a
-push with any of these fails before it reaches students.
+front of a student: a task chunk missing `eval: false`, a worked answer outside
+the `when-meta="show-solutions"` block (which would publish it before the
+session), and a link to a chapter that does not exist. The publish workflow runs
+the same check, so a push with any of these fails before it reaches students.
 
 ## 3. Add any new data to the generator
 
 Append to `scripts/make_data.R`; do not write a second script. One generator
 with one seed is what makes every student's copy identical and every expected
-value quotable. Then add the new file in two places in `_quarto.yml`: under
-`project: resources:` so it is published, and under the top-level `resources:`
-so the live cells mount it into the browser filesystem.
+value quotable. New data files are published automatically, since
+`project: resources:` includes `data/`.
 
 ## 4. Add a check, if the exercise needs one
 
@@ -83,32 +77,26 @@ quarto render print/day2-student.qmd --to typst    # printable worksheet
 Only `_book/` is published. The instructor profile writes elsewhere precisely so
 that publishing cannot leak solutions.
 
-## Writing live cells
+## Writing the cells
 
-| You want | Cell header |
+| You want | How |
 |---|---|
-| a worked example that runs itself on page load | `#\| autorun: true` |
-| a task the student fills in | `#\| exercise: unique-key` |
-| the answer, shown behind a button | `#\| exercise: unique-key` + `#\| solution: true` |
-| a nudge, shown behind a button | `#\| exercise: unique-key` + `#\| hint: true` |
+| a worked example, shown with its output | a plain ` ```{r} ` or ` ```{python} ` chunk |
+| a task for the student to fill in | the same, plus `#\| eval: false`, with `______` where the answer goes |
+| a hint | a `::: {.callout-tip collapse="true"}` block — name the function, never the line |
+| the worked answer | a `::: {.content-visible when-meta="show-solutions"}` block containing an executed chunk |
 
-: {tbl-colwidths="[52,48]"}
+Two rules, each learnt the hard way.
 
-Three rules, each learnt the hard way.
-
-1. **Exercise keys must be unique within a page**, and the R and Python versions
-   of the same task need different keys — `baseline_r` and `baseline_py`.
-2. **A solution cell must run on its own.** Clicking *Solution* replaces the
-   editor contents and runs them, so a solution that depends on an import made
-   in the exercise cell it replaced will fail. Anything an autorun cell created
-   earlier on the page is fine.
-3. **Mark blanks `______`**, six underscores. The worksheet generator leaves them
-   as they are, so they print as a line to write on.
+1. **A task chunk must be `eval: false`.** `______` is not valid code, so the
+   render fails without it. `make check` catches it.
+2. **Hints are always visible.** A hint containing the answer line publishes the
+   answer; name the functions instead.
 
 ## Keeping the worksheet under twenty pages
 
 `scripts/make_worksheet.py` drops solutions, hints, instructor blocks and
-browser-only notes, and flattens the R/Python tabs into labels, which is most of
+web-only notes, and flattens the R/Python tabs into labels, which is most of
 the saving. Day 1 comes out at 14 pages for students and 16 for staff. If a day
 runs long, the thing to cut is narrative, not tasks: move the discussion into a
 `::: {.web-only}` block, where it stays on the site and leaves the paper.

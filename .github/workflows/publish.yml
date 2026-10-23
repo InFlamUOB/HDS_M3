@@ -1,22 +1,23 @@
-# Renders the student booklet and publishes it to GitHub Pages on every push to
-# main. Nothing in the booklet executes at render time - every code cell runs in
-# the reader's browser - so this job needs Quarto and nothing else: no R, no
-# Python, no package cache. It finishes in well under a minute.
+# Publishes the booklet to GitHub Pages.
 #
-# One-time setup, in the repository: Settings -> Pages -> Build and deployment
-# -> Source: GitHub Actions.
+# The site is NOT built here. You render it on your own machine, where R and
+# Python live, and commit the _book/ folder; this job simply publishes that
+# folder. The consequence is worth the trade: what students see is byte for byte
+# what you saw locally, with no dependence on which Quarto version a runner
+# happens to install.
 #
-# The instructor build is deliberately NOT produced here. It is rendered locally
-# with `make instructor`, so solutions cannot reach the public site by accident.
+# So the rule is: after changing a chapter, `make site`, then commit _book/
+# along with your change. `make check` and the link check guard the rest.
+#
+# One-time setup: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
 
 name: Publish booklet
 
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'print/**'
-      - '**/*.pdf'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -33,33 +34,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: quarto-dev/quarto-actions/setup@v2
         with:
-          version: 1.7.32
+          fetch-depth: 0   # the staleness check below reads commit dates
 
-      - name: Check that no chapter executes at render time
-        run: |
-          if grep -rEn '^```\{(r|python)[,}]' --include='day*.qmd' --include='index.qmd' . ; then
-            echo "::error::A chapter contains a server-executed chunk. Use {webr} or {pyodide} so the cell runs in the reader's browser."
-            exit 1
-          fi
-
-      - name: Check the live cells
+      - name: Check the chapters
         run: python3 scripts/check_cells.py
 
-      - name: Render student booklet
-        run: quarto render --to live-html
+      - name: Check that the rendered site is committed and current
+        run: |
+          if [ ! -f _book/index.html ]; then
+            echo "::error::_book/index.html is missing. Run 'make site' and commit _book/."
+            exit 1
+          fi
+          # Compare commit dates, not file mtimes: a checkout gives every file the
+          # same mtime, so an mtime test here would pass or fail at random.
+          src=$(git log -1 --format=%ct -- '*.qmd' '_quarto.yml' 'theme.scss' 'references.bib')
+          book=$(git log -1 --format=%ct -- _book)
+          if [ "$src" -gt "$book" ]; then
+            echo "::error::A chapter changed more recently than _book/. Run 'make site' and commit the result."
+            exit 1
+          fi
 
       - name: Check for dead links and unresolved cross-references
         run: python3 scripts/check_links.py _book
 
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
         with:
           path: _book
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
