@@ -34,6 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the staleness check below reads commit dates
 
       - name: Check the chapters
         run: python3 scripts/check_cells.py
@@ -44,9 +46,12 @@ jobs:
             echo "::error::_book/index.html is missing. Run 'make site' and commit _book/."
             exit 1
           fi
-          newer=$(find . -name '*.qmd' -newer _book/index.html -not -path './_book/*' -print -quit)
-          if [ -n "$newer" ]; then
-            echo "::error::$newer is newer than the rendered site. Run 'make site' and commit _book/."
+          # Compare commit dates, not file mtimes: a checkout gives every file the
+          # same mtime, so an mtime test here would pass or fail at random.
+          src=$(git log -1 --format=%ct -- '*.qmd' '_quarto.yml' 'theme.scss' 'references.bib')
+          book=$(git log -1 --format=%ct -- _book)
+          if [ "$src" -gt "$book" ]; then
+            echo "::error::A chapter changed more recently than _book/. Run 'make site' and commit the result."
             exit 1
           fi
 
