@@ -8,7 +8,6 @@
 #   make day DAY=2 TITLE="..."  scaffold the next day and register it
 #   make data               regenerate every dataset from scripts/make_data.R
 #   make check              source checks (live cells, links), before you push
-#   make code DAY=1         write the day's code out as plain R and Python scripts
 #   make links              check the built site for dead links
 #   make all DAY=1          data + site + instructor + worksheets
 #   make clean              remove build output
@@ -20,7 +19,7 @@ PYTHON ?= python3
 RSCRIPT ?= Rscript
 
 .DEFAULT_GOAL := help
-.PHONY: help setup-r preview site instructor worksheets day data check code links all clean
+.PHONY: help setup-r preview site instructor worksheets day data check links all clean
 
 help:
 	@grep -E '^#   make' $(MAKEFILE_LIST) | sed 's/^#   //'
@@ -61,9 +60,6 @@ check:
 
 # Needs a build: checks the rendered HTML for links whose target is missing and
 # for cross-references Quarto could not resolve.
-code:
-	@$(PYTHON) scripts/make_code.py --day $(DAY)
-
 links:
 	@$(PYTHON) scripts/check_links.py _book
 

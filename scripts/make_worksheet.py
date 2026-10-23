@@ -11,14 +11,14 @@ Writes print/day<N>-<profile>.qmd, which is rendered with
 The chapters are the single source of truth: this script only transforms them.
 
 What it does
-  * rewrites live cells (```{webr} / ```{pyodide}) into plain ```r / ```python
-    blocks, since nothing executes on paper;
-  * drops hint and solution cells for the student profile, keeps and labels them
-    for the instructor profile;
+  * rewrites executable cells (```{r} / ```{python}) into plain ```r / ```python
+    blocks and strips their `#|` options, since nothing executes on paper;
+  * drops the worked-answer blocks for the student profile, keeps and labels
+    them for the instructor profile;
   * drops ::: {.content-visible when-profile="instructor"} blocks for the
     student profile;
-  * drops ::: {.web-only} blocks, which say things that are only true in a
-    browser;
+  * drops ::: {.web-only} blocks, which say things that are only true on screen;
+  * drops {{< include >}} directives, which are render plumbing;
   * flattens ::: {.panel-tabset} into bold language labels, which is both
     shorter and clearer in print.
 
@@ -51,15 +51,15 @@ bibliography: references.bib
 ---
 
 ::: {{.callout-note appearance="simple"}}
-This is the printable companion to the interactive booklet. The code is here so
-that you can read and annotate it away from a screen; it runs — editable, with
-its output — in the online version, which is where you should actually work.
-Blanks written `______` are yours to fill in.
+This is the printable companion to the booklet. The code is here so that you can
+read and annotate it away from a screen; you run it in the `.qmd` chapters
+themselves, in your editor, which is where you should actually work. Blanks
+written `______` are yours to fill in.
 :::
 
 """
 
-LANG = {"webr": "r", "pyodide": "python"}
+LANG = {"r": "r", "python": "python"}
 
 
 def transform(text: str, instructor: bool) -> str:
@@ -71,8 +71,14 @@ def transform(text: str, instructor: bool) -> str:
     while i < len(lines):
         line = lines[i]
 
+        # {{< include _common.qmd >}} is render plumbing (it only configures
+        # knitr and reticulate) and its path would not resolve from print/.
+        if re.match(r"^\{\{<\s*include\s+.*>\}\}\s*$", line):
+            i += 1
+            continue
+
         # --- fenced code cells -------------------------------------------
-        m = re.match(r"^```\{(webr|pyodide)\}\s*$", line)
+        m = re.match(r"^```\{(r|python)\}\s*$", line)
         if m:
             lang, body, opts = LANG[m.group(1)], [], {}
             i += 1
@@ -84,15 +90,8 @@ def transform(text: str, instructor: bool) -> str:
                     body.append(lines[i])
                 i += 1
             i += 1                                     # closing fence
-            is_answer = "solution" in opts or "hint" in opts
-            if is_answer and not instructor:
-                continue
             if drop_depth is not None:
                 continue
-            if is_answer:
-                label = "Solution" if "solution" in opts else "Hint"
-                out.append(f"*{label}:*")
-                out.append("")
             out.append(f"```{lang}")
             out.extend(body)
             out.append("```")
@@ -108,8 +107,13 @@ def transform(text: str, instructor: bool) -> str:
                 if drop_depth is None and (
                     ".web-only" in a
                     or (not instructor and 'when-profile="instructor"' in a)
+                    or (not instructor and 'when-meta="show-solutions"' in a)
                 ):
                     drop_depth = len(div_stack)
+                    i += 1
+                    continue
+                # the callout inside already carries a "Worked answer" heading
+                if instructor and 'when-meta="show-solutions"' in a and drop_depth is None:
                     i += 1
                     continue
                 if ".panel-tabset" in a and drop_depth is None:

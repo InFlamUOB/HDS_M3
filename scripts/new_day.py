@@ -46,7 +46,7 @@ By the end of the day you should be able to, without looking anything up:
 
 ## What you need before you start
 
-- A browser. The code cells run in the page.
+- R and Python working locally, and this project open in your editor (@sec-setup).
 - ...
 
 ::: {{.content-visible when-profile="instructor"}}
@@ -127,7 +127,7 @@ def main() -> int:
         body = (template
                 .replace("# Exercise N.M — Title {#sec-shortname}",
                          f"# Exercise {day}.{i} — {title} {{#sec-{slug}}}")
-                .replace("unique_key_r", f"{slug.replace('-', '_')}_{i}_r"))
+)
         write(ROOT / name, body)
         chapters.append(name)
         rows.append(f"| {day}.{i} | [{title}]({name}) | 45 min | individual |")
@@ -159,12 +159,14 @@ def main() -> int:
 
     print(f"""
 Next:
-  1. write the chapters, using {{webr}} and {{pyodide}} cells
+  1. write the chapters, using {{r}} and {{python}} cells: worked examples plain,
+     task cells with `#| eval: false` and ______, answers inside
+     when-meta="show-solutions" blocks
   2. append any new data to scripts/make_data.R, and register the file under
      BOTH `resources:` keys in _quarto.yml
   3. make check
   4. make worksheets DAY={day}
-  5. commit and push — the site rebuilds itself""")
+  5. make site, then commit and push — including _book/, which is what publishes""")
     return 0
 
 

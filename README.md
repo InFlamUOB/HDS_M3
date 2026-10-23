@@ -113,6 +113,6 @@ _book/                   the rendered site, committed; this is what gets publish
 make day DAY=2 TITLE="Validation you can defend"
 # write the chapters
 make check
-make site            # executes them; commit _freeze/ with your changes
+make site            # executes them; commit _book/ with your changes
 git push
 ```
