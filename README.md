@@ -17,9 +17,6 @@ requirement, because nothing in the booklet executes at render time. **Quarto
 1.4 or newer**, which is what the Quarto Live extension needs; CI builds with
 1.7.32. Check yours with `quarto --version`.
 
-`make doctor` reports all of this for your machine and prints the exact install
-command for anything missing. It changes nothing.
-
 R and Python are *not* needed to build or preview the site. They are needed only
 to run `scripts/make_data.R`, or to work through the exercises on your own
 machine rather than in the browser. Nothing here uses `reticulate` or a conda
@@ -69,7 +66,7 @@ sides follow the same small discipline.
 git pull                       # ALWAYS first: the assistant may have pushed
 # ... edit the .qmd files, `make preview` to see them ...
 make check                     # catches the faults that only show up in a browser
-make test-cells DAY=1          # if you touched code: runs the live cells for real
+make code DAY=1                # if you touched code: refresh the plain scripts
 git add -A && git commit -m "what changed and why"
 git pull --rebase              # again, in case something landed while you worked
 git push
@@ -133,6 +130,26 @@ Publish `_book/` only. The Quarto Live extension is committed in
 CI. The printable worksheets use Typst, which Quarto bundles, so they need no
 LaTeX.
 
+## The code, as plain scripts
+
+The booklet's code lives in the chapters, as live cells that run in the reader's
+browser. Those cannot be run in a local R or Python session, so the same code is
+also written out as ordinary scripts:
+
+```
+code/day1-code.R
+code/day1-code.py
+```
+
+Open either in Positron and run it line by line. The worked examples appear in
+order, and wherever a task has blanks for the student, the published solution
+appears instead — so the script is the state a student reaches by the end of the
+day. Running it is also how you check a chapter's code still works, since
+rendering never executes it.
+
+The chapters are the source. After editing one, run `make code DAY=1` to refresh
+the scripts; never edit them directly, because the next run overwrites them.
+
 ## Layout
 
 ```
@@ -150,6 +167,8 @@ appendix/                data provenance, troubleshooting, glossary,
 checks/                  self-check helpers, R and Python, kept in step
 scripts/make_data.R      generates every dataset from one seed
 scripts/make_worksheet.py builds the printable worksheet from the chapters
+scripts/make_code.py     writes code/dayN-code.R and .py from the chapters
+code/                    those generated scripts, committed so they are to hand
 data/                    generated CSVs (committed, so everyone's are identical)
 print/                   generated worksheet sources — do not edit by hand
 ```

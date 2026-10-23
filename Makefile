@@ -1,6 +1,5 @@
 # Everything you need for a teaching day. Run `make` for the list.
 #
-#   make doctor             check this machine has what the booklet needs
 #   make setup-r            install the R packages used off-browser
 #   make preview            live-reloading local site (the one you work in)
 #   make site               build the student booklet into _book/
@@ -9,7 +8,7 @@
 #   make day DAY=2 TITLE="..."  scaffold the next day and register it
 #   make data               regenerate every dataset from scripts/make_data.R
 #   make check              source checks (live cells, links), before you push
-#   make test-cells DAY=1   RUN a day's live cells in real R and Python
+#   make code DAY=1         write the day's code out as plain R and Python scripts
 #   make links              check the built site for dead links
 #   make all DAY=1          data + site + instructor + worksheets
 #   make clean              remove build output
@@ -21,13 +20,10 @@ PYTHON ?= python3
 RSCRIPT ?= Rscript
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor setup-r preview site instructor worksheets day data check test-cells links all clean
+.PHONY: help setup-r preview site instructor worksheets day data check code links all clean
 
 help:
 	@grep -E '^#   make' $(MAKEFILE_LIST) | sed 's/^#   //'
-
-doctor:
-	@$(PYTHON) scripts/doctor.py
 
 setup-r:
 	$(RSCRIPT) scripts/setup_local.R
@@ -67,8 +63,8 @@ check:
 
 # Needs a build: checks the rendered HTML for links whose target is missing and
 # for cross-references Quarto could not resolve.
-test-cells:
-	@$(PYTHON) scripts/run_cells.py --day $(DAY)
+code:
+	@$(PYTHON) scripts/make_code.py --day $(DAY)
 
 links:
 	@$(PYTHON) scripts/check_links.py _book
