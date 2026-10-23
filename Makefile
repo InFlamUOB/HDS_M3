@@ -1,13 +1,13 @@
 # Everything you need for a teaching day. Run `make` for the list.
 #
-#   make setup-r            install the R packages used off-browser
-#   make preview            live-reloading local site (the one you work in)
-#   make site               build the student booklet into _book/
+#   make setup-r            install the R packages and settle the Python side
+#   make preview            local site that reloads as you edit
+#   make site               build the booklet into _book/ — commit this with your edit
 #   make instructor         build the staff copy into _book-instructor/
 #   make worksheets DAY=1   printable PDFs for one day
 #   make day DAY=2 TITLE="..."  scaffold the next day and register it
 #   make data               regenerate every dataset from scripts/make_data.R
-#   make check              source checks (live cells, links), before you push
+#   make check              source checks (blanks, hidden answers, links)
 #   make links              check the built site for dead links
 #   make all DAY=1          data + site + instructor + worksheets
 #   make clean              remove build output
