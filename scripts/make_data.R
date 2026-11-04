@@ -146,7 +146,7 @@ if (requireNamespace("mlbench", quietly = TRUE)) {
 #                                exercise; 13 predictors with 20 missing each.
 #   data/bupa.csv              - liver function tests, used in the Day 2
 #                                transformation exercise.
-# Both come from the module's existing material. See appendix/data.qmd.
+# Both come from the module's existing material. See data/PROVENANCE.txt.
 writeLines(c(
   paste("generated:", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
   paste("R version:", getRversion()),
