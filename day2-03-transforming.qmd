@@ -1,0 +1,474 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 2.3 — Transforming {#sec-transforming}
+
+**40 minutes · work individually**
+
+## Objectives
+
+::: {.objective-list}
+- Measure the skewness of a variable and say, from the number alone, roughly
+  what its histogram looks like.
+- Apply min-max scaling, standardisation and a log transformation, and state
+  for each one what it changes and what it leaves alone.
+- Say which of the three you would apply before fitting a linear model, and
+  why the honest answer is "it depends on the model".
+:::
+
+## Why this, here
+
+@sec-missing-data left you with a complete table of numbers. Models are
+sensitive to the *scale* and the *shape* of those numbers in ways that have
+nothing to do with the clinical content: a variable measured in thousands
+dominates one measured in units, and a long right tail puts most of the
+leverage in a handful of patients. This exercise is about what the common fixes
+actually do — including the one that does nothing.
+
+## A third file, and a warning about its last column
+
+`data/bupa.csv` holds 345 patients with five liver-related blood tests (`mcv`,
+`alkalinephosphotase`, `alamine`, `aspartate`, `gammaGlut`), a count of daily
+alcoholic `drinks`, and a column called `selector`. There are no missing
+values.
+
+::: {.callout-warning}
+## `selector` is not a diagnosis
+It is the field the original depositors used to split the file into two sets,
+200 rows and 145 rows. Tutorials across the internet model it as a liver
+disease label; it is not one, and a model that predicts it is predicting an
+arbitrary partition. We use this file only for transformation, where the label
+plays no part. See @sec-data for the detail.
+:::
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(readr); library(dplyr); library(tidyr); library(ggplot2)
+bupa <- read_csv("data/bupa.csv", show_col_types = FALSE)
+dim(bupa)
+summary(bupa)
+```
+
+## Python
+
+```{python}
+import pandas as pd
+import numpy as np
+bupa = pd.read_csv("data/bupa.csv")
+print(bupa.shape)
+bupa.describe().round(2)
+```
+:::
+
+Compare the mean and the median of `gammaGlut`, then of `mcv`. In one of them
+they agree; in the other the mean is half as large again as the median. That
+gap is the fingerprint of a right tail, and skewness puts a number on it.
+
+$$g_1 = \frac{\frac{1}{n}\sum_i (x_i - \bar{x})^3}{\left[\frac{1}{n}\sum_i (x_i - \bar{x})^2\right]^{3/2}}$$
+
+Zero for a symmetric variable, positive when the tail is to the right. Above
+about 1 it is worth doing something about; above 2 the mean is no longer a
+useful summary. This is one formula, not two: R has no `skewness()` in base, so
+we write it, and pandas has `.skew()` built in with a small-sample correction
+that makes no visible difference at this size.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+skewness <- function(x) {
+  x <- x[!is.na(x)]
+  mean((x - mean(x))^3) / mean((x - mean(x))^2)^1.5
+}
+labs_cols <- c("mcv", "alkalinephosphotase", "alamine", "aspartate", "gammaGlut", "drinks")
+sapply(bupa[labs_cols], skewness) |> round(2)
+```
+
+## Python
+
+```{python}
+labs_cols = ["mcv", "alkalinephosphotase", "alamine", "aspartate", "gammaGlut", "drinks"]
+bupa[labs_cols].skew().round(2)
+```
+:::
+
+`alamine`, `gammaGlut` and `aspartate` are strongly right-skewed, around 3.1,
+2.9 and 2.3. `mcv` is mildly left-skewed. Plot the two extremes and the numbers
+become a picture.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+bupa |>
+  select(mcv, gammaGlut) |>
+  pivot_longer(everything()) |>
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(~ name, scales = "free") +
+  labs(x = NULL, y = "Patients")
+```
+
+## Python
+
+```{python}
+import matplotlib.pyplot as plt
+fig, axes = plt.subplots(1, 2, figsize=(8, 3.2))
+for ax, col in zip(axes, ["mcv", "gammaGlut"]):
+    ax.hist(bupa[col], bins=30)
+    ax.set_title(col)
+    ax.set_xlabel(None); ax.set_ylabel("Patients")
+fig.tight_layout()
+plt.show()
+```
+:::
+
+## Three transformations
+
+| Transformation | Formula | Range after | Shape after |
+|---|---|---|---|
+| Min-max scaling | $(x - \min) / (\max - \min)$ | $[0, 1]$ | unchanged |
+| Standardisation (z-score) | $(x - \mu) / \sigma$ | mean 0, sd 1 | unchanged |
+| Log | $\log(x)$ | depends | compressed on the right |
+
+: {tbl-colwidths="[28,28,22,22]"}
+
+The third column is what everyone remembers and the fourth is what matters.
+Here are all three applied to `gammaGlut`.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+g <- bupa$gammaGlut
+transformed <- tibble(
+  raw     = g,
+  minmax  = (g - min(g)) / (max(g) - min(g)),
+  zscore  = (g - mean(g)) / sd(g),
+  logged  = log(g)
+)
+sapply(transformed, skewness) |> round(2)
+sapply(transformed, function(x) c(mean = mean(x), sd = sd(x))) |> round(2)
+```
+
+## Python
+
+```{python}
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+
+g = bupa[["gammaGlut"]]
+transformed = pd.DataFrame({
+    "raw":    g["gammaGlut"],
+    "minmax": MinMaxScaler().fit_transform(g).ravel(),
+    "zscore": StandardScaler().fit_transform(g).ravel(),
+    "logged": np.log(g["gammaGlut"]),
+})
+print(transformed.skew().round(2))
+print(transformed.agg(["mean", "std"]).round(2))
+```
+:::
+
+## The result that should bother you
+
+Min-max scaling and standardisation leave the skewness **exactly** where it
+was. Only the log moves it, from about 2.9 to about 0.5.
+
+1. Both scalings are *affine*: they multiply by one constant and subtract
+   another. Skewness is built from the ratio of the third and second central
+   moments, and that ratio is unchanged by multiplication — the constant
+   cancels, top and bottom. The number is identical, not approximately
+   identical.
+2. So "normalising" the data does not make it normal. It makes it *comparable*,
+   which is a different problem, solved for a different reason: a distance, a
+   penalty or a gradient step treats a variable in thousands differently from
+   one in units.
+3. The log is the only one of the three that changes the shape, because it is
+   not affine. It also changes the meaning: a coefficient fitted to
+   `log(gammaGlut)` is about proportional change, not absolute, and that is
+   something you have to be willing to say in the discussion section.
+
+See it rather than take it on trust: three boxplots of the same variable.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+transformed |>
+  pivot_longer(everything(), names_to = "transform") |>
+  mutate(transform = factor(transform, levels = c("raw", "minmax", "zscore", "logged"))) |>
+  ggplot(aes(x = transform, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~ transform, scales = "free", nrow = 1) +
+  labs(x = NULL, y = NULL)
+```
+
+## Python
+
+```{python}
+fig, axes = plt.subplots(1, 4, figsize=(9, 3))
+for ax, col in zip(axes, transformed.columns):
+    ax.boxplot(transformed[col])
+    ax.set_title(col); ax.set_xticks([])
+fig.tight_layout()
+plt.show()
+```
+:::
+
+The first three boxes are the same picture with different numbers on the axis.
+The fourth is a different picture.
+
+## Task 1 — The original's question, with the trap left in
+
+This was the task on the page this exercise comes from, and it is a good one.
+
+> 1.1 Load the bupa dataset and apply a transformation of your choice to a
+> feature of your choice.
+> 1.2 Remove the label column (`selector`) from the dataset.
+> 1.3 Visualise the data before and after the transformation using boxplots.
+
+Do it — and when you reach 1.2, write one sentence saying why that step is in
+the list. It is not because `selector` is a label you must protect from
+leaking. It is because it is not a label at all, and a boxplot of it would
+invite you to treat it as one.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+bupa_labs <- bupa |> select(-______)
+
+bupa_logged <- bupa_labs |> mutate(across(c(alamine, aspartate, gammaGlut), ______))
+
+sk <- sapply(bupa_logged[c("alamine", "aspartate", "gammaGlut")], skewness)
+sk
+check_metric_range(max(sk), -1, 1, "largest skewness after transformation")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`select()` drops a column when you put a minus in front of its name. For the
+transformation, the function is `log` — pass it as a bare function name inside
+`across()`, not as a call.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+bupa_labs <- bupa |> select(-selector)
+
+bupa_logged <- bupa_labs |> mutate(across(c(alamine, aspartate, gammaGlut), log))
+
+sk <- sapply(bupa_logged[c("alamine", "aspartate", "gammaGlut")], skewness)
+sk
+check_metric_range(max(sk), -1, 1, "largest skewness after transformation")
+
+bind_rows(before = bupa_labs, after = bupa_logged, .id = "state") |>
+  pivot_longer(c(alamine, aspartate, gammaGlut)) |>
+  mutate(state = factor(state, levels = c("before", "after"))) |>
+  ggplot(aes(x = name, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~ state, scales = "free_y") +
+  labs(x = NULL, y = NULL)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+skewed = ["alamine", "aspartate", "gammaGlut"]
+bupa_labs = bupa.drop(columns=["______"])
+
+bupa_logged = bupa_labs.copy()
+bupa_logged[skewed] = np.______(bupa_labs[skewed])
+
+sk = bupa_logged[skewed].skew()
+print(sk)
+check_metric_range(sk.max(), -1, 1, "largest skewness after transformation")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+skewed = ["alamine", "aspartate", "gammaGlut"]
+bupa_labs = bupa.drop(columns=["selector"])
+
+bupa_logged = bupa_labs.copy()
+bupa_logged[skewed] = np.log(bupa_labs[skewed])
+
+sk = bupa_logged[skewed].skew()
+print(sk)
+check_metric_range(sk.max(), -1, 1, "largest skewness after transformation")
+
+fig, axes = plt.subplots(1, 2, figsize=(8, 3.2))
+bupa_labs[skewed].plot.box(ax=axes[0], title="before")
+bupa_logged[skewed].plot.box(ax=axes[1], title="after")
+fig.tight_layout()
+plt.show()
+```
+:::
+:::
+:::
+
+## Task 2 — Where the log is not available
+
+`drinks` is right-skewed too, and nine patients report zero. `log(0)` is
+`-Inf`, which propagates into every summary and plot downstream.
+
+Try `log(drinks)` first and look at what you get. Then use `log1p()`, which
+computes $\log(1 + x)$, and compare the skewness of both against the raw
+column.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+sum(bupa$drinks == 0)
+summary(log(bupa$drinks))              # look before you fix
+
+drinks_log1p <- ______(bupa$drinks)
+c(raw = skewness(bupa$drinks), log1p = skewness(drinks_log1p))
+check_metric_range(skewness(drinks_log1p), -1, 1, "skewness of log1p(drinks)")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+sum(bupa$drinks == 0)
+summary(log(bupa$drinks))              # look before you fix
+
+drinks_log1p <- log1p(bupa$drinks)
+c(raw = skewness(bupa$drinks), log1p = skewness(drinks_log1p))
+check_metric_range(skewness(drinks_log1p), -1, 1, "skewness of log1p(drinks)")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+print((bupa["drinks"] == 0).sum())
+print(np.log(bupa["drinks"]).describe())    # look before you fix
+
+drinks_log1p = np.______(bupa["drinks"])
+print(bupa["drinks"].skew(), drinks_log1p.skew())
+check_metric_range(drinks_log1p.skew(), -1, 1, "skewness of log1p(drinks)")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+print((bupa["drinks"] == 0).sum())
+print(np.log(bupa["drinks"]).describe())    # look before you fix
+
+drinks_log1p = np.log1p(bupa["drinks"])
+print(bupa["drinks"].skew(), drinks_log1p.skew())
+check_metric_range(drinks_log1p.skew(), -1, 1, "skewness of log1p(drinks)")
+```
+:::
+:::
+:::
+
+Adding 1 is a choice, not a fact. It is defensible for a count of drinks, where
+the units are fixed and 1 is small; it is arbitrary for a laboratory value in
+mu U/ml, where the same "+1" means something different depending on the assay.
+Say which you did.
+
+## Reflection
+
+1. A colleague standardises every predictor before fitting a linear regression
+   and reports that the model improved. What do you suspect happened, and what
+   would you ask to see?
+2. You log-transform `gammaGlut` and fit a model. A hepatologist asks what the
+   coefficient means. Answer in one sentence, in their units, not yours.
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Expected values.** Skewness: `alamine` 3.0–3.1, `gammaGlut` 2.8–2.9,
+`aspartate` 2.2–2.3, `drinks` 1.5, `mcv` about −0.4. After `log`: all three
+skewed labs fall to between 0.3 and 0.6. `log1p(drinks)` lands near 0.1.
+Min-max and z-score skewness are identical to the raw value to every printed
+digit — if a student reports otherwise, they have transformed a different
+column.
+
+**Reflection 1.** Standardisation cannot change the fit of an ordinary linear
+regression at all: the predictions, residuals and $R^2$ are identical, and only
+the coefficients are rescaled. So either the "improvement" is in the
+interpretability of the coefficients, or something else changed at the same
+time — a dropped row, a different split, or a penalised model, where
+standardisation genuinely does change the answer because the penalty acts on
+the coefficient scale. Ask to see both fits.
+
+**Reflection 2.** With `log` base e, a coefficient of $\beta$ means that a
+doubling of gammaGlut is associated with $\beta \log 2$ units of outcome; the
+clinically sayable version is "per doubling", not "per unit of log".
+
+**Common failures.** (1) `across(..., log())` with the parentheses, which
+evaluates `log()` with no argument. (2) Students concluding that min-max
+scaling "fixed" the skew because the axis numbers got smaller — go back to the
+boxplot panel, which is why it is four panels and not one. (3) Someone will
+model `selector`. Let them, then ask what the two groups are.
+
+**Timing.** Forty minutes is enough if the three transformations are presented
+from the front and the class only does Tasks 1 and 2. The skewness formula
+rewards five minutes at the whiteboard for anyone who has not met moments.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — Is `selector` really arbitrary?
+Compare `gammaGlut` between the two `selector` groups. The means differ by more
+than you might expect of a random partition — which does not make it a
+diagnosis, but does mean the split was not made by shuffling. What would you
+need to know before using either group on its own?
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Transformations that are fitted
+`log()` needs nothing from the data: the same input always gives the same
+output. Min-max needs a minimum and a maximum; standardisation needs a mean and
+a standard deviation; the Box-Cox transformation estimates a power. Sort the
+four into those that are *fitted* and those that are not, and keep the list —
+in @sec-leakage, it is exactly the fitted ones that have to be learned on the
+training set alone.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that you can measure skewness, name what each of three transformations
+changes, and demonstrate that two of them do not change shape at all.
+
+**Cannot:** that you have applied any of them safely. Every transformation in
+this chapter was fitted to all 345 rows at once, including the rows you would
+have held back for testing. @sec-leakage is about what that costs.

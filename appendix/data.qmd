@@ -4,11 +4,14 @@ engine: markdown
 
 # The datasets {#sec-data}
 
-Every dataset in this booklet is simulated by `scripts/make_data.R`, from seed
-2025. Run `Rscript scripts/make_data.R` from the project root to regenerate all
-of them; `data/PROVENANCE.txt` records when and with which R version.
+Day 1's datasets are simulated by `scripts/make_data.R`, from seed 2025. Run
+`Rscript scripts/make_data.R` from the project root to regenerate all of them;
+`data/PROVENANCE.txt` records when and with which R version. Days 2 to 6 add
+three files that are not simulated here: a synthetic diabetes dataset shipped
+with `mlbench`, and two small clinical teaching files used in the preprocessing
+exercises. All five are described below.
 
-Simulation is deliberate, for three reasons. The generating process is known, so
+Simulation is deliberate for Day 1, for three reasons. The generating process is known, so
 every diagnostic question has a checkable answer. No information governance
 approval is needed, so the files can live in a public repository. And the
 defects are the ones we chose, so they can be taught.
@@ -73,6 +76,94 @@ $-1700 + 30\,\text{bpd} + 25\,\text{ad} + \varepsilon$, $\varepsilon \sim N(0, 2
 Units and magnitudes are plausible; the numbers are invented. Used in Exercise
 1.2 Task 4 so that students rerun the pipeline on columns whose names bear no
 resemblance to the ones they just used.
+
+## `diabetes.csv` — the case study for Days 2 to 6 {#sec-data-diabetes}
+
+768 adults, nine columns, exported from `mlbench`'s `SynthDiabetes` by
+`scripts/make_data.R`. Every value is synthetic and no row corresponds to a real
+person.
+
+| Column | Meaning |
+|---|---|
+| `pregnant` | number of times pregnant |
+| `glucose` | plasma glucose concentration, glucose tolerance test |
+| `pressure` | diastolic blood pressure, mm Hg |
+| `triceps` | triceps skin fold thickness, mm |
+| `insulin` | 2-hour serum insulin, mu U/ml |
+| `mass` | body mass index |
+| `pedigree` | diabetes pedigree function |
+| `age` | years |
+| `diabetes` | `pos` or `neg` |
+
+: {tbl-colwidths="[18,82]"}
+
+**Known defect, retained on purpose.** Zeros appear where zero is
+physiologically impossible: 52.7% of `insulin` values, 32.7% of `triceps`, 4.6%
+of `pressure`, 1.7% of `mass` and 0.7% of `glucose`. They are missing values
+written as zeros, and because they are numerically valid, every summary
+statistic and every model will quietly use them. Finding them is the first task
+of Day 2, and they are what makes the imputation and leakage exercises bite.
+
+::: {.callout-important}
+## Why this is synthetic, and why that is worth five minutes of class
+These exercises were originally written against `PimaIndiansDiabetes`: data on
+diabetes in Akimel O'odham ("Pima") women, collected by the US National
+Institute of Diabetes and Digestive and Kidney Diseases, which reached the UCI
+Machine Learning Repository in the late 1980s and became one of the most-used
+teaching datasets in the world.
+
+Both UCI and `mlbench` have since withdrawn it. The `mlbench` changelog for
+version 2.1-10 records the removal, and the documentation for the replacement
+states that the data "had apparently been included without informed consent" in
+those repositories, and that distribution ceased once it became clear the data
+"had most likely been shared illicitly".
+
+Copies remain on third-party mirrors, and nothing technical prevents their use.
+The reason this booklet does not use them is that a teaching repository is a
+publisher like any other. It is also a point worth making to the cohort
+directly: consent does not expire because a file is convenient, a dataset's
+ubiquity is not evidence that it was lawfully obtained, and "everyone uses it"
+is the sentence that kept it in circulation for thirty years.
+
+`SynthDiabetes` was created by Matthias Templ to mimic the data analysed by
+Smith et al. (1988). It has the same size, the same columns and the same
+defects, so the exercises are unchanged; only the values differ.
+:::
+
+## `longisland_heart.csv` — missingness to diagnose
+
+200 patients, 14 columns, used in the Day 2 missing-data exercise. Each of the
+13 predictors has exactly 20 missing values, and 150 of the 200 rows are
+incomplete in at least one column — a pattern regular enough that students can
+work out it was injected rather than observed, which is itself the point of the
+first task.
+
+Two things to say out loud when you use it. The outcome, `diagnosis of heart
+disease`, has five levels rather than two. And the clinical variables are not in
+clinical units: `trestbps` runs from 1 to 41 and `chol` from 1 to 100, so they
+have been recoded or binned at some earlier point by someone who did not write
+it down. That is an ordinary and instructive state for a teaching extract to be
+in.
+
+## `bupa.csv` — skewed variables to transform
+
+345 patients, seven columns of liver-related blood tests (`mcv`,
+`alkalinephosphotase`, `alamine`, `aspartate`, `gammaGlut`), plus `drinks` and a
+`selector` field. Complete, with no missing values. Used in the Day 2
+transformation exercise because `gammaGlut` and `alamine` are strongly
+right-skewed, which is what makes a log transformation visibly do something.
+
+::: {.callout-note appearance="simple"}
+## A caution worth passing on
+`selector` is often treated as a disease label in tutorials using this file. It
+is not one: it was the field the original depositors used to split the data into
+two sets. It splits this copy 200 / 145, and mean daily drinks are 3.39 and 3.54
+in the two groups — an arbitrary partition, not a diagnosis. Any exercise that
+predicts it is predicting the split. This booklet uses the file only for
+transformation, where the label is irrelevant: `alamine`, `gammaGlut` and
+`aspartate` have skewness 3.1, 2.9 and 2.3, which is what makes a log
+transformation visibly do something.
+:::
 
 ## Using real data instead
 

@@ -1,0 +1,526 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 5.4 — Random forest, and what the pipeline bought you {#sec-random-forest}
+
+**45 minutes · individually**
+
+:::: {.web-only}
+Every cell on this page is a real R or Python cell, run against
+`data/diabetes.csv` with the split used throughout Day 5.
+::::
+
+## Objectives
+
+::: {.objective-list}
+- Fit and tune a random forest through a workflow, changing only the model
+  specification from the one you wrote in @sec-decision-trees.
+- Say why the training performance of a bagged model is not evidence of
+  anything, and name the number to report in its place.
+- Decide, with a standard error in hand, whether a more flexible model has
+  actually beaten a simpler one.
+:::
+
+## Why this, here
+
+@sec-decision-trees ended with a tuned tree that was behind a logistic
+regression, and with the observation that a single tree is unstable: resample
+the training rows and the splits three levels down change. Instability of that
+kind is variance, and variance can be averaged away. A random forest grows
+hundreds of trees, each on a bootstrap resample of the rows and each allowed to
+consider only a random handful of predictors at every split, and averages their
+votes. The decorrelation is the point; without it the trees would all look
+alike and averaging would gain nothing.
+
+You will change four lines of the Day 5.3 code. That is the second thing this
+exercise is about.
+
+## Worked example — five hundred trees, fitted the same way as one
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(tidymodels); library(readr)
+
+diabetes <- read_csv("data/diabetes.csv") |>
+  dplyr::mutate(diabetes = factor(diabetes, levels = c("pos", "neg")))
+
+set.seed(123)
+split <- initial_split(diabetes, prop = 0.7, strata = diabetes)
+train <- training(split); test <- testing(split)
+
+rf_fit <- rand_forest(trees = 500) |>
+  set_engine("ranger", seed = 123) |>
+  set_mode("classification") |>
+  fit(diabetes ~ ., data = train)
+
+scores <- function(fit, label) {
+  one <- function(dat, set) {
+    p <- augment(fit, dat)
+    tibble::tibble(model = label, set = set,
+      accuracy = accuracy(p, diabetes, .pred_class)$.estimate,
+      sens     = sens(p, diabetes, .pred_class)$.estimate,
+      spec     = yardstick::specificity(p, diabetes, .pred_class)$.estimate,
+      auc      = roc_auc(p, diabetes, .pred_pos)$.estimate)
+  }
+  dplyr::bind_rows(one(train, "train"), one(test, "test"))
+}
+
+scores(rf_fit, "rf defaults")
+```
+
+## Python
+
+```{python}
+import pandas as pd, numpy as np
+from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, recall_score, roc_auc_score
+
+diabetes = pd.read_csv("data/diabetes.csv")
+X = diabetes.drop(columns="diabetes")
+y = (diabetes["diabetes"] == "pos").astype(int)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3,
+                                          random_state=123, stratify=y)
+
+rf_fit = RandomForestClassifier(n_estimators=500, random_state=123,
+                                oob_score=True).fit(X_tr, y_tr)
+
+def scores(fit, label):
+    rows = []
+    for name, Xs, ys in [("train", X_tr, y_tr), ("test", X_te, y_te)]:
+        pred = fit.predict(Xs)
+        rows.append({"model": label, "set": name,
+                     "accuracy": accuracy_score(ys, pred),
+                     "sens": recall_score(ys, pred),
+                     "spec": recall_score(1 - ys, 1 - pred),
+                     "auc": roc_auc_score(ys, fit.predict_proba(Xs)[:, 1])})
+    return pd.DataFrame(rows)
+
+scores(rf_fit, "rf defaults")
+```
+:::
+
+::: {.callout-important}
+## Do not read the training row
+A random forest's training accuracy is between 0.95 and 1.00 and it means
+almost nothing. Each tree was grown on a bootstrap resample, so when you ask
+the forest about a training patient, roughly two-thirds of its trees are being
+asked about a row they were fitted on. The average is contaminated by
+construction, and it is contaminated in a way that no amount of extra data
+fixes.
+
+Both libraries supply the honest internal alternative: the **out-of-bag**
+estimate, computed for each row from only the trees that did not see it.
+`extract_fit_engine(rf_fit)$prediction.error` in R gives the OOB Brier score —
+about 0.18 here, where lower is better. `rf_fit.oob_score_` in Python gives OOB
+accuracy, about 0.76. Report one of those, or the resampled estimate from the
+tuning below. Never the training row.
+:::
+
+```{r}
+extract_fit_engine(rf_fit)$prediction.error   # OOB Brier score
+```
+
+## Task 1 — The same workflow, a different model
+
+Mark `mtry` and `min_n` for tuning, build a small grid, resample the training
+rows five ways, and search. `mtry` is the number of predictors offered at each
+split — the parameter that does the decorrelating — and there are eight
+predictors to choose from.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+rf_spec <- rand_forest(mtry = ______, min_n = ______, trees = 500) |>
+  set_engine("ranger", seed = 123) |>
+  set_mode("classification")
+
+rf_grid <- grid_regular(mtry(range = c(2L, 6L)),
+                        min_n(range = c(2L, 20L)),
+                        levels = 3)
+nrow(rf_grid)
+
+rf_wf <- workflow() |> add_model(rf_spec) |> add_formula(diabetes ~ .)
+
+set.seed(123)
+folds  <- vfold_cv(train, v = 5, strata = diabetes)
+rf_res <- tune_grid(rf_wf, resamples = folds, grid = rf_grid,
+                    metrics = metric_set(roc_auc, accuracy))
+
+show_best(rf_res, metric = "roc_auc", n = 5)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The two blanks are the same one-word placeholder you used for `tree_depth` in
+@sec-decision-trees. The grid will supply the values.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+rf_spec <- rand_forest(mtry = tune(), min_n = tune(), trees = 500) |>
+  set_engine("ranger", seed = 123) |>
+  set_mode("classification")
+
+rf_grid <- grid_regular(mtry(range = c(2L, 6L)),
+                        min_n(range = c(2L, 20L)),
+                        levels = 3)
+nrow(rf_grid)
+
+rf_wf <- workflow() |> add_model(rf_spec) |> add_formula(diabetes ~ .)
+
+set.seed(123)
+folds  <- vfold_cv(train, v = 5, strata = diabetes)
+rf_res <- tune_grid(rf_wf, resamples = folds, grid = rf_grid,
+                    metrics = metric_set(roc_auc, accuracy))
+
+show_best(rf_res, metric = "roc_auc", n = 5)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+param_grid = {"max_features": [2, 4, 6], "min_samples_leaf": [1, 5, 20]}
+
+rf_search = GridSearchCV(RandomForestClassifier(n_estimators=500, random_state=123),
+                         param_grid,
+                         cv=StratifiedKFold(5, shuffle=True, random_state=123),
+                         scoring=______).fit(X_tr, y_tr)
+
+print(rf_search.best_params_, round(rf_search.best_score_, 3))
+print(np.round([rf_search.cv_results_["mean_test_score"].min(),
+                rf_search.cv_results_["mean_test_score"].max()], 3))
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+param_grid = {"max_features": [2, 4, 6], "min_samples_leaf": [1, 5, 20]}
+
+rf_search = GridSearchCV(RandomForestClassifier(n_estimators=500, random_state=123),
+                         param_grid,
+                         cv=StratifiedKFold(5, shuffle=True, random_state=123),
+                         scoring="roc_auc").fit(X_tr, y_tr)
+
+print(rf_search.best_params_, round(rf_search.best_score_, 3))
+print(np.round([rf_search.cv_results_["mean_test_score"].min(),
+                rf_search.cv_results_["mean_test_score"].max()], 3))
+```
+:::
+:::
+:::
+
+Nine grid points, five folds, 500 trees each: around five seconds in R and
+fifteen in Python. Compare the best resampled AUC with the worst. Then answer
+the question the original exercise asks: **do more flexible forests always
+perform better?** The grid has the answer in it.
+
+## Task 2 — Finalise, and spend the test set
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+best_rf <- select_best(rf_res, metric = ______)
+best_rf
+
+final_rf <- finalize_workflow(rf_wf, best_rf) |> fit(data = train)
+rf_final_scores <- scores(final_rf, "rf tuned")
+rf_final_scores
+conf_mat(augment(final_rf, test), truth = diabetes, estimate = .pred_class)
+
+check_beats_prevalence(rf_final_scores$accuracy[rf_final_scores$set == "test"],
+                       test$diabetes)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`select_best()` needs to know which of the two metrics you collected it should
+sort on, as a string.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+best_rf <- select_best(rf_res, metric = "roc_auc")
+best_rf
+
+final_rf <- finalize_workflow(rf_wf, best_rf) |> fit(data = train)
+rf_final_scores <- scores(final_rf, "rf tuned")
+rf_final_scores
+conf_mat(augment(final_rf, test), truth = diabetes, estimate = .pred_class)
+
+check_beats_prevalence(rf_final_scores$accuracy[rf_final_scores$set == "test"],
+                       test$diabetes)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+final_rf = rf_search.______
+rf_final_scores = scores(final_rf, "rf tuned")
+print(rf_final_scores)
+
+check_beats_prevalence(
+    rf_final_scores.loc[rf_final_scores["set"] == "test", "accuracy"].item(), y_te)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+final_rf = rf_search.best_estimator_
+rf_final_scores = scores(final_rf, "rf tuned")
+print(rf_final_scores)
+
+check_beats_prevalence(
+    rf_final_scores.loc[rf_final_scores["set"] == "test", "accuracy"].item(), y_te)
+```
+:::
+:::
+:::
+
+## Task 3 — Was it worth it?
+
+A forest is harder to explain, slower to fit and impossible to draw. Put its
+test AUC next to the logistic regression of @sec-classification-metrics, fitted
+on the same training rows, and next to the standard error of the resampled
+estimate you already have.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+logit_fit <- logistic_reg() |> set_engine("glm") |> fit(diabetes ~ ., data = train)
+
+comparison <- dplyr::bind_rows(
+  scores(logit_fit, "logistic regression"),
+  rf_final_scores
+) |> dplyr::filter(set == ______)
+comparison
+
+# the standard error of the best resampled AUC, for scale
+show_best(rf_res, metric = "roc_auc", n = 1)$______
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The last blank is a column name in the `show_best()` output. It is the only
+column that measures uncertainty rather than performance.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+logit_fit <- logistic_reg() |> set_engine("glm") |> fit(diabetes ~ ., data = train)
+
+comparison <- dplyr::bind_rows(
+  scores(logit_fit, "logistic regression"),
+  rf_final_scores
+) |> dplyr::filter(set == "test")
+comparison
+
+# the standard error of the best resampled AUC, for scale
+show_best(rf_res, metric = "roc_auc", n = 1)$std_err
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+logit_fit = Pipeline([("scale", StandardScaler()),
+                      ("logit", LogisticRegression(max_iter=1000))]).fit(X_tr, y_tr)
+
+comparison = pd.concat([scores(logit_fit, "logistic regression"), rf_final_scores])
+print(comparison[comparison["set"] == ______])
+
+i = rf_search.best_index_
+print(rf_search.cv_results_["std_test_score"][i] / np.sqrt(5))
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+logit_fit = Pipeline([("scale", StandardScaler()),
+                      ("logit", LogisticRegression(max_iter=1000))]).fit(X_tr, y_tr)
+
+comparison = pd.concat([scores(logit_fit, "logistic regression"), rf_final_scores])
+print(comparison[comparison["set"] == "test"])
+
+i = rf_search.best_index_
+print(rf_search.cv_results_["std_test_score"][i] / np.sqrt(5))
+```
+:::
+:::
+:::
+
+Write the sentence you would put in a report, containing both AUCs and the
+standard error. It should not contain the word "better" unless you can defend
+it.
+
+## The result that should bother you
+
+Five hundred trees, two tuned hyperparameters, a grid search over nine
+settings and five resamples each. The tuned forest reaches a test AUC of about
+0.79–0.83. The logistic regression from @sec-classification-metrics, eight
+coefficients and no tuning at all, reaches about 0.78–0.84 on the same rows.
+
+Three steps.
+
+1. The difference between the two is around 0.01 of AUC. The standard error of
+   the forest's own resampled estimate is about 0.02. A difference smaller than
+   the uncertainty of the measurement is not a difference, and no amount of
+   decimal places makes it one.
+2. Which direction it falls in depends on the language — which is to say, on
+   which rows landed in the test set. In R the logistic regression is ahead; in
+   Python the forest is, by about the same margin. If a result flips when you
+   reshuffle the data, the result is the reshuffling.
+3. So the honest finding is that on these eight predictors and these 768
+   patients, flexibility buys nothing. That is a real and publishable finding,
+   and it is the one most often not reported, because a forest that ties with a
+   logistic regression looks like a failed experiment rather than evidence
+   about the data.
+
+A forest that ties should still usually lose. The logistic regression's
+coefficients can be inspected, its behaviour outside the training range is
+predictable, and a clinician can be told what it does. @sec-day6 is about what
+you have to do to say the same of a forest.
+
+## Reflection — why pipelines
+
+The original version of this exercise asked these two questions and they are
+the right two.
+
+1. What do workflows and pipelines give you over writing the model, the
+   formula and the prediction code separately? Answer it concretely: count the
+   lines you changed between @sec-decision-trees and this page.
+2. How does a workflow help when you change the model, and how does it help
+   when you add preprocessing — scaling, imputation, dummy variables?
+
+The second half is the one with teeth. A preprocessing step fitted outside the
+pipeline is fitted on all the rows, including the ones being held out, which is
+@sec-leakage's failure mode. Inside a workflow or a `Pipeline`, every
+resampling fold refits the preprocessing on its own training part. The same
+code is correct under cross-validation and incorrect without the wrapper, and
+nothing in the output tells you which you did.
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Expected values.** Forests are stochastic and resampling moves the last
+digit; quote ranges.
+
+| | R, seed 123 (ranger) | Python, random_state 123 |
+|---|---|---|
+| default forest: train accuracy / AUC | 0.953 / 0.993 | 1.000 / 1.000 |
+| default forest: test accuracy / AUC | 0.736 / 0.824 | 0.706 / 0.768 |
+| out-of-bag estimate | Brier 0.182 | accuracy 0.764 |
+| grid | 9 points × 5 folds | 9 points × 5 folds |
+| best resampled AUC | 0.78–0.80 | 0.815 |
+| resampled AUC across the grid | 0.762 to 0.785 | 0.800 to 0.815 |
+| standard error of the best | about 0.020 | about 0.016 |
+| chosen settings | `mtry` 2, `min_n` 20 | `max_features` 2, leaf 5 |
+| tuned forest: test accuracy / AUC | 0.740 / 0.831 | 0.732 / 0.792 |
+| logistic regression: test AUC | 0.844 | 0.782 |
+
+: {tbl-colwidths="[40,30,30]"}
+
+Across four fold seeds the R search chose `mtry = 2` and `min_n = 20` every
+time, with a resampled AUC between 0.779 and 0.797. `mtry = 2` winning is
+worth a minute: the smallest value in the grid is the most decorrelating one,
+which is the mechanism rather than a quirk of this data.
+
+**Run the comparison as a vote.** Before Task 3, ask the room to predict which
+model wins. Almost everyone says the forest. Then show both columns of the
+table above — R has the logistic regression ahead and Python has the forest
+ahead, on the same data with a different split. It is the most efficient
+twenty seconds of the day.
+
+**Common failures.** (1) `mtry` above the number of predictors: ranger errors,
+sklearn silently caps it. (2) Reading the forest's training AUC of 0.99 as a
+result; the callout exists for this and it still happens. (3) Students who set
+`n_jobs=-1` in `GridSearchCV` on a managed laptop occasionally meet a
+permissions error from the parallel backend; the default is fine at this size.
+(4) Forgetting `set_engine("ranger", seed = 123)`, after which the numbers move
+between runs and someone concludes the tuning is broken.
+
+**Timing.** Tuning is about five seconds in R and fifteen in Python. If the
+room is ahead, widen the grid to `levels = 5` and let them watch the cost grow;
+if it is behind, give them `best_rf` and go straight to Task 3, which is where
+the day's argument lands.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — How many trees are enough?
+Refit the tuned forest with 10, 50, 100 and 500 trees and plot test AUC against
+the count. The curve flattens early. What does that say about the common claim
+that a forest "cannot overfit by adding trees", and about where the remaining
+error is coming from?
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Give it a useless predictor
+Add a column of random numbers to the training and test data and refit. The
+test AUC barely moves, which is the forest's robustness. Then look at what
+`vip::vip()` says about the random column's importance — and keep the answer
+for @sec-importance.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 3 — Tune for the clinic, not for AUC
+Retune with `metrics = metric_set(sens)` and a threshold that a screening
+service could live with. Does the chosen `mtry` change? What has to be true
+about the service for that to be the right objective?
+:::
+
+## What you can and cannot now claim
+
+**Can:** that you can tune and evaluate an ensemble through the same workflow
+you used for a single tree, that you report an out-of-bag or resampled estimate
+rather than a training one, and that you can say whether a difference between
+two models is larger than the noise in the comparison.
+
+**Cannot:** anything about *why* the forest predicts what it predicts for a
+given patient. Five hundred trees have no coefficients and no drawing. That is
+the question @sec-day6 exists to answer, and it is the price you have now
+agreed to pay.

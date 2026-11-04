@@ -10,8 +10,17 @@
 # machine has none. This script simply triggers that once, so the first cell you
 # run in a session is not the one that waits for the download.
 
-r_pkgs  <- c("tidymodels", "tidyverse", "data.table", "rpart", "reticulate")
-py_pkgs <- c("pandas", "numpy", "matplotlib", "seaborn", "scikit-learn", "joblib")
+r_pkgs  <- c("tidymodels", "tidyverse", "data.table", "rpart", "reticulate",
+             # Days 2-6
+             "mlbench",     # the synthetic diabetes data (Days 2-6)
+             "naniar", "mice", "finalfit",   # missingness (Day 2)
+             "rpart.plot",  # drawing trees (Day 5)
+             "ranger",      # the random forest engine (Day 5)
+             "glmnet",      # penalised regression (Day 5.5)
+             "vip",         # variable importance (Days 5-6)
+             "DALEX", "DALEXtra")            # model explanation (Day 6)
+py_pkgs <- c("pandas", "numpy", "matplotlib", "seaborn", "scikit-learn", "joblib",
+             "shap")   # Day 6
 
 # ---- R side ----------------------------------------------------------------
 missing <- r_pkgs[!vapply(r_pkgs, requireNamespace, logical(1), quietly = TRUE)]

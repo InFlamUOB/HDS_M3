@@ -1,0 +1,753 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 4.4 — Is a predicted 0.7 worth 0.7? {#sec-calibration}
+
+**45 minutes · work individually**
+
+::: {.callout-important}
+## A suggested addition, not part of the original module
+This exercise was proposed and drafted by the assistant that rebuilt the
+booklet, not ported from an earlier version of the module. Exercise 4.3 names calibration as something it has not checked and cannot claim, and the booklet never returns to it. A probability used to make a decision is worth nothing unless it means what it says. Treat it as a
+draft to accept, rewrite or delete: nothing else depends on it, and removing it
+means deleting this file and its line in `_quarto.yml`.
+:::
+
+## Objectives
+
+::: {.objective-list}
+- Build a calibration table by hand — bin the predicted probabilities, and put
+  the mean prediction in each bin next to the rate actually observed in it.
+- Say why a model can be perfectly ranked and badly calibrated, and name a
+  metric that notices the difference.
+- Decide whether a gap between predicted and observed is a fault in the model
+  or the size of the test set.
+:::
+
+## Why this, here
+
+@sec-thresholds chose a threshold of 0.17 from a cost ratio of five to one, and
+the arithmetic behind that choice assumed something it never checked: that a
+predicted probability of 0.17 belongs to a group of patients of whom about 17%
+really do have diabetes. If the probabilities are on a different scale from the
+events, the threshold is still a number but it is no longer the number the cost
+ratio implies.
+
+That assumption has a name. A model is **calibrated** when, among the patients
+it gives probability $q$, the long-run proportion with the outcome is $q$.
+Calibration is a property of the probabilities themselves, and it is not
+measured by anything Day 4 has computed so far: accuracy, sensitivity and
+specificity all throw the probability away at the threshold and look only at
+the classes that come out.
+
+::: {.callout-note appearance="simple"}
+## One number borrowed from Day 5
+Task 3 needs the area under the ROC curve, which is @sec-classification-metrics
+and has not been taught yet. You need only one fact about it here: AUC is the
+probability that a randomly chosen positive patient is given a higher score than
+a randomly chosen negative one. It is a statement about **order** and nothing
+else. That is the whole point of Task 3, and you can take the number on trust
+until Day 5 explains it.
+:::
+
+## Worked example — calibration in the large, and where it stops holding
+
+Same model and same split as @sec-thresholds: `diabetes ~ glucose`, fitted to
+615 patients, scored on the 153 held back.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(readr); library(dplyr); library(tidymodels)
+
+diabetes <- read_csv("data/diabetes.csv", show_col_types = FALSE) |>
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+test_rows <- seq(5, nrow(diabetes), by = 5)
+train <- diabetes[-test_rows, ]
+test  <- diabetes[ test_rows, ]
+
+fit <- logistic_reg() |> set_engine("glm") |> fit(diabetes ~ glucose, data = train)
+
+p_train <- predict(fit, train, type = "prob")$.pred_pos
+p_logit <- predict(fit, test,  type = "prob")$.pred_pos
+
+source("checks/checks.R")
+cat("on the training rows\n")
+check_probabilities(p_train, prevalence = mean(train$diabetes == "pos"))
+cat("on the held-out rows\n")
+check_probabilities(p_logit, prevalence = mean(test$diabetes == "pos"))
+```
+
+## Python
+
+```{python}
+import numpy as np, pandas as pd
+from sklearn.linear_model import LogisticRegression
+
+diabetes = pd.read_csv("data/diabetes.csv")
+is_test = (diabetes.index + 1) % 5 == 0
+train, test = diabetes[~is_test], diabetes[is_test]
+
+y_train = (train["diabetes"] == "pos").astype(int)
+y_test  = (test["diabetes"]  == "pos").astype(int)
+
+fit = LogisticRegression(C=np.inf, max_iter=1000).fit(train[["glucose"]], y_train)
+p_train = fit.predict_proba(train[["glucose"]])[:, 1]
+p_logit = fit.predict_proba(test[["glucose"]])[:, 1]
+
+import sys; sys.path.append("checks")
+from checks import *
+print("on the training rows")
+check_probabilities(p_train, prevalence=float(y_train.mean()))
+print("on the held-out rows")
+check_probabilities(p_logit, prevalence=float(y_test.mean()))
+```
+:::
+
+The first check passes to six decimal places and it could not have done anything
+else: @sec-logistic-regression showed that a logistic regression with an
+intercept makes the mean of its fitted probabilities equal the observed
+prevalence, exactly, on the rows it was fitted to. That is an algebraic identity,
+not evidence.
+
+The second check reports `[fix]`. The mean predicted probability on the held-out
+patients is 0.386, the prevalence among them is 0.359, and the gap of 0.027 is
+larger than the check's tolerance of 0.02. Nothing is broken: the training
+prevalence is 0.366 and the test prevalence is 0.359, so the model is carrying
+the training rate onto a test set that happens to be slightly healthier. This is
+the weakest possible calibration claim — **calibration in the large**, one number
+against one number — and the model already misses it by two and a half
+percentage points on 153 patients.
+
+A model can pass that test and still be useless, because it averages. A model
+that gave every patient 0.359 would pass it perfectly.
+
+## Task 1 — The calibration curve, before a package draws one
+
+Split the predicted probabilities into five bins of width 0.2. In each bin,
+count the patients, average the predictions, and compute the proportion who
+actually had diabetes. A calibrated model puts those last two columns on top of
+each other.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+
+calibration_table <- function(p, truth, n_bins = 5) {
+  edges <- seq(0, 1, length.out = ______ + 1)
+  tibble(bin      = cut(p, breaks = edges, include.lowest = TRUE),
+         p        = p,
+         observed = as.integer(truth == "pos")) |>
+    group_by(bin, .drop = FALSE) |>
+    summarise(n              = n(),
+              mean_predicted = mean(p),
+              observed_rate  = mean(______),
+              .groups = "drop")
+}
+
+logit_cal <- calibration_table(p_logit, test$diabetes)
+logit_cal
+
+gap_logit <- max(abs(logit_cal$mean_predicted - logit_cal$observed_rate), na.rm = TRUE)
+check_metric_range(gap_logit, 0, 0.35, "largest predicted-minus-observed gap")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+
+calibration_table <- function(p, truth, n_bins = 5) {
+  edges <- seq(0, 1, length.out = n_bins + 1)
+  tibble(bin      = cut(p, breaks = edges, include.lowest = TRUE),
+         p        = p,
+         observed = as.integer(truth == "pos")) |>
+    group_by(bin, .drop = FALSE) |>
+    summarise(n              = n(),
+              mean_predicted = mean(p),
+              observed_rate  = mean(observed),
+              .groups = "drop")
+}
+
+logit_cal <- calibration_table(p_logit, test$diabetes)
+logit_cal
+
+gap_logit <- max(abs(logit_cal$mean_predicted - logit_cal$observed_rate), na.rm = TRUE)
+check_metric_range(gap_logit, 0, 0.35, "largest predicted-minus-observed gap")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+
+def calibration_table(p, truth, n_bins=5):
+    p = np.asarray(p, dtype=float)
+    bin_id = np.minimum((p * ______).astype(int), n_bins - 1)
+    out = pd.DataFrame({"bin": bin_id, "p": p, "observed": np.asarray(truth)})
+    return (out.groupby("bin")
+               .agg(n=("p", "size"), mean_predicted=("p", "mean"),
+                    observed_rate=("______", "mean"))
+               .reindex(range(n_bins)))
+
+logit_cal = calibration_table(p_logit, y_test)
+print(logit_cal.round(4))
+
+gap_logit = (logit_cal["mean_predicted"] - logit_cal["observed_rate"]).abs().max()
+check_metric_range(gap_logit, 0, 0.35, "largest predicted-minus-observed gap")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+
+def calibration_table(p, truth, n_bins=5):
+    p = np.asarray(p, dtype=float)
+    bin_id = np.minimum((p * n_bins).astype(int), n_bins - 1)
+    out = pd.DataFrame({"bin": bin_id, "p": p, "observed": np.asarray(truth)})
+    return (out.groupby("bin")
+               .agg(n=("p", "size"), mean_predicted=("p", "mean"),
+                    observed_rate=("observed", "mean"))
+               .reindex(range(n_bins)))
+
+logit_cal = calibration_table(p_logit, y_test)
+print(logit_cal.round(4))
+
+gap_logit = (logit_cal["mean_predicted"] - logit_cal["observed_rate"]).abs().max()
+check_metric_range(gap_logit, 0, 0.35, "largest predicted-minus-observed gap")
+```
+:::
+:::
+:::
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The bins are five equal slices of the interval from 0 to 1. In R one function
+turns a numeric vector into a factor of intervals; in Python multiplying by the
+number of bins and truncating does the same job, with the top edge needing care
+because a probability of exactly 1 would otherwise fall into a sixth bin.
+:::
+
+Both languages give the same five rows, because the split and the model are
+fixed:
+
+| Bin | Patients | Mean predicted | Observed rate |
+|---|---|---|---|
+| 0.0–0.2 | 40 | 0.146 | 0.125 |
+| 0.2–0.4 | 57 | 0.297 | 0.298 |
+| 0.4–0.6 | 23 | 0.474 | 0.522 |
+| 0.6–0.8 | 17 | 0.703 | 0.647 |
+| 0.8–1.0 | 16 | 0.842 | 0.625 |
+
+: {tbl-colwidths="[22,20,29,29]"}
+
+The middle of the range is close. The top bin is not: the model promises 0.84
+and delivers 0.63, which in a clinic is the difference between "almost certainly"
+and "probably". The largest gap is 0.217.
+
+## Is that top bin a fault, or is it sixteen patients?
+
+Before reading anything into a gap, ask what gap you would see from a model that
+was *perfectly* calibrated. We can answer that exactly, because we can generate
+outcomes from the model's own probabilities and rebuild the table. This reuses
+the `calibration_table()` you wrote in Task 1, so run that cell first.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+set.seed(1)
+max_gap <- function(y) {
+  tab <- calibration_table(p_logit, factor(ifelse(y == 1, "pos", "neg"),
+                                           levels = c("neg", "pos")))
+  max(abs(tab$mean_predicted - tab$observed_rate), na.rm = TRUE)
+}
+simulated <- replicate(2000, max_gap(rbinom(length(p_logit), 1, p_logit)))
+
+round(c(observed      = max_gap(as.integer(test$diabetes == "pos")),
+        sim_median    = median(simulated),
+        sim_90th      = unname(quantile(simulated, 0.90)),
+        p_value       = mean(simulated >= max_gap(as.integer(test$diabetes == "pos")))), 3)
+```
+
+## Python
+
+```{python}
+rng = np.random.default_rng(1)
+
+def max_gap(y):
+    tab = calibration_table(p_logit, y)
+    return float((tab["mean_predicted"] - tab["observed_rate"]).abs().max())
+
+observed = max_gap(y_test.to_numpy())
+simulated = np.array([max_gap(rng.binomial(1, p_logit)) for _ in range(2000)])
+
+{"observed": round(observed, 3),
+ "sim_median": round(float(np.median(simulated)), 3),
+ "sim_90th": round(float(np.quantile(simulated, 0.90)), 3),
+ "p_value": round(float((simulated >= observed).mean()), 3)}
+```
+:::
+
+A perfectly calibrated model on 153 patients in five bins produces a largest gap
+of 0.126 on a typical run, and exceeds the 0.217 we measured in about 12% of
+runs. The curve is not evidence that this model is miscalibrated. It is
+mostly evidence that sixteen patients is not many, and it is the reason
+calibration plots in papers should carry the bin counts — which is why
+`calibration_table()` returns `n` first.
+
+## Task 2 — A second model, on the same patients
+
+@sec-random-forest grows 500 trees and averages their votes, and averages of
+bounded numbers are pulled towards the middle. The standard warning is that an
+untouched random forest is poorly calibrated: too timid near 0 and near 1. Fit
+the Day 5.4 specification to **these** training rows, build its calibration
+table, and draw both curves against the diagonal.
+
+The forest sees all eight predictors and the logistic regression sees one, so
+this is not a fair comparison of accuracy. It is a comparison of the shape of
+two curves, which is what the plot is for.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+library(ggplot2)
+source("checks/checks.R")
+
+set.seed(123)
+rf <- rand_forest(trees = 500) |>
+  set_engine("ranger", seed = 123) |>
+  set_mode("classification") |>
+  fit(diabetes ~ ., data = train)
+
+p_rf <- predict(rf, test, type = "prob")$______
+check_probabilities(p_rf, prevalence = mean(test$diabetes == "pos"))
+
+curves <- bind_rows(
+  calibration_table(p_logit, test$diabetes) |> mutate(model = "logistic, glucose only"),
+  calibration_table(p_rf,    test$diabetes) |> mutate(model = "random forest, 8 predictors")
+) |> filter(n > 0)
+
+ggplot(curves, aes(x = mean_predicted, y = ______, colour = model)) +
+  geom_abline(linetype = "dashed") +
+  geom_line() +
+  geom_point(aes(size = n)) +
+  coord_equal(xlim = c(0, 1), ylim = c(0, 1)) +
+  labs(x = "Mean predicted probability in the bin",
+       y = "Observed rate in the bin", colour = NULL, size = "patients")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+library(ggplot2)
+source("checks/checks.R")
+
+set.seed(123)
+rf <- rand_forest(trees = 500) |>
+  set_engine("ranger", seed = 123) |>
+  set_mode("classification") |>
+  fit(diabetes ~ ., data = train)
+
+p_rf <- predict(rf, test, type = "prob")$.pred_pos
+check_probabilities(p_rf, prevalence = mean(test$diabetes == "pos"))
+
+curves <- bind_rows(
+  calibration_table(p_logit, test$diabetes) |> mutate(model = "logistic, glucose only"),
+  calibration_table(p_rf,    test$diabetes) |> mutate(model = "random forest, 8 predictors")
+) |> filter(n > 0)
+
+ggplot(curves, aes(x = mean_predicted, y = observed_rate, colour = model)) +
+  geom_abline(linetype = "dashed") +
+  geom_line() +
+  geom_point(aes(size = n)) +
+  coord_equal(xlim = c(0, 1), ylim = c(0, 1)) +
+  labs(x = "Mean predicted probability in the bin",
+       y = "Observed rate in the bin", colour = NULL, size = "patients")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestClassifier
+import sys; sys.path.append("checks")
+from checks import *
+
+rf = RandomForestClassifier(n_estimators=500, random_state=123).fit(
+    train.drop(columns="diabetes"), y_train)
+p_rf = rf.predict_proba(test.drop(columns="diabetes"))[:, ______]
+check_probabilities(p_rf, prevalence=float(y_test.mean()))
+
+fig, ax = plt.subplots(figsize=(5, 5))
+ax.plot([0, 1], [0, 1], linestyle="--", color="grey")
+for p, label in [(p_logit, "logistic, glucose only"),
+                 (p_rf, "random forest, 8 predictors")]:
+    tab = calibration_table(p, y_test).dropna()
+    ax.plot(tab["mean_predicted"], tab["______"], marker="o", label=label)
+ax.set_xlabel("Mean predicted probability in the bin")
+ax.set_ylabel("Observed rate in the bin")
+ax.legend()
+plt.show()
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestClassifier
+import sys; sys.path.append("checks")
+from checks import *
+
+rf = RandomForestClassifier(n_estimators=500, random_state=123).fit(
+    train.drop(columns="diabetes"), y_train)
+p_rf = rf.predict_proba(test.drop(columns="diabetes"))[:, 1]
+check_probabilities(p_rf, prevalence=float(y_test.mean()))
+
+fig, ax = plt.subplots(figsize=(5, 5))
+ax.plot([0, 1], [0, 1], linestyle="--", color="grey")
+for p, label in [(p_logit, "logistic, glucose only"),
+                 (p_rf, "random forest, 8 predictors")]:
+    tab = calibration_table(p, y_test).dropna()
+    ax.plot(tab["mean_predicted"], tab["observed_rate"], marker="o", label=label)
+ax.set_xlabel("Mean predicted probability in the bin")
+ax.set_ylabel("Observed rate in the bin")
+ax.legend()
+plt.show()
+```
+:::
+:::
+:::
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The forest's probability column has the same name as the logistic regression's,
+because `parsnip` names it after the factor level; in Python `predict_proba`
+again returns one column per class in `classes_` order. The second blank is the
+column of `calibration_table()` that holds what actually happened.
+:::
+
+The warning does not come true here, and that is worth more than if it had. The
+forest's probabilities reach both ends of the interval — 0.008 to 0.906 in R,
+0.004 to 0.924 in Python — rather than huddling near the
+prevalence, its mean is 0.362 against a prevalence of 0.359 — it passes the
+check the logistic regression failed — and its largest bin gap is 0.19 in R and
+0.30 in Python. Neither model is distinguishable from calibrated at this sample
+size, and the two languages disagree about which looks worse, which tells you
+how much signal there is in the comparison.
+
+Pile-up towards the middle is real, but it is a property of small or heavily
+regularised ensembles. Five hundred unrestricted trees on 615 patients are
+confident enough to reach both ends.
+
+## Task 3 — Same order, different numbers
+
+Now break the probabilities on purpose, in a way no ranking metric can see.
+Shrink every prediction a third of the way towards 0.5:
+
+$$q = 0.5 + \frac{p - 0.5}{3}.$$
+
+This is strictly increasing in $p$, so the patients come out in exactly the same
+order. Compute the AUC before and after, and the calibration table after.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+p_squashed <- 0.5 + (p_logit - 0.5) / ______
+
+auc_raw      <- roc_auc_vec(test$diabetes, p_logit,     event_level = "second")
+auc_squashed <- roc_auc_vec(test$diabetes, ______, event_level = "second")
+check_matches(auc_squashed, auc_raw, tol = 1e-4, label = "AUC after squashing")
+
+brier <- function(p) mean((p - as.integer(test$diabetes == "pos"))^2)
+round(c(auc_raw = auc_raw, auc_squashed = auc_squashed,
+        brier_raw = brier(p_logit), brier_squashed = brier(p_squashed)), 6)
+
+check_probabilities(p_squashed, prevalence = mean(test$diabetes == "pos"))
+calibration_table(p_squashed, test$diabetes)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+p_squashed <- 0.5 + (p_logit - 0.5) / 3
+
+auc_raw      <- roc_auc_vec(test$diabetes, p_logit,    event_level = "second")
+auc_squashed <- roc_auc_vec(test$diabetes, p_squashed, event_level = "second")
+check_matches(auc_squashed, auc_raw, tol = 1e-4, label = "AUC after squashing")
+
+brier <- function(p) mean((p - as.integer(test$diabetes == "pos"))^2)
+round(c(auc_raw = auc_raw, auc_squashed = auc_squashed,
+        brier_raw = brier(p_logit), brier_squashed = brier(p_squashed)), 6)
+
+check_probabilities(p_squashed, prevalence = mean(test$diabetes == "pos"))
+calibration_table(p_squashed, test$diabetes)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+from sklearn.metrics import roc_auc_score, brier_score_loss
+import sys; sys.path.append("checks")
+from checks import *
+
+p_squashed = 0.5 + (p_logit - 0.5) / ______
+
+auc_raw      = roc_auc_score(y_test, p_logit)
+auc_squashed = roc_auc_score(y_test, ______)
+check_matches(auc_squashed, auc_raw, tol=1e-4, label="AUC after squashing")
+
+print({"auc_raw": round(auc_raw, 6), "auc_squashed": round(auc_squashed, 6),
+       "brier_raw": round(brier_score_loss(y_test, p_logit), 6),
+       "brier_squashed": round(brier_score_loss(y_test, p_squashed), 6)})
+
+check_probabilities(p_squashed, prevalence=float(y_test.mean()))
+print(calibration_table(p_squashed, y_test).round(4))
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+from sklearn.metrics import roc_auc_score, brier_score_loss
+import sys; sys.path.append("checks")
+from checks import *
+
+p_squashed = 0.5 + (p_logit - 0.5) / 3
+
+auc_raw      = roc_auc_score(y_test, p_logit)
+auc_squashed = roc_auc_score(y_test, p_squashed)
+check_matches(auc_squashed, auc_raw, tol=1e-4, label="AUC after squashing")
+
+print({"auc_raw": round(auc_raw, 6), "auc_squashed": round(auc_squashed, 6),
+       "brier_raw": round(brier_score_loss(y_test, p_logit), 6),
+       "brier_squashed": round(brier_score_loss(y_test, p_squashed), 6)})
+
+check_probabilities(p_squashed, prevalence=float(y_test.mean()))
+print(calibration_table(p_squashed, y_test).round(4))
+```
+:::
+:::
+:::
+
+The **Brier score** in that cell is the mean squared difference between the
+probability and the outcome coded 0 or 1. Unlike AUC it is a *proper* scoring
+rule: it is minimised by telling the truth, so it falls when the ranking improves
+and also when the numbers themselves get closer to the events.
+
+## The result that should bother you
+
+The squashed model and the original model are the same model. One is a
+one-line transformation of the other, and every patient keeps their position in
+the queue.
+
+1. The AUC is 0.742022 before and 0.742022 after — identical to six decimal
+   places, in both languages, because AUC counts pairs in the right order and
+   the order did not change. A report that quotes only AUC cannot tell these two
+   models apart, and most published model reports quote only AUC.
+2. The Brier score rises from 0.199 to 0.218, and the probabilities now span
+   0.359 to 0.625. Every patient is told something between "a bit more likely
+   than not to be fine" and "not far off even odds", which is a model with
+   nothing to say.
+3. Apply @sec-thresholds' cost-minimising threshold of 0.17 to each. The
+   original probabilities send 123 of the 153 patients for investigation at a
+   cost of 74. The squashed probabilities send **all 153**, at a cost of 98 —
+   exactly the cost of ignoring the model and investigating everybody. The
+   entire value Day 4.3 extracted from this model has been destroyed by a
+   transformation that AUC says never happened.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+cost_of <- function(p, threshold, cost_fn = 5, cost_fp = 1) {
+  called_pos <- p >= threshold
+  truly_pos  <- test$diabetes == "pos"
+  cost_fn * sum(!called_pos & truly_pos) + cost_fp * sum(called_pos & !truly_pos)
+}
+p_squashed <- 0.5 + (p_logit - 0.5) / 3
+
+for (threshold in c(0.17, 0.5)) {
+  print(rbind(
+    raw      = c(threshold = threshold, n_investigated = sum(p_logit    >= threshold),
+                 cost = cost_of(p_logit,    threshold)),
+    squashed = c(threshold = threshold, n_investigated = sum(p_squashed >= threshold),
+                 cost = cost_of(p_squashed, threshold))))
+}
+```
+
+## Python
+
+```{python}
+truly_pos = y_test.to_numpy() == 1
+p_squashed = 0.5 + (p_logit - 0.5) / 3
+
+def cost_of(p, threshold, cost_fn=5, cost_fp=1):
+    called_pos = p >= threshold
+    return int(cost_fn * (~called_pos & truly_pos).sum()
+               + cost_fp * (called_pos & ~truly_pos).sum())
+
+pd.DataFrame([
+    dict(model=name, threshold=t, n_investigated=int((p >= t).sum()), cost=cost_of(p, t))
+    for t in (0.17, 0.5)
+    for name, p in [("raw", p_logit), ("squashed", p_squashed)]
+])
+```
+:::
+
+The sting is in the two rows for 0.5. At that threshold the two
+models are indistinguishable — both call 40 patients positive and both cost 165
+— because 0.5 is the one point this transformation leaves alone. A team that
+had never moved off the default would have found nothing wrong, and would have
+been right that nothing was wrong *for them*. Calibration starts to matter the
+moment the threshold stops being arbitrary.
+
+## Reflection
+
+1. AUC did not move and the Brier score did. Write the one-sentence rule you
+   would give a colleague for when AUC alone is an adequate summary of a
+   clinical prediction model, and when it is not.
+2. The noise simulation said we cannot tell this model from a calibrated one on
+   153 patients. How many patients would you want before you were willing to
+   publish a calibration curve with five bins, and what would you report
+   alongside it if you could not get them?
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Expected values** (the data is synthetic; forests move the last digit).
+
+| | R | Python |
+|---|---|---|
+| mean predicted, training rows / prevalence | 0.365854 / 0.365854 | 0.365854 / 0.365854 |
+| mean predicted, test rows / prevalence | 0.386 / 0.359 | 0.386 / 0.359 |
+| logistic: largest bin gap | 0.217 | 0.217 |
+| logistic: AUC / Brier | 0.742022 / 0.199 | 0.742022 / 0.199 |
+| simulated largest gap: median, 90th, p | 0.126, 0.217, 0.12 | 0.126, 0.217, 0.12 |
+| forest: mean predicted, range | 0.362, 0.008–0.906 | 0.362, 0.004–0.924 |
+| forest: AUC / Brier / largest gap | 0.755 / 0.192 / 0.19 | 0.743 / 0.197 / 0.30 |
+| squashed: AUC / Brier / range | 0.742022 / 0.218 / 0.359–0.625 | same |
+| cost at 0.17: raw, squashed | 74, 98 | 74, 98 |
+
+: {tbl-colwidths="[46,27,27]"}
+
+**Answers.** (1) AUC is adequate when the output is a ranked list and a fixed
+number of people will be seen — a waiting list, a recall quota — because only
+order is used. It is inadequate the moment a probability is compared with a
+number: a threshold from a cost ratio, a risk communicated to a patient, a
+prediction combined with another model's. (2) There is no single right answer
+and the useful part is the reasoning: bins of fifty or so are where the
+binomial noise on a rate of 0.8 drops below about 0.06, which with five bins
+means several hundred patients. Students who answer "report the counts and a
+confidence interval per bin, and do not smooth" have the better answer than
+students who name a number.
+
+**The simulation is the teaching, not the forest.** If the room is short of
+time, cut Task 2 and keep the noise control. The single most common thing a
+student does with their first calibration plot is to narrate a wobble that
+sixteen patients cannot support, and the simulation is the only cure. Worth
+noting aloud, if someone asks: the top bin on its own does look extreme — a
+perfectly calibrated model puts its observed rate between 0.69 and 1.00 ninety
+per cent of the time, and we saw 0.63 — but we chose that bin by looking at all
+five and picking the worst, which is why the honest test is the one over the
+maximum.
+
+**Common failures.** (1) Binning by equal counts instead of equal width and
+then comparing the table with the one above; both are defensible and the
+numbers differ, so say which you want. (2) In Python, forgetting `.dropna()`
+before plotting, which draws a line through an empty bin. (3) Reading the
+squashed model's higher Brier score as "a worse model" — it is the same model,
+and that is the point of the page. (4) Someone will ask whether you can simply
+recalibrate the squashed predictions back; you can, exactly, and Stretch 2 is
+where to send them.
+
+**Timing.** The worked example and Task 1 are the floor, 20 minutes. Task 3 and
+the three numbered steps are the ceiling and should not be rushed; Task 2 is
+the one to drop.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — Fix the imbalance, break the probabilities
+The booklet has quoted a prevalence near 36% since @sec-first-look and never
+resampled it. Try it: keep all 225 `pos` training patients, draw an equal number
+of `neg` at random, refit `diabetes ~ glucose` on the balanced 450, and predict
+the same 153 test patients.
+
+Nothing happens to the ranking. With one predictor the fitted probability is a
+monotone function of glucose whichever rows you fitted on, so the test AUC comes
+back as 0.742022 again, to the last digit. Everything happens to the scale: the
+mean predicted probability rises from 0.386 to about 0.49, against a prevalence
+of 0.359, and the Brier score rises from 0.199 to about 0.212. @sec-thresholds'
+threshold of 0.17 now costs 94 or 95 instead of 74, because on the balanced
+model 0.17 is a glucose of about 83 rather than about 100 and almost every
+patient clears it.
+
+The model is not worse. It is answering a different question — the risk in a
+population where diabetes is half as common as it is here is not the risk in
+this one — and the threshold was measured on the old scale. Re-minimising the
+cost on the new probabilities finds 0.26 or 0.27, and the cost there is 74
+again: the same decisions, relabelled. Ask what you would have had to know to
+spot this if someone handed you only the resampled model and its AUC.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Put it back
+Fit a logistic regression of the outcome on the *log-odds* of the squashed
+predictions, using the test set's own outcomes, and look at the slope. This is
+Platt scaling, and on a monotone distortion it undoes the damage almost exactly.
+Then say why doing it on the test set, as you just did, is not allowed, and what
+you would have had to hold back at the start to do it properly.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that you can build and read a calibration table for a set of predicted
+probabilities, that you can say whether its wobbles are larger than the sampling
+noise of the test set, and that you know one metric which notices a distortion
+that AUC cannot.
+
+**Cannot:** that this model is calibrated. The honest finding is weaker and more
+useful: on 153 held-out patients it is not *detectably* miscalibrated, which is
+a statement about the test set at least as much as about the model. Nor can you
+claim that calibration survives deployment — @sec-shift's covariate shift moves
+the case mix, and a model calibrated in development is routinely not calibrated
+in the clinic.

@@ -1,0 +1,443 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 6.1 — Importance, and a column of pure noise {#sec-importance}
+
+**45 minutes · work individually**
+
+## Objectives
+
+::: {.objective-list}
+- Fit a random forest and read two different importance rankings off it.
+- State, for each measure, what it is a measure of and which question it
+  answers.
+- Use a pure-noise control to decide how much of a ranking to believe.
+:::
+
+## Why this, here
+
+@sec-random-forest left you with a forest that predicts better than the
+logistic regression of @sec-logistic-regression and cannot be read. The obvious
+next move is to ask the forest which variables it used. Every library will
+answer that question. The problem is that they answer different questions, give
+different rankings, and none of them will tell you so. We settle it the way you
+would settle any measurement question: by measuring something whose true value
+we already know.
+
+## The model we will spend the day explaining
+
+We add one predictor that cannot possibly matter — a column of random numbers,
+drawn independently of everything else, named `noise`. It is not a trick on the
+model. It is a control on the *importance measures*: whatever any of them says
+about `noise`, we know the right answer is nothing.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(readr); library(dplyr); library(parsnip); library(rsample)
+library(yardstick); library(vip); library(ggplot2)
+
+set.seed(123)
+dia <- read_csv("data/diabetes.csv", show_col_types = FALSE) |>
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")),
+         noise    = round(rnorm(n()), 2))
+
+split <- initial_split(dia, prop = 0.7, strata = diabetes)
+train <- training(split)
+test  <- testing(split)
+
+rf_fit <- rand_forest(trees = 500, mtry = 3, min_n = 10) |>
+  set_engine("ranger", importance = "impurity", seed = 123) |>
+  set_mode("classification") |>
+  fit(diabetes ~ ., data = train)
+
+preds <- predict(rf_fit, test, type = "prob") |> bind_cols(test)
+roc_auc(preds, truth = diabetes, .pred_pos, event_level = "second")
+```
+
+## Python
+
+```{python}
+import numpy as np, pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import roc_auc_score
+from sklearn.inspection import permutation_importance
+
+dia = pd.read_csv("data/diabetes.csv")
+y = (dia["diabetes"] == "pos").astype(int)
+X = dia.drop(columns=["diabetes"]).copy()
+X["noise"] = np.random.default_rng(42).normal(size=len(X)).round(2)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=123, stratify=y)
+
+rf = RandomForestClassifier(n_estimators=300, random_state=123).fit(X_train, y_train)
+auc = roc_auc_score(y_test, rf.predict_proba(X_test)[:, 1])
+round(auc, 3)
+```
+:::
+
+Both forests score a test AUC in the high 0.7s. Note the `event_level =
+"second"` in the R call: the factor levels are `neg`, `pos`, and **yardstick
+treats the first level as the event**, so without that argument you would be
+scoring the model's ability to detect *absence* of diabetes.
+
+## Measure 1 — impurity importance
+
+Every split in every tree reduces Gini impurity by some amount. Impurity
+importance adds those reductions up, per variable, over the whole forest. It is
+free: the forest already computed it while fitting. It is also entirely
+internal — it is a summary of what happened inside the training rows, and no
+test data enters it anywhere.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| fig-width: 6.5
+#| fig-height: 3.5
+imp <- vi(rf_fit)
+imp
+vip(rf_fit, num_features = 9) + labs(title = "Impurity importance")
+```
+
+## Python
+
+```{python}
+#| fig-width: 6.5
+#| fig-height: 3.5
+imp = pd.Series(rf.feature_importances_, index=X.columns).sort_values()
+print(imp.round(3))
+
+fig, ax = plt.subplots(figsize=(6.5, 3.5))
+imp.plot(kind="barh", ax=ax, color="steelblue")
+ax.set_xlabel("mean decrease in impurity")
+fig.tight_layout(); plt.show()
+```
+:::
+
+## Task 1 — Find the control
+
+Look at the ranking you just printed and find `noise` in it. Then let the check
+say it out loud: `check_noise_control()` reports where the control landed and
+what it is worth relative to the strongest predictor.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+check_noise_control(______)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+check_noise_control(imp)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+check_noise_control(______)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+check_noise_control(imp)
+```
+:::
+:::
+:::
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The check wants the importances themselves, not the model. In R that is the
+object `vi()` returned; in Python it is the `Series` you built from
+`feature_importances_`. The check finds `noise` by name.
+:::
+
+The check prints `[fix]`. **That is not a mistake in your code.** It is the
+check doing its job on a measure that has just handed a third of its top score
+to a column of random numbers.
+
+## Task 2 — Ask a different question
+
+Permutation importance asks something else entirely: *if I destroy this
+variable, how much worse does the model get?* Shuffle one column of the **test**
+set, re-score, record the drop in AUC, put the column back, repeat. Nothing is
+refitted; the model is held fixed and the data is damaged.
+
+Fill in the two blanks: which rows to permute, and which metric to score.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+pred_pos <- function(object, newdata) predict(object, newdata, type = "prob")$.pred_pos
+
+set.seed(123)
+perm <- vi(rf_fit, method = "permute",
+           train = ______, target = "diabetes",
+           metric = ______, event_level = "second",
+           pred_wrapper = pred_pos, nsim = 20,
+           smaller_is_better = FALSE)
+perm
+check_noise_control(perm)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+pred_pos <- function(object, newdata) predict(object, newdata, type = "prob")$.pred_pos
+
+set.seed(123)
+perm <- vi(rf_fit, method = "permute",
+           train = test, target = "diabetes",
+           metric = "roc_auc", event_level = "second",
+           pred_wrapper = pred_pos, nsim = 20,
+           smaller_is_better = FALSE)
+perm
+check_noise_control(perm)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+result = permutation_importance(rf, ______, ______, n_repeats=20,
+                                random_state=123, scoring=______)
+perm = pd.Series(result.importances_mean, index=X.columns).sort_values()
+print(perm.round(4))
+check_noise_control(perm)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+result = permutation_importance(rf, X_test, y_test, n_repeats=20,
+                                random_state=123, scoring="roc_auc")
+perm = pd.Series(result.importances_mean, index=X.columns).sort_values()
+print(perm.round(4))
+check_noise_control(perm)
+```
+:::
+:::
+:::
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Permutation importance needs rows the model has not been fitted on, and a
+metric to measure the damage with. You have both already: the held-out set, and
+the AUC you reported above. In Python the metric is a string scikit-learn
+recognises; in R it is a yardstick metric name.
+:::
+
+This time the check passes. Under permutation the control is worth a few per
+cent of glucose at most, which is what zero looks like once sampling noise is
+added to it. Report which variables changed rank between the two measures.
+
+::: {.callout-warning}
+## Below the top two, the ordering is not real
+In both languages glucose dominates and age is a distant second. Everything
+below that is a cluster of near-zero values whose spread across repeats is as
+large as the values themselves — `noise` finishes inside that cluster, in R
+slightly above zero and in Python slightly below it. Do not report a rank order
+within a cluster like that. Report the cluster.
+:::
+
+## The result that should bother you
+
+Impurity importance put `noise` fifth of nine, ahead of blood pressure,
+insulin and triceps skinfold — three measurements a diabetes clinic actually
+takes. Reason it through in three steps.
+
+1. The forest is allowed to split on `noise`, and with `mtry = 3` it is offered
+   the chance about a third of the time. A continuous variable with 768
+   distinct-ish values offers a great many candidate split points, so by chance
+   some of them separate the training rows well.
+2. Each of those lucky splits reduces training impurity, and impurity
+   importance counts every one of them. Nothing in the measure asks whether the
+   reduction survives on rows the forest has not seen.
+3. So impurity importance is a faithful description of *how the forest was
+   built*. It is not evidence about which variables carry signal. Those are
+   different claims, and only the second one is what anybody wants.
+
+This is not an obscure edge case. It is the default output of
+`feature_importances_` and of `vip()`, it appears in papers, and the control
+that exposes it costs one line.
+
+## Task 3 — Is the noise column doing any harm?
+
+If impurity importance is right that `noise` matters, dropping it should hurt.
+Refit the forest without it and compare test AUC.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+rf_clean <- rand_forest(trees = 500, mtry = 3, min_n = 10) |>
+  set_engine("ranger", seed = 123) |>
+  set_mode("classification") |>
+  fit(diabetes ~ ., data = ______)
+
+predict(rf_clean, test, type = "prob") |>
+  bind_cols(test) |>
+  roc_auc(truth = diabetes, .pred_pos, event_level = "second")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+rf_clean <- rand_forest(trees = 500, mtry = 3, min_n = 10) |>
+  set_engine("ranger", seed = 123) |>
+  set_mode("classification") |>
+  fit(diabetes ~ ., data = select(train, -noise))
+
+predict(rf_clean, test, type = "prob") |>
+  bind_cols(test) |>
+  roc_auc(truth = diabetes, .pred_pos, event_level = "second")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+rf_clean = RandomForestClassifier(n_estimators=300, random_state=123).fit(
+    X_train.drop(columns=______), y_train)
+auc_clean = roc_auc_score(y_test, rf_clean.predict_proba(
+    X_test.drop(columns=______))[:, 1])
+print(round(auc_clean, 3), "versus", round(auc, 3), "with the noise column")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+rf_clean = RandomForestClassifier(n_estimators=300, random_state=123).fit(
+    X_train.drop(columns=["noise"]), y_train)
+auc_clean = roc_auc_score(y_test, rf_clean.predict_proba(
+    X_test.drop(columns=["noise"]))[:, 1])
+print(round(auc_clean, 3), "versus", round(auc, 3), "with the noise column")
+```
+:::
+:::
+:::
+
+The AUC moves by about one point in the second decimal — in Python it goes up a
+little, in R down a little. That is the same size as the spread you get from
+refitting the forest with ten different seeds and changing nothing else, so it
+is not a difference at all. A variable that one importance measure ranked
+fifth of nine is worth nothing to the prediction.
+
+## Reflection
+
+1. Impurity importance and permutation importance disagreed. Write the sentence
+   you would say to a clinical collaborator who asks which one is correct —
+   without using the word "wrong".
+2. Permutation importance is computed on held-out rows here. What would change
+   if you computed it on the training rows instead, and which of the two would
+   you report in a paper?
+3. You now have a control for *importance*. What would the equivalent control
+   be for a claim that the model is well calibrated?
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Answers.** (1) Something like: "they measure different things — one counts how
+often the forest used a variable while it was being built, the other measures
+how much the predictions degrade without it. Only the second is about
+prediction." The useful follow-up is to ask which one the collaborator thought
+they were being shown. (2) On training rows the drop is dominated by
+memorisation, so every variable the forest leaned on looks important, including
+the control; the held-out version is the one to report, and it is also the one
+with a defensible interpretation — generalisation loss. (3) A control for
+calibration is a model whose probabilities are deliberately distorted, for
+example by pushing every prediction towards 0.5, and then checking that your
+calibration diagnostic actually notices.
+
+**Expected values** (synthetic data; regenerating it moves the last digit).
+Test AUC 0.75–0.80 in both languages. Impurity: glucose first at roughly four
+times the control; `noise` fifth of nine at 30–37% of glucose. Permutation on
+the test set: glucose 0.14–0.17, everything else under 0.02, `noise` between
+−0.01 and +0.01. Refitting without `noise` changes AUC by under 0.015 in either
+direction.
+
+**Common failures.** (1) Passing the fitted model rather than the importance
+table to `check_noise_control()`. (2) In R, omitting `event_level = "second"`,
+which silently reports AUC for the wrong class — the giveaway is an AUC near
+0.2. (3) Reading the `[fix]` in Task 1 as a bug and trying to debug it; say
+early that a check can fail honestly. (4) Treating the permutation ranking
+below the top two as meaningful.
+
+**Timing.** If you are short, set Task 3 as a demonstration rather than an
+exercise — but do not skip it, because it is the only direct evidence that the
+control is worthless to the prediction rather than merely low-ranked.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — Two controls, not one
+Add a second control: a column of integers `1:n`, a row identifier. It carries
+no information either, but it has one distinct value per patient. Where does
+impurity importance put it, and what does the comparison with `noise` tell you
+about which features that measure favours?
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Correlated predictors break both measures
+Add a copy of `glucose` with a little jitter, so the two columns are nearly
+identical. What happens to glucose's permutation importance, and why? Write
+down the sentence a reader would wrongly conclude from the new ranking.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that for this forest, on these held-out rows, permuting glucose costs
+about 0.14 of AUC and permuting anything else costs almost nothing; and that a
+column known to be meaningless was ranked fifth of nine by the forest's own
+built-in importance.
+
+**Cannot:** anything about an individual patient. Both measures are averages
+over the whole test set, and an average over 231 people cannot tell you why the
+model said what it said about one of them — which is what @sec-shap is for.

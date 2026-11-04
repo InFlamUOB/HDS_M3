@@ -1,0 +1,794 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 5.5 — Shrinking coefficients towards zero {#sec-regularisation}
+
+**50 minutes · work individually**
+
+::: {.callout-important}
+## A suggested addition, not part of the original module
+This exercise was proposed and drafted by the assistant that rebuilt the
+booklet, not ported from an earlier version of the module. The word regularisation appears nowhere else in the booklet, although the site this material came from was called RegularizationAndTrees. Day 5 shows a forest beating a tree by averaging variance away; penalties are the other answer to the same problem. Treat it as a
+draft to accept, rewrite or delete: nothing else depends on it, and removing it
+means deleting this file and its line in `_quarto.yml`.
+:::
+
+:::: {.web-only}
+Every cell on this page is a real R or Python cell, run against
+`data/diabetes.csv` with the split used throughout Day 5, plus four columns of
+random numbers added on purpose.
+::::
+
+## Objectives
+
+::: {.objective-list}
+- Fit a lasso and a ridge logistic regression with the penalty chosen by
+  cross-validation, in both languages, and read off which coefficients the
+  penalty set to exactly zero.
+- Say what each of the two penalties does to a predictor that carries no
+  signal, and defend a choice between them to a reader.
+- Show that the penalty which minimises cross-validated AUC is not the penalty
+  that recovers the right variables, and quote the AUC the difference costs.
+:::
+
+## Why this, here
+
+@sec-random-forest answered the instability of a single tree by averaging:
+grow five hundred trees on resampled rows and let the variance cancel. There is
+a second answer to the same problem, and it does not need five hundred of
+anything. Leave one model, and make it harder for the fitting procedure to give
+any coefficient a large value. That is regularisation, and @sec-frameworks
+already met it without arguing for it — scikit-learn applies a penalty by
+default, R's `glmnet` engine applies one when asked, and the chapter closed by
+saying that Day 5 would make the case. This is that case, and the case against.
+
+It sits here, after @sec-resampling and @sec-decision-trees, because the
+strength of the penalty is a hyperparameter like `tree_depth`: there is no way
+to read it off the data you fitted on, and the only honest way to choose it is
+the resampling machinery you already have.
+
+## Worked example — twelve predictors, four of which are nothing
+
+We take Day 5's eight predictors and add four columns of random numbers, drawn
+independently of everything else and of each other. @sec-importance uses one
+such control; four is better, because then the useless columns outnumber the
+predictors that carry any real signal in this data — which, as Day 6 will show,
+is roughly `glucose` and `age`.
+
+Every predictor is standardised first. A penalty acts on the size of a
+coefficient, and the size of a coefficient depends on the units of its
+predictor, so penalising unstandardised predictors penalises whoever chose the
+units. The standardisation happens inside the recipe or the pipeline, which is
+what makes it honest under resampling (@sec-leakage).
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(tidymodels); library(readr)
+
+dia <- read_csv("data/diabetes.csv", show_col_types = FALSE) |>
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+set.seed(123)
+dia <- dia |> mutate(noise  = round(rnorm(n()), 2),
+                     noise2 = round(rnorm(n()), 2),
+                     noise3 = round(rnorm(n()), 2),
+                     noise4 = round(rnorm(n()), 2))
+controls <- c("noise", "noise2", "noise3", "noise4")
+
+set.seed(123)
+split <- initial_split(dia, prop = 0.7, strata = diabetes)
+train <- training(split); test <- testing(split)
+
+norm_rec <- recipe(diabetes ~ ., data = train) |>
+  step_normalize(all_numeric_predictors())
+
+plain_fit <- workflow() |>
+  add_recipe(norm_rec) |>
+  add_model(logistic_reg() |> set_engine("glm")) |>
+  fit(data = train)
+
+tidy(plain_fit) |> arrange(desc(abs(estimate))) |> print(n = 13)
+```
+
+## Python
+
+```{python}
+import numpy as np, pandas as pd
+from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import roc_auc_score
+
+dia = pd.read_csv("data/diabetes.csv")
+y = (dia["diabetes"] == "pos").astype(int)
+X = dia.drop(columns="diabetes").copy()
+
+rng = np.random.default_rng(42)
+for nm in ["noise", "noise2", "noise3", "noise4"]:
+    X[nm] = rng.normal(size=len(X)).round(2)
+controls = ["noise", "noise2", "noise3", "noise4"]
+
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3,
+                                          random_state=123, stratify=y)
+
+def coefs(fitted):
+    """The coefficients of a fitted pipeline, named, largest first."""
+    s = pd.Series(fitted[-1].coef_[0], index=X.columns)
+    return s.reindex(s.abs().sort_values(ascending=False).index)
+
+plain = make_pipeline(StandardScaler(),
+                      LogisticRegression(C=np.inf, max_iter=1000)).fit(X_tr, y_tr)
+print(coefs(plain).round(3))
+```
+:::
+
+::: {.callout-warning}
+## Two spellings of "no penalty", and one relevel that differs from the rest of Day 5
+`LogisticRegression()` **always** penalises unless you stop it: the default
+`C=1.0` is a ridge penalty, and `C=np.inf` is the unpenalised fit that matches
+R's `glm` (@sec-frameworks). If you are on scikit-learn 1.7 or earlier, write
+`penalty=None`, `penalty="l1"` and `penalty="l2"` where this page writes
+`C=np.inf`, `l1_ratio=1` and `l1_ratio=0`; the older spellings still run on
+1.8 and 1.9 but print a deprecation warning.
+
+The factor levels here are `neg`, `pos` — the order @sec-importance uses, not
+the `pos`, `neg` of @sec-classification-metrics. This page reads coefficients,
+and with `neg` first the coefficients are for the probability of `pos`, so a
+positive coefficient means higher risk. The price is `event_level = "second"`
+in every yardstick call below.
+:::
+
+Now the test AUC, and the control columns' coefficients, from the same fit.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+augment(plain_fit, test) |>
+  roc_auc(truth = diabetes, .pred_pos, event_level = "second")
+```
+
+## Python
+
+```{python}
+round(roc_auc_score(y_te, plain.predict_proba(X_te)[:, 1]), 3)
+```
+:::
+
+Read the two coefficient tables again, and find the controls. In R, `noise4`
+has the fourth largest coefficient of the twelve, ahead of `pressure`, `age`,
+`pedigree`, `insulin` and `triceps`, and its p-value is 0.043. In Python,
+`noise3` is sixth of twelve, ahead of `age`. Nothing is wrong with either fit.
+This is what maximum likelihood does when it is given twelve predictors and 537
+patients: it spends a little of each coefficient on whatever the random columns
+happen to line up with.
+
+## Task 1 — Let a lasso choose the variables
+
+Fit the same logistic regression with an L1 penalty, with the strength of the
+penalty tuned by 10-fold cross-validation on the training rows. The test set
+takes no part in the choice, for the reason @sec-decision-trees gave.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+
+pen_grid <- tibble(penalty = 10^seq(-4, 0, length.out = 30))
+
+lasso_wf <- workflow() |>
+  add_recipe(norm_rec) |>
+  add_model(logistic_reg(penalty = ______, mixture = ______) |> set_engine("glmnet"))
+
+set.seed(123)
+folds     <- vfold_cv(train, v = 10, strata = diabetes)
+lasso_res <- tune_grid(lasso_wf, resamples = folds, grid = pen_grid,
+                       metrics = metric_set(roc_auc))
+show_best(lasso_res, metric = "roc_auc", n = 3)
+
+best_pen  <- select_best(lasso_res, metric = "roc_auc")
+lasso_fit <- finalize_workflow(lasso_wf, best_pen) |> fit(data = train)
+lasso_co  <- tidy(lasso_fit) |> arrange(desc(abs(estimate)))
+print(lasso_co, n = 13)
+
+check_selection(lasso_co, controls, label = "the CV-best lasso")
+check_metric_range(
+  augment(lasso_fit, test) |>
+    roc_auc(truth = diabetes, .pred_pos, event_level = "second") |> pull(.estimate),
+  0.7, 0.95, "lasso test AUC")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The first blank is the same placeholder you used for `tree_depth` in
+@sec-decision-trees, so that the grid can supply the values. The second selects
+which penalty you get: in `glmnet`'s parameterisation, `mixture` is the share
+of the penalty that is L1, and the lasso is all of it.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+
+pen_grid <- tibble(penalty = 10^seq(-4, 0, length.out = 30))
+
+lasso_wf <- workflow() |>
+  add_recipe(norm_rec) |>
+  add_model(logistic_reg(penalty = tune(), mixture = 1) |> set_engine("glmnet"))
+
+set.seed(123)
+folds     <- vfold_cv(train, v = 10, strata = diabetes)
+lasso_res <- tune_grid(lasso_wf, resamples = folds, grid = pen_grid,
+                       metrics = metric_set(roc_auc))
+show_best(lasso_res, metric = "roc_auc", n = 3)
+
+best_pen  <- select_best(lasso_res, metric = "roc_auc")
+lasso_fit <- finalize_workflow(lasso_wf, best_pen) |> fit(data = train)
+lasso_co  <- tidy(lasso_fit) |> arrange(desc(abs(estimate)))
+print(lasso_co, n = 13)
+
+check_selection(lasso_co, controls, label = "the CV-best lasso")
+check_metric_range(
+  augment(lasso_fit, test) |>
+    roc_auc(truth = diabetes, .pred_pos, event_level = "second") |> pull(.estimate),
+  0.7, 0.95, "lasso test AUC")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+
+Cs = np.logspace(-3, 2, 30)
+cv = StratifiedKFold(10, shuffle=True, random_state=123)
+
+lasso_search = GridSearchCV(
+    make_pipeline(StandardScaler(),
+                  LogisticRegression(solver="liblinear", l1_ratio=______,
+                                     max_iter=5000)),
+    {"logisticregression__C": Cs}, cv=cv, scoring=______).fit(X_tr, y_tr)
+
+print(round(lasso_search.best_params_["logisticregression__C"], 4),
+      round(lasso_search.best_score_, 4))
+lasso_co = coefs(lasso_search.best_estimator_)
+print(lasso_co.round(4))
+
+check_selection(lasso_co, controls, label="the CV-best lasso")
+check_metric_range(roc_auc_score(y_te, lasso_search.predict_proba(X_te)[:, 1]),
+                   0.7, 0.95, "lasso test AUC")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`l1_ratio` is the share of the penalty that is L1, and the lasso is all of it.
+The scoring string is the one `GridSearchCV` understood in @sec-random-forest.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+
+Cs = np.logspace(-3, 2, 30)
+cv = StratifiedKFold(10, shuffle=True, random_state=123)
+
+lasso_search = GridSearchCV(
+    make_pipeline(StandardScaler(),
+                  LogisticRegression(solver="liblinear", l1_ratio=1,
+                                     max_iter=5000)),
+    {"logisticregression__C": Cs}, cv=cv, scoring="roc_auc").fit(X_tr, y_tr)
+
+print(round(lasso_search.best_params_["logisticregression__C"], 4),
+      round(lasso_search.best_score_, 4))
+lasso_co = coefs(lasso_search.best_estimator_)
+print(lasso_co.round(4))
+
+check_selection(lasso_co, controls, label="the CV-best lasso")
+check_metric_range(roc_auc_score(y_te, lasso_search.predict_proba(X_te)[:, 1]),
+                   0.7, 0.95, "lasso test AUC")
+```
+:::
+:::
+:::
+
+::: {.callout-note appearance="simple"}
+## `penalty` and `C` run in opposite directions
+R's `penalty` is the penalty itself: larger means more shrinkage. Python's `C`
+is its reciprocal: larger means *less*. The two are related by
+`C = 1 / (n * penalty)`, with `n = 537` training rows here, because `glmnet`
+divides the likelihood by the sample size and scikit-learn does not. R's chosen
+penalty of 0.0085 is therefore a `C` of 0.22, and Python's chosen `C` of 0.386
+is a penalty of 0.0048. That is as close as two different splits of the same
+768 patients were ever going to agree; the grids look unrelated and are not.
+:::
+
+The check prints `[fix]`, and the detail line says why. Write down which
+predictors the lasso dropped, and which controls it kept.
+
+## Task 2 — Ridge: shrink everything, select nothing
+
+Change one argument to get the other classical penalty. L2 shrinks coefficients
+towards zero in proportion to their size and never reaches it. Fit it on the
+same grid and folds, and compare.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+ridge_wf <- workflow() |>
+  add_recipe(norm_rec) |>
+  add_model(logistic_reg(penalty = tune(), mixture = ______) |> set_engine("glmnet"))
+
+ridge_res <- tune_grid(ridge_wf, resamples = folds, grid = pen_grid,
+                       metrics = metric_set(roc_auc))
+ridge_fit <- finalize_workflow(ridge_wf, select_best(ridge_res, metric = "roc_auc")) |>
+  fit(data = train)
+ridge_co  <- tidy(ridge_fit) |> arrange(desc(abs(estimate)))
+print(ridge_co, n = 13)
+
+c(lasso_zeros = sum(lasso_co$estimate == 0),
+  ridge_zeros = sum(ridge_co$estimate == 0))
+
+check_selection(ridge_co, controls, label = "the CV-best ridge")
+augment(ridge_fit, test) |>
+  roc_auc(truth = diabetes, .pred_pos, event_level = "second")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`mixture` is the L1 share of the penalty. Ridge is the other end of the same
+dial.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+ridge_wf <- workflow() |>
+  add_recipe(norm_rec) |>
+  add_model(logistic_reg(penalty = tune(), mixture = 0) |> set_engine("glmnet"))
+
+ridge_res <- tune_grid(ridge_wf, resamples = folds, grid = pen_grid,
+                       metrics = metric_set(roc_auc))
+ridge_fit <- finalize_workflow(ridge_wf, select_best(ridge_res, metric = "roc_auc")) |>
+  fit(data = train)
+ridge_co  <- tidy(ridge_fit) |> arrange(desc(abs(estimate)))
+print(ridge_co, n = 13)
+
+c(lasso_zeros = sum(lasso_co$estimate == 0),
+  ridge_zeros = sum(ridge_co$estimate == 0))
+
+check_selection(ridge_co, controls, label = "the CV-best ridge")
+augment(ridge_fit, test) |>
+  roc_auc(truth = diabetes, .pred_pos, event_level = "second")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+ridge_search = GridSearchCV(
+    make_pipeline(StandardScaler(),
+                  LogisticRegression(solver="liblinear", l1_ratio=______,
+                                     max_iter=5000)),
+    {"logisticregression__C": Cs}, cv=cv, scoring="roc_auc").fit(X_tr, y_tr)
+
+ridge_co = coefs(ridge_search.best_estimator_)
+print(ridge_co.round(4))
+print({"lasso_zeros": int((lasso_co == 0).sum()),
+       "ridge_zeros": int((ridge_co == 0).sum())})
+
+check_selection(ridge_co, controls, label="the CV-best ridge")
+print(round(roc_auc_score(y_te, ridge_search.predict_proba(X_te)[:, 1]), 3))
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+ridge_search = GridSearchCV(
+    make_pipeline(StandardScaler(),
+                  LogisticRegression(solver="liblinear", l1_ratio=0,
+                                     max_iter=5000)),
+    {"logisticregression__C": Cs}, cv=cv, scoring="roc_auc").fit(X_tr, y_tr)
+
+ridge_co = coefs(ridge_search.best_estimator_)
+print(ridge_co.round(4))
+print({"lasso_zeros": int((lasso_co == 0).sum()),
+       "ridge_zeros": int((ridge_co == 0).sum())})
+
+check_selection(ridge_co, controls, label="the CV-best ridge")
+print(round(roc_auc_score(y_te, ridge_search.predict_proba(X_te)[:, 1]), 3))
+```
+:::
+:::
+:::
+
+Now write two sentences, and keep them. The first says which of the two models
+you would report to a clinical audience and why. The second says what you would
+have to add to the ridge model before anybody could act on it, given that it
+assigns a non-zero coefficient to four columns you generated yourself.
+
+## Worked example — the whole path, and what a clean model costs
+
+A lasso does not fit one model. It fits a path: at every penalty, a different
+set of survivors. Both libraries will hand you the whole thing, so there is no
+reason to look at only the point the tuning chose.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| fig-width: 6.5
+#| fig-height: 3.6
+coef_path <- purrr::map_dfr(pen_grid$penalty, \(lam) tidy(lasso_fit, penalty = lam)) |>
+  filter(term != "(Intercept)") |>
+  mutate(kind = if_else(term %in% controls, "control", "measured"))
+
+ggplot(coef_path, aes(log10(penalty), estimate, group = term, colour = kind)) +
+  geom_line() +
+  geom_vline(xintercept = log10(best_pen$penalty), linetype = "dashed") +
+  scale_colour_manual(values = c(control = "firebrick", measured = "grey30")) +
+  labs(x = "log10(penalty)", y = "standardised coefficient",
+       colour = NULL, title = "Lasso path; dashed line is the CV-best penalty")
+
+path <- coef_path |>
+  summarise(kept_real     = sum(estimate != 0 & kind == "measured"),
+            kept_controls = sum(estimate != 0 & kind == "control"),
+            .by = penalty) |>
+  left_join(collect_metrics(lasso_res) |> select(penalty, cv_auc = mean, std_err),
+            by = "penalty")
+
+path |> slice_min(penalty, n = 1, by = c(kept_real, kept_controls)) |> arrange(penalty)
+
+# the largest penalty whose resampled AUC is still within one standard error
+select_by_one_std_err(lasso_res, metric = "roc_auc", desc(penalty)) |> select(penalty)
+```
+
+## Python
+
+```{python}
+#| fig-width: 6.5
+#| fig-height: 3.6
+import matplotlib.pyplot as plt
+
+rows, lines = [], []
+for C, mean, sd in zip(Cs, lasso_search.cv_results_["mean_test_score"],
+                       lasso_search.cv_results_["std_test_score"]):
+    f = make_pipeline(StandardScaler(),
+                      LogisticRegression(solver="liblinear", l1_ratio=1, C=C,
+                                         max_iter=5000)).fit(X_tr, y_tr)
+    c = pd.Series(f[-1].coef_[0], index=X.columns)
+    lines.append(c)
+    rows.append({"C": round(C, 5),
+                 "kept_real": int((c.drop(controls) != 0).sum()),
+                 "kept_controls": int((c[controls] != 0).sum()),
+                 "cv_auc": round(mean, 4), "std_err": round(sd / np.sqrt(10), 4)})
+
+paths = pd.DataFrame(lines, index=Cs)
+fig, ax = plt.subplots(figsize=(6.5, 3.6))
+for col in paths.columns:
+    ax.plot(np.log10(paths.index), paths[col],
+            color="firebrick" if col in controls else "grey")
+ax.axvline(np.log10(lasso_search.best_params_["logisticregression__C"]), ls="--", color="black")
+ax.set_xlabel("log10(C)"); ax.set_ylabel("standardised coefficient")
+ax.set_title("Lasso path; red is a control, dashed line is the CV-best C")
+fig.tight_layout(); plt.show()
+
+path = pd.DataFrame(rows)
+print(path.drop_duplicates(subset=["kept_real", "kept_controls"], keep="last").to_string(index=False))
+
+# the strongest penalty (smallest C) still within one standard error of the best
+best = path["cv_auc"].idxmax()
+within = path["cv_auc"] >= path.loc[best, "cv_auc"] - path.loc[best, "std_err"]
+print("one-standard-error C:", path.loc[within, "C"].min())
+```
+:::
+
+The table has one row for each distinct pair of survivor counts, printed at the
+weakest penalty that achieves it. Three penalties on it are worth marking: the
+one the tuning chose, the one at which the last control disappears, and the
+strongest penalty whose resampled AUC is still within one standard error of the
+best — the one-standard-error rule of @sec-decision-trees, which the cell above
+prints. In R they are 0.0085, 0.0418 and 0.204, all different, and the
+one-standard-error rule lands in the stretch of the path where `glucose` is the
+only survivor. In Python they are `C` = 0.386, `C` = 0.0788 and `C` = 0.053,
+and the last two keep the same five predictors. Neither language puts the
+tuned penalty near either of the other two.
+
+## Task 3 — Which of two correlated predictors survives
+
+`age` and `pregnant` are correlated at about 0.74 in these 768 patients. A lasso given two
+nearly interchangeable predictors does not split the coefficient between them;
+it tends to keep one and zero the other. Which one it keeps is the question.
+
+Refit at the penalty that clears the controls, on twenty bootstrap resamples of
+the training rows, and tabulate which of the pair survives each time.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+clear_pen <- path |> filter(kept_controls == 0, kept_real > 0) |>
+  slice_min(penalty, n = 1) |> pull(penalty)
+clear_pen
+
+pick_pair <- function(sp) {
+  d  <- analysis(sp)
+  wf <- workflow() |>
+    add_recipe(recipe(diabetes ~ ., data = d) |> step_normalize(all_numeric_predictors())) |>
+    add_model(logistic_reg(penalty = clear_pen, mixture = 1) |> set_engine("glmnet"))
+  co   <- tidy(fit(wf, data = d))
+  kept <- intersect(c("______", "______"), co$term[co$estimate != 0])
+  if (length(kept) == 0) "neither" else paste(kept, collapse = " + ")
+}
+
+set.seed(123)
+boots <- bootstraps(train, times = ______, strata = diabetes)
+table(vapply(boots$splits, pick_pair, character(1)))
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The two string blanks are the correlated pair named in the paragraph above.
+`bootstraps()` takes the number of resamples the paragraph asks for; twenty is
+enough to see the instability and small enough to finish while you watch.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+clear_pen <- path |> filter(kept_controls == 0, kept_real > 0) |>
+  slice_min(penalty, n = 1) |> pull(penalty)
+clear_pen
+
+pick_pair <- function(sp) {
+  d  <- analysis(sp)
+  wf <- workflow() |>
+    add_recipe(recipe(diabetes ~ ., data = d) |> step_normalize(all_numeric_predictors())) |>
+    add_model(logistic_reg(penalty = clear_pen, mixture = 1) |> set_engine("glmnet"))
+  co   <- tidy(fit(wf, data = d))
+  kept <- intersect(c("age", "pregnant"), co$term[co$estimate != 0])
+  if (length(kept) == 0) "neither" else paste(kept, collapse = " + ")
+}
+
+set.seed(123)
+boots <- bootstraps(train, times = 20, strata = diabetes)
+table(vapply(boots$splits, pick_pair, character(1)))
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+clear_C = path.loc[path["kept_controls"] == 0, "C"].max()
+print(clear_C)
+
+def pick_pair(seed):
+    r   = np.random.default_rng(seed)
+    idx = r.integers(0, len(X_tr), len(X_tr))
+    f   = make_pipeline(StandardScaler(),
+                        LogisticRegression(solver="liblinear", l1_ratio=1,
+                                           C=clear_C, max_iter=5000)
+                        ).fit(X_tr.iloc[idx], y_tr.iloc[idx])
+    c    = pd.Series(f[-1].coef_[0], index=X.columns)
+    kept = [v for v in ["______", "______"] if c[v] != 0]
+    return " + ".join(kept) if kept else "neither"
+
+print(pd.Series([pick_pair(100 + b) for b in range(______)]).value_counts())
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+clear_C = path.loc[path["kept_controls"] == 0, "C"].max()
+print(clear_C)
+
+def pick_pair(seed):
+    r   = np.random.default_rng(seed)
+    idx = r.integers(0, len(X_tr), len(X_tr))
+    f   = make_pipeline(StandardScaler(),
+                        LogisticRegression(solver="liblinear", l1_ratio=1,
+                                           C=clear_C, max_iter=5000)
+                        ).fit(X_tr.iloc[idx], y_tr.iloc[idx])
+    c    = pd.Series(f[-1].coef_[0], index=X.columns)
+    kept = [v for v in ["age", "pregnant"] if c[v] != 0]
+    return " + ".join(kept) if kept else "neither"
+
+print(pd.Series([pick_pair(100 + b) for b in range(20)]).value_counts())
+```
+:::
+:::
+:::
+
+Nothing changed between those twenty fits except which patients were resampled.
+Every one of them is a defensible analysis of these data, and they do not agree
+on the variable list.
+
+## The result that should bother you
+
+The lasso did set coefficients to exactly zero, which is what it is for. Look
+at which ones. In R it zeroed `insulin` and `triceps` — two measurements a
+diabetes clinic takes — and kept all four random columns. In Python it zeroed
+`insulin`, `triceps` and one of the four controls, and kept the other three.
+
+Three steps.
+
+1. The penalty was chosen to minimise cross-validated AUC and nothing else. At
+   the chosen penalty — 0.0085 in R and `C` = 0.386 in Python, which is a
+   penalty of 0.0048 in R's units — the resampled AUC is 0.777 with a standard error
+   of 0.023, and 0.803 with a standard error of 0.015. A control column that
+   happens to line up with the outcome in the training rows earns a small
+   coefficient, and taking it away costs a little resampled AUC, so the tuning
+   keeps it. Prediction was the objective. Selection was a side effect, and
+   nobody asked the cross-validation to do it well.
+2. The penalty that does clear the controls sits further along the path:
+   0.0418 in R and `C` = 0.0788 in Python. It costs 0.007 and 0.006 of
+   resampled AUC respectively, both comfortably inside one standard error, so
+   the sparse model predicts just as well. But read the other column of the
+   path table. Clearing the four worthless columns takes three real ones with
+   it: the survivors fall from 7 to 4 in R and from 8 to 5 in Python.
+3. And the list that comes out is not stable. At that same penalty, over twenty
+   bootstrap resamples of the same 537 patients, R kept `age` alone 6 times,
+   `pregnant` alone 7 times, both 5 times and neither twice; Python kept
+   `pregnant` alone 12 times, `age` alone once, both 5 times and neither twice.
+   The two are correlated at about 0.74, the penalty will pay for one of them,
+   and which one it buys depends on which patients were resampled.
+
+A lasso hands you a variable list with no uncertainty attached to it. The list
+has at least as much sampling variability as any other estimate you have made
+this week, and it hides it better, because a coefficient of exactly zero looks
+like a decision rather than an estimate.
+
+## What the penalty assumes
+
+A penalty is not a neutral correction for small samples. It is a statement
+about which coefficient values are plausible before the data arrives: an L2
+penalty is exactly a normal prior on the coefficients centred at zero, and an
+L1 penalty is a Laplace prior, which is peaked at zero and has no derivative
+there — that kink is what produces exact zeros. Both say that a coefficient of 0.1 is more believable than one of
+2, for every predictor equally.
+
+Sometimes that is right. In a model with twelve standardised predictors and 537
+patients, large coefficients usually are noise, and the test AUCs above say so.
+But it is a claim about the biology, and it is being made by the fitting
+procedure rather than by you. A penalty applied to a predictor you have strong
+prior reason to believe in — a dose, an established risk factor — shrinks it
+for the same reason it shrinks `noise4`, which is no reason at all. `glmnet`
+lets you exempt a predictor with `penalty.factor`, and almost nobody does;
+scikit-learn's `LogisticRegression` offers no equivalent at all.
+
+## Reflection
+
+1. Your collaborator reads the lasso output and says: "so insulin and triceps
+   do not predict diabetes". Write the reply, in two sentences, without using
+   the word "significant".
+2. Task 3 produced a different variable list from each resample of the same
+   537 patients. What would you have to report, instead of a variable list, for
+   the reader to see that instability?
+3. Regularisation and the random forest of @sec-random-forest are both answers
+   to variance. Name one thing a penalised regression gives you that the forest
+   cannot, and one thing the forest gives you that the penalty cannot.
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Answers.** (1) Something like: the lasso dropped them *given the other ten
+predictors and this penalty*, which is a statement about redundancy at one
+point on a path, not about their association with the outcome; refitting at a
+smaller penalty keeps both. (2) Selection frequency across resamples — the
+proportion of bootstraps in which each predictor survives, which is the idea
+behind stability selection, and is Stretch 2. (3) The penalised regression
+gives a coefficient with a sign and a magnitude a clinician can read, and a
+model that extrapolates predictably; the forest captures interactions and
+non-linearity nobody specified.
+
+**Expected values.** Synthetic data; the two
+languages split differently and both are given.
+
+| | R, seed 123 (glmnet) | Python, random_state 123 (liblinear) |
+|---|---|---|
+| unpenalised test AUC | 0.842 | 0.774 |
+| largest control coefficient, unpenalised | `noise4` 0.214, 4th of 12, p = 0.043 | `noise3` 0.128, 6th of 12 |
+| CV-best penalty | 0.0085 | `C` = 0.386 |
+| resampled AUC there | 0.777 ± 0.023 | 0.803 ± 0.015 |
+| lasso coefficients set to zero | `triceps`, `insulin` | `triceps`, `insulin`, `noise` |
+| lasso test AUC | 0.846 | 0.776 |
+| ridge zeros / test AUC | 0 / 0.839 | 0 / 0.781 |
+| penalty clearing all four controls | 0.0418, 4 real survivors | `C` = 0.0788, 5 real survivors |
+| resampled AUC there | 0.770 ± 0.022 | 0.797 ± 0.014 |
+| 20 bootstraps at that penalty | `age` 6, `pregnant` 7, both 5, neither 2 | `pregnant` 12, `age` 1, both 5, neither 2 |
+
+: {tbl-colwidths="[34,33,33]"}
+
+The three test AUCs within a language — unpenalised, lasso, ridge — differ by
+less than 0.01. Say that out loud: on 537 rows and twelve predictors the
+penalty is not buying prediction. What it changes is the variable list, and
+that is the thing the page is about.
+
+**Common failures.** (1) Forgetting `step_normalize()` or `StandardScaler()`
+and then reading the coefficient table: `insulin` and `glucose` are on scales
+two orders of magnitude apart, the penalty hits them unequally, and the
+selection is meaningless. (2) Reading `mixture` as the amount of penalty rather
+than its type; the amount is `penalty`. (3) Expecting the `[fix]` from
+`check_selection()` to go away — it is the result, and Task 1 is the one place
+in the day where a check is supposed to fail. (4) In Python, `l1_ratio=1`
+without `solver="liblinear"` or `"saga"`: lbfgs cannot do L1 and the error
+message does not say so clearly.
+
+**Timing.** The page runs end to end in about twenty seconds in each
+language, tuning and bootstraps included. Task 3 is
+the one to protect; if the room is behind, run the path worked example as a
+demonstration and give them `clear_pen` directly.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — The dial between them
+Elastic net is `mixture` strictly between 0 and 1 (`l1_ratio` in Python). Tune
+over a two-dimensional grid of `penalty` and `mixture`, and see whether
+anything beats both endpoints by more than its standard error. Then say what
+the elastic net does with `age` and `pregnant` that the lasso would not.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Report a frequency, not a list
+Extend Task 3: across 100 bootstrap resamples, record every predictor's
+selection frequency rather than only the correlated pair's. Sort them. That
+table is what a lasso can honestly support, and the controls give you the
+reference level for "selected by chance".
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 3 — Two rankings of the same data
+@sec-importance ranks the same twelve columns by permutation importance on a
+random forest. Put that ranking next to the order in which the lasso path drops
+the columns. Where they disagree, which would you trust, and what would settle
+it?
+:::
+
+## What you can and cannot now claim
+
+**Can:** that you can fit a penalised logistic regression with the penalty
+chosen by cross-validation in either language, read off which coefficients it
+set to exactly zero, and state the AUC cost of the sparser model.
+
+**Cannot:** that the variables the lasso kept are the variables that matter.
+The selection moved when the rows were resampled and the controls survived the
+penalty the cross-validation chose, so the variable list is an output of the
+procedure as much as of the biology. Nor can you claim the penalty is
+assumption-free: it encodes a preference for small coefficients that you did
+not derive from anything clinical. @sec-day6 asks what the model did, variable
+by variable and patient by patient, which is a different question and has its
+own controls.

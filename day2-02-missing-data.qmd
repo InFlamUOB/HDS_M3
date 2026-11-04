@@ -1,0 +1,603 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 2.2 — Missing data {#sec-missing-data}
+
+**45 minutes · work individually**
+
+## Objectives
+
+::: {.objective-list}
+- Describe the missingness in a file numerically and visually, and say how many
+  rows are complete without counting them by hand.
+- Decide whether a missingness pattern is plausible as something a clinic
+  produced, using a comparison rather than an impression.
+- Impute missing values with a stated rule, and name two properties of the data
+  your imputation changed.
+:::
+
+## Why this, here
+
+In @sec-first-look the absent values were disguised as zeros. Here they are
+honest `NA`s, which removes the detective work and leaves the harder question:
+once you can see the holes, what do you do about them? Describing the pattern
+comes first, because the pattern decides whether filling the holes is
+reasonable at all.
+
+## A second file, and two warnings about it
+
+`data/longisland_heart.csv` holds 200 patients and 14 columns of cardiac
+assessment. Two things about it must be said before anything else.
+
+- The outcome, `diagnosis of heart disease`, has **five** levels, not two. It
+  is a severity grade. Nothing today models it, and anyone who reaches for a
+  two-class method on Day 4 should come back and check this first.
+- The clinical variables are **not in clinical units**. `trestbps` — resting
+  blood pressure — runs from 1 to 41, and `chol` from 1 to 100. Somebody
+  recoded or binned these columns and did not write down how. You cannot say
+  whether an imputed `chol` of 29 is plausible, because you do not know what 29
+  means.
+
+That second point is not a flaw in the exercise. It is the ordinary state of a
+teaching extract, and recognising it is part of the work.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(readr); library(dplyr); library(tidyr); library(ggplot2)
+heart <- read_csv("data/longisland_heart.csv", show_col_types = FALSE)
+dim(heart)
+colSums(is.na(heart))
+```
+
+## Python
+
+```{python}
+import pandas as pd
+import numpy as np
+heart = pd.read_csv("data/longisland_heart.csv")
+print(heart.shape)
+heart.isna().sum()
+```
+:::
+
+## Seeing the pattern
+
+Counts per column do not tell you whether the gaps line up. Three views, each
+answering a different question.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(naniar)
+vis_miss(heart) + theme(axis.text.x = element_text(angle = 90))
+```
+
+`vis_miss()` draws the whole frame, one cell per value. `gg_miss_upset()` goes
+further and counts the *combinations* of columns that are missing together —
+which is the question that matters when you are deciding whether missingness is
+a single process or several.
+
+```{r}
+gg_miss_upset(heart, nsets = 6)
+```
+
+## Python
+
+```{python}
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.imshow(heart.isna().T, aspect="auto", interpolation="nearest", cmap="viridis")
+ax.set_yticks(range(heart.shape[1]), heart.columns, fontsize=7)
+ax.set_xlabel("Patient (row order)")
+ax.set_title("Missing values (yellow)")
+plt.show()
+```
+
+The pandas equivalent of counting combinations is to group by the pattern of
+missingness itself and count how often each pattern occurs.
+
+```{python}
+combo = heart.isna().apply(
+    lambda row: ", ".join(heart.columns[row.values]) or "(complete)", axis=1)
+print(combo.value_counts().head(8).to_string())
+```
+:::
+
+::: {.panel-tabset}
+## R
+
+```{r}
+n_missing_per_row <- rowSums(is.na(heart))
+table(n_missing_per_row)
+sum(n_missing_per_row == 0)
+```
+
+## Python
+
+```{python}
+n_missing_per_row = heart.isna().sum(axis=1)
+print(n_missing_per_row.value_counts().sort_index())
+print((n_missing_per_row == 0).sum())
+```
+:::
+
+Fifty complete patients out of 200. Three quarters of the file is unusable by
+any method that requires a full row, which is what most methods silently do.
+
+## Task 1 — Decide whether a clinic could have produced this
+
+Look again at the column counts you printed above, then build the comparison
+that settles it. Simulate a frame in which 20 values are knocked out of each of
+13 columns completely at random, count how many rows end up incomplete, and
+repeat that a few hundred times. Compare the real file against that
+distribution.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+set.seed(1)
+sim_incomplete <- replicate(300, {
+  m <- sapply(1:13, function(i) sample(c(rep(TRUE, ______), rep(FALSE, 180))))
+  sum(rowSums(m) > 0)
+})
+range(sim_incomplete); mean(sim_incomplete)
+
+observed <- sum(rowSums(is.na(heart)) > ______)
+observed
+check_metric_range(observed, min(sim_incomplete), max(sim_incomplete),
+                   "incomplete rows in the real file, against the simulated range")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Each column needs 20 missing out of 200, so each simulated column is a shuffle
+of 20 `TRUE`s and 180 `FALSE`s. A row is incomplete if it has at least one.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+set.seed(1)
+sim_incomplete <- replicate(300, {
+  m <- sapply(1:13, function(i) sample(c(rep(TRUE, 20), rep(FALSE, 180))))
+  sum(rowSums(m) > 0)
+})
+range(sim_incomplete); mean(sim_incomplete)
+
+observed <- sum(rowSums(is.na(heart)) > 0)
+observed
+check_metric_range(observed, min(sim_incomplete), max(sim_incomplete),
+                   "incomplete rows in the real file, against the simulated range")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+rng = np.random.default_rng(1)
+def one_sim():
+    m = np.zeros((200, 13), dtype=bool)
+    for j in range(13):
+        m[rng.choice(200, ______, replace=False), j] = True
+    return (m.sum(axis=1) > 0).sum()
+
+sim_incomplete = np.array([one_sim() for _ in range(300)])
+print(sim_incomplete.min(), sim_incomplete.max(), sim_incomplete.mean())
+
+observed = (heart.isna().sum(axis=1) > ______).sum()
+print(observed)
+check_metric_range(observed, sim_incomplete.min(), sim_incomplete.max(),
+                   "incomplete rows in the real file, against the simulated range")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+rng = np.random.default_rng(1)
+def one_sim():
+    m = np.zeros((200, 13), dtype=bool)
+    for j in range(13):
+        m[rng.choice(200, 20, replace=False), j] = True
+    return (m.sum(axis=1) > 0).sum()
+
+sim_incomplete = np.array([one_sim() for _ in range(300)])
+print(sim_incomplete.min(), sim_incomplete.max(), sim_incomplete.mean())
+
+observed = (heart.isna().sum(axis=1) > 0).sum()
+print(observed)
+check_metric_range(observed, sim_incomplete.min(), sim_incomplete.max(),
+                   "incomplete rows in the real file, against the simulated range")
+```
+:::
+:::
+:::
+
+Write down your conclusion in one sentence before reading the next section.
+
+## The result that should bother you
+
+The simulation matches. The real file has 150 incomplete rows and random
+knockout produces around 150 as well, comfortably inside the simulated range.
+So the row-level pattern is consistent with missing completely at random — and
+that is the finding, because **no clinic produces missingness completely at
+random**.
+
+1. Every one of the 13 predictors has **exactly** 20 missing values. Not
+   19, not 22. A process that loses values independently in thirteen different
+   columns does not land on the same count thirteen times; the probability of
+   that is vanishing. Somebody wrote a loop.
+2. Compare with @sec-first-look, where every missing `triceps` was also a
+   missing `insulin`. That nesting is what a real process looks like: tests are
+   ordered in bundles, bundles are skipped together, and the patients they are
+   skipped for are not a random sample.
+3. So this file is an exercise in *mechanics*, not in *diagnosis*. Imputation
+   methods are safe to practise on it precisely because the missingness is
+   artificial and ignorable. Do not take that reassurance with you.
+
+The useful habit is the one you just performed: when a pattern looks regular,
+simulate the process you think produced it and check whether the data lies
+inside the result.
+
+## Task 2 — Impute, and measure what you changed
+
+Fill the numeric gaps with the column median, then compare the standard
+deviation and a correlation before and after. Median rather than mean, because
+these columns are recoded and skewed; the argument for it is the same either
+way.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+num_cols <- c("age", "trestbps", "chol", "thalach", "oldpeak")
+
+heart_imp <- heart |>
+  mutate(across(all_of(num_cols), ~ ifelse(is.na(.x), ______(.x, na.rm = TRUE), .x)))
+
+sd_before <- sd(heart$chol, na.rm = TRUE)
+sd_after  <- sd(heart_imp$chol)
+c(before = sd_before, after = sd_after, ratio = sd_after / sd_before)
+
+check_metric_range(sum(is.na(heart_imp[num_cols])), 0, 0, "missing values left")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The function that returns the middle value of a vector, with `na.rm = TRUE` so
+that it can be computed at all. `ifelse()` is doing the replacing; you supply
+the number it replaces with.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+num_cols <- c("age", "trestbps", "chol", "thalach", "oldpeak")
+
+heart_imp <- heart |>
+  mutate(across(all_of(num_cols), ~ ifelse(is.na(.x), median(.x, na.rm = TRUE), .x)))
+
+sd_before <- sd(heart$chol, na.rm = TRUE)
+sd_after  <- sd(heart_imp$chol)
+c(before = sd_before, after = sd_after, ratio = sd_after / sd_before)
+
+check_metric_range(sum(is.na(heart_imp[num_cols])), 0, 0, "missing values left")
+
+cor(heart$chol, heart$thalach, use = "pairwise.complete.obs")
+cor(heart_imp$chol, heart_imp$thalach)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+from sklearn.impute import SimpleImputer
+
+num_cols = ["age", "trestbps", "chol", "thalach", "oldpeak"]
+imputer = SimpleImputer(strategy="______")
+heart_imp = heart.copy()
+heart_imp[num_cols] = imputer.fit_transform(heart[num_cols])
+
+sd_before = heart["chol"].std()
+sd_after = heart_imp["chol"].std()
+print(sd_before, sd_after, sd_after / sd_before)
+
+check_metric_range(heart_imp[num_cols].isna().sum().sum(), 0, 0, "missing values left")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+from sklearn.impute import SimpleImputer
+
+num_cols = ["age", "trestbps", "chol", "thalach", "oldpeak"]
+imputer = SimpleImputer(strategy="median")
+heart_imp = heart.copy()
+heart_imp[num_cols] = imputer.fit_transform(heart[num_cols])
+
+sd_before = heart["chol"].std()
+sd_after = heart_imp["chol"].std()
+print(sd_before, sd_after, sd_after / sd_before)
+
+check_metric_range(heart_imp[num_cols].isna().sum().sum(), 0, 0, "missing values left")
+
+print(heart[["chol", "thalach"]].corr().iloc[0, 1])
+print(heart_imp[["chol", "thalach"]].corr().iloc[0, 1])
+```
+:::
+:::
+:::
+
+Single-value imputation moves 20 patients to the exact centre of the
+distribution. The standard deviation falls, every one of those patients is now
+claimed to be perfectly average, and the next analysis has no way of telling
+which rows were invented. The mean survives; almost nothing else does.
+
+::: {.callout-note appearance="simple"}
+## What `mice` adds
+`mice` (multivariate imputation by chained equations) fills each gap by
+predicting it from the other columns, and does the whole thing several times so
+that downstream estimates can carry the uncertainty. One complete frame from it
+is still a guess, but it is a guess that respects the relationships between
+columns rather than flattening them.
+
+```{r}
+library(mice)
+imp <- mice(heart, m = 5, printFlag = FALSE, seed = 1)
+chol_imp <- complete(imp, 1)$chol
+c(observed_sd = sd(heart$chol, na.rm = TRUE),
+  median_imputed_sd = sd(heart_imp$chol),
+  mice_sd = sd(chol_imp))
+```
+
+Use the version of this you can defend. On a file with 10% missing and a
+single-value imputation, say so in the methods; on anything important, use
+multiple imputation and say that.
+:::
+
+## Task 3 — Categorical columns, and the order that matters
+
+`sex` and `cp` (chest pain type) are categories stored as numbers. Models need
+them as indicator columns, and the encoder has to be given data without gaps —
+otherwise "missing" silently becomes a category of its own.
+
+Build a `ColumnTransformer` that imputes and then encodes, and check how many
+columns come out. In the R version, `exclude = c(NA, NaN)` earns its place:
+this file's gaps arrive as `NaN` rather than `NA`, and `factor()` would
+otherwise give them a level called "NaN" and report nothing missing at all.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+# recipes does the same job in R, and you will meet it properly in @sec-leakage.
+library(recipes)
+heart_cat <- heart |> mutate(across(c(sex, cp), ~ factor(.x, exclude = c(NA, NaN))))
+
+rec <- recipe(~ age + trestbps + chol + thalach + oldpeak + sex + cp,
+              data = heart_cat) |>
+  step_impute_median(all_numeric_predictors()) |>
+  step_impute_mode(sex, cp) |>
+  step_dummy(sex, cp, one_hot = ______)
+baked <- bake(prep(rec), new_data = NULL)
+dim(baked)
+names(baked)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`one_hot` chooses between one column per level and one fewer, which is the
+difference between dummy coding for a linear model and indicator coding for
+everything else. Here we want one per level, as scikit-learn produced.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+library(recipes)
+heart_cat <- heart |> mutate(across(c(sex, cp), ~ factor(.x, exclude = c(NA, NaN))))
+
+rec <- recipe(~ age + trestbps + chol + thalach + oldpeak + sex + cp,
+              data = heart_cat) |>
+  step_impute_median(all_numeric_predictors()) |>
+  step_impute_mode(sex, cp) |>
+  step_dummy(sex, cp, one_hot = TRUE)
+baked <- bake(prep(rec), new_data = NULL)
+dim(baked)
+names(baked)
+```
+:::
+:::
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+
+cat_cols = ["sex", "cp"]
+cat_steps = Pipeline([
+    ("impute", SimpleImputer(strategy="most_frequent")),
+    ("encode", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+])
+prep = ColumnTransformer([
+    ("num", SimpleImputer(strategy="median"), num_cols),
+    ("cat", ______, cat_cols),
+])
+out = prep.fit_transform(heart)
+print(out.shape)
+print(prep.get_feature_names_out())
+check_metric_range(np.isnan(out).sum(), 0, 0, "missing values in the design matrix")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+
+cat_cols = ["sex", "cp"]
+cat_steps = Pipeline([
+    ("impute", SimpleImputer(strategy="most_frequent")),
+    ("encode", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+])
+prep = ColumnTransformer([
+    ("num", SimpleImputer(strategy="median"), num_cols),
+    ("cat", cat_steps, cat_cols),
+])
+out = prep.fit_transform(heart)
+print(out.shape)
+print(prep.get_feature_names_out())
+check_metric_range(np.isnan(out).sum(), 0, 0, "missing values in the design matrix")
+```
+:::
+:::
+:::
+
+Now do it in the wrong order — encode first, impute afterwards — and look at
+the column names. The encoder, handed a column containing `NA`, treats
+"missing" as a value worth a column of its own, and you have added a predictor
+that says *this patient's chest pain type was not recorded*. Sometimes that is
+exactly what you want and you should say so out loud. What you must not do is
+create it by accident.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+rec_wrong <- recipe(~ sex + cp, data = heart_cat) |>
+  step_dummy(sex, cp, one_hot = TRUE)
+baked_wrong <- bake(prep(rec_wrong), new_data = NULL)
+names(baked_wrong)
+colSums(is.na(baked_wrong))
+```
+
+## Python
+
+```{python}
+encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+encoder.fit(heart[["sex", "cp"]])
+print(encoder.get_feature_names_out())
+```
+:::
+
+The two languages fail differently, and the R failure is the safer one.
+`step_dummy()` propagates the missing value into every indicator column, so the
+gaps are still gaps and the next step still has to deal with them — and if you
+then add `step_impute_mode()`, recipes refuses outright, because the columns it
+is being asked to fill are numeric now. scikit-learn produces `sex_nan` and
+`cp_nan`: no missing values, no warning, and two extra predictors nobody asked
+for.
+
+## Reflection
+
+1. You imputed `chol` with its median without knowing what the units are. Name
+   one thing that could be wrong with the imputed values that you would be
+   unable to detect.
+2. Multiple imputation gives five different filled-in datasets. If the five
+   disagree about an answer you care about, what does that disagreement tell
+   you, and what would you report?
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Expected values.** Every predictor has exactly 20 missing (10%); 150 of 200
+rows incomplete, 50 complete. The simulated range for incomplete rows is about
+134–164 with a mean near 149, so the observed 150 sits in the middle. Median
+imputation of `chol` drops its standard deviation by roughly 5% (ratio about
+0.94–0.96); the `chol`–`thalach` correlation moves towards zero. `mice` returns
+a standard deviation close to the observed one. The Python design matrix comes
+out with 5 numeric columns plus one indicator per level of `sex` and `cp`.
+
+**Task 1 is the point of the exercise.** The evidence students should name is
+"exactly 20 in every column", not the simulation — the simulation only rules
+out the alternative that the regularity is a coincidence of the row structure.
+A student who says "it is MCAR, so it is fine" has drawn the wrong conclusion
+and should be asked what clinical process would do this.
+
+**Reflection 1.** The median is a plausible value, but plausibility is
+unverifiable when the scale is unknown: if `chol` is a binned percentile, the
+median is not the median cholesterol of anyone. Accept any answer that
+distinguishes *numerically reasonable* from *clinically meaningful*.
+
+**Common failures.** (1) `median(.x)` without `na.rm = TRUE`, which returns
+`NA` and imputes nothing — the check catches it. (2) `gg_miss_upset()` errors if
+`naniar` is not installed; `vis_miss()` alone is enough. (3) Running the Python
+`ColumnTransformer` cell before `num_cols` exists, because they skipped Task 2.
+
+**Timing.** The simulation in Task 1 takes longer to explain than to run. If
+you are behind, give them the simulated range verbally and spend the time on
+Task 3, which is the one that shows up again in @sec-leakage.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — Is missingness informative here?
+Add a column `chol_missing` and test whether it is associated with the outcome
+grade. In this file it should not be, by construction. Run the same test on
+`insulin_missing` in `data/diabetes.csv` and compare. One of these files is
+teaching you mechanics and the other is teaching you suspicion.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Pool, do not pick
+Fit the same simple model on each of the five `mice` completions and look at
+how much the coefficient for one predictor moves between them. That spread is
+the part single imputation throws away. `pool()` is the function that combines
+them properly.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that you can describe a missingness pattern in numbers and in a
+picture, that you tested a hypothesis about how it arose rather than asserting
+one, and that you can impute and state what the imputation cost.
+
+**Cannot:** that any of this was done safely. Every statistic you used to fill
+a gap — a median, a mode, a `mice` model — was computed from the whole file,
+including the rows you will later use to test a model. That is @sec-leakage,
+and it is the reason today is built this way.

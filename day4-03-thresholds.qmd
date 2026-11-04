@@ -1,0 +1,586 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 4.3 — Choosing a threshold {#sec-thresholds}
+
+**45 minutes · work individually, discuss Task 3 in pairs**
+
+## Objectives
+
+::: {.objective-list}
+- Turn predicted probabilities into predicted classes at a stated threshold, and
+  build the confusion table that results.
+- Say what moving the threshold from 0.5 to 0.3 buys and what it costs, in
+  patients rather than in percentages.
+- Choose a threshold from a stated cost ratio, and defend the choice against the
+  threshold that maximises accuracy.
+:::
+
+## Why this, here
+
+@sec-logistic-regression ended with a probability of 0.302 for a patient with a
+glucose of 120. No clinic can act on 0.302. Somebody has to decide whether that
+patient is investigated further, and that decision needs a cut-off.
+
+The cut-off is not part of the model. Nothing in the fitting procedure chose
+0.5, no diagnostic accuracy study supports it, and the software offers it as a
+default only because it has to offer something. Choosing it properly requires
+one piece of information the data does not contain: what it costs to be wrong in
+each of the two directions. In diabetes screening those costs are not remotely
+equal — a missed diagnosis is years of untreated hyperglycaemia, a false alarm
+is a fasting glucose test and a worried afternoon — and the whole of this
+exercise follows from that asymmetry.
+
+## Fit on the training rows, predict on the held-out ones
+
+Same split as @sec-frameworks: every fifth row held back, so that the two
+languages are working on the same 153 patients. This time we are making a claim
+about unseen patients, so the split is doing real work.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(readr); library(dplyr); library(tidymodels)
+
+diabetes <- read_csv("data/diabetes.csv", show_col_types = FALSE) |>
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+test_rows <- seq(5, nrow(diabetes), by = 5)
+train <- diabetes[-test_rows, ]
+test  <- diabetes[ test_rows, ]
+
+fit <- logistic_reg() |> set_engine("glm") |> fit(diabetes ~ glucose, data = train)
+
+preds <- predict(fit, test, type = "prob") |>
+  bind_cols(test |> select(glucose, diabetes))
+
+round(coef(fit$fit), 6)
+c(n_test = nrow(test), pos = sum(test$diabetes == "pos"),
+  neg = sum(test$diabetes == "neg"))
+```
+
+## Python
+
+```{python}
+import numpy as np, pandas as pd
+from sklearn.linear_model import LogisticRegression
+
+diabetes = pd.read_csv("data/diabetes.csv")
+is_test = (diabetes.index + 1) % 5 == 0
+train, test = diabetes[~is_test], diabetes[is_test]
+
+y_train = (train["diabetes"] == "pos").astype(int)
+y_test  = (test["diabetes"] == "pos").astype(int)
+
+fit = LogisticRegression(C=np.inf, max_iter=1000).fit(train[["glucose"]], y_train)
+p_pos = fit.predict_proba(test[["glucose"]])[:, 1]
+
+print(round(fit.intercept_[0], 6), round(fit.coef_[0][0], 6))
+print(len(test), int(y_test.sum()), int((y_test == 0).sum()))
+```
+:::
+
+Both languages fit the same model to the same 615 patients and report an
+intercept of −5.308065 and a glucose coefficient of 0.037362. The test set is
+153 patients, 55 of them `pos`. Every number below is therefore directly
+comparable between the two tabs, which was the point of fixing the split.
+
+The predicted probabilities run from 0.078 to 0.874 and average 0.386.
+
+## A threshold is a rule, and a rule has consequences
+
+```{r}
+#| fig-height: 3.4
+library(ggplot2)
+ggplot(preds, aes(x = glucose, y = .pred_pos, colour = diabetes)) +
+  geom_point(alpha = 0.7, size = 1.6) +
+  geom_hline(yintercept = c(0.3, 0.5, 0.7), linetype = "dashed") +
+  labs(x = "Glucose (mg/dL)", y = "Predicted P(pos)", colour = NULL,
+       caption = "Dashed lines: thresholds 0.3, 0.5 and 0.7")
+```
+
+Everything above a line is called positive, everything below it negative. With
+one predictor the picture is unusually honest: a probability threshold *is* a
+glucose cut-off, and these three are 119, 142 and 165 mg/dL. Any colour above a
+line that is not the positive class is a false alarm; any positive-class point
+below it is a missed diagnosis.
+
+## Task 1 — Three thresholds, three confusion tables
+
+Count the four cells of the confusion table at 0.3, 0.5 and 0.7, and turn them
+into sensitivity, specificity and positive predictive value. Do it by counting
+first: the packaged functions come in the next section, and they are much easier
+to misuse than to use.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+counts <- function(threshold) {
+  called_pos <- preds$.pred_pos >= ______
+  truly_pos  <- preds$diabetes == "pos"
+  tibble(threshold = threshold,
+         TP = sum(called_pos & truly_pos),
+         FP = sum(called_pos & !truly_pos),
+         FN = sum(!called_pos & ______),
+         TN = sum(!called_pos & !truly_pos))
+}
+
+bind_rows(lapply(c(0.3, 0.5, 0.7), counts)) |>
+  mutate(sensitivity = TP / (TP + FN),
+         specificity = TN / (TN + FP),
+         ppv         = TP / (TP + FP),
+         accuracy    = (TP + TN) / nrow(preds))
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+counts <- function(threshold) {
+  called_pos <- preds$.pred_pos >= threshold
+  truly_pos  <- preds$diabetes == "pos"
+  tibble(threshold = threshold,
+         TP = sum(called_pos & truly_pos),
+         FP = sum(called_pos & !truly_pos),
+         FN = sum(!called_pos & truly_pos),
+         TN = sum(!called_pos & !truly_pos))
+}
+
+threshold_table <- bind_rows(lapply(c(0.3, 0.5, 0.7), counts)) |>
+  mutate(sensitivity = TP / (TP + FN),
+         specificity = TN / (TN + FP),
+         ppv         = TP / (TP + FP),
+         accuracy    = (TP + TN) / nrow(preds))
+threshold_table
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+rows = []
+for threshold in [0.3, 0.5, 0.7]:
+    called_pos = p_pos >= ______
+    truly_pos  = y_test.to_numpy() == 1
+    tp = int(( called_pos &  truly_pos).sum())
+    fp = int(( called_pos & ~truly_pos).sum())
+    fn = int((~called_pos &  ______).sum())
+    tn = int((~called_pos & ~truly_pos).sum())
+    rows.append(dict(threshold=threshold, TP=tp, FP=fp, FN=fn, TN=tn,
+                     sensitivity=tp / (tp + fn), specificity=tn / (tn + fp),
+                     ppv=tp / (tp + fp), accuracy=(tp + tn) / len(y_test)))
+pd.DataFrame(rows).round(3)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+rows = []
+for threshold in [0.3, 0.5, 0.7]:
+    called_pos = p_pos >= threshold
+    truly_pos  = y_test.to_numpy() == 1
+    tp = int(( called_pos &  truly_pos).sum())
+    fp = int(( called_pos & ~truly_pos).sum())
+    fn = int((~called_pos &  truly_pos).sum())
+    tn = int((~called_pos & ~truly_pos).sum())
+    rows.append(dict(threshold=threshold, TP=tp, FP=fp, FN=fn, TN=tn,
+                     sensitivity=tp / (tp + fn), specificity=tn / (tn + fp),
+                     ppv=tp / (tp + fp), accuracy=(tp + tn) / len(y_test)))
+threshold_table = pd.DataFrame(rows)
+threshold_table.round(3)
+```
+:::
+:::
+:::
+
+You should get, in both languages:
+
+| Threshold | TP | FP | FN | TN | Sensitivity | Specificity | PPV | Accuracy |
+|---|---|---|---|---|---|---|---|---|
+| 0.3 | 42 | 38 | 13 | 60 | 0.764 | 0.612 | 0.525 | 0.667 |
+| 0.5 | 25 | 15 | 30 | 83 | 0.455 | 0.847 | 0.625 | 0.706 |
+| 0.7 | 17 | 11 | 38 | 87 | 0.309 | 0.888 | 0.607 | 0.680 |
+
+: {tbl-colwidths="[13,8,8,8,8,15,15,12,13]"}
+
+Read the FN column before anything else. At the default threshold the model
+misses 30 of the 55 patients who have diabetes. At 0.7 it misses 38 — more than
+two in three. Moving from 0.5 down to 0.3 finds 17 more of them and raises the
+false alarms from 15 to 38.
+
+## The packaged version, and the trap in it
+
+Both languages ship a confusion-matrix function, and both have a convention
+about which class counts as the event. Getting it wrong silently swaps your
+sensitivity and your specificity.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+preds_0.5 <- preds |>
+  mutate(predicted = factor(if_else(.pred_pos >= 0.5, "pos", "neg"),
+                            levels = c("neg", "pos")))
+
+conf_mat(preds_0.5, truth = diabetes, estimate = predicted)
+
+c(default      = sens(preds_0.5, truth = diabetes, estimate = predicted)$.estimate,
+  event_second = sens(preds_0.5, truth = diabetes, estimate = predicted,
+                      event_level = "second")$.estimate)
+```
+
+## Python
+
+```{python}
+from sklearn.metrics import confusion_matrix, recall_score
+
+print(confusion_matrix(y_test, (p_pos >= 0.5).astype(int), labels=[0, 1]))
+
+{"pos_label=1": round(recall_score(y_test, (p_pos >= 0.5).astype(int)), 3),
+ "pos_label=0": round(recall_score(y_test, (p_pos >= 0.5).astype(int), pos_label=0), 3)}
+```
+:::
+
+`yardstick` treats the **first** factor level as the event, and our levels are
+`neg, pos`, so its default sensitivity of 0.847 is the specificity of the thing
+you care about. `event_level = "second"` recovers 0.455. scikit-learn makes the
+same decision with `pos_label`, which defaults to 1 and therefore happens to be
+right here — but only because we coded the outcome as 0/1 in that order.
+
+The original course notes for this material converted the outcome to a 0/1
+factor before calling `conf_mat()`, which made `"0"` the first level and the
+event. The table they printed was a correct table of the wrong event. It is a
+one-word fault, it does not raise an error, and the numbers it produces are
+plausible — which is the whole problem.
+
+## Task 2 — Put a price on the two errors
+
+A missed diagnosis is not a false alarm. For this exercise, take a missed case
+to cost **five times** what a false alarm costs — the ratio is a decision for a
+service, not a statistician, and Task 3 asks you to argue with it.
+
+Compute the total cost over a grid of thresholds, find the cheapest one, and
+compare it with two strategies that use no model at all: investigate everybody,
+and investigate nobody.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+cost_of <- function(threshold, cost_fn = 5, cost_fp = 1) {
+  called_pos <- preds$.pred_pos >= threshold
+  truly_pos  <- preds$diabetes == "pos"
+  cost_fn * sum(______ & truly_pos) + cost_fp * sum(called_pos & !truly_pos)
+}
+
+grid <- tibble(threshold = seq(0.01, 0.99, by = 0.01)) |>
+  mutate(cost = sapply(threshold, cost_of))
+
+best <- grid |> slice_min(cost, n = 1)
+c(best_threshold = best$threshold, best_cost = best$cost,
+  cost_at_0.5    = cost_of(0.5),
+  investigate_everyone = cost_of(______),
+  investigate_nobody   = cost_of(1.01))
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+"Investigate everybody" is not a special case needing its own code: it is the
+rule you get from a threshold low enough that every predicted probability clears
+it. The lowest probability in the test set is 0.078.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+cost_of <- function(threshold, cost_fn = 5, cost_fp = 1) {
+  called_pos <- preds$.pred_pos >= threshold
+  truly_pos  <- preds$diabetes == "pos"
+  cost_fn * sum(!called_pos & truly_pos) + cost_fp * sum(called_pos & !truly_pos)
+}
+
+grid <- tibble(threshold = seq(0.01, 0.99, by = 0.01)) |>
+  mutate(cost = sapply(threshold, cost_of))
+
+best <- grid |> slice_min(cost, n = 1)
+c(best_threshold = best$threshold, best_cost = best$cost,
+  cost_at_0.5    = cost_of(0.5),
+  investigate_everyone = cost_of(0),
+  investigate_nobody   = cost_of(1.01))
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+truly_pos = y_test.to_numpy() == 1
+
+def cost_of(threshold, cost_fn=5, cost_fp=1):
+    called_pos = p_pos >= threshold
+    return cost_fn * (______ & truly_pos).sum() + cost_fp * (called_pos & ~truly_pos).sum()
+
+grid = np.round(np.arange(0.01, 1.00, 0.01), 2)
+costs = np.array([cost_of(t) for t in grid])
+
+{"best_threshold": float(grid[costs.argmin()]), "best_cost": int(costs.min()),
+ "cost_at_0.5": int(cost_of(0.5)),
+ "investigate_everyone": int(cost_of(______)), "investigate_nobody": int(cost_of(1.01))}
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+truly_pos = y_test.to_numpy() == 1
+
+def cost_of(threshold, cost_fn=5, cost_fp=1):
+    called_pos = p_pos >= threshold
+    return cost_fn * (~called_pos & truly_pos).sum() + cost_fp * (called_pos & ~truly_pos).sum()
+
+grid = np.round(np.arange(0.01, 1.00, 0.01), 2)
+costs = np.array([cost_of(t) for t in grid])
+
+{"best_threshold": float(grid[costs.argmin()]), "best_cost": int(costs.min()),
+ "cost_at_0.5": int(cost_of(0.5)),
+ "investigate_everyone": int(cost_of(0)), "investigate_nobody": int(cost_of(1.01))}
+```
+:::
+:::
+:::
+
+## The result that should bother you
+
+The default threshold is not merely suboptimal here. It is beaten by a policy
+with no model in it.
+
+1. At 0.5 the model's accuracy is 0.706, against 0.641 for always saying `neg`.
+   Six and a half percentage points for three decades of diabetes research, and
+   a student reporting only accuracy would call that a working classifier.
+2. At 0.5 the same model misses 30 of 55 cases. Those two sentences describe the
+   same 153 patients. Accuracy is high because the model is good at the common
+   class, and the common class is the one nobody is screening for.
+3. Price the errors at 5:1 and the arithmetic turns hostile. The default
+   threshold costs 165. Investigating **every** one of the 153 patients costs 98,
+   because it incurs 98 false alarms and no missed cases. The model as deployed
+   at its default is two-thirds worse than a policy that ignores it.
+
+The model is not useless: at its cost-minimising threshold of 0.17 it costs 74,
+about a quarter less than investigating everybody. But that is the honest size of
+the win, it arrives only once somebody states the cost ratio, and it is invisible
+at 0.5.
+
+::: {.callout-note appearance="simple"}
+## Where 0.17 comes from
+For a known cost ratio the optimal threshold is
+$\text{cost}_{FP} / (\text{cost}_{FP} + \text{cost}_{FN})$ — here
+$1/(1+5) = 0.167$ — whenever the predicted probabilities are well calibrated.
+Our grid finds 0.17 empirically on 153 patients, which is agreement to the
+nearest grid point and partly luck. The theoretical result is the thing to
+remember; the grid is what you run when you do not trust the calibration, which
+is most of the time.
+:::
+
+## Task 3 — Set the operating point, and defend it
+
+Find the highest threshold at which sensitivity is at least 0.80, then report
+what it costs. Write two sentences for a diabetes service: one stating the rule
+in glucose rather than in probability, one stating the price.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+sens_at <- function(t) {
+  truly_pos <- preds$diabetes == "pos"
+  sum(preds$.pred_pos >= t & truly_pos) / sum(truly_pos)
+}
+candidates <- seq(0.01, 0.99, by = 0.01)
+chosen <- max(candidates[sapply(candidates, sens_at) >= ______])
+
+ppv_at <- function(t) sum(preds$.pred_pos >= t & preds$diabetes == "pos") /
+                      sum(preds$.pred_pos >= t)
+c(threshold = chosen, sensitivity = sens_at(chosen), ppv = ppv_at(chosen))
+check_metric_range(sens_at(chosen), 0.80, 1.00, "sensitivity at the chosen threshold")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+sens_at <- function(t) {
+  truly_pos <- preds$diabetes == "pos"
+  sum(preds$.pred_pos >= t & truly_pos) / sum(truly_pos)
+}
+candidates <- seq(0.01, 0.99, by = 0.01)
+chosen <- max(candidates[sapply(candidates, sens_at) >= 0.80])
+
+ppv_at <- function(t) sum(preds$.pred_pos >= t & preds$diabetes == "pos") /
+                      sum(preds$.pred_pos >= t)
+c(threshold = chosen, sensitivity = sens_at(chosen), ppv = ppv_at(chosen))
+check_metric_range(sens_at(chosen), 0.80, 1.00, "sensitivity at the chosen threshold")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+
+def sens_at(t):
+    return ((p_pos >= t) & truly_pos).sum() / truly_pos.sum()
+
+def ppv_at(t):
+    return ((p_pos >= t) & truly_pos).sum() / (p_pos >= t).sum()
+
+candidates = np.round(np.arange(0.01, 1.00, 0.01), 2)
+chosen = max(t for t in candidates if sens_at(t) >= ______)
+
+print({"threshold": chosen, "sensitivity": round(sens_at(chosen), 3),
+       "ppv": round(ppv_at(chosen), 3)})
+check_metric_range(sens_at(chosen), 0.80, 1.00, "sensitivity at the chosen threshold")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+
+def sens_at(t):
+    return ((p_pos >= t) & truly_pos).sum() / truly_pos.sum()
+
+def ppv_at(t):
+    return ((p_pos >= t) & truly_pos).sum() / (p_pos >= t).sum()
+
+candidates = np.round(np.arange(0.01, 1.00, 0.01), 2)
+chosen = max(t for t in candidates if sens_at(t) >= 0.80)
+
+print({"threshold": chosen, "sensitivity": round(sens_at(chosen), 3),
+       "ppv": round(ppv_at(chosen), 3)})
+check_metric_range(sens_at(chosen), 0.80, 1.00, "sensitivity at the chosen threshold")
+```
+:::
+:::
+:::
+
+The answer is 0.28, which catches 44 of the 55 cases and raises 43 false alarms.
+Its positive predictive value is 0.506: **half the people this rule sends for
+investigation do not have diabetes**, and its accuracy, 0.647, is almost exactly
+the do-nothing baseline. A service can accept that — screening programmes
+routinely do — but only if someone has said so out loud. Write the two
+sentences before you look at the next section.
+
+## Reflection
+
+1. Sensitivity rose from 0.455 to 0.800 and accuracy fell from 0.706 to 0.647.
+   Explain to a sceptical colleague why that is an improvement, without using
+   the word "cost".
+2. Everything here was computed on 153 patients with the prevalence this file
+   happens to have. Name one thing that changes about your chosen threshold if
+   the model is deployed in a population where diabetes is half as common, and
+   say which of the four numbers in the confusion table move first.
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Expected values** (the data is synthetic; the last digit may move if it is
+regenerated). Train 615, test 153 with 55 `pos`. Coefficients: intercept
+≈ −5.308, glucose ≈ 0.0374, identical in both languages because the split is
+fixed. Confusion tables as printed in the table above. Majority-class accuracy
+0.641. Costs at 5:1 — threshold 0.5: 165; 0.3: 103; 0.7: 201; best threshold
+0.17 at 74; investigate everybody 98; investigate nobody 275. Operating point
+for sensitivity ≥ 0.80: threshold 0.28, sensitivity 0.800, PPV 0.506, accuracy
+0.647.
+
+**Answers.** (1) The two errors are different events with different
+consequences, and accuracy is the one summary that insists they are the same;
+an improvement that trades 15 false alarms for 19 found cases is an improvement
+in everything except the metric that cannot tell them apart. (2) Prevalence does
+not change sensitivity or specificity, which are conditional on the truth, but
+it does change PPV, which falls — so the same threshold produces a far worse
+false-alarm rate in a lower-prevalence population. TP and FN fall together; FP
+and TN rise. This is the single most common reason a published screening model
+disappoints on deployment, and it connects straight back to @sec-shift.
+
+**Plenary.** Ask for the Task 3 sentences aloud from two or three people. The
+useful disagreement is about the 5:1 ratio; a diabetes service might argue for
+10:1, an over-stretched endoscopy list for 2:1, and the point is that the number
+is theirs and not ours. Nobody should leave thinking 0.17 is a property of the
+model.
+
+**Common failures.** (1) Computing the cost with the FN and FP terms swapped —
+it produces a cost-minimising threshold near 0.9, which is the tell. (2)
+Comparing a threshold chosen on the test set with a score on the same test set:
+say out loud that the 0.17 is itself fitted, and that a defensible pipeline
+chooses the threshold on a validation split. (3) `preds$.pred_pos >= 0.5`
+written with `>`; with 153 continuous probabilities it changes nothing, and it
+is worth asking when it would.
+
+**Timing.** Task 1 and the result-that-should-bother-you are the day. Task 2 can
+be shortened to the three thresholds already in the table if the room is slow;
+Task 3 can go home.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — All the thresholds at once
+Plot sensitivity against 1 − specificity across the whole grid. You have just
+drawn a ROC curve by hand, and the area under it is the one classification
+summary that does not depend on the threshold — which is a virtue and a vice.
+@sec-classification-metrics is the full treatment; arriving there having built
+the curve from counts is worth an hour of slides.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Choose the threshold honestly
+Split the 615 training rows again into fit and validation parts, choose the
+threshold on the validation part, and only then report its cost on the test set.
+Does the cost go up? It usually does, and the gap is the price of having chosen
+the threshold on the data you then reported.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 3 — Does a better model move the threshold?
+Refit with `diabetes ~ glucose + mass + age` and repeat Task 2. The cost at the
+best threshold falls; ask whether the best threshold itself moved, and whether
+you would have predicted the direction.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that at a stated threshold, on 153 held-out patients, this model finds a
+stated fraction of the diabetes in them at a stated false-alarm rate — and that
+you can produce the threshold a stated cost ratio implies.
+
+**Cannot:** that any of these thresholds is right for a real service. The cost
+ratio was invented for the exercise, the prevalence is this file's, the
+probabilities have not been checked for calibration, and the threshold was
+chosen on the same rows it was scored on. Each of those is a day of its own, and
+@sec-classification-metrics is the next one.
