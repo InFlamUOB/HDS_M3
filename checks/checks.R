@@ -118,3 +118,102 @@ check_shift_answers <- function(answers) {
   }
   invisible(n_right)
 }
+
+
+# ---------------------------------------------------------------------------
+# Added for Days 2-6.
+# ---------------------------------------------------------------------------
+
+# Day 3: did the number you computed yourself land on the number a standard
+# routine gives? Used for gradient descent against lm(), and for a closed-form
+# estimator against the fitted model. `tol` is relative to the target, with a
+# floor of 1 so that a target of zero still has a sensible tolerance.
+check_matches <- function(value, target, tol = 0.01, label = "value") {
+  limit <- tol * max(1, abs(target))
+  ok <- is.numeric(value) && length(value) == 1 && is.finite(value) &&
+        abs(value - target) <= limit
+  hds_check(paste0(label, " matches the reference answer"), ok,
+            hint = "a gap much larger than the tolerance usually means too few iterations, a learning rate that is too small, or a sign error in the gradient",
+            detail = if (is.numeric(value) && length(value) == 1)
+              sprintf("%.4f vs %.4f (gap %.4g, allowed %.4g)",
+                      value[1], target, abs(value[1] - target), limit)
+            else class(value))
+  invisible(ok)
+}
+
+check_probabilities <- function(p, prevalence, tol = 0.02) {
+  ok_range <- is.numeric(p) && length(p) > 0 && all(p >= 0 & p <= 1)
+  hds_check("every value is a probability between 0 and 1", ok_range,
+            hint = "you may have kept the log-odds, or a class label, instead of a probability",
+            detail = if (is.numeric(p)) sprintf("range %.3f to %.3f", min(p), max(p)) else class(p))
+  if (!ok_range) return(invisible(FALSE))
+  hds_check("the mean predicted probability matches the observed prevalence",
+            abs(mean(p) - prevalence) < tol,
+            hint = "a logistic regression with an intercept averages to the prevalence on its training rows; if yours averages to one minus that, you have taken the other probability column",
+            detail = sprintf("mean %.3f vs prevalence %.3f", mean(p), prevalence))
+  invisible(NULL)
+}
+
+# Day 5: a classifier's accuracy is only meaningful next to the accuracy of
+# predicting the commonest class for everybody. `truth` is the vector of true
+# labels for the rows the accuracy was computed on.
+check_beats_prevalence <- function(accuracy, truth) {
+  truth    <- as.factor(truth)
+  majority <- max(table(truth)) / length(truth)
+  hds_check("the model beats the majority-class rule",
+            is.numeric(accuracy) && length(accuracy) == 1 && accuracy > majority,
+            hint = paste("predicting the commonest class for everyone needs no data and no model;",
+                         "an accuracy below that bar means the model has learnt nothing usable"),
+            detail = sprintf("model %.3f vs majority-class %.3f (%+.1f percentage points)",
+                             accuracy, majority, 100 * (accuracy - majority)))
+  invisible(majority)
+}
+
+# Day 5: the gap between a score on the rows a model was fitted to and the same
+# score on held-out rows. Pass scores where higher is better (accuracy, AUC).
+check_overfit_gap <- function(train_score, test_score, max_gap = 0.05,
+                              label = "score") {
+  gap <- train_score - test_score
+  hds_check(paste0("train-minus-test gap in ", label, " is under ", max_gap),
+            is.numeric(gap) && length(gap) == 1 && is.finite(gap) && gap < max_gap,
+            hint = paste("a wide gap means the model has fitted rows it will never see again;",
+                         "the cure is less capacity, not more training"),
+            detail = sprintf("train %.3f, test %.3f, gap %+.3f",
+                             train_score, test_score, gap))
+  invisible(gap)
+}
+
+# Day 6: a control column of random numbers is added to the predictors, and
+# every importance measure is asked where it put it. `importance` is either a
+# named numeric vector or a data frame with columns Variable and Importance
+# (what vip::vi() returns). The check passes when the control is worth less
+# than `tol` of the strongest predictor. A [fix] here is not necessarily a
+# mistake in your code - read the detail line and @sec-importance.
+check_noise_control <- function(importance, noise = "noise", tol = 0.1) {
+  if (is.data.frame(importance)) {
+    v <- stats::setNames(importance$Importance, importance$Variable)
+  } else {
+    v <- importance
+  }
+  if (!is.numeric(v) || is.null(names(v))) {
+    return(invisible(hds_check("importance is a named numeric vector", FALSE,
+      hint = "pass vi(fit), or a vector whose names are the predictors")))
+  }
+  if (!noise %in% names(v)) {
+    return(invisible(hds_check(paste0("the control column '", noise, "' is present"), FALSE,
+      hint = "add it to the predictors before fitting, or set noise= to its name",
+      detail = paste(names(v), collapse = ", "))))
+  }
+  v <- sort(v, decreasing = TRUE)
+  rank <- which(names(v) == noise)
+  share <- unname(v[[noise]] / v[[1]])
+  hds_check(paste0("the pure-noise control is worth less than ",
+                   round(100 * tol), "% of the top predictor"),
+            share < tol,
+            hint = paste0("this measure gives a column of random numbers a real share of ",
+                          "the credit, so it is describing the model rather than the data"),
+            detail = sprintf("'%s' ranks %d of %d, %.0f%% of '%s' (%.4g vs %.4g)",
+                             noise, rank, length(v), 100 * share, names(v)[1],
+                             v[[noise]], v[[1]]))
+  invisible(share)
+}

@@ -1,0 +1,544 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 2.1 — First look {#sec-first-look}
+
+**45 minutes · work individually**
+
+:::: {.web-only}
+Every cell on this page is a real R or Python cell. Open `day2-01-first-look.qmd`
+in your editor and run them one at a time — the output printed here is what you
+should get. If a package is missing, see @sec-setup.
+::::
+
+## Objectives
+
+::: {.objective-list}
+- Describe a numeric column with summary statistics and a plot, in either
+  language, and say which of the two told you something the other hid.
+- Audit a data file for values that are legal to the computer and impossible in
+  a patient, and quantify how many there are.
+- Read a correlation matrix and say which entries you do not believe, with a
+  reason that is not "that seems high".
+:::
+
+## Why this, here
+
+On Day 1 the first task of the pipeline was *load and inspect*, and the file
+obliged: `summary()` showed an age of 109 and a median stay of 66 days, and both
+oddities were visible in the output. Today's file is not so helpful. Every
+column of `data/diabetes.csv` is numeric, nothing is missing, no summary
+function complains, and the defect is still there. It is written as a zero.
+
+## The data
+
+`data/diabetes.csv` holds 768 adults assessed for type 2 diabetes: eight
+measurements and a `pos`/`neg` outcome. It is synthetic, and the reason it is
+synthetic is a point about consent rather than about convenience —
+@sec-data-diabetes, and the paragraph in @sec-day2.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(readr); library(dplyr); library(tidyr); library(ggplot2)
+diabetes <- read_csv("data/diabetes.csv", show_col_types = FALSE)
+dim(diabetes)
+summary(diabetes)
+```
+
+## Python
+
+```{python}
+import pandas as pd
+import numpy as np
+diabetes = pd.read_csv("data/diabetes.csv")
+print(diabetes.shape)
+diabetes.describe().round(2)
+```
+:::
+
+Read the `insulin` column of that output before going on. Minimum zero, first
+quartile zero, median zero, mean about 75, maximum 846. A serum insulin of zero
+is not a low reading; it is not a reading at all.
+
+## What a summary hides, and a plot does not
+
+::: {.panel-tabset}
+## R
+
+```{r}
+ggplot(diabetes, aes(x = insulin)) +
+  geom_histogram(binwidth = 20, boundary = 0) +
+  labs(x = "2-hour serum insulin (mu U/ml)", y = "Patients",
+       title = "Insulin, as recorded")
+```
+
+## Python
+
+```{python}
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots()
+ax.hist(diabetes["insulin"], bins=range(0, 880, 20))
+ax.set_xlabel("2-hour serum insulin (mu U/ml)")
+ax.set_ylabel("Patients")
+ax.set_title("Insulin, as recorded")
+plt.show()
+```
+:::
+
+The bar at zero is taller than every other bar put together, and it is not a
+population of patients with no insulin. The same spike is in `triceps`, smaller
+spikes are in `pressure`, `mass` and `glucose`, and none of them is visible in
+a table of quartiles unless you are looking for it.
+
+## Task 1 — Count what cannot be true
+
+Count the zeros in every numeric column and express them as a percentage of the
+768 rows. Then decide, column by column, which of those zeros could be a real
+measurement. One of them can.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+zeros <- diabetes |>
+  summarise(across(where(is.numeric), ~ sum(______))) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "n_zero") |>
+  mutate(pct = 100 * n_zero / ______) |>
+  arrange(desc(pct))
+zeros
+
+insulin_pct <- zeros$pct[zeros$variable == "insulin"]
+check_metric_range(insulin_pct, 45, 60, "percentage of insulin values that are zero")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`.x == 0` is a logical vector, and `sum()` of a logical vector counts the
+`TRUE`s. The denominator is the number of rows: `nrow()`.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+zeros <- diabetes |>
+  summarise(across(where(is.numeric), ~ sum(.x == 0))) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "n_zero") |>
+  mutate(pct = 100 * n_zero / nrow(diabetes)) |>
+  arrange(desc(pct))
+zeros
+
+insulin_pct <- zeros$pct[zeros$variable == "insulin"]
+check_metric_range(insulin_pct, 45, 60, "percentage of insulin values that are zero")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+num = diabetes.select_dtypes("number")
+zeros = (pd.DataFrame({"n_zero": (num == ______).sum()})
+         .assign(pct=lambda d: 100 * d["n_zero"] / ______)
+         .sort_values("pct", ascending=False))
+print(zeros)
+
+insulin_pct = zeros.loc["insulin", "pct"]
+check_metric_range(insulin_pct, 45, 60, "percentage of insulin values that are zero")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+num = diabetes.select_dtypes("number")
+zeros = (pd.DataFrame({"n_zero": (num == 0).sum()})
+         .assign(pct=lambda d: 100 * d["n_zero"] / len(diabetes))
+         .sort_values("pct", ascending=False))
+print(zeros)
+
+insulin_pct = zeros.loc["insulin", "pct"]
+check_metric_range(insulin_pct, 45, 60, "percentage of insulin values that are zero")
+```
+:::
+:::
+:::
+
+Five columns carry zeros that no living adult can produce: `insulin`,
+`triceps`, `pressure`, `mass` and `glucose`. The sixth, `pregnant`, is a count
+of previous pregnancies, where zero is both common and true. Nothing in the
+file distinguishes the two kinds — that distinction is clinical knowledge you
+brought with you, and it is the reason a data dictionary is not optional.
+
+## Task 2 — Make the missing values missing
+
+Replace the impossible zeros with `NA` (R) or `np.nan` (Python) in those five
+columns, leaving `pregnant` alone, and recompute the mean and median of
+`insulin` and `triceps`.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+impossible <- c("glucose", "pressure", "triceps", "insulin", "mass")
+dia <- diabetes |> mutate(across(all_of(impossible), ~ na_if(.x, ______)))
+
+mean_insulin <- mean(dia$insulin, na.rm = ______)
+check_metric_range(mean_insulin, 140, 180, "mean insulin, zeros removed")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`na_if(x, y)` returns `NA` wherever `x` equals `y`. Every summary function in R
+refuses to average a vector containing `NA` unless you tell it to skip them.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+impossible <- c("glucose", "pressure", "triceps", "insulin", "mass")
+dia <- diabetes |> mutate(across(all_of(impossible), ~ na_if(.x, 0)))
+
+mean_insulin <- mean(dia$insulin, na.rm = TRUE)
+check_metric_range(mean_insulin, 140, 180, "mean insulin, zeros removed")
+
+dia |>
+  summarise(across(all_of(impossible),
+                   list(missing = ~ sum(is.na(.x)),
+                        mean = ~ mean(.x, na.rm = TRUE),
+                        median = ~ median(.x, na.rm = TRUE)))) |>
+  pivot_longer(everything(), names_to = c("variable", ".value"), names_sep = "_")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+impossible = ["glucose", "pressure", "triceps", "insulin", "mass"]
+dia = diabetes.copy()
+dia[impossible] = dia[impossible].replace(______, np.nan)
+
+mean_insulin = dia["insulin"].______
+check_metric_range(mean_insulin, 140, 180, "mean insulin, zeros removed")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+impossible = ["glucose", "pressure", "triceps", "insulin", "mass"]
+dia = diabetes.copy()
+dia[impossible] = dia[impossible].replace(0, np.nan)
+
+mean_insulin = dia["insulin"].mean()
+check_metric_range(mean_insulin, 140, 180, "mean insulin, zeros removed")
+
+print(dia[impossible].agg(["count", "mean", "median"]).round(1))
+```
+:::
+:::
+:::
+
+Compare the two means for `insulin`. The one computed with the zeros in place is
+a number that no textbook, no clinician and no laboratory would recognise, and
+it was produced by a function that did exactly what it was asked.
+
+::: {.callout-warning}
+## `NA` is not a worse answer than a number
+Students often resist this step because the dataset "gets smaller". It does not
+get smaller; it stops lying. A mean over 363 measured insulins is an estimate of
+something. A mean over 768 values of which 405 are a clerical convention is an
+estimate of nothing, and it will not announce itself as one.
+:::
+
+## Correlation, and what it does with the zeros
+
+The correlation matrix is the usual next step: one number per pair of columns,
+telling you which measurements move together.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+num_cols <- c("pregnant", "glucose", "pressure", "triceps", "insulin",
+              "mass", "pedigree", "age")
+cor_raw <- cor(diabetes[num_cols])
+round(cor_raw, 2)
+```
+
+## Python
+
+```{python}
+num_cols = ["pregnant", "glucose", "pressure", "triceps", "insulin",
+            "mass", "pedigree", "age"]
+cor_raw = diabetes[num_cols].corr()
+cor_raw.round(2)
+```
+:::
+
+A heatmap makes the structure readable at a glance. There are packages that
+draw prettier ones; the point here is that a correlation matrix is just a table
+of numbers, so anything that colours a table will do.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+as.data.frame(as.table(cor_raw)) |>
+  ggplot(aes(Var1, Var2, fill = Freq)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.2f", Freq)), size = 2.6) +
+  scale_fill_gradient2(limits = c(-1, 1), name = "r") +
+  labs(x = NULL, y = NULL, title = "Correlations, zeros left in") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Python
+
+```{python}
+fig, ax = plt.subplots(figsize=(6, 5))
+im = ax.imshow(cor_raw, vmin=-1, vmax=1, cmap="RdBu_r")
+ax.set_xticks(range(len(num_cols)), num_cols, rotation=45, ha="right")
+ax.set_yticks(range(len(num_cols)), num_cols)
+for i in range(len(num_cols)):
+    for j in range(len(num_cols)):
+        ax.text(j, i, f"{cor_raw.iloc[i, j]:.2f}", ha="center", va="center", size=7)
+fig.colorbar(im, ax=ax, label="r")
+ax.set_title("Correlations, zeros left in")
+plt.show()
+```
+:::
+
+The largest off-diagonal entry is `pregnant` with `age`, around 0.74, which
+tells you nothing you did not know about how pregnancies accumulate. The next
+largest is `insulin` with `triceps`, about 0.47: serum insulin and skin-fold
+thickness, more strongly associated with each other than insulin is with
+glucose. Hold that thought.
+
+## Task 3 — Recompute the correlations on the measurements that exist
+
+Build the same matrix from `dia` — the frame in which the impossible zeros are
+`NA` — using pairwise complete observations, and find the pair whose
+correlation changes most.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+cor_na <- cor(dia[num_cols], use = "______")
+round(cor_na - cor_raw, 2)
+
+ins_tri <- cor_na["insulin", "triceps"]
+check_metric_range(ins_tri, 0.0, 0.3, "insulin-triceps correlation, zeros removed")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`cor()` has a `use =` argument; `"pairwise.complete.obs"` keeps, for each pair
+of columns, the rows where both are present. Read its help for what the other
+options do — they are not equivalent.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+cor_na <- cor(dia[num_cols], use = "pairwise.complete.obs")
+round(cor_na - cor_raw, 2)
+
+ins_tri <- cor_na["insulin", "triceps"]
+check_metric_range(ins_tri, 0.0, 0.3, "insulin-triceps correlation, zeros removed")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+cor_na = dia[num_cols].______      # pandas skips missing values pairwise by default
+print((cor_na - cor_raw).round(2))
+
+ins_tri = cor_na.loc["insulin", "triceps"]
+check_metric_range(ins_tri, 0.0, 0.3, "insulin-triceps correlation, zeros removed")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+cor_na = dia[num_cols].corr()
+print((cor_na - cor_raw).round(2))
+
+ins_tri = cor_na.loc["insulin", "triceps"]
+check_metric_range(ins_tri, 0.0, 0.3, "insulin-triceps correlation, zeros removed")
+```
+:::
+:::
+:::
+
+## The result that should bother you
+
+The strongest association in the raw matrix is mostly an artefact of the zeros,
+and one of the real associations was hidden by them. Both directions, in the
+same table.
+
+1. **`insulin` with `triceps` falls from about 0.47 to about 0.17** once the
+   zeros are treated as missing. Every one of the 251 rows with a zero skin-fold
+   also has a zero insulin, so a quarter of the file sits exactly at the origin
+   of that scatter plot. Points at the origin, far below the real values, pull a
+   regression line through themselves. The association was between the two
+   recording failures, not between the two hormonal quantities.
+2. **`triceps` with `mass` rises from about 0.38 to about 0.61.** Skin-fold
+   thickness and body mass index measure overlapping things and should agree;
+   the zeros were diluting that agreement towards the middle.
+3. So the zeros did not add noise. Noise attenuates everything. They *moved*
+   correlations, up for pairs that share a missingness pattern and down for
+   pairs that do not — and nothing in the output marks which is which.
+
+Here is the control. Take two columns that are independent by construction —
+random numbers with plausible means — and knock out exactly the rows that
+`insulin` and `triceps` have as zeros. There is no association whatsoever to
+find, so whatever correlation appears was manufactured by the zeros.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+set.seed(2025)
+fake_insulin <- rnorm(768, mean = 150, sd = 100)
+fake_triceps <- rnorm(768, mean = 30,  sd = 10)
+cor(fake_insulin, fake_triceps)                      # independent, as drawn
+
+fake_insulin[diabetes$insulin == 0] <- 0
+fake_triceps[diabetes$triceps == 0] <- 0
+cor(fake_insulin, fake_triceps)                      # same zeros, same artefact
+```
+
+## Python
+
+```{python}
+rng = np.random.default_rng(2025)
+fake_insulin = rng.normal(150, 100, len(diabetes))
+fake_triceps = rng.normal(30, 10, len(diabetes))
+print(np.corrcoef(fake_insulin, fake_triceps)[0, 1])   # independent, as drawn
+
+fake_insulin[diabetes["insulin"] == 0] = 0
+fake_triceps[diabetes["triceps"] == 0] = 0
+print(np.corrcoef(fake_insulin, fake_triceps)[0, 1])   # same zeros, same artefact
+```
+:::
+
+Two variables with nothing to do with each other, correlated at around 0.4
+because they were blank on the same patients. The 0.47 you were about to report
+is that, plus a little.
+
+## Reflection
+
+1. The zeros are not random: every zero `triceps` is also a zero `insulin`, but
+   not the reverse. What kind of clinical process produces nested missingness
+   like that, and would you expect the patients it affects to be like the rest?
+2. You cannot fix this by deleting the affected rows and you cannot fix it by
+   keeping them. Say in one sentence what each choice costs, and what you would
+   need to know to choose.
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Expected values** (ranges, so a regenerated file does not invalidate them).
+Zeros: `insulin` 50–55%, `triceps` 30–35%, `pressure` 4–5%, `mass` 1–2%,
+`glucose` under 1%. Mean insulin 75 with zeros, 155–165 without; the median
+moves from 0 to about 125. Correlations: `insulin`–`triceps` 0.45–0.50 raw and
+0.15–0.20 with zeros as missing; `triceps`–`mass` 0.35–0.40 raw and 0.58–0.63
+with zeros as missing. The control lands between 0.35 and 0.49 depending on the
+seed.
+
+**Reflection 1.** The nesting says insulin was assayed less often than
+anthropometry was measured, and that nobody with a skin-fold reading was
+skipped for insulin. That is a clinic workflow, not a patient characteristic —
+but the patients who get the full panel are usually the ones someone was
+worried about, so the measured subgroup is not a random sample. This is the
+hook for @sec-missing-data.
+
+**Reflection 2.** Dropping the 406 affected rows keeps 362 of 768 patients and
+biases towards whoever gets fully investigated. Keeping them means modelling a
+fiction. Deciding needs the one thing the file cannot tell you: why the value is
+absent. Accept any answer that names that; reject "just use the mean", which is
+@sec-leakage waiting to happen.
+
+**Common failures.** (1) `sum(.x == 0)` applied to `diabetes` after the
+zeros have already been replaced, giving all zeros — tell them to check which
+frame they are summarising. (2) In Python, `df.replace(0, np.nan)` across the
+whole frame, which also destroys `pregnant`; the task says five columns and the
+check does not catch it. (3) `cor()` with default `use = "everything"` on a
+frame containing `NA`, which returns a matrix of `NA` rather than an error.
+
+**Timing.** Tasks 1 and 2 take ten minutes together. Protect the last fifteen
+for the control, which is the part they remember. If you are short, set Task 3
+as reading and run the control from the front.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — Does the missingness predict the outcome?
+Make a binary column `insulin_missing` and cross-tabulate it against
+`diabetes`. If the patients with no insulin result differ in outcome from the
+rest, then the fact of measurement carries information — which is either a
+clinically real signal about who gets investigated, or a trap, depending on
+whether the same process will operate when your model is deployed.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Spearman instead of Pearson
+Recompute the raw matrix with `method = "spearman"`. Rank correlation is robust
+to outliers, and some people will tell you it therefore handles this. Check
+whether the `insulin`–`triceps` artefact survives, and explain the result:
+zeros are not outliers, they are ties at the bottom of the ranking.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that you have audited this file rather than described it, that you know
+how many values in each column are not measurements, and that you can name two
+correlations in the published matrix that are wrong and say in which direction.
+
+**Cannot:** anything about what to do with those 405 absent insulins. Replacing
+them with a number is easy, and every way of doing it changes a different thing
+about the data. That is @sec-missing-data.

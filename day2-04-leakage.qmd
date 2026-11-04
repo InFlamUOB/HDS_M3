@@ -1,0 +1,704 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 2.4 — Leakage {#sec-leakage}
+
+**60 minutes · work individually, compare answers in pairs**
+
+## Objectives
+
+::: {.objective-list}
+- State which preprocessing steps are *fitted* to data and which are not, and
+  explain why only the fitted ones can leak.
+- Build the same impute-and-scale pipeline twice, once leaking and once not,
+  and report the difference in test MAE as a number you computed.
+- Say which kinds of leakage cost you nothing and which destroy the
+  evaluation, with an example of each.
+:::
+
+## Why this, here
+
+Everything you did today was fitted to the whole file. The median that filled
+the gaps in @sec-missing-data was computed from all 200 patients; the mean and
+standard deviation in @sec-transforming came from all 345. On Day 1 you learned
+to hold rows back so that the evaluation means something (@sec-pipeline). Those
+two habits are in direct conflict, and this exercise is about which one wins.
+
+The rule is short: **anything learned from data is part of the model, and must
+be learned from the training rows only.** A log is not learned. A mean is. So
+is a median, a standard deviation, a minimum, a set of category levels, an
+imputation model, and the choice of which predictors to keep.
+
+## Today's regression
+
+Predict body mass index from the measurements that relate to it: skin-fold
+thickness, blood pressure, age and number of pregnancies. `triceps` is missing
+in about a third of rows, so imputation is unavoidable, which is the point.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(readr); library(dplyr); library(tidymodels)
+tidymodels_prefer()
+
+diabetes <- read_csv("data/diabetes.csv", show_col_types = FALSE)
+dia <- diabetes |>
+  mutate(across(c(glucose, pressure, triceps, insulin, mass), ~ na_if(.x, 0))) |>
+  filter(!is.na(mass)) |>                 # the outcome must be present
+  mutate(row_id = row_number()) |>        # so we can line rows up again later
+  select(row_id, mass, triceps, pressure, age, pregnant, glucose)
+
+nrow(dia)
+colSums(is.na(dia))
+```
+
+## Python
+
+```{python}
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error
+
+diabetes = pd.read_csv("data/diabetes.csv")
+dia = diabetes.copy()
+impossible = ["glucose", "pressure", "triceps", "insulin", "mass"]
+dia[impossible] = dia[impossible].replace(0, np.nan)
+dia = dia.dropna(subset=["mass"])[
+    ["mass", "triceps", "pressure", "age", "pregnant", "glucose"]]
+
+print(len(dia))
+print(dia.isna().sum())
+```
+:::
+
+And the split, made once and used for everything that follows.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+set.seed(42)
+split <- initial_split(dia, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
+c(train = nrow(train), test = nrow(test))
+
+mae_baseline <- mean(abs(test$mass - mean(train$mass)))
+mae_baseline
+```
+
+## Python
+
+```{python}
+train, test = train_test_split(dia, test_size=0.2, random_state=42)
+print(len(train), len(test))
+
+mae_baseline = np.abs(test["mass"] - train["mass"].mean()).mean()
+print(mae_baseline)
+```
+:::
+
+A model that predicts the training mean BMI for everybody is wrong by between
+five and six BMI units. Everything below has to beat that to be worth running.
+
+## Leak 1 — Scaling before the split
+
+The textbook mistake. Standardise the predictors using the mean and standard
+deviation of all 755 rows, then split, then fit. Compare with standardising
+using the training rows only. For both, fill the gaps the same way, so that the
+only difference is where the scaling constants came from.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+preds <- c("triceps", "pressure", "age", "pregnant")
+fill_na <- function(df, values) {
+  for (v in names(values)) df[[v]][is.na(df[[v]])] <- values[[v]]
+  df
+}
+train_means <- lapply(train[preds], mean, na.rm = TRUE)
+train_f <- fill_na(train, train_means)
+test_f  <- fill_na(test,  train_means)
+
+# WRONG: centre and scale using every row, training and test together
+all_f  <- fill_na(dia, train_means)
+mu_all <- sapply(all_f[preds], mean); sd_all <- sapply(all_f[preds], sd)
+scale_by <- function(df, mu, sd) {
+  for (v in names(mu)) df[[v]] <- (df[[v]] - mu[[v]]) / sd[[v]]
+  df
+}
+model_formula <- mass ~ triceps + pressure + age + pregnant
+fit_leak  <- lm(model_formula, data = scale_by(train_f, mu_all, sd_all))
+mae_scale_leak <- mean(abs(test_f$mass -
+  predict(fit_leak, scale_by(test_f, mu_all, sd_all))))
+
+# RIGHT: constants from the training rows only
+mu_tr <- sapply(train_f[preds], mean); sd_tr <- sapply(train_f[preds], sd)
+fit_ok <- lm(model_formula, data = scale_by(train_f, mu_tr, sd_tr))
+mae_scale_ok <- mean(abs(test_f$mass -
+  predict(fit_ok, scale_by(test_f, mu_tr, sd_tr))))
+
+c(leaky = mae_scale_leak, honest = mae_scale_ok,
+  difference = mae_scale_leak - mae_scale_ok)
+```
+
+## Python
+
+```{python}
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+
+preds = ["triceps", "pressure", "age", "pregnant"]
+imp = SimpleImputer(strategy="mean").fit(train[preds])
+train_f = pd.DataFrame(imp.transform(train[preds]), columns=preds, index=train.index)
+test_f  = pd.DataFrame(imp.transform(test[preds]),  columns=preds, index=test.index)
+all_f   = pd.DataFrame(imp.transform(dia[preds]),   columns=preds, index=dia.index)
+
+# WRONG: scaler fitted on every row, training and test together
+sc_leak = StandardScaler().fit(all_f)
+fit_leak = LinearRegression().fit(sc_leak.transform(train_f), train["mass"])
+mae_scale_leak = mean_absolute_error(
+    test["mass"], fit_leak.predict(sc_leak.transform(test_f)))
+
+# RIGHT: scaler fitted on the training rows only
+sc_ok = StandardScaler().fit(train_f)
+fit_ok = LinearRegression().fit(sc_ok.transform(train_f), train["mass"])
+mae_scale_ok = mean_absolute_error(
+    test["mass"], fit_ok.predict(sc_ok.transform(test_f)))
+
+print(mae_scale_leak, mae_scale_ok, mae_scale_leak - mae_scale_ok)
+```
+:::
+
+The two MAEs are the same number, and not approximately: they agree to the
+last decimal place the computer keeps, and the difference printed is
+floating-point arithmetic rather than statistics. This is not a near miss. It
+is an identity.
+
+Standardisation subtracts a constant and divides by another. Ordinary least
+squares then estimates whatever coefficients undo that, exactly: scale a
+predictor by $c$ and its coefficient becomes $\beta/c$, so every fitted value
+is unchanged. The leak transferred information — the test rows did influence
+$\mu$ and $\sigma$ — and the model had no way to use it.
+
+::: {.callout-warning}
+## Do not conclude that scaling leakage is harmless
+It is harmless *here*, because the model is linear and the leak is an affine
+transformation. Put a penalty on the coefficients, as ridge and lasso do, and
+the scale decides how hard each coefficient is pushed towards zero, so the leak
+changes the fit. Use a distance-based method and it changes the neighbours. The
+rule exists because you cannot audit, at the moment you write the
+preprocessing, every model that will later be fitted on top of it.
+:::
+
+## Task 1 — Leak 2: imputation before the split
+
+Now the leak the original version of this material was most worried about. Fill
+the missing `triceps` and `pressure` with the mean of **all 755 rows**, then
+split and fit; then do it again with the mean of the training rows only. Report
+both MAEs and the difference.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+global_means <- lapply(dia[preds], mean, na.rm = ______)      # all rows: the leak
+train_means  <- lapply(train[preds], mean, na.rm = TRUE)
+
+c(global_triceps = global_means$triceps, train_triceps = train_means$triceps)
+
+fit_g <- lm(model_formula, data = fill_na(train, ______))
+mae_imp_leak <- mean(abs(test$mass - predict(fit_g, fill_na(test, global_means))))
+
+fit_t <- lm(model_formula, data = fill_na(train, train_means))
+mae_imp_ok <- mean(abs(test$mass - predict(fit_t, fill_na(test, train_means))))
+
+c(leaky = mae_imp_leak, honest = mae_imp_ok, difference = mae_imp_leak - mae_imp_ok)
+check_beats_baseline(mae_imp_ok, mae_baseline)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`fill_na()` is defined above and takes a data frame and a named list of
+replacement values. The leaky version differs from the honest one by one
+argument: which frame the means were computed from.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+global_means <- lapply(dia[preds], mean, na.rm = TRUE)        # all rows: the leak
+train_means  <- lapply(train[preds], mean, na.rm = TRUE)
+
+c(global_triceps = global_means$triceps, train_triceps = train_means$triceps)
+
+fit_g <- lm(model_formula, data = fill_na(train, global_means))
+mae_imp_leak <- mean(abs(test$mass - predict(fit_g, fill_na(test, global_means))))
+
+fit_t <- lm(model_formula, data = fill_na(train, train_means))
+mae_imp_ok <- mean(abs(test$mass - predict(fit_t, fill_na(test, train_means))))
+
+c(leaky = mae_imp_leak, honest = mae_imp_ok, difference = mae_imp_leak - mae_imp_ok)
+check_beats_baseline(mae_imp_ok, mae_baseline)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+imp_leak = SimpleImputer(strategy="mean").fit(______[preds])   # all rows: the leak
+imp_ok   = SimpleImputer(strategy="mean").fit(train[preds])
+
+print(imp_leak.statistics_[0], imp_ok.statistics_[0])          # imputed triceps
+
+fit_g = LinearRegression().fit(imp_leak.transform(train[preds]), train["mass"])
+mae_imp_leak = mean_absolute_error(
+    test["mass"], fit_g.predict(imp_leak.transform(test[preds])))
+
+fit_t = LinearRegression().fit(imp_ok.transform(train[preds]), train["mass"])
+mae_imp_ok = mean_absolute_error(
+    test["mass"], fit_t.predict(imp_ok.transform(test[preds])))
+
+print(mae_imp_leak, mae_imp_ok, mae_imp_leak - mae_imp_ok)
+check_beats_baseline(mae_imp_ok, mae_baseline)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+imp_leak = SimpleImputer(strategy="mean").fit(dia[preds])      # all rows: the leak
+imp_ok   = SimpleImputer(strategy="mean").fit(train[preds])
+
+print(imp_leak.statistics_[0], imp_ok.statistics_[0])          # imputed triceps
+
+fit_g = LinearRegression().fit(imp_leak.transform(train[preds]), train["mass"])
+mae_imp_leak = mean_absolute_error(
+    test["mass"], fit_g.predict(imp_leak.transform(test[preds])))
+
+fit_t = LinearRegression().fit(imp_ok.transform(train[preds]), train["mass"])
+mae_imp_ok = mean_absolute_error(
+    test["mass"], fit_t.predict(imp_ok.transform(test[preds])))
+
+print(mae_imp_leak, mae_imp_ok, mae_imp_leak - mae_imp_ok)
+check_beats_baseline(mae_imp_ok, mae_baseline)
+```
+:::
+:::
+:::
+
+This time the two numbers genuinely differ, because the imputed constant is
+data the model consumes rather than a rescaling it can absorb. They differ
+around the fourth decimal place of a quantity measured in BMI units, and which
+of them is larger depends on the split. The leak is real and it is worth
+nothing: a mean over 604 rows and a mean over 755 rows of the same population
+are nearly the same number, and the choice between them is not detectable in
+any result you would report.
+
+## The result that should bother you
+
+Two leaks, carefully constructed, and the scoreboard is unchanged. If you stop
+here you will leave believing that the rule is a formality.
+
+So try a third, and keep everything else the same. Impute the missing
+`triceps` and `pressure` by *predicting* them — a sensible thing to do, far
+better statistics than the mean — using a regression fitted to all 755 rows
+with every other column available to it, **including `mass`, the outcome**.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+# WRONG: an imputation model fitted on all rows, allowed to see the outcome
+dia_leak <- dia
+for (v in c("triceps", "pressure")) {
+  others <- c("mass", "age", "pregnant", "glucose")      # note what is in here
+  usable <- complete.cases(dia_leak[others])
+  m    <- lm(reformulate(others, v), data = dia_leak[usable & !is.na(dia_leak[[v]]), ])
+  miss <- usable & is.na(dia_leak[[v]])
+  dia_leak[[v]][miss] <- predict(m, newdata = dia_leak[miss, ])
+}
+dia_leak <- fill_na(dia_leak, lapply(dia_leak[preds], mean, na.rm = TRUE))
+
+train_leak <- dia_leak |> filter(row_id %in% train$row_id)
+test_leak  <- dia_leak |> filter(row_id %in% test$row_id)
+
+fit_leak3 <- lm(model_formula, data = train_leak)
+mae_impmodel_leak <- mean(abs(test_leak$mass - predict(fit_leak3, test_leak)))
+
+# RIGHT: the same idea, fitted on the training rows, outcome withheld
+train_ok <- train; test_ok <- test
+for (v in c("triceps", "pressure")) {
+  others <- c("age", "pregnant", "glucose")              # and what is not
+  m <- lm(reformulate(others, v),
+          data = train_ok[complete.cases(train_ok[others]) & !is.na(train_ok[[v]]), ])
+  for (nm in c("train_ok", "test_ok")) {
+    d <- get(nm); miss <- complete.cases(d[others]) & is.na(d[[v]])
+    d[[v]][miss] <- predict(m, newdata = d[miss, ]); assign(nm, d)
+  }
+}
+train_ok <- fill_na(train_ok, lapply(train_ok[preds], mean, na.rm = TRUE))
+test_ok  <- fill_na(test_ok,  lapply(train_ok[preds], mean, na.rm = TRUE))
+
+fit_ok3 <- lm(model_formula, data = train_ok)
+mae_impmodel_ok <- mean(abs(test_ok$mass - predict(fit_ok3, test_ok)))
+
+c(leaky = mae_impmodel_leak, honest = mae_impmodel_ok,
+  difference = mae_impmodel_leak - mae_impmodel_ok)
+```
+
+## Python
+
+```{python}
+# WRONG: an imputation model fitted on all rows, allowed to see the outcome
+dia_leak = dia.copy()
+for v in ["triceps", "pressure"]:
+    others = ["mass", "age", "pregnant", "glucose"]
+    obs = dia_leak[v].notna() & dia_leak[others].notna().all(axis=1)
+    m = LinearRegression().fit(dia_leak.loc[obs, others], dia_leak.loc[obs, v])
+    miss = dia_leak[v].isna() & dia_leak[others].notna().all(axis=1)
+    dia_leak.loc[miss, v] = m.predict(dia_leak.loc[miss, others])
+dia_leak[preds] = dia_leak[preds].fillna(dia_leak[preds].mean())
+
+train_leak, test_leak = dia_leak.loc[train.index], dia_leak.loc[test.index]
+fit_leak3 = LinearRegression().fit(train_leak[preds], train_leak["mass"])
+mae_impmodel_leak = mean_absolute_error(
+    test_leak["mass"], fit_leak3.predict(test_leak[preds]))
+
+# RIGHT: the same idea, fitted on the training rows, outcome withheld
+train_ok, test_ok = train.copy(), test.copy()
+for v in ["triceps", "pressure"]:
+    others = ["age", "pregnant", "glucose"]
+    obs = train_ok[v].notna() & train_ok[others].notna().all(axis=1)
+    m = LinearRegression().fit(train_ok.loc[obs, others], train_ok.loc[obs, v])
+    for d in (train_ok, test_ok):
+        miss = d[v].isna() & d[others].notna().all(axis=1)
+        d.loc[miss, v] = m.predict(d.loc[miss, others])
+train_ok[preds] = train_ok[preds].fillna(train_ok[preds].mean())
+test_ok[preds]  = test_ok[preds].fillna(train_ok[preds].mean())
+
+fit_ok3 = LinearRegression().fit(train_ok[preds], train_ok["mass"])
+mae_impmodel_ok = mean_absolute_error(
+    test_ok["mass"], fit_ok3.predict(test_ok[preds]))
+
+print(mae_impmodel_leak, mae_impmodel_ok, mae_impmodel_leak - mae_impmodel_ok)
+```
+:::
+
+Now the number moves, by around half a BMI unit, and in the flattering
+direction. Over sixty different splits the leaky version won every single
+time, by between 0.3 and 0.8 units.
+
+1. The imputation model learned `triceps` as a function of `mass`. Every
+   imputed `triceps` in the test set is therefore a coded copy of that
+   patient's own BMI — the thing you are about to predict.
+2. The outcome model then "discovers" that `triceps` predicts `mass` very well
+   in exactly those rows, and the test MAE improves. Nothing was fabricated;
+   the arithmetic is correct throughout. The test set simply stopped being
+   held out.
+3. This is why the rule is about information rather than about code order.
+   Leak 1 moved a statistic across the split and cost nothing. Leak 3 moved
+   the *outcome* across it, through a column that does not look like an
+   outcome, and cost the entire evaluation.
+
+The difference between leaks 2 and 3 is not how careless the analyst was. It is
+how much row-specific information the fitted step could carry. A mean carries
+almost none. A model carries as much as you let it.
+
+## Task 2 — The leak-free pipeline, written once
+
+Doing this by hand is how the mistakes get made, which is why both languages
+have a way to package preprocessing and model into one object that can only be
+fitted on what it is given.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+rec <- recipe(mass ~ triceps + pressure + age + pregnant, data = ______) |>
+  step_impute_mean(all_predictors()) |>
+  step_normalize(all_predictors())
+
+wf <- workflow() |>
+  add_recipe(rec) |>
+  add_model(linear_reg() |> set_engine("lm"))
+
+final <- last_fit(wf, split = split, metrics = metric_set(mae))
+mae_pipeline <- collect_metrics(final)$.estimate
+mae_pipeline
+check_beats_baseline(mae_pipeline, mae_baseline)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+A recipe is declared against the frame whose *structure* it should learn from,
+and `last_fit()` then re-estimates every step on the training half of the split
+you hand it. Giving the recipe the test rows at this point would undo the thing
+you are demonstrating.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+rec <- recipe(mass ~ triceps + pressure + age + pregnant, data = train) |>
+  step_impute_mean(all_predictors()) |>
+  step_normalize(all_predictors())
+
+wf <- workflow() |>
+  add_recipe(rec) |>
+  add_model(linear_reg() |> set_engine("lm"))
+
+final <- last_fit(wf, split = split, metrics = metric_set(mae))
+mae_pipeline <- collect_metrics(final)$.estimate
+mae_pipeline
+check_beats_baseline(mae_pipeline, mae_baseline)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+
+numeric = Pipeline([("impute", SimpleImputer(strategy="mean")),
+                    ("scale", StandardScaler())])
+prep = ColumnTransformer([("num", numeric, preds)])
+pipe = Pipeline([("prep", prep), ("model", LinearRegression())])
+
+pipe.fit(______[preds], ______["mass"])
+mae_pipeline = mean_absolute_error(test["mass"], pipe.predict(test[preds]))
+print(mae_pipeline)
+check_beats_baseline(mae_pipeline, mae_baseline)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+
+numeric = Pipeline([("impute", SimpleImputer(strategy="mean")),
+                    ("scale", StandardScaler())])
+prep = ColumnTransformer([("num", numeric, preds)])
+pipe = Pipeline([("prep", prep), ("model", LinearRegression())])
+
+pipe.fit(train[preds], train["mass"])
+mae_pipeline = mean_absolute_error(test["mass"], pipe.predict(test[preds]))
+print(mae_pipeline)
+check_beats_baseline(mae_pipeline, mae_baseline)
+```
+:::
+:::
+:::
+
+The two objects are the same idea with different spelling. A recipe plus a
+workflow, or a `ColumnTransformer` inside a `Pipeline`: in both, `fit()` sees
+only the training rows, every fitted quantity is stored inside the object, and
+applying it to new data cannot consult that data. You get the leak-free
+behaviour because it is the only behaviour available, not because you
+remembered.
+
+## Task 3 — The scoreboard
+
+Collect every MAE you have computed into one table, in the order you produced
+them, and write the one sentence it supports.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+tibble(
+  pipeline = c("baseline: predict the training mean",
+               "leak 1: scaled on all rows",
+               "leak 2: mean-imputed on all rows",
+               "leak 3: imputation model saw the outcome",
+               "leak-free pipeline (recipes)"),
+  MAE = c(mae_baseline, mae_scale_leak, mae_imp_leak, ______, mae_pipeline)
+) |>
+  mutate(vs_baseline = round(100 * MAE / mae_baseline))
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+tibble(
+  pipeline = c("baseline: predict the training mean",
+               "leak 1: scaled on all rows",
+               "leak 2: mean-imputed on all rows",
+               "leak 3: imputation model saw the outcome",
+               "leak-free pipeline (recipes)"),
+  MAE = c(mae_baseline, mae_scale_leak, mae_imp_leak, mae_impmodel_leak, mae_pipeline)
+) |>
+  mutate(vs_baseline = round(100 * MAE / mae_baseline))
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+scoreboard = pd.DataFrame({
+    "pipeline": ["baseline: predict the training mean",
+                 "leak 1: scaled on all rows",
+                 "leak 2: mean-imputed on all rows",
+                 "leak 3: imputation model saw the outcome",
+                 "leak-free pipeline (sklearn)"],
+    "MAE": [mae_baseline, mae_scale_leak, mae_imp_leak, ______, mae_pipeline],
+})
+scoreboard["vs_baseline"] = (100 * scoreboard["MAE"] / mae_baseline).round()
+print(scoreboard)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+scoreboard = pd.DataFrame({
+    "pipeline": ["baseline: predict the training mean",
+                 "leak 1: scaled on all rows",
+                 "leak 2: mean-imputed on all rows",
+                 "leak 3: imputation model saw the outcome",
+                 "leak-free pipeline (sklearn)"],
+    "MAE": [mae_baseline, mae_scale_leak, mae_imp_leak, mae_impmodel_leak, mae_pipeline],
+})
+scoreboard["vs_baseline"] = (100 * scoreboard["MAE"] / mae_baseline).round()
+print(scoreboard)
+```
+:::
+:::
+:::
+
+The R and Python numbers will not match each other, because `set.seed(42)` and
+`random_state=42` choose different rows — the same point Day 1 made in
+@sec-pipeline. Within a language, the ordering is what matters.
+
+## Reflection
+
+1. Leak 3 produced the best MAE in your table. If a colleague showed you that
+   model and that number, what would you ask for, and what would you expect to
+   see in the answer?
+2. Cross-validation repeats the split many times. Does putting your
+   preprocessing inside a workflow or a `Pipeline` matter more or less once you
+   are cross-validating, and why?
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Expected values** (R with seed 42, Python with `random_state=42`; the two
+differ because the splits differ). Baseline MAE 5.5–5.9 BMI units. Leak 1: the
+two MAEs are identical to within 1e-15 — if a student reports a difference in
+the third decimal, they have changed the imputation or the split as well.
+Leak 2: a difference of 0.0001–0.001, sign varying with the seed. Leak 3: leaky
+3.7–4.4 against an honest 4.5–4.9; over sixty seeds the gap ran from 0.32 to
+0.83 and the leaky version won every time. The leak-free pipeline reproduces
+the honest number to the last digit — 4.46 in R and 4.92 in Python here, about
+80–85% of the baseline — which is the point of Task 2: it is the same
+arithmetic, with no opportunity to get the order wrong.
+
+**The teaching line.** Resist the urge to tidy this into "leakage inflates
+performance". Two of the three leaks did not, and students who have seen that
+remember the real rule — information, not code order — rather than a
+superstition about the sequence of lines.
+
+**Reflection 1.** Ask for the preprocessing code, not the model. Specifically:
+was any step fitted before the split, and did any step have access to the
+outcome column? A single-number answer ("we used mean imputation") is not
+enough; the question is what the imputer was fitted on.
+
+**Reflection 2.** More. With one split you can audit the order by reading ten
+lines. With ten-fold cross-validation the preprocessing has to be refitted
+inside every fold, which is tedious to do by hand and automatic inside a
+workflow — this is the usual reason leakage survives into published work.
+
+**Common failures.** (1) Reusing `train_means` from Leak 1 inside Task 1 and
+getting identical numbers — the variable name is the same on purpose, so make
+them re-read. (2) In Python, `SimpleImputer` fitted on `dia[preds]` but applied
+to a frame whose columns are in a different order. (3) `last_fit()` given a
+recipe declared on `dia` rather than `train`: it still works, because
+`last_fit()` re-estimates the steps on the training half, and that is worth
+saying out loud rather than marking wrong.
+
+**Timing.** Leak 1 and Leak 3 are the two that must happen. If you are short,
+set Task 1 as reading, give them the difference, and spend the time on the
+scoreboard.
+:::
+:::
+
+## Stretch
+
+The extra challenge from the original course material, rebuilt as a sequence
+you can stop at any point. Use the same split throughout and add a row to your
+scoreboard each time.
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — Does a better imputer help?
+Swap `step_impute_mean()` for `step_impute_median()`, then for
+`step_impute_bag()` — or in Python, `SimpleImputer(strategy="median")` and
+`KNNImputer()`. Keep everything else identical. Report the MAEs. The honest
+answer, which you should check rather than assume, is that it makes very little
+difference, and knowing that is worth more than a tenth of a BMI unit.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Feature engineering inside the pipeline
+Add `step_log(glucose)` or a banded age variable (`step_cut()` then
+`step_dummy()`; `pd.cut()` then `OneHotEncoder`). Does the extra complexity
+earn its place against the four-predictor model? This is the question
+@sec-day2-consolidation asks you to be able to answer with a table.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 3 — Build a leak you cannot see
+Add twenty columns of pure random noise to the data. Choose the five most
+correlated with `mass` **using all the rows**, fit on those five, and evaluate.
+Then do the selection on the training rows only. One of the two beats the
+baseline and neither should. Feature selection is a fitted step, and it is the
+leak that is hardest to spot in somebody else's code.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that you can build a preprocessing pipeline whose fitted quantities
+come from the training rows alone, in either language, and that you have
+measured what three different leaks cost on one dataset.
+
+**Cannot:** that a leak-free single split is a good estimate of anything. The
+whole day has rested on one arbitrary 80/20 partition of 755 patients, and
+@sec-day2-consolidation names what that still leaves undone.

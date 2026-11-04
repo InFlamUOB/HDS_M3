@@ -1,0 +1,587 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 3.4 — Ols {#sec-ols}
+
+**40 minutes · individually, then in pairs for the derivation**
+
+## Objectives
+
+::: {.objective-list}
+- Derive the ordinary least squares estimators for a single predictor, in your
+  own handwriting, from the squared-error loss.
+- Compute both estimators from a dataset with nothing but means, a covariance
+  and a variance, and show that they agree with `lm()`.
+- Name the two conditions the derivation imposes on the fitted residuals, and
+  check them numerically.
+:::
+
+## Why this, here
+
+@sec-gradient-descent minimised the squared-error loss by walking downhill, and
+needed standardised columns and a well-chosen learning rate to get there. For
+this particular loss and this particular model, none of that is necessary: the
+minimum can be written down. This exercise does the algebra, and then checks it
+against the software.
+
+::: {.callout-note}
+## This exercise is one language, deliberately
+The derivation is algebra and has no R version or Python version. Only the
+verification at the end is code, and that appears in both languages. If you are
+following the booklet in Python, the three pages of mathematics below still
+apply to you in full — `LinearRegression` is solving the same equations as
+`lm()`.
+:::
+
+## Setting up the minimisation problem
+
+We want the intercept and slope that minimise the sum of squared residuals:
+
+$$\min_{\hat{\beta_0}, \hat{\beta_1}} \; W, \qquad\text{where}\qquad
+W = \sum_{i=1}^{N} (y_i - \hat{\beta_0} - \hat{\beta_1} x_i)^2$$ {#eq-ols-objective}
+
+Minimising the sum and minimising the mean are the same problem: dividing by $N$
+scales the whole surface without moving its lowest point. We use the sum here
+because it keeps the algebra clean.
+
+A minimum of a smooth function is where all its partial derivatives vanish.
+There are two parameters, so there are two equations.
+
+$$\frac{\partial W}{\partial \hat{\beta_0}} =
+\sum_{i=1}^{N} -2(y_i - \hat{\beta_0} - \hat{\beta_1} x_i) = 0$$ {#eq-ols-d0}
+
+$$\frac{\partial W}{\partial \hat{\beta_1}} =
+\sum_{i=1}^{N} -2 x_i (y_i - \hat{\beta_0} - \hat{\beta_1} x_i) = 0$$ {#eq-ols-d1}
+
+Both follow from the chain rule: the inside of the bracket differentiates to
+$-1$ with respect to $\hat\beta_0$ and to $-x_i$ with respect to $\hat\beta_1$.
+These two are the *normal equations*, and everything below is rearrangement.
+
+::: {.callout-note appearance="simple"}
+## Where the gradients of @sec-gradient-descent came from
+@eq-ols-d0 and @eq-ols-d1, divided by $N$, are exactly the two gradients the
+descent loop used. The difference between the two exercises is not the
+mathematics; it is that here we set the derivatives to zero and solve, while
+there we evaluated them at the current guess and took a step.
+:::
+
+## Solving for $\hat{\beta_0}$
+
+Divide @eq-ols-d0 by $-2$ — which is allowed because the right-hand side is zero,
+and is the reason some textbooks write the loss with a $\tfrac{1}{2}$ in front:
+
+$$\sum_{i=1}^{N} (y_i - \hat{\beta_0} - \hat{\beta_1} x_i) = 0$$
+
+Distribute the summation over the three terms. The middle one is a constant
+summed $N$ times:
+
+$$\sum_{i=1}^{N} y_i - N\hat{\beta_0} - \hat{\beta_1}\sum_{i=1}^{N} x_i = 0
+\qquad\Longrightarrow\qquad
+N \hat{\beta_0} = \sum_{i=1}^{N} y_i - \hat{\beta_1} \sum_{i=1}^{N} x_i$$
+
+Divide by $N$ and use $\frac{1}{N}\sum y_i = \bar{y}$ and
+$\frac{1}{N}\sum x_i = \bar{x}$:
+
+$$\boxed{\;\hat{\beta_0} = \bar{y} - \hat{\beta_1} \bar{x}\;}$$
+
+Read that before going on: whatever the slope turns out to be, the fitted line
+passes through the point $(\bar{x}, \bar{y})$. The mean of the predictors and
+the mean of the outcome are always on the line.
+
+## Solving for $\hat{\beta_1}$
+
+Divide @eq-ols-d1 by $-2$ as well, and expand:
+
+$$\sum_{i=1}^{N} \left( x_i y_i - \hat{\beta_0} x_i - \hat{\beta_1} x_i^2 \right) = 0$$
+
+Substitute $\hat{\beta_0} = \bar{y} - \hat{\beta_1} \bar{x}$ from above:
+
+$$\sum_{i=1}^{N} x_i y_i - \sum_{i=1}^{N}(\bar{y} - \hat{\beta_1}\bar{x})x_i
+ - \hat{\beta_1} \sum_{i=1}^{N} x_i^2 = 0$$
+
+Distribute the sums, pulling the constants $\bar{x}$ and $\bar{y}$ out in front:
+
+$$\sum_{i=1}^{N} x_i y_i - \bar{y}\sum_{i=1}^{N}x_i
+ + \hat{\beta_1}\bar{x} \sum_{i=1}^{N} x_i - \hat{\beta_1} \sum_{i=1}^{N} x_i^2 = 0$$
+
+Now collect the two terms in $\hat{\beta_1}$ on one side and use
+$\sum x_i = N\bar{x}$ and $\sum y_i = N\bar{y}$:
+
+$$\hat{\beta_1}\left(\sum_{i=1}^{N} x_i^2 - N\bar{x}^2\right)
+ = \sum_{i=1}^{N} x_i y_i - N\bar{x}\bar{y}$$
+
+which, using the identity in the callout below for both sides, is
+
+$$\hat{\beta_1} = \frac{\sum_{i=1}^{N} (x_i - \bar{x})(y_i - \bar{y})}
+{\sum_{i=1}^{N} (x_i - \bar{x})^2}
+= \frac{\operatorname{Cov}(x,y)}{\operatorname{Var}(x)}$$
+
+::: {.callout-note collapse="true"}
+## The identity, in six steps
+$$\sum_{i=1}^{N} (x_i - \bar{x})(y_i - \bar{y}) = \sum_{i=1}^{N} x_i y_i - N \bar{x} \bar{y}$$
+
+**Step 1 — expand the product.**
+$$\sum_{i=1}^{N} (x_i - \bar{x})(y_i - \bar{y})
+= \sum_{i=1}^{N} \left( x_i y_i - x_i \bar{y} - \bar{x} y_i + \bar{x} \bar{y} \right)$$
+
+**Step 2 — separate the summation.**
+$$= \sum_{i=1}^{N} x_i y_i - \sum_{i=1}^{N} x_i \bar{y}
+  - \sum_{i=1}^{N} \bar{x} y_i + \sum_{i=1}^{N} \bar{x} \bar{y}$$
+
+**Step 3 — factor the constants out.** $\bar{x}$ and $\bar{y}$ do not depend on
+$i$, so
+$$\sum_{i=1}^{N} x_i \bar{y} = \bar{y} \sum_{i=1}^{N} x_i, \qquad
+\sum_{i=1}^{N} \bar{x} y_i = \bar{x} \sum_{i=1}^{N} y_i, \qquad
+\sum_{i=1}^{N} \bar{x} \bar{y} = N \bar{x} \bar{y}$$
+
+**Step 4 — substitute back.**
+$$= \sum_{i=1}^{N} x_i y_i - \bar{y} \sum_{i=1}^{N} x_i
+  - \bar{x} \sum_{i=1}^{N} y_i + N \bar{x} \bar{y}$$
+
+**Step 5 — use $\sum x_i = N \bar{x}$ and $\sum y_i = N \bar{y}$.**
+$$= \sum_{i=1}^{N} x_i y_i - \bar{y} (N \bar{x}) - \bar{x} (N \bar{y})
+  + N \bar{x} \bar{y}$$
+
+**Step 6 — combine.** The second and third terms are each
+$-N\bar{x}\bar{y}$, and one of them cancels the fourth:
+$$= \sum_{i=1}^{N} x_i y_i - N \bar{x} \bar{y}$$
+
+Setting $y = x$ gives the companion identity
+$\sum (x_i - \bar{x})^2 = \sum x_i^2 - N\bar{x}^2$, which is the denominator.
+:::
+
+So the complete solution, for one predictor, is two lines of arithmetic:
+
+$$\hat{\beta_1} = \frac{\operatorname{Cov}(x,y)}{\operatorname{Var}(x)}
+\qquad\qquad
+\hat{\beta_0} = \bar{y} - \hat{\beta_1} \bar{x}$$
+
+No iteration, no learning rate, no starting guess. The derivation follows the
+one in Berkeley's [EEP118 handout](https://are.berkeley.edu/courses/EEP118/current/derive_ols.pdf);
+with more than one predictor the same argument is done in matrix
+form and gives $\hat{\beta} = (X^\top X)^{-1} X^\top y$, which is what `lm()`
+actually evaluates.
+
+## Task 1 — The closed form against the software
+
+Compute both estimators from means, a covariance and a variance, and compare
+them with the fitted model.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+library(readr); library(dplyr)
+source("checks/checks.R")
+
+diab <- read_csv("data/diabetes.csv")
+glu  <- diab |> filter(glucose > 0) |> slice(1:80) |> select(age, glucose)
+x    <- glu$age
+y    <- glu$glucose
+
+b1hat <- ______ / ______
+b0hat <- mean(y) - b1hat * ______
+
+fit <- lm(glucose ~ age, data = glu)
+rbind(closed_form = c(b0hat, b1hat), lm = coef(fit))
+
+check_matches(b1hat, coef(fit)[["age"]], tol = 1e-8, label = "closed-form slope")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Two functions, `cov()` and `var()`, in the order the formula gives them. The
+third blank is the mean of the predictor.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+library(readr); library(dplyr)
+source("checks/checks.R")
+
+diab <- read_csv("data/diabetes.csv")
+glu  <- diab |> filter(glucose > 0) |> slice(1:80) |> select(age, glucose)
+x    <- glu$age
+y    <- glu$glucose
+
+b1hat <- cov(x, y) / var(x)
+b0hat <- mean(y) - b1hat * mean(x)
+
+fit <- lm(glucose ~ age, data = glu)
+rbind(closed_form = c(b0hat, b1hat), lm = coef(fit))
+
+check_matches(b1hat, coef(fit)[["age"]], tol = 1e-8, label = "closed-form slope")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import pandas as pd, numpy as np, sys; sys.path.append("checks")
+from checks import *
+from sklearn.linear_model import LinearRegression
+
+diab = pd.read_csv("data/diabetes.csv")
+glu = (diab.loc[diab["glucose"] > 0, ["age", "glucose"]]
+           .head(80).reset_index(drop=True))
+x, y = glu["age"], glu["glucose"]
+
+b1hat = ______ / ______          # pandas: x.cov(y) and x.var(), both ddof=1
+b0hat = y.mean() - b1hat * ______
+
+fit = LinearRegression().fit(glu[["age"]], y)
+print({"closed_form": (b0hat, b1hat), "sklearn": (fit.intercept_, fit.coef_[0])})
+
+check_matches(b1hat, fit.coef_[0], tol=1e-8, label="closed-form slope")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import pandas as pd, numpy as np, sys; sys.path.append("checks")
+from checks import *
+from sklearn.linear_model import LinearRegression
+
+diab = pd.read_csv("data/diabetes.csv")
+glu = (diab.loc[diab["glucose"] > 0, ["age", "glucose"]]
+           .head(80).reset_index(drop=True))
+x, y = glu["age"], glu["glucose"]
+
+b1hat = x.cov(y) / x.var()
+b0hat = y.mean() - b1hat * x.mean()
+
+fit = LinearRegression().fit(glu[["age"]], y)
+print({"closed_form": (b0hat, b1hat), "sklearn": (fit.intercept_, fit.coef_[0])})
+
+check_matches(b1hat, fit.coef_[0], tol=1e-8, label="closed-form slope")
+```
+:::
+:::
+:::
+
+Both give 110.298 and 0.2886749. Not approximately: to every digit either
+language will print. `lm()` is not doing anything you have not just done by
+hand, and neither is `LinearRegression`.
+
+::: {.callout-note appearance="simple"}
+## The covariance ratio also explains @sec-gradient-descent
+Standardising both columns makes $\operatorname{Var}(x) = 1$ and turns
+$\operatorname{Cov}(x,y)$ into the correlation, so on standardised data
+$\hat\beta_1 = \operatorname{Cor}(x,y)$ — the 0.1347 the descent converged to.
+The correlation is the slope of the standardised fit, which is a more useful
+definition of it than the one most people carry.
+:::
+
+## Task 2 — The two conditions the derivation imposes
+
+@eq-ols-d0 and @eq-ols-d1 say that at the optimum, $\sum r_i = 0$ and
+$\sum x_i r_i = 0$. Those are not assumptions about the world; they are
+consequences of having minimised. Check both for the fitted line, and for the
+hand-drawn line from @sec-loss-functions.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+r_fitted <- ______                     # residuals of the fitted line
+r_guess  <- y - (120 + 0.5 * x)        # residuals of the hand-drawn line
+
+rbind(fitted = c(sum_r = sum(r_fitted), sum_xr = sum(x * r_fitted)),
+      guess  = c(sum_r = sum(r_guess),  sum_xr = sum(x * r_guess)))
+
+check_matches(sum(r_fitted), 0, tol = 1e-6, label = "sum of fitted residuals")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+r_fitted <- resid(fit)
+r_guess  <- y - (120 + 0.5 * x)
+
+rbind(fitted = c(sum_r = sum(r_fitted), sum_xr = sum(x * r_fitted)),
+      guess  = c(sum_r = sum(r_guess),  sum_xr = sum(x * r_guess)))
+
+check_matches(sum(r_fitted), 0, tol = 1e-6, label = "sum of fitted residuals")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+r_fitted = ______                      # residuals of the fitted line
+r_guess  = y - (120 + 0.5 * x)
+
+print({"fitted": (r_fitted.sum(), (x * r_fitted).sum()),
+       "guess":  (r_guess.sum(),  (x * r_guess).sum())})
+
+check_matches(r_fitted.sum(), 0, tol=1e-6, label="sum of fitted residuals")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+r_fitted = y - fit.predict(glu[["age"]])
+r_guess  = y - (120 + 0.5 * x)
+
+print({"fitted": (r_fitted.sum(), (x * r_fitted).sum()),
+       "guess":  (r_guess.sum(),  (x * r_guess).sum())})
+
+check_matches(r_fitted.sum(), 0, tol=1e-6, label="sum of fitted residuals")
+```
+:::
+:::
+:::
+
+The fitted residuals sum to something of the order of $10^{-13}$ and their
+product with age to the order of $10^{-11}$: zero, to the precision
+floating-point arithmetic allows. The hand-drawn line's residuals sum to −1338.5 and its
+cross-product to −47700.5.
+
+That is a diagnostic worth keeping. If someone hands you fitted values from a
+least-squares model and the residuals do not sum to zero, either there is no
+intercept in the model or those are not least-squares fitted values.
+
+## The result that should bother you
+
+The derivation divides by $\operatorname{Var}(x)$. It therefore returns an
+answer for any dataset in which the predictor is not perfectly constant — and
+says nothing about how large that variance is. Refit the same model on
+progressively narrower age bands.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+bands <- list(c(21, 25), c(21, 30), c(21, 40), c(21, 81))
+
+do.call(rbind, lapply(bands, function(b) {
+  s <- glu |> filter(age >= b[1], age <= b[2])
+  data.frame(band = paste(b[1], "to", b[2]), n = nrow(s),
+             var_age = var(s$age),
+             slope = cov(s$age, s$glucose) / var(s$age))
+}))
+```
+
+## Python
+
+```{python}
+rows = []
+for lo, hi in [(21, 25), (21, 30), (21, 40), (21, 81)]:
+    s = glu[(glu["age"] >= lo) & (glu["age"] <= hi)]
+    rows.append({"band": f"{lo} to {hi}", "n": len(s),
+                 "var_age": s["age"].var(),
+                 "slope": s["age"].cov(s["glucose"]) / s["age"].var()})
+pd.DataFrame(rows)
+```
+:::
+
+Three steps of reasoning.
+
+1. Over the full range the slope is 0.289 mg/dL per year. Among patients aged
+   21 to 40 it is 2.21, and among those aged 21 to 30 it is 4.17 — fourteen
+   times the full-range estimate, from a subset of the same 80 patients.
+2. The mechanism is the denominator. Restricting the age range cuts
+   $\operatorname{Var}(x)$ from 190 to 8, and the covariance in the numerator is
+   estimated from fewer, closer points, so it is noise-dominated. The estimator
+   is behaving exactly as derived; the data cannot support what is being asked
+   of it.
+3. So a published slope is not a property of a relationship. It is a property of
+   a relationship *and the range of predictor values the sample happened to
+   cover*. When you compare your coefficient with someone else's, compare the
+   predictor ranges first.
+
+## Task 3 — Somewhere the formula has not been
+
+`data/birthweight.csv` holds 600 pregnancies: `bpd` (biparietal diameter, mm),
+`ad` (abdominal diameter, mm) and `bw` (birth weight, g). Apply the closed form
+to predict `bw` from `bpd`, and confirm it against the fitted model.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+bwt <- read_csv("data/birthweight.csv")
+
+slope_bw     <- ______
+intercept_bw <- ______
+
+fit_bw <- lm(bw ~ bpd, data = bwt)
+rbind(closed_form = c(intercept_bw, slope_bw), lm = coef(fit_bw))
+
+check_matches(slope_bw, coef(fit_bw)[["bpd"]], tol = 1e-8,
+              label = "closed-form slope, birth weight")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+bwt <- read_csv("data/birthweight.csv")
+
+slope_bw     <- cov(bwt$bpd, bwt$bw) / var(bwt$bpd)
+intercept_bw <- mean(bwt$bw) - slope_bw * mean(bwt$bpd)
+
+fit_bw <- lm(bw ~ bpd, data = bwt)
+rbind(closed_form = c(intercept_bw, slope_bw), lm = coef(fit_bw))
+
+check_matches(slope_bw, coef(fit_bw)[["bpd"]], tol = 1e-8,
+              label = "closed-form slope, birth weight")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+bwt = pd.read_csv("data/birthweight.csv")
+
+slope_bw     = ______
+intercept_bw = ______
+
+fit_bw = LinearRegression().fit(bwt[["bpd"]], bwt["bw"])
+print({"closed_form": (intercept_bw, slope_bw),
+       "sklearn": (fit_bw.intercept_, fit_bw.coef_[0])})
+
+check_matches(slope_bw, fit_bw.coef_[0], tol=1e-8,
+              label="closed-form slope, birth weight")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+bwt = pd.read_csv("data/birthweight.csv")
+
+slope_bw     = bwt["bpd"].cov(bwt["bw"]) / bwt["bpd"].var()
+intercept_bw = bwt["bw"].mean() - slope_bw * bwt["bpd"].mean()
+
+fit_bw = LinearRegression().fit(bwt[["bpd"]], bwt["bw"])
+print({"closed_form": (intercept_bw, slope_bw),
+       "sklearn": (fit_bw.intercept_, fit_bw.coef_[0])})
+
+check_matches(slope_bw, fit_bw.coef_[0], tol=1e-8,
+              label="closed-form slope, birth weight")
+```
+:::
+:::
+:::
+
+The answer is 891.21 + 29.04 per mm of biparietal diameter. Then report two more
+things before you believe it: the in-sample MSE, and the MSE of predicting the
+mean birth weight for every pregnancy. Ours are 106,801 and 129,410, so the
+model removes 17% of the squared error — ten times what age managed for glucose,
+and still not a model anyone should be handed without the plot.
+
+## Reflection
+
+1. The derivation never mentions the data being normally distributed,
+   independent, or anything else. What exactly does it assume, and where in the
+   algebra would you look to find out?
+2. Given that the closed form exists and takes microseconds, why is the whole of
+   modern machine learning fitted by gradient descent?
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Answers.** Reflection 1: the derivation assumes only that we are minimising
+the squared-error loss over a straight line, and that $\operatorname{Var}(x) > 0$
+so the division is defined. Distributional assumptions enter when you want
+standard errors, p-values or intervals — none of which appear here, and none of
+which this module computes. This is worth labouring: students arrive believing
+least squares requires normality. Reflection 2: the closed form exists because
+squared error plus a linear model gives linear normal equations. Change either —
+a different loss, as in @sec-loss-functions, or a non-linear model — and no
+closed form exists. Also, $(X^\top X)^{-1}$ is infeasible when $X$ has a million
+columns, and gradient descent needs only one pass of multiplications per step.
+
+**Expected values** (regenerated data varies in the last digit). Diabetes subset:
+$\hat\beta_1 = 0.2887$, $\hat\beta_0 = 110.298$, identical to `lm()` to machine
+precision. Residual sums below $10^{-10}$ in absolute value. Hand-drawn line:
+$\sum r \approx -1340$, $\sum x r \approx -47{,}700$. Age bands: slope ≈ 0.68,
+4.2, 2.2, 0.29 for the four bands, with the variance of age rising from about 2
+to about 190. Birth weight: intercept ≈ 890, slope ≈ 29 g per mm, in-sample MSE
+≈ 105,000–108,000 against a baseline of ≈ 129,000.
+
+**Common failures.** (1) `var(x)` against `var(y)` in the denominator, which
+gives a plausible-looking wrong slope — the check catches it, and it is worth
+asking what the ratio they computed actually estimates. (2) Writing
+`cov(x, y) / var(x)` with `x` and `y` the wrong way round, which gives the slope
+of age on glucose; ask what regressing the predictor on the outcome would even
+mean. (3) In Python, `np.var` defaults to `ddof=0` while `pd.Series.var`
+defaults to `ddof=1`; both give the same slope here because the ratio cancels
+the denominator, which is a good thing to notice out loud rather than to
+discover later.
+
+**Plenary.** Hand out the age-band table with the slope column blanked and ask
+for predictions before revealing it. Then ask which of the four slopes they
+would publish. The answer — all of them, each with its range stated — is the
+one worth arguing towards.
+
+**Timing.** The derivation takes 20 minutes if they write it out; 5 if they read
+it, and reading it is close to worthless. Insist on paper. Task 3 is the one to
+drop if you are short.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — Two predictors, in matrix form
+Build the design matrix $X$ with a column of ones and the columns `bpd` and
+`ad`, and evaluate $(X^\top X)^{-1} X^\top y$ with `solve()` in R or
+`np.linalg.solve` in Python. Compare with `lm(bw ~ bpd + ad)`. Then compare the
+`bpd` coefficient with the single-predictor one from Task 3: here they are close
+because `bpd` and `ad` are almost uncorrelated, which is unusual in clinical
+data and is why the comparison is normally not so forgiving.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Break the formula
+Construct a dataset where the closed form fails or misleads: all patients the
+same age, two patients only, or one patient with an age of 10,000. Predict what
+each will do before you run it, and say which of the three a real extract is
+most likely to contain.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that you can derive and compute the least squares estimators for one
+predictor, verify them against both languages' implementations, and state the
+two conditions a least-squares fit imposes on its residuals.
+
+**Cannot:** that any of today's models are good. Every number on every page was
+computed on the rows the model was fitted to, and we have not scored a single
+held-out patient. @sec-day3-consolidation collects what that leaves unresolved.

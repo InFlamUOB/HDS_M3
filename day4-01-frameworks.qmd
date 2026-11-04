@@ -1,0 +1,577 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 4.1 — One interface, many models {#sec-frameworks}
+
+**45 minutes · work individually**
+
+## Objectives
+
+::: {.objective-list}
+- Say what a model *specification* is, what an *engine* is, and which of the two
+  you change to swap one algorithm for another.
+- Fit three different models to the same rows by changing one line each time,
+  and score each against a baseline that does no learning.
+- Say what a `workflow` or a `Pipeline` carries that a fitted model on its own
+  does not.
+:::
+
+## Why this, here
+
+In @sec-pipeline you wrote the five steps out by hand, with `lm()` in R and
+`LinearRegression()` in Python. That is affordable for one model. From today the
+models multiply — logistic regression now, trees and forests on @sec-day5 — and
+each one of them has its own function name, its own argument names and its own
+way of returning a prediction. `rpart()` wants `method = "class"`;
+`randomForest()` wants the outcome to be a factor and will quietly do regression
+if it is not; `glmnet()` refuses a formula and demands a matrix.
+
+Two ecosystems exist to put one interface in front of all of that: **tidymodels**
+in R and **scikit-learn** in Python. The point of this exercise is not that they
+save typing. It is that they make models *comparable*: when the only line that
+differs between two analyses is the one naming the model, the difference in the
+result is attributable to the model.
+
+| The question | tidymodels | scikit-learn |
+|---|---|---|
+| what kind of model is this | `logistic_reg()`, `decision_tree()` | the estimator class, `LogisticRegression` |
+| which code actually fits it | `set_engine("glm")` | the class, plus `solver=` |
+| what happens to the data first | a `recipe()` of `step_*()` | transformers, e.g. `StandardScaler` |
+| the two bolted together | `workflow()` | `Pipeline` |
+| fit it, then use it | `fit()`, `predict()` | `.fit()`, `.predict()` |
+
+: {tbl-colwidths="[30,35,35]"}
+
+## A specification is not a model
+
+Declaring a model and fitting it are separate acts, and both frameworks make you
+notice. In R you can print a specification that has never seen data. In Python
+the estimator exists, but asking it to predict raises an error until you fit it.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(tidymodels)
+
+log_spec  <- logistic_reg(mode = "classification") |> set_engine("glm")
+tree_spec <- decision_tree(mode = "classification") |> set_engine("rpart")
+
+log_spec
+```
+
+## Python
+
+```{python}
+from sklearn.linear_model import LogisticRegression
+from sklearn.exceptions import NotFittedError
+
+log_spec = LogisticRegression(C=float("inf"), max_iter=1000)
+
+try:
+    log_spec.predict([[120.0, 30.0, 40.0]])
+except NotFittedError as e:
+    print(str(e).split(".")[0])
+```
+:::
+
+The R specification says *logistic regression, fitted by `glm`* and nothing else:
+no data, no coefficients. Swapping `"glm"` for `"glmnet"` keeps the first half
+and replaces the second.
+
+## The split we use all day
+
+`data/diabetes.csv` holds 768 patients: eight measurements and `diabetes`, which
+is `pos` or `neg`. It is the synthetic replacement for the withdrawn Pima Indians
+data — read @sec-data-diabetes before you quote a number from it anywhere.
+
+We hold back every fifth row. That is not how you would usually split, and the
+reason we do it here is worth a paragraph.
+
+::: {.callout-note}
+## Why a fixed rule rather than a seed
+@sec-pipeline showed that `set.seed(42)` and `random_state=42` select different
+rows, so the two languages ended the day with different test sets and different
+scores. That is honest, but it means any R-versus-Python difference you then see
+is confounded with the split.
+
+Taking every fifth row of a file whose row order carries no information gives
+both languages *the same 153 patients*, so the rest of this day compares
+languages rather than partitions. Exercise 1.2's Stretch 2 asked how much the
+split matters; Stretch 1 below is that question again, and the answer is still
+"more than you would like".
+:::
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(readr); library(dplyr)
+
+diabetes <- read_csv("data/diabetes.csv", show_col_types = FALSE) |>
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+test_rows <- seq(5, nrow(diabetes), by = 5)
+train <- diabetes[-test_rows, ]
+test  <- diabetes[ test_rows, ]
+
+c(train = nrow(train), test = nrow(test), test_pos = sum(test$diabetes == "pos"))
+```
+
+## Python
+
+```{python}
+import pandas as pd
+
+diabetes = pd.read_csv("data/diabetes.csv")
+
+is_test = (diabetes.index + 1) % 5 == 0
+train, test = diabetes[~is_test], diabetes[is_test]
+
+y_train = (train["diabetes"] == "pos").astype(int)
+y_test  = (test["diabetes"] == "pos").astype(int)
+features = ["glucose", "mass", "age"]
+
+len(train), len(test), int(y_test.sum())
+```
+:::
+
+## Fit and predict: the same two verbs, whatever the model
+
+::: {.panel-tabset}
+## R
+
+```{r}
+log_fit  <- log_spec  |> fit(diabetes ~ glucose + mass + age, data = train)
+tree_fit <- tree_spec |> fit(diabetes ~ glucose + mass + age, data = train)
+
+acc <- function(f) mean(predict(f, test)$.pred_class == test$diabetes)
+c(logistic = acc(log_fit), tree = acc(tree_fit),
+  majority = mean(test$diabetes == "neg"))
+```
+
+## Python
+
+```{python}
+from sklearn.tree import DecisionTreeClassifier
+
+log_fit  = LogisticRegression(C=float("inf"), max_iter=1000).fit(train[features], y_train)
+tree_fit = DecisionTreeClassifier(random_state=42).fit(train[features], y_train)
+
+{"logistic": round(log_fit.score(test[features], y_test), 4),
+ "tree":     round(tree_fit.score(test[features], y_test), 4),
+ "majority": round(float((y_test == 0).mean()), 4)}
+```
+:::
+
+Two readings, and the second is the uncomfortable one.
+
+The logistic regressions agree: 0.712 in both languages, on the same 153
+patients. The trees do not — about 0.69 in R against about 0.59 in Python — and
+the word `decision_tree` is identical in both. `rpart` stops growing when a split
+stops paying for itself, so it returns ten leaves; `DecisionTreeClassifier` grows
+until every leaf is pure, so it returns about 180 and scores 1.00 on the rows it
+was fitted to. Same name, same data, different default, and the default is the
+whole difference. @sec-decision-trees is where you learn to control it.
+
+And a third reading, which should take the shine off all of them: always saying
+`neg` scores 0.641 on this test set. The logistic model's seven percentage points
+over that is the entire return on three clinical measurements.
+
+## Task 1 — Swap the model, keep everything else
+
+Fit a third model — a random forest, five hundred trees instead of one — on the
+same rows, and score it against the majority baseline. One line names the model;
+nothing else changes.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+rf_fit <- rand_forest(mode = "classification") |>
+  set_engine("ranger", seed = 42) |>
+  fit(______, data = ______)
+
+acc_rf <- mean(predict(rf_fit, test)$.pred_class == test$diabetes)
+check_beats_prevalence(acc_rf, test$diabetes)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+rf_fit <- rand_forest(mode = "classification") |>
+  set_engine("ranger", seed = 42) |>
+  fit(diabetes ~ glucose + mass + age, data = train)
+
+acc_rf <- mean(predict(rf_fit, test)$.pred_class == test$diabetes)
+check_beats_prevalence(acc_rf, test$diabetes)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+from sklearn.ensemble import RandomForestClassifier
+
+rf_fit = RandomForestClassifier(random_state=42).fit(______, ______)
+
+acc_rf = rf_fit.score(test[features], y_test)
+check_beats_prevalence(acc_rf, y_test)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+from sklearn.ensemble import RandomForestClassifier
+
+rf_fit = RandomForestClassifier(random_state=42).fit(train[features], y_train)
+
+acc_rf = rf_fit.score(test[features], y_test)
+check_beats_prevalence(acc_rf, y_test)
+```
+:::
+:::
+:::
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The R side wants the same formula and the same data frame you gave `fit()` for
+the logistic model. The Python side wants the predictor columns and the outcome
+as two separate arguments — that is the shape difference from Exercise 1.1, and
+it has not gone away.
+:::
+
+A forest has no coefficients, no equation and no way of telling a clinician why
+it said what it said. It also, here, does not win: five hundred trees score
+about 0.69–0.70 against the logistic regression's 0.712 on the same rows. Note
+that down before @sec-random-forest, and note too that the cost of finding it
+out was one line — which is the argument for the framework, and the only
+argument this exercise is making.
+
+## Task 2 — Swap the engine, keep the model
+
+Now change only the second half of the specification. In R, replace the `glm`
+engine with `glmnet`, which fits the same logistic model with a penalty on the
+coefficients. In Python there is no engine slot; the nearest thing is `solver=`,
+so change that instead and see whether it does the same job.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+lasso_fit <- logistic_reg(penalty = 0.1, mixture = 1) |>
+  set_engine("______") |>
+  fit(diabetes ~ glucose + mass + age, data = train)
+
+round(coef(lasso_fit$fit, s = 0.1)[, 1], 5)   # compare with the glm coefficients
+round(coef(log_fit$fit), 5)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+lasso_fit <- logistic_reg(penalty = 0.1, mixture = 1) |>
+  set_engine("glmnet") |>
+  fit(diabetes ~ glucose + mass + age, data = train)
+
+round(coef(lasso_fit$fit, s = 0.1)[, 1], 5)
+round(coef(log_fit$fit), 5)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import numpy as np
+for solver in ["lbfgs", "newton-cg", "______"]:
+    m = LogisticRegression(C=1.0, solver=solver, max_iter=1000).fit(train[features], y_train)
+    print(f"{solver:>10}", np.round(m.coef_[0], 5), round(m.intercept_[0], 3))
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import numpy as np
+for solver in ["lbfgs", "newton-cg", "liblinear"]:
+    m = LogisticRegression(C=1.0, solver=solver, max_iter=1000).fit(train[features], y_train)
+    print(f"{solver:>10}", np.round(m.coef_[0], 5), round(m.intercept_[0], 3))
+```
+:::
+:::
+:::
+
+In R the engine change is a change of model: the lasso drives the coefficients
+for `mass` and `age` to exactly zero and keeps only `glucose`. Two of your three
+predictors have left the building, and nothing in the specification said they
+could.
+
+In Python two of the three solvers agree to four decimal places and the third,
+`liblinear`, does not — it penalises the intercept as well, which the other two
+do not. So "the solver is only a numerical detail" is true twice out of three
+times, which is the worst possible number of times for a thing to be true.
+
+## Task 3 — Put preprocessing inside the model object
+
+A `workflow` and a `Pipeline` are the same idea: one object that remembers both
+what you did to the data and what you fitted to it, so that the identical
+treatment reaches the test rows. Build one with the predictors standardised.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+rec <- recipe(diabetes ~ glucose + mass + age, data = train) |>
+  step_normalize(______)
+
+wf_fit <- workflow() |>
+  add_model(log_spec) |>
+  add_recipe(______) |>
+  fit(data = train)
+
+acc_wf <- mean(predict(wf_fit, test)$.pred_class == test$diabetes)
+check_beats_prevalence(acc_wf, test$diabetes)
+round(coef(extract_fit_engine(wf_fit)), 4)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+rec <- recipe(diabetes ~ glucose + mass + age, data = train) |>
+  step_normalize(all_numeric_predictors())
+
+wf_fit <- workflow() |>
+  add_model(log_spec) |>
+  add_recipe(rec) |>
+  fit(data = train)
+
+acc_wf <- mean(predict(wf_fit, test)$.pred_class == test$diabetes)
+check_beats_prevalence(acc_wf, test$diabetes)
+round(coef(extract_fit_engine(wf_fit)), 4)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+pipe = Pipeline([
+    ("scale", ______),
+    ("model", LogisticRegression(C=float("inf"), max_iter=1000)),
+]).fit(train[features], y_train)
+
+acc_pipe = pipe.score(test[features], y_test)
+check_beats_prevalence(acc_pipe, y_test)
+np.round(pipe[-1].coef_[0], 4), round(pipe[-1].intercept_[0], 4)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+pipe = Pipeline([
+    ("scale", StandardScaler()),
+    ("model", LogisticRegression(C=float("inf"), max_iter=1000)),
+]).fit(train[features], y_train)
+
+acc_pipe = pipe.score(test[features], y_test)
+check_beats_prevalence(acc_pipe, y_test)
+np.round(pipe[-1].coef_[0], 4), round(pipe[-1].intercept_[0], 4)
+```
+:::
+:::
+:::
+
+::: {.callout-note appearance="simple"}
+## Assign the result of `.fit()`, always
+Written as a bare line, `pipe.fit(X, y)` returns the fitted pipeline, and both
+Jupyter and this booklet will then print scikit-learn's HTML representation of
+it — the grey box listing every default parameter. It is noise in a notebook,
+and in a `knitr` render under a non-UTF-8 locale it stops the build outright.
+Assign the result, or end the line with a semicolon.
+:::
+
+Compare the standardised coefficients with the unstandardised ones from the
+earlier cell. The accuracy is unchanged at 0.712 — an unpenalised logistic
+regression does not care about the units of its predictors — but the
+coefficients now say something the originals could not: per standard deviation,
+`glucose` carries about four times the weight of `mass` or `age`.
+
+::: {.callout-note appearance="simple"}
+## Two things differ between the languages here, and only one matters
+R reports the standardised `glucose` coefficient as about 1.1804 and Python as
+about 1.1794. The cause is that `step_normalize()` divides by the sample standard
+deviation (dividing by $n-1$) and `StandardScaler` by the population one
+(dividing by $n$). It is a convention, it is a fourth decimal place, and it never
+changed a clinical conclusion.
+
+The difference that *does* matter is in the next section.
+
+The reason to put the scaling inside the object rather than before the split is
+leakage: a scaler fitted on all 768 rows has read the test set's mean. That is
+@sec-leakage's subject and this is the machinery that prevents it.
+:::
+
+## The result that should bother you
+
+The two frameworks give you the same interface. They do not give you the same
+model.
+
+1. On these 615 training rows, R's `glm` and scikit-learn with `C=inf` agree to
+   five decimal places: `glucose` 0.03508, `mass` 0.03598, `age` 0.02170. Whatever
+   else is going on, the two libraries solve the same problem when you ask them
+   to.
+2. But `C=inf` is not scikit-learn's default. The default is `C=1.0`, which is an
+   L2 penalty on the coefficients — the thing the `glmnet` engine does in R only
+   when you ask for it. On 615 rows the penalty is swamped by the likelihood and
+   you cannot see it.
+3. Run the cell below, which refits on the first 50 rows only. Now you can.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+small <- diabetes[1:50, ]
+z <- function(x) (x - mean(x)) / sd(x)
+glm_small <- glm(diabetes ~ z(glucose) + z(mass) + z(age) + z(pedigree),
+                 data = small, family = binomial)
+round(coef(glm_small), 3)
+```
+
+## Python
+
+```{python}
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+
+small = diabetes.iloc[:50]
+y_small = (small["diabetes"] == "pos").astype(int)
+f4 = ["glucose", "mass", "age", "pedigree"]
+
+for C, label in [(float("inf"), "no penalty"), (1.0, "the default")]:
+    p = Pipeline([("scale", StandardScaler()),
+                  ("model", LogisticRegression(C=C, max_iter=2000))]).fit(small[f4], y_small)
+    print(f"{label:>12}", dict(zip(f4, np.round(p[-1].coef_[0], 3))))
+```
+:::
+
+Unpenalised, `mass` has a coefficient of −0.022; at the default `C=1.0` it is
++0.035. Fifty patients, four predictors, and the sign of a clinical
+association depends on an argument nobody typed. R's unpenalised `glm` gives −0.022
+too: it matches the unpenalised Python fit, not Python's default.
+
+The lesson is not that scikit-learn is wrong — a penalty on 50 rows is good
+statistics, and Day 5 will argue for it. The lesson is that **"I fitted a
+logistic regression" does not identify a model**, and a methods section that says
+only that cannot be reproduced in the other language.
+
+## Reflection
+
+1. You now have four fitted objects that all answer `predict()`. Name one thing
+   a reviewer could ask about your analysis that none of them can answer, and
+   say which object would have to carry it.
+2. A colleague reports that their Python results do not match yours and asks for
+   your R script. What is the shortest list of things they must check before
+   concluding that one of you has made a mistake?
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Expected values** (the data is synthetic; the last digit may move if it is
+regenerated). Test set 153 rows, 55 `pos`. Accuracy: logistic 0.71 in both
+languages, `rpart` tree ≈ 0.69, scikit-learn tree ≈ 0.59, random forest ≈ 0.69–0.70,
+majority baseline 0.641. Unstandardised `glm`/`C=inf` coefficients: intercept
+≈ −6.94, glucose ≈ 0.0351, mass ≈ 0.0360, age ≈ 0.0217. Standardised: ≈ 1.18,
+0.29, 0.26. The `glmnet` lasso at `penalty = 0.1` keeps `glucose` (≈ 0.018) and
+zeroes `mass` and `age`.
+
+**Answers.** (1) Anything about uncertainty or about which rows were used:
+`predict()` returns a point prediction and none of these objects carries a
+confidence interval, a record of the split, or the package version. A `workflow`
+or `Pipeline` carries the preprocessing but not the provenance; that is why
+registries exist (@sec-pipeline). (2) The short list: the same rows, the same
+predictors, the same penalty, the same treatment of the outcome's level order.
+Three of the four are invisible in a script that only says
+`LogisticRegression()`.
+
+**Common failures.** (1) `fit(diabetes ~ ., data = train)` in Task 1 — it runs,
+scores better, and is not the same model; ask what `.` included. (2) In Python,
+`train[features]` written as `train["glucose"]`, giving a shape error, exactly as
+in Exercise 1.1. (3) a missing engine package: the specification prints happily and `fit()`
+fails, which illustrates the specification/engine split well and wastes ten
+minutes badly — check `ranger` and `glmnet` are installed before the session.
+
+**Timing.** Tasks 1 and 3 are the load-bearing ones. Task 2 can be demonstrated
+from the front in four minutes if the room is slow.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — How much of today is the split?
+Replace the every-fifth-row rule with `initial_split(diabetes, prop = 0.8,
+strata = diabetes)` under ten different seeds, and collect the ten logistic
+accuracies. Ours ran from about 0.69 to 0.80. The majority baseline moves too.
+Report the range, and then decide what you think of a paper that reports one
+split and three decimal places.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Make the tree behave
+Grow the scikit-learn tree with `ccp_alpha=0.01` and refit. The test accuracy
+rises from about 0.59 to about 0.71. You have not changed the algorithm, the
+data or the split — only the default that decides when to stop. Keep the number:
+@sec-decision-trees is about why pruning is the whole game.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that you can fit, swap and score models through one interface in either
+language, and that you know which line to change to swap the algorithm, the
+engine or the preprocessing.
+
+**Cannot:** that any of these models is any good. Every number on this page is
+an accuracy, and accuracy on a 36% prevalence outcome is a weak instrument —
+0.641 of it is free. Before judging a classifier you need to know what it
+predicts for an individual patient, which is a probability, and that is
+@sec-logistic-regression.

@@ -16,8 +16,18 @@ import numpy as np
 import pandas as pd
 
 __all__ = [
-    "hds_check", "check_setup", "check_data", "check_split",
-    "check_metric_range", "check_beats_baseline", "check_shift_answers",
+    "hds_check",
+    "check_setup",
+    "check_data",
+    "check_split",
+    "check_metric_range",
+    "check_beats_baseline",
+    "check_shift_answers",
+    "check_matches",
+    "check_probabilities",
+    "check_beats_prevalence",
+    "check_overfit_gap",
+    "check_noise_control",
 ]
 
 
@@ -124,3 +134,108 @@ def check_shift_answers(answers):
         print("All three. Note which evidence settled each one - that is the "
               "transferable part.")
     return n_right
+
+
+# ---------------------------------------------------------------------------
+# Added for Days 2-6.
+# ---------------------------------------------------------------------------
+
+
+def check_matches(value, target, tol=0.01, label="value"):
+    """Day 3: did the number you computed yourself land on the number a standard
+    routine gives? Used for gradient descent against lm()/LinearRegression, and
+    for a closed-form estimator against the fitted model. `tol` is relative to
+    the target, with a floor of 1 so that a target of zero still has a sensible
+    tolerance.
+    """
+    limit = tol * max(1, abs(target))
+    ok = np.isscalar(value) and np.isfinite(value) and abs(value - target) <= limit
+    hds_check(f"{label} matches the reference answer", ok,
+              hint="a gap much larger than the tolerance usually means too few "
+                   "iterations, a learning rate that is too small, or a sign "
+                   "error in the gradient",
+              detail=(f"{float(value):.4f} vs {float(target):.4f} "
+                      f"(gap {abs(float(value) - float(target)):.4g}, allowed {limit:.4g})")
+                     if np.isscalar(value) else type(value).__name__)
+    return ok
+
+
+def check_probabilities(p, prevalence, tol=0.02):
+    """p: predicted probabilities of the POSITIVE class. prevalence: observed rate."""
+    p = np.asarray(p, dtype=float).ravel()
+    ok_range = p.size > 0 and bool(((p >= 0) & (p <= 1)).all())
+    hds_check("every value is a probability between 0 and 1", ok_range,
+              hint="you may have kept the log-odds, or a class label, instead of a "
+                   "probability",
+              detail=f"range {p.min():.3f} to {p.max():.3f}" if p.size else "empty")
+    if not ok_range:
+        return
+    hds_check("the mean predicted probability matches the observed prevalence",
+              abs(p.mean() - prevalence) < tol,
+              hint="a logistic regression with an intercept averages to the prevalence "
+                   "on its training rows; if yours averages to one minus that, you have "
+                   "taken the other probability column",
+              detail=f"mean {p.mean():.3f} vs prevalence {prevalence:.3f}")
+
+
+def check_beats_prevalence(accuracy, truth):
+    """Day 5: compare an accuracy against the majority-class rule.
+
+    `truth` is the vector of true labels for the rows the accuracy was
+    computed on; the bar is the share of the commonest class in it.
+    """
+    truth = pd.Series(np.asarray(truth))
+    majority = truth.value_counts(normalize=True).max()
+    hds_check("the model beats the majority-class rule",
+              np.isscalar(accuracy) and float(accuracy) > majority,
+              hint="predicting the commonest class for everyone needs no data and "
+                   "no model; an accuracy below that bar means the model has "
+                   "learnt nothing usable",
+              detail=f"model {float(accuracy):.3f} vs majority-class {majority:.3f} "
+                     f"({100 * (float(accuracy) - majority):+.1f} percentage points)")
+    return majority
+
+
+def check_overfit_gap(train_score, test_score, max_gap=0.05, label="score"):
+    """Day 5: the gap between a fitted-rows score and a held-out score.
+
+    Pass scores where higher is better (accuracy, AUC).
+    """
+    gap = float(train_score) - float(test_score)
+    hds_check(f"train-minus-test gap in {label} is under {max_gap}",
+              np.isfinite(gap) and gap < max_gap,
+              hint="a wide gap means the model has fitted rows it will never see "
+                   "again; the cure is less capacity, not more training",
+              detail=f"train {float(train_score):.3f}, test {float(test_score):.3f}, "
+                     f"gap {gap:+.3f}")
+    return gap
+
+
+def check_noise_control(importance, noise="noise", tol=0.1):
+    """Day 6: where did the pure-noise control land?
+
+    A control column of random numbers is added to the predictors, and every
+    importance measure is asked where it put it. `importance` is a pandas
+    Series (or a dict) whose index is the predictor names. The check passes
+    when the control is worth less than `tol` of the strongest predictor. A
+    [fix] here is not necessarily a mistake in your code - read the detail
+    line, and the chapter.
+    """
+    s = pd.Series(importance)
+    if noise not in s.index:
+        return hds_check(f"the control column '{noise}' is present", False,
+                         hint="add it to the predictors before fitting, or set "
+                              "noise= to its name",
+                         detail=", ".join(map(str, s.index)))
+    s = s.sort_values(ascending=False)
+    rank = list(s.index).index(noise) + 1
+    share = s[noise] / s.iloc[0]
+    hds_check(f"the pure-noise control is worth less than {round(100 * tol)}% "
+              "of the top predictor",
+              share < tol,
+              hint="this measure gives a column of random numbers a real share "
+                   "of the credit, so it is describing the model rather than "
+                   "the data",
+              detail=f"'{noise}' ranks {rank} of {len(s)}, {100 * share:.0f}% of "
+                     f"'{s.index[0]}' ({s[noise]:.4g} vs {s.iloc[0]:.4g})")
+    return share

@@ -117,3 +117,45 @@ bw <- data.frame(
 bw$bw <- -1700 + 30 * bw$bpd + 25 * bw$ad + rnorm(n, 0, 250)   # grams
 write.csv(bw, "data/birthweight.csv", row.names = FALSE)
 cat("also written: data/birthweight.csv\n")
+
+# ---------------------------------------------------------------------------
+# Days 2-6: the diabetes case study.
+#
+# The exercises were written against PimaIndiansDiabetes, which mlbench removed
+# in version 2.1-10 after UCI withdrew it: the data had apparently been included
+# in those repositories without informed consent. mlbench now ships
+# SynthDiabetes in its place - 768 rows, the same nine columns, created by
+# Matthias Templ to mimic Smith et al. (1988), with every value synthetic and no
+# row corresponding to a real person. That is what the booklet uses.
+#
+# The zeros in glucose, pressure, triceps, insulin and mass are kept: they are
+# physiologically impossible and stand for missing values. Finding them is the
+# first thing Day 2 asks students to do.
+# ---------------------------------------------------------------------------
+if (requireNamespace("mlbench", quietly = TRUE)) {
+  data("SynthDiabetes", package = "mlbench", envir = environment())
+  diabetes <- get("SynthDiabetes", envir = environment())
+  readr::write_csv(diabetes, "data/diabetes.csv")
+  message("wrote diabetes.csv: ", nrow(diabetes), " rows")
+} else {
+  message("mlbench not installed; data/diabetes.csv left as committed")
+}
+
+# Two files are not generated here and are committed as supplied:
+#   data/longisland_heart.csv  - teaching extract used in the Day 2 missing-data
+#                                exercise; 13 predictors with 20 missing each.
+#   data/bupa.csv              - liver function tests, used in the Day 2
+#                                transformation exercise.
+# Both come from the module's existing material. See appendix/data.qmd.
+writeLines(c(
+  paste("generated:", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
+  paste("R version:", getRversion()),
+  "seed: 2025",
+  "script: scripts/make_data.R",
+  "",
+  "simulated here: los_data.csv, los_data_skewed.csv, extract_A/B/C.csv, birthweight.csv",
+  paste("exported from mlbench SynthDiabetes:", "diabetes.csv",
+        if (requireNamespace("mlbench", quietly = TRUE))
+          paste0("(mlbench ", utils::packageVersion("mlbench"), ")") else ""),
+  "committed as supplied: longisland_heart.csv, bupa.csv"
+), "data/PROVENANCE.txt")

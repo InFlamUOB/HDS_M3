@@ -1,0 +1,475 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 5.1 — Regression metrics {#sec-regression-metrics}
+
+**45 minutes · individually**
+
+:::: {.web-only}
+Every cell on this page is a real R or Python cell. Open
+`day5-01-regression-metrics.qmd` in your editor and run them one at a time. The
+output printed here is what the cell produced when the booklet was built.
+::::
+
+## Objectives
+
+::: {.objective-list}
+- Compute RMSE, MAE and R² for one fitted model, and say in a sentence what
+  question each of the three answers.
+- Say which of the three changes when a handful of patients are badly
+  predicted, and which barely moves.
+- Explain how the same model, on the same clinical question, can have an R² of
+  0.93 in one population and 0.2 in another without being a worse model.
+:::
+
+## Why this, here
+
+@sec-pipeline reported one number for the length-of-stay model: a mean absolute
+error of about three days. @sec-loss-functions showed that the quantity a model
+*minimises* is a choice. This exercise is about the quantity you *report*, which
+is a separate choice and is the one your reader will act on. Three metrics are
+in routine use for a continuous outcome, they are computed from the same
+residuals, and they disagree in ways that matter.
+
+## The three metrics
+
+$$\text{MAE} = \frac{1}{n}\sum_{i=1}^{n}\left|y_i-\hat y_i\right|
+\qquad
+\text{RMSE} = \sqrt{\frac{1}{n}\sum_{i=1}^{n}\left(y_i-\hat y_i\right)^2}
+\qquad
+R^2 = 1-\frac{\sum_i (y_i-\hat y_i)^2}{\sum_i (y_i-\bar y)^2}$$
+
+| Metric | Units | Reads as | Blind to |
+|---|---|---|---|
+| MAE | the outcome's | the typical error | whether the error is a steady drizzle or two catastrophes |
+| RMSE | the outcome's | the error, with large ones weighted up | nothing much, which is the problem: one bad patient moves it |
+| R² | none | the share of the outcome's variance the model accounts for | how large the error is in days, and how variable this population happens to be |
+
+: {tbl-colwidths="[12,14,38,36]"}
+
+The third column of that table is what a clinician hears. The fourth is what
+you have to supply.
+
+## Worked example — all three, on the model you already know
+
+Same data, same split and same model as @sec-pipeline, so that the MAE below is
+a number you have seen before.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(tidymodels); library(readr)
+
+los <- read_csv("data/los_data.csv")
+
+set.seed(42)
+split <- initial_split(los, prop = 0.8)
+train <- training(split); test <- testing(split)
+
+fit <- linear_reg() |> set_engine("lm") |> fit(LOS ~ Age + Severity, data = train)
+
+preds <- augment(fit, test)
+reg_metrics <- metric_set(rmse, mae, rsq_trad)
+reg_metrics(preds, truth = LOS, estimate = .pred)
+```
+
+## Python
+
+```{python}
+import pandas as pd, numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
+
+los = pd.read_csv("data/los_data.csv")
+X, y = los[["Age", "Severity"]], los["LOS"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+model = LinearRegression().fit(X_train, y_train)
+p = model.predict(X_test)
+
+pd.Series({"rmse": root_mean_squared_error(y_test, p),
+           "mae":  mean_absolute_error(y_test, p),
+           "r2":   r2_score(y_test, p)})
+```
+:::
+
+The two languages split differently, as they did on Day 1, so the numbers differ
+in the first decimal place and agree on every statement you would make from
+them: the error is around three to three and a half days, and the model accounts
+for about 93–94% of the variance in length of stay.
+
+::: {.callout-warning}
+## `rsq` and `rsq_trad` are not the same function
+yardstick has two R² metrics. `rsq()` is the **squared correlation** between
+truth and prediction; `rsq_trad()` is the textbook $1-\text{SS}_\text{res}/\text{SS}_\text{tot}$,
+which is what `sklearn.metrics.r2_score` computes. On a well-fitting model they
+agree to two decimals. They part company exactly where it matters: a prediction
+that is systematically too high by ten days has a perfect correlation with the
+truth, so `rsq()` is 1 and `rsq_trad()` is far below zero. Use `rsq_trad()`, and
+when you read someone else's R² ask which one they computed.
+:::
+
+## Task 1 — Give the metrics something to beat
+
+@sec-pipeline compared the model's MAE against a predictor that ignores age and
+severity and returns the mean training length of stay for every patient.
+Compute all three metrics for that baseline on the same test rows.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+baseline <- test |> dplyr::mutate(.pred = ______)
+reg_metrics(baseline, truth = LOS, estimate = .pred)
+
+check_beats_baseline(mae(preds, truth = LOS, estimate = .pred)$.estimate,
+                     mae(baseline, truth = LOS, estimate = ______)$.estimate)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The baseline prediction is one number repeated for every test patient, and it
+comes from the training rows, not the test rows. `mean()` is the whole model.
+The second blank is the name of the column you just created.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+baseline <- test |> dplyr::mutate(.pred = mean(train$LOS))
+reg_metrics(baseline, truth = LOS, estimate = .pred)
+
+check_beats_baseline(mae(preds, truth = LOS, estimate = .pred)$.estimate,
+                     mae(baseline, truth = LOS, estimate = .pred)$.estimate)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+b = np.full(len(y_test), ______)
+print({"rmse": root_mean_squared_error(y_test, b),
+       "mae":  mean_absolute_error(y_test, b),
+       "r2":   r2_score(y_test, b)})
+check_beats_baseline(mean_absolute_error(y_test, p), mean_absolute_error(y_test, ______))
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+b = np.full(len(y_test), y_train.mean())
+print({"rmse": root_mean_squared_error(y_test, b),
+       "mae":  mean_absolute_error(y_test, b),
+       "r2":   r2_score(y_test, b)})
+check_beats_baseline(mean_absolute_error(y_test, p), mean_absolute_error(y_test, b))
+```
+:::
+:::
+:::
+
+The baseline's R² is not approximately zero by luck. Read the formula again:
+the baseline's numerator and denominator are the same sum, up to the difference
+between the training mean and the test mean. **R² is defined as a comparison
+with the predict-the-mean baseline**, so reporting R² and then saying "and it
+beats the baseline" says the same thing twice. RMSE and MAE say nothing about a
+baseline at all, which is why @sec-pipeline had to compute one by hand.
+
+## Task 2 — The same model, a realistic outcome
+
+`data/los_data.csv` has a symmetric length of stay with a median around 66 days,
+which is not what length of stay looks like (@sec-data).
+`data/los_data_skewed.csv` holds the realistic version: the same 1000 patients,
+the same two predictors, a right-skewed outcome with a median of about five
+days and a tail reaching beyond fifty.
+
+Run the identical pipeline on it and report the same three metrics.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+skew <- read_csv("data/los_data_skewed.csv")
+summary(skew$LOS)
+
+set.seed(42)
+split_s <- initial_split(skew, prop = 0.8)
+train_s <- training(split_s); test_s <- ______
+
+fit_s   <- linear_reg() |> set_engine("lm") |> fit(______, data = train_s)
+preds_s <- augment(fit_s, test_s)
+reg_metrics(preds_s, truth = LOS, estimate = .pred)
+
+check_metric_range(rsq_trad(preds_s, truth = LOS, estimate = .pred)$.estimate,
+                   0, 1, "R-squared, skewed outcome")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Nothing new is needed. The functions are the ones two cells above:
+`testing()`, and the same formula you used for the symmetric data.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+skew <- read_csv("data/los_data_skewed.csv")
+summary(skew$LOS)
+
+set.seed(42)
+split_s <- initial_split(skew, prop = 0.8)
+train_s <- training(split_s); test_s <- testing(split_s)
+
+fit_s   <- linear_reg() |> set_engine("lm") |> fit(LOS ~ Age + Severity, data = train_s)
+preds_s <- augment(fit_s, test_s)
+reg_metrics(preds_s, truth = LOS, estimate = .pred)
+
+check_metric_range(rsq_trad(preds_s, truth = LOS, estimate = .pred)$.estimate,
+                   0, 1, "R-squared, skewed outcome")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+skew = pd.read_csv("data/los_data_skewed.csv")
+print(skew["LOS"].describe())
+
+Xs, ys = skew[["Age", "Severity"]], skew["LOS"]
+Xs_tr, Xs_te, ys_tr, ys_te = train_test_split(Xs, ys, test_size=0.2, random_state=42)
+ps = LinearRegression().fit(Xs_tr, ys_tr).predict(______)
+
+print({"rmse": root_mean_squared_error(ys_te, ps),
+       "mae":  mean_absolute_error(ys_te, ps),
+       "r2":   r2_score(______, ps)})
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+skew = pd.read_csv("data/los_data_skewed.csv")
+print(skew["LOS"].describe())
+
+Xs, ys = skew[["Age", "Severity"]], skew["LOS"]
+Xs_tr, Xs_te, ys_tr, ys_te = train_test_split(Xs, ys, test_size=0.2, random_state=42)
+ps = LinearRegression().fit(Xs_tr, ys_tr).predict(Xs_te)
+
+print({"rmse": root_mean_squared_error(ys_te, ps),
+       "mae":  mean_absolute_error(ys_te, ps),
+       "r2":   r2_score(ys_te, ps)})
+```
+:::
+:::
+:::
+
+Write the six numbers — three metrics, two datasets — in a two-row table before
+you read on. The point of this exercise is in that table and not in any one cell.
+
+## Task 3 — Find out who the RMSE is listening to
+
+RMSE squares each residual, so a patient predicted 30 days out contributes 100
+times what a patient predicted 3 days out contributes. Measure that directly:
+sort the test rows by squared error and compute the share of the **total**
+squared error carried by the worst 5% of patients, for each of the two datasets.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+worst_share <- function(p) {
+  e <- sort((p$LOS - p$.pred)^2, decreasing = TRUE)
+  k <- ceiling(0.05 * length(e))
+  sum(e[1:k]) / ______
+}
+c(symmetric = worst_share(preds), skewed = worst_share(preds_s))
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+A share is a part over a whole. You already have the part.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+worst_share <- function(p) {
+  e <- sort((p$LOS - p$.pred)^2, decreasing = TRUE)
+  k <- ceiling(0.05 * length(e))
+  sum(e[1:k]) / sum(e)
+}
+c(symmetric = worst_share(preds), skewed = worst_share(preds_s))
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+def worst_share(y_true, y_pred):
+    e = np.sort((np.asarray(y_true) - y_pred) ** 2)[::-1]
+    k = int(np.ceil(0.05 * len(e)))
+    return e[:k].sum() / ______
+
+{"symmetric": worst_share(y_test, p), "skewed": worst_share(ys_te, ps)}
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+def worst_share(y_true, y_pred):
+    e = np.sort((np.asarray(y_true) - y_pred) ** 2)[::-1]
+    k = int(np.ceil(0.05 * len(e)))
+    return e[:k].sum() / e.sum()
+
+{"symmetric": worst_share(y_test, p), "skewed": worst_share(ys_te, ps)}
+```
+:::
+:::
+:::
+
+Then compute RMSE ÷ MAE for both datasets. The ratio is 1 when every residual
+is the same size and grows as the errors become uneven. It is a one-line
+diagnostic worth running on any regression you are handed.
+
+## The result that should bother you
+
+The model is the same model. The predictors are the same two columns. The
+clinical question is the same question. And:
+
+- MAE moves from about 3.2–3.4 days to about 3.8 days — barely at all;
+- R² collapses from about 0.93 to somewhere between 0.14 and 0.21.
+
+Three steps, because the reasoning transfers to every R² you will ever read.
+
+1. R² is a ratio, and the denominator is the variance of the outcome *in the
+   sample you evaluated on*. The symmetric file has a standard deviation of
+   around 16 days; the skewed file has one of around 6. The same 4–6 days of
+   error is a small fraction of the first and a large fraction of the second.
+2. So R² is a statement about the model **and** the population jointly. Move
+   the model to a hospital with a narrower case-mix and R² falls, with nothing
+   about the model having changed. This is the single most common way a
+   published R² misleads.
+3. MAE did not collapse because it is denominated in days rather than in
+   variance. It also did not improve: in both files the model is wrong by
+   several days, which is the fact a ward manager needs. The clinically useless
+   model and the clinically useful one are distinguished by neither metric on
+   its own — you need the error in days *and* something to compare it with.
+
+Notice too that the skewed file's own baseline has an MAE of about 3.9–4.3
+days. The model's 3.8 days beats it by a few percent, where on the symmetric
+file it beat the baseline by a factor of four. The R² and the
+model-versus-baseline ratio are telling you the same story; the MAE on its own
+is not telling you any story at all.
+
+## Reflection
+
+1. A colleague reports "R² = 0.91" for a model predicting length of stay in a
+   specialist unit, and asks you to deploy it on a general medical ward. What do
+   you need to know before that number means anything, and why is the answer
+   not "the code"?
+2. You must choose one metric to put in the abstract of a paper about a
+   length-of-stay model. Which, and what do you have to write next to it to
+   stop it being misread?
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Expected values** (regenerated data moves the last digit; R and Python split
+differently, so both are given).
+
+| | R, seed 42 | Python, random_state 42 |
+|---|---|---|
+| `los_data` test RMSE / MAE / R² | 4.27 / 3.42 / 0.934 | 3.96 / 3.16 / 0.942 |
+| `los_data` baseline RMSE / MAE / R² | 16.7 / 13.1 / −0.0001 | 16.5 / 13.0 / −0.004 |
+| `los_data_skewed` test RMSE / MAE / R² | 5.73 / 3.80 / 0.208 | 4.96 / 3.75 / 0.137 |
+| `los_data_skewed` baseline RMSE / MAE | 6.45 / 4.29 | 5.37 / 3.95 |
+| worst-5% share of squared error | 0.29 symmetric, 0.55 skewed | 0.28 symmetric, 0.40 skewed |
+| RMSE ÷ MAE | 1.25 symmetric, 1.51 skewed | 1.25 symmetric, 1.32 skewed |
+
+: {tbl-colwidths="[40,30,30]"}
+
+**Task 1's real answer.** Most students compute the baseline correctly and then
+read its R² of zero as a bug. It is the definition. The exchange to have is:
+"what would a baseline R² of −0.4 mean?" — a model worse than the mean, which
+is common in genuinely held-out evaluation and almost never reported.
+
+**Common failures.** (1) `mean(test$LOS)` instead of `mean(train$LOS)` in Task 1
+— the number barely changes, so nobody notices; ask how they would know.
+(2) Computing `rsq()` rather than `rsq_trad()` in R and getting a positive
+number for the baseline, or an `NA` with a warning because a constant prediction
+has no variance. (3) Forgetting to re-split for the skewed file and evaluating
+the skewed model on symmetric test rows.
+
+**Timing.** Task 3 is the one to drop if you are short; the worst-5% share is
+the most memorable number on the page but the RMSE ÷ MAE ratio carries the same
+message in one line.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — Make `rsq` and `rsq_trad` disagree
+Add ten days to every prediction on the symmetric test set and recompute both.
+One is unchanged and one falls below zero. Which behaviour do you want from a
+metric reported in a paper, and which from a metric used to compare two models
+during development?
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — Fit on the log scale
+Refit the skewed model as `log(LOS) ~ Age + Severity`, then exponentiate the
+predictions and compute RMSE, MAE and R² **in days**. Metrics computed on the
+log scale are not comparable with metrics computed in days, and a surprising
+number of published models compare them anyway.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 3 — Choose the metric from the harm
+Write the sentence that decides between MAE and RMSE for a bed-planning model:
+if being 30 days wrong about one patient is worse than being 3 days wrong about
+ten patients, which metric encodes that, and who in the hospital is entitled to
+make that judgement?
+:::
+
+## What you can and cannot now claim
+
+**Can:** that you can compute and interpret the three standard regression
+metrics, say which one a given audience needs, and spot an R² that is reporting
+a property of the population rather than of the model.
+
+**Cannot:** anything at all about a model whose outcome is a class rather than a
+number. None of these three metrics is defined when the truth is `pos` or `neg`,
+and the metrics that replace them have a failure mode of their own — which is
+@sec-classification-metrics.
