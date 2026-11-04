@@ -6,8 +6,8 @@ A Quarto book of machine learning exercises for the Health Data Science MSc,
 organised by teaching day. Each exercise is given in both R and Python. Students
 read the exercise on the site and copy the code into their own script.
 
-**Day 1 is complete.** Later days are placeholders: see `roadmap.qmd` and the
-*Adding a day* appendix.
+**Days 1 to 6 are written**: twenty-five exercises, each in both languages,
+with hidden worked answers released after the session they belong to.
 
 ## How it works
 
@@ -104,11 +104,8 @@ _quarto-instructor.yml   instructor profile (adds the teaching notes)
 _common.qmd              knitr options and the reticulate pointer, included per chapter
 _templates/exercise.qmd  skeleton for a new exercise
 index.qmd                how to use the booklet
-day1-*.qmd               Day 1: overview, three exercises, consolidation
-roadmap.qmd              the intended arc of the remaining days
-setup.qmd                installing R and Python (written for students)
-appendix/                data provenance, troubleshooting, glossary,
-                         adding a day, instructor guide
+day1-*.qmd  ... day6-*.qmd   the exercises, numbered N.M within each day
+appendix/glossary.qmd        the glossary
 checks/                  self-check helpers used inside the exercises, R and Python
 scripts/make_data.R      generates every dataset from one seed
 scripts/check_cells.py   the pre-push check

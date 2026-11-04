@@ -4,9 +4,9 @@
     python3 scripts/new_day.py --day 2 --title "Validation you can defend" \
         --exercises resampling,metrics
 
-Creates day<N>-00-overview.qmd, one chapter per named exercise from
-_templates/exercise.qmd, and day<N>-99-consolidation.qmd, then inserts the
-part: block into _quarto.yml ahead of roadmap.qmd. Safe to re-run: existing
+Creates one chapter per named exercise from _templates/exercise.qmd,
+then inserts the
+part: block into _quarto.yml ahead of the appendices. Safe to re-run: existing
 files are left alone and the part block is only added once.
 """
 
@@ -120,7 +120,7 @@ def main() -> int:
 
     template = (ROOT / "_templates" / "exercise.qmd").read_text()
 
-    rows, chapters = [], [f"day{day}-00-overview.qmd"]
+    chapters = []
     for i, slug in enumerate(slugs, start=1):
         name = f"day{day}-{i:02d}-{slug}.qmd"
         title = slug.replace("-", " ").capitalize()
@@ -130,27 +130,21 @@ def main() -> int:
 )
         write(ROOT / name, body)
         chapters.append(name)
-        rows.append(f"| {day}.{i} | [{title}]({name}) | 45 min | individual |")
 
-    write(ROOT / f"day{day}-00-overview.qmd",
-          OVERVIEW.format(day=day, rows="\n".join(rows)))
-    write(ROOT / f"day{day}-99-consolidation.qmd",
-          CONSOLIDATION.format(day=day, next_day=day + 1))
-    chapters.append(f"day{day}-99-consolidation.qmd")
 
-    # register the part in _quarto.yml, immediately before roadmap.qmd
+    # register the part in _quarto.yml, immediately before the appendices
     cfg_path = ROOT / "_quarto.yml"
     cfg = cfg_path.read_text()
-    if f'day{day}-00-overview.qmd' in cfg:
+    if f'day{day}-01-' in cfg:
         print("  _quarto.yml already lists this day")
     else:
         block = (f'    - part: "Day {day} — {args.title}"\n'
                  + "      chapters:\n"
                  + "".join(f"        - {c}\n" for c in chapters))
-        new_cfg, n = re.subn(r"^(    - roadmap\.qmd\n)", block + r"\1",
+        new_cfg, n = re.subn(r"^(  appendices:\n)", block + r"\1",
                              cfg, count=1, flags=re.M)
         if n == 0:
-            print("  could not find '- roadmap.qmd' in _quarto.yml; add the part "
+            print("  could not find 'appendices:' in _quarto.yml; add the part "
                   "block by hand:", file=sys.stderr)
             print(block, file=sys.stderr)
             return 1
