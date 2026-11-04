@@ -6,7 +6,7 @@
 
 Creates one chapter per named exercise from _templates/exercise.qmd,
 then inserts the
-part: block into _quarto.yml ahead of roadmap.qmd. Safe to re-run: existing
+part: block into _quarto.yml ahead of the appendices. Safe to re-run: existing
 files are left alone and the part block is only added once.
 """
 
@@ -132,7 +132,7 @@ def main() -> int:
         chapters.append(name)
 
 
-    # register the part in _quarto.yml, immediately before roadmap.qmd
+    # register the part in _quarto.yml, immediately before the appendices
     cfg_path = ROOT / "_quarto.yml"
     cfg = cfg_path.read_text()
     if f'day{day}-01-' in cfg:
@@ -141,10 +141,10 @@ def main() -> int:
         block = (f'    - part: "Day {day} — {args.title}"\n'
                  + "      chapters:\n"
                  + "".join(f"        - {c}\n" for c in chapters))
-        new_cfg, n = re.subn(r"^(    - roadmap\.qmd\n)", block + r"\1",
+        new_cfg, n = re.subn(r"^(  appendices:\n)", block + r"\1",
                              cfg, count=1, flags=re.M)
         if n == 0:
-            print("  could not find '- roadmap.qmd' in _quarto.yml; add the part "
+            print("  could not find 'appendices:' in _quarto.yml; add the part "
                   "block by hand:", file=sys.stderr)
             print(block, file=sys.stderr)
             return 1

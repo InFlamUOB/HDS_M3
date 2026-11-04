@@ -2901,7 +2901,7 @@
     "href": "day5-05-regularisation.html#worked-example-twelve-predictors-four-of-which-are-nothing",
     "title": "21  Exercise 5.5 — Shrinking coefficients towards zero",
     "section": "21.3 Worked example — twelve predictors, four of which are nothing",
-    "text": "21.3 Worked example — twelve predictors, four of which are nothing\nWe take Day 5’s eight predictors and add four columns of random numbers, drawn independently of everything else and of each other. Chapter 22 uses one such control; four is better, because then the useless columns outnumber the predictors that carry any real signal in this data — which, as Day 6 will show, is roughly glucose and age.\nEvery predictor is standardised first. A penalty acts on the size of a coefficient, and the size of a coefficient depends on the units of its predictor, so penalising unstandardised predictors penalises whoever chose the units. The standardisation happens inside the recipe or the pipeline, which is what makes it honest under resampling (Chapter 7).\n\nRPython\n\n\n\nlibrary(tidymodels); library(readr)\n\ndia &lt;- read_csv(\"data/diabetes.csv\", show_col_types = FALSE) |&gt;\n  mutate(diabetes = factor(diabetes, levels = c(\"neg\", \"pos\")))\n\nset.seed(123)\ndia &lt;- dia |&gt; mutate(noise  = round(rnorm(n()), 2),\n                     noise2 = round(rnorm(n()), 2),\n                     noise3 = round(rnorm(n()), 2),\n                     noise4 = round(rnorm(n()), 2))\ncontrols &lt;- c(\"noise\", \"noise2\", \"noise3\", \"noise4\")\n\nset.seed(123)\nsplit &lt;- initial_split(dia, prop = 0.7, strata = diabetes)\ntrain &lt;- training(split); test &lt;- testing(split)\n\nnorm_rec &lt;- recipe(diabetes ~ ., data = train) |&gt;\n  step_normalize(all_numeric_predictors())\n\nplain_fit &lt;- workflow() |&gt;\n  add_recipe(norm_rec) |&gt;\n  add_model(logistic_reg() |&gt; set_engine(\"glm\")) |&gt;\n  fit(data = train)\n\ntidy(plain_fit) |&gt; arrange(desc(abs(estimate))) |&gt; print(n = 13)\n\n#&gt; # A tibble: 13 × 5\n#&gt;    term        estimate std.error statistic  p.value\n#&gt;    &lt;chr&gt;          &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;\n#&gt;  1 glucose      1.05        0.129   8.10    5.34e-16\n#&gt;  2 (Intercept) -0.715       0.107  -6.69    2.25e-11\n#&gt;  3 mass         0.318       0.123   2.58    9.88e- 3\n#&gt;  4 pregnant     0.253       0.159   1.59    1.11e- 1\n#&gt;  5 noise4      -0.214       0.106  -2.03    4.27e- 2\n#&gt;  6 pressure    -0.161       0.116  -1.39    1.66e- 1\n#&gt;  7 noise        0.138       0.105   1.31    1.89e- 1\n#&gt;  8 age          0.116       0.150   0.771   4.41e- 1\n#&gt;  9 noise3      -0.109       0.107  -1.02    3.08e- 1\n#&gt; 10 pedigree     0.100       0.106   0.949   3.42e- 1\n#&gt; 11 noise2      -0.0632      0.107  -0.591   5.54e- 1\n#&gt; 12 insulin     -0.0324      0.123  -0.264   7.92e- 1\n#&gt; 13 triceps     -0.00122     0.132  -0.00925 9.93e- 1\n\n\n\n\n\nimport numpy as np, pandas as pd\nfrom sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.metrics import roc_auc_score\n\ndia = pd.read_csv(\"data/diabetes.csv\")\ny = (dia[\"diabetes\"] == \"pos\").astype(int)\nX = dia.drop(columns=\"diabetes\").copy()\n\nrng = np.random.default_rng(42)\nfor nm in [\"noise\", \"noise2\", \"noise3\", \"noise4\"]:\n    X[nm] = rng.normal(size=len(X)).round(2)\ncontrols = [\"noise\", \"noise2\", \"noise3\", \"noise4\"]\n\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3,\n                                          random_state=123, stratify=y)\n\ndef coefs(fitted):\n    \"\"\"The coefficients of a fitted pipeline, named, largest first.\"\"\"\n    s = pd.Series(fitted[-1].coef_[0], index=X.columns)\n    return s.reindex(s.abs().sort_values(ascending=False).index)\n\nplain = make_pipeline(StandardScaler(),\n                      LogisticRegression(C=np.inf, max_iter=1000)).fit(X_tr, y_tr)\nprint(coefs(plain).round(3))\n\n#&gt; glucose     1.199\n#&gt; mass        0.277\n#&gt; pregnant    0.267\n#&gt; pedigree    0.260\n#&gt; pressure   -0.212\n#&gt; noise3      0.128\n#&gt; age         0.100\n#&gt; noise4      0.081\n#&gt; noise2     -0.066\n#&gt; triceps     0.061\n#&gt; insulin    -0.046\n#&gt; noise      -0.007\n#&gt; dtype: float64\n\n\n\n\n\n\n\n\n\n\n\nWarningTwo spellings of “no penalty”, and one relevel that differs from the rest of Day 5\n\n\n\nLogisticRegression() always penalises unless you stop it: the default C=1.0 is a ridge penalty, and C=np.inf is the unpenalised fit that matches R’s glm (Chapter 13). If you are on scikit-learn 1.7 or earlier, write penalty=None, penalty=\"l1\" and penalty=\"l2\" where this page writes C=np.inf, l1_ratio=1 and l1_ratio=0; the older spellings still run on 1.8 and 1.9 but print a deprecation warning.\nThe factor levels here are neg, pos — the order Chapter 22 uses, not the pos, neg of Chapter 18. This page reads coefficients, and with neg first the coefficients are for the probability of pos, so a positive coefficient means higher risk. The price is event_level = \"second\" in every yardstick call below.\n\n\nNow the test AUC, and the control columns’ coefficients, from the same fit.\n\nRPython\n\n\n\naugment(plain_fit, test) |&gt;\n  roc_auc(truth = diabetes, .pred_pos, event_level = \"second\")\n\n#&gt; # A tibble: 1 × 3\n#&gt;   .metric .estimator .estimate\n#&gt;   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;\n#&gt; 1 roc_auc binary         0.842\n\n\n\n\n\nround(roc_auc_score(y_te, plain.predict_proba(X_te)[:, 1]), 3)\n\n#&gt; 0.774\n\n\n\n\n\nRead the two coefficient tables again, and find the controls. In R, noise4 has the fourth largest coefficient of the twelve, ahead of pressure, age, pedigree, insulin and triceps, and its p-value is 0.043. In Python, noise3 is sixth of twelve, ahead of age. Nothing is wrong with either fit. This is what maximum likelihood does when it is given twelve predictors and 537 patients: it spends a little of each coefficient on whatever the random columns happen to line up with.",
+    "text": "21.3 Worked example — twelve predictors, four of which are nothing\nWe take Day 5’s eight predictors and add four columns of random numbers, drawn independently of everything else and of each other. Chapter 22 uses one such control; four is better, because then the useless columns outnumber the predictors that carry any real signal in this data — which, as Day 9 will show, is roughly glucose and age.\nEvery predictor is standardised first. A penalty acts on the size of a coefficient, and the size of a coefficient depends on the units of its predictor, so penalising unstandardised predictors penalises whoever chose the units. The standardisation happens inside the recipe or the pipeline, which is what makes it honest under resampling (Chapter 7).\n\nRPython\n\n\n\nlibrary(tidymodels); library(readr)\n\ndia &lt;- read_csv(\"data/diabetes.csv\", show_col_types = FALSE) |&gt;\n  mutate(diabetes = factor(diabetes, levels = c(\"neg\", \"pos\")))\n\nset.seed(123)\ndia &lt;- dia |&gt; mutate(noise  = round(rnorm(n()), 2),\n                     noise2 = round(rnorm(n()), 2),\n                     noise3 = round(rnorm(n()), 2),\n                     noise4 = round(rnorm(n()), 2))\ncontrols &lt;- c(\"noise\", \"noise2\", \"noise3\", \"noise4\")\n\nset.seed(123)\nsplit &lt;- initial_split(dia, prop = 0.7, strata = diabetes)\ntrain &lt;- training(split); test &lt;- testing(split)\n\nnorm_rec &lt;- recipe(diabetes ~ ., data = train) |&gt;\n  step_normalize(all_numeric_predictors())\n\nplain_fit &lt;- workflow() |&gt;\n  add_recipe(norm_rec) |&gt;\n  add_model(logistic_reg() |&gt; set_engine(\"glm\")) |&gt;\n  fit(data = train)\n\ntidy(plain_fit) |&gt; arrange(desc(abs(estimate))) |&gt; print(n = 13)\n\n#&gt; # A tibble: 13 × 5\n#&gt;    term        estimate std.error statistic  p.value\n#&gt;    &lt;chr&gt;          &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;\n#&gt;  1 glucose      1.05        0.129   8.10    5.34e-16\n#&gt;  2 (Intercept) -0.715       0.107  -6.69    2.25e-11\n#&gt;  3 mass         0.318       0.123   2.58    9.88e- 3\n#&gt;  4 pregnant     0.253       0.159   1.59    1.11e- 1\n#&gt;  5 noise4      -0.214       0.106  -2.03    4.27e- 2\n#&gt;  6 pressure    -0.161       0.116  -1.39    1.66e- 1\n#&gt;  7 noise        0.138       0.105   1.31    1.89e- 1\n#&gt;  8 age          0.116       0.150   0.771   4.41e- 1\n#&gt;  9 noise3      -0.109       0.107  -1.02    3.08e- 1\n#&gt; 10 pedigree     0.100       0.106   0.949   3.42e- 1\n#&gt; 11 noise2      -0.0632      0.107  -0.591   5.54e- 1\n#&gt; 12 insulin     -0.0324      0.123  -0.264   7.92e- 1\n#&gt; 13 triceps     -0.00122     0.132  -0.00925 9.93e- 1\n\n\n\n\n\nimport numpy as np, pandas as pd\nfrom sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.metrics import roc_auc_score\n\ndia = pd.read_csv(\"data/diabetes.csv\")\ny = (dia[\"diabetes\"] == \"pos\").astype(int)\nX = dia.drop(columns=\"diabetes\").copy()\n\nrng = np.random.default_rng(42)\nfor nm in [\"noise\", \"noise2\", \"noise3\", \"noise4\"]:\n    X[nm] = rng.normal(size=len(X)).round(2)\ncontrols = [\"noise\", \"noise2\", \"noise3\", \"noise4\"]\n\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3,\n                                          random_state=123, stratify=y)\n\ndef coefs(fitted):\n    \"\"\"The coefficients of a fitted pipeline, named, largest first.\"\"\"\n    s = pd.Series(fitted[-1].coef_[0], index=X.columns)\n    return s.reindex(s.abs().sort_values(ascending=False).index)\n\nplain = make_pipeline(StandardScaler(),\n                      LogisticRegression(C=np.inf, max_iter=1000)).fit(X_tr, y_tr)\nprint(coefs(plain).round(3))\n\n#&gt; glucose     1.199\n#&gt; mass        0.277\n#&gt; pregnant    0.267\n#&gt; pedigree    0.260\n#&gt; pressure   -0.212\n#&gt; noise3      0.128\n#&gt; age         0.100\n#&gt; noise4      0.081\n#&gt; noise2     -0.066\n#&gt; triceps     0.061\n#&gt; insulin    -0.046\n#&gt; noise      -0.007\n#&gt; dtype: float64\n\n\n\n\n\n\n\n\n\n\n\nWarningTwo spellings of “no penalty”, and one relevel that differs from the rest of Day 5\n\n\n\nLogisticRegression() always penalises unless you stop it: the default C=1.0 is a ridge penalty, and C=np.inf is the unpenalised fit that matches R’s glm (Chapter 13). If you are on scikit-learn 1.7 or earlier, write penalty=None, penalty=\"l1\" and penalty=\"l2\" where this page writes C=np.inf, l1_ratio=1 and l1_ratio=0; the older spellings still run on 1.8 and 1.9 but print a deprecation warning.\nThe factor levels here are neg, pos — the order Chapter 22 uses, not the pos, neg of Chapter 18. This page reads coefficients, and with neg first the coefficients are for the probability of pos, so a positive coefficient means higher risk. The price is event_level = \"second\" in every yardstick call below.\n\n\nNow the test AUC, and the control columns’ coefficients, from the same fit.\n\nRPython\n\n\n\naugment(plain_fit, test) |&gt;\n  roc_auc(truth = diabetes, .pred_pos, event_level = \"second\")\n\n#&gt; # A tibble: 1 × 3\n#&gt;   .metric .estimator .estimate\n#&gt;   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;\n#&gt; 1 roc_auc binary         0.842\n\n\n\n\n\nround(roc_auc_score(y_te, plain.predict_proba(X_te)[:, 1]), 3)\n\n#&gt; 0.774\n\n\n\n\n\nRead the two coefficient tables again, and find the controls. In R, noise4 has the fourth largest coefficient of the twelve, ahead of pressure, age, pedigree, insulin and triceps, and its p-value is 0.043. In Python, noise3 is sixth of twelve, ahead of age. Nothing is wrong with either fit. This is what maximum likelihood does when it is given twelve predictors and 537 patients: it spends a little of each coefficient on whatever the random columns happen to line up with.",
     "crumbs": [
       "Day 5 — Supervised Learning.Regularization&Trees",
       "<span class='chapter-number'>21</span>  <span class='chapter-title'>Exercise 5.5 — Shrinking coefficients towards zero</span>"
@@ -2934,7 +2934,7 @@
     "href": "day5-05-regularisation.html#worked-example-the-whole-path-and-what-a-clean-model-costs",
     "title": "21  Exercise 5.5 — Shrinking coefficients towards zero",
     "section": "21.6 Worked example — the whole path, and what a clean model costs",
-    "text": "21.6 Worked example — the whole path, and what a clean model costs\nA lasso does not fit one model. It fits a path: at every penalty, a different set of survivors. Both libraries will hand you the whole thing, so there is no reason to look at only the point the tuning chose.\n\nRPython\n\n\n\ncoef_path &lt;- purrr::map_dfr(pen_grid$penalty, \\(lam) tidy(lasso_fit, penalty = lam)) |&gt;\n  filter(term != \"(Intercept)\") |&gt;\n  mutate(kind = if_else(term %in% controls, \"control\", \"measured\"))\n\nggplot(coef_path, aes(log10(penalty), estimate, group = term, colour = kind)) +\n  geom_line() +\n  geom_vline(xintercept = log10(best_pen$penalty), linetype = \"dashed\") +\n  scale_colour_manual(values = c(control = \"firebrick\", measured = \"grey30\")) +\n  labs(x = \"log10(penalty)\", y = \"standardised coefficient\",\n       colour = NULL, title = \"Lasso path; dashed line is the CV-best penalty\")\n\n\n\n\n\n\n\npath &lt;- coef_path |&gt;\n  summarise(kept_real     = sum(estimate != 0 & kind == \"measured\"),\n            kept_controls = sum(estimate != 0 & kind == \"control\"),\n            .by = penalty) |&gt;\n  left_join(collect_metrics(lasso_res) |&gt; select(penalty, cv_auc = mean, std_err),\n            by = \"penalty\")\n\npath |&gt; slice_min(penalty, n = 1, by = c(kept_real, kept_controls)) |&gt; arrange(penalty)\n\n#&gt; # A tibble: 8 × 5\n#&gt;   penalty kept_real kept_controls cv_auc std_err\n#&gt;     &lt;dbl&gt;     &lt;int&gt;         &lt;int&gt;  &lt;dbl&gt;   &lt;dbl&gt;\n#&gt; 1 0.0001          7             4  0.771  0.0232\n#&gt; 2 0.00329         6             4  0.773  0.0230\n#&gt; 3 0.0117          6             3  0.776  0.0231\n#&gt; 4 0.0221          5             2  0.775  0.0224\n#&gt; 5 0.0304          4             1  0.771  0.0224\n#&gt; 6 0.0418          4             0  0.770  0.0216\n#&gt; 7 0.0788          1             0  0.763  0.0212\n#&gt; 8 0.281           0             0  0.5    0\n\n# the largest penalty whose resampled AUC is still within one standard error\nselect_by_one_std_err(lasso_res, metric = \"roc_auc\", desc(penalty)) |&gt; select(penalty)\n\n#&gt; # A tibble: 1 × 1\n#&gt;   penalty\n#&gt;     &lt;dbl&gt;\n#&gt; 1   0.204\n\n\n\n\n\nimport matplotlib.pyplot as plt\n\nrows, lines = [], []\nfor C, mean, sd in zip(Cs, lasso_search.cv_results_[\"mean_test_score\"],\n                       lasso_search.cv_results_[\"std_test_score\"]):\n    f = make_pipeline(StandardScaler(),\n                      LogisticRegression(solver=\"liblinear\", l1_ratio=1, C=C,\n                                         max_iter=5000)).fit(X_tr, y_tr)\n    c = pd.Series(f[-1].coef_[0], index=X.columns)\n    lines.append(c)\n    rows.append({\"C\": round(C, 5),\n                 \"kept_real\": int((c.drop(controls) != 0).sum()),\n                 \"kept_controls\": int((c[controls] != 0).sum()),\n                 \"cv_auc\": round(mean, 4), \"std_err\": round(sd / np.sqrt(10), 4)})\n\npaths = pd.DataFrame(lines, index=Cs)\nfig, ax = plt.subplots(figsize=(6.5, 3.6))\nfor col in paths.columns:\n    ax.plot(np.log10(paths.index), paths[col],\n            color=\"firebrick\" if col in controls else \"grey\")\nax.axvline(np.log10(lasso_search.best_params_[\"logisticregression__C\"]), ls=\"--\", color=\"black\")\nax.set_xlabel(\"log10(C)\"); ax.set_ylabel(\"standardised coefficient\")\nax.set_title(\"Lasso path; red is a control, dashed line is the CV-best C\")\nfig.tight_layout(); plt.show()\n\n\n\n\n\n\n\npath = pd.DataFrame(rows)\nprint(path.drop_duplicates(subset=[\"kept_real\", \"kept_controls\"], keep=\"last\").to_string(index=False))\n\n#&gt;         C  kept_real  kept_controls  cv_auc  std_err\n#&gt;   0.00728          0              0  0.5000   0.0000\n#&gt;   0.02395          1              0  0.7845   0.0163\n#&gt;   0.03562          3              0  0.7827   0.0163\n#&gt;   0.07880          5              0  0.7965   0.0143\n#&gt;   0.11721          6              1  0.7968   0.0139\n#&gt;   0.38566          6              3  0.8026   0.0150\n#&gt;   0.57362          7              3  0.8017   0.0148\n#&gt;   1.26896          8              3  0.8007   0.0148\n#&gt; 100.00000          8              4  0.8007   0.0152\n\n# the strongest penalty (smallest C) still within one standard error of the best\nbest = path[\"cv_auc\"].idxmax()\nwithin = path[\"cv_auc\"] &gt;= path.loc[best, \"cv_auc\"] - path.loc[best, \"std_err\"]\nprint(\"one-standard-error C:\", path.loc[within, \"C\"].min())\n\n#&gt; one-standard-error C: 0.05298\n\n\n\n\n\nThe table has one row for each distinct pair of survivor counts, printed at the weakest penalty that achieves it. Three penalties on it are worth marking: the one the tuning chose, the one at which the last control disappears, and the strongest penalty whose resampled AUC is still within one standard error of the best — the one-standard-error rule of Chapter 19, which the cell above prints. In R they are 0.0085, 0.0418 and 0.204, all different, and the one-standard-error rule lands in the stretch of the path where glucose is the only survivor. In Python they are C = 0.386, C = 0.0788 and C = 0.053, and the last two keep the same five predictors. Neither language puts the tuned penalty near either of the other two.",
+    "text": "21.6 Worked example — the whole path, and what a clean model costs\nA lasso does not fit one model. It fits a path: at every penalty, a different set of survivors. Both libraries will hand you the whole thing, so there is no reason to look at only the point the tuning chose.\n\nRPython\n\n\n\ncoef_path &lt;- purrr::map_dfr(pen_grid$penalty, \\(lam) tidy(lasso_fit, penalty = lam)) |&gt;\n  filter(term != \"(Intercept)\") |&gt;\n  mutate(kind = if_else(term %in% controls, \"control\", \"measured\"))\n\nggplot(coef_path, aes(log10(penalty), estimate, group = term, colour = kind)) +\n  geom_line() +\n  geom_vline(xintercept = log10(best_pen$penalty), linetype = \"dashed\") +\n  scale_colour_manual(values = c(control = \"firebrick\", measured = \"grey30\")) +\n  labs(x = \"log10(penalty)\", y = \"standardised coefficient\",\n       colour = NULL, title = \"Lasso path; dashed line is the CV-best penalty\")\n\n\n\n\n\n\n\npath &lt;- coef_path |&gt;\n  summarise(kept_real     = sum(estimate != 0 & kind == \"measured\"),\n            kept_controls = sum(estimate != 0 & kind == \"control\"),\n            .by = penalty) |&gt;\n  left_join(collect_metrics(lasso_res) |&gt; select(penalty, cv_auc = mean, std_err),\n            by = \"penalty\")\n\npath |&gt; slice_min(penalty, n = 1, by = c(kept_real, kept_controls)) |&gt; arrange(penalty)\n\n#&gt; # A tibble: 8 × 5\n#&gt;   penalty kept_real kept_controls cv_auc std_err\n#&gt;     &lt;dbl&gt;     &lt;int&gt;         &lt;int&gt;  &lt;dbl&gt;   &lt;dbl&gt;\n#&gt; 1 0.0001          7             4  0.771  0.0232\n#&gt; 2 0.00329         6             4  0.773  0.0230\n#&gt; 3 0.0117          6             3  0.776  0.0231\n#&gt; 4 0.0221          5             2  0.775  0.0224\n#&gt; 5 0.0304          4             1  0.771  0.0224\n#&gt; 6 0.0418          4             0  0.770  0.0216\n#&gt; 7 0.0788          1             0  0.763  0.0212\n#&gt; 8 0.281           0             0  0.5    0\n\n# the largest penalty whose resampled AUC is still within one standard error\nselect_by_one_std_err(lasso_res, metric = \"roc_auc\", desc(penalty)) |&gt; select(penalty)\n\n#&gt; # A tibble: 1 × 1\n#&gt;   penalty\n#&gt;     &lt;dbl&gt;\n#&gt; 1   0.204\n\n\n\n\n\nimport matplotlib.pyplot as plt\n\nrows, lines = [], []\nfor C, mean, sd in zip(Cs, lasso_search.cv_results_[\"mean_test_score\"],\n                       lasso_search.cv_results_[\"std_test_score\"]):\n    f = make_pipeline(StandardScaler(),\n                      LogisticRegression(solver=\"liblinear\", l1_ratio=1, C=C,\n                                         max_iter=5000)).fit(X_tr, y_tr)\n    c = pd.Series(f[-1].coef_[0], index=X.columns)\n    lines.append(c)\n    rows.append({\"C\": round(C, 5),\n                 \"kept_real\": int((c.drop(controls) != 0).sum()),\n                 \"kept_controls\": int((c[controls] != 0).sum()),\n                 \"cv_auc\": round(mean, 4), \"std_err\": round(sd / np.sqrt(10), 4)})\n\npaths = pd.DataFrame(lines, index=Cs)\nfig, ax = plt.subplots(figsize=(6.5, 3.6))\nfor col in paths.columns:\n    ax.plot(np.log10(paths.index), paths[col],\n            color=\"firebrick\" if col in controls else \"grey\")\nax.axvline(np.log10(lasso_search.best_params_[\"logisticregression__C\"]), ls=\"--\", color=\"black\")\nax.set_xlabel(\"log10(C)\"); ax.set_ylabel(\"standardised coefficient\")\nax.set_title(\"Lasso path; red is a control, dashed line is the CV-best C\")\nfig.tight_layout(); plt.show()\n\n\n\n\n\n\n\npath = pd.DataFrame(rows)\nprint(path.drop_duplicates(subset=[\"kept_real\", \"kept_controls\"], keep=\"last\").to_string(index=False))\n\n#&gt;         C  kept_real  kept_controls  cv_auc  std_err\n#&gt;   0.00728          0              0  0.5000   0.0000\n#&gt;   0.02395          1              0  0.7845   0.0163\n#&gt;   0.03562          3              0  0.7827   0.0163\n#&gt;   0.07880          5              0  0.7965   0.0143\n#&gt;   0.11721          6              1  0.7968   0.0139\n#&gt;   0.38566          6              3  0.8026   0.0150\n#&gt;   0.57362          7              3  0.8017   0.0148\n#&gt;   1.26896          8              3  0.8009   0.0148\n#&gt; 100.00000          8              4  0.8007   0.0152\n\n# the strongest penalty (smallest C) still within one standard error of the best\nbest = path[\"cv_auc\"].idxmax()\nwithin = path[\"cv_auc\"] &gt;= path.loc[best, \"cv_auc\"] - path.loc[best, \"std_err\"]\nprint(\"one-standard-error C:\", path.loc[within, \"C\"].min())\n\n#&gt; one-standard-error C: 0.05298\n\n\n\n\n\nThe table has one row for each distinct pair of survivor counts, printed at the weakest penalty that achieves it. Three penalties on it are worth marking: the one the tuning chose, the one at which the last control disappears, and the strongest penalty whose resampled AUC is still within one standard error of the best — the one-standard-error rule of Chapter 19, which the cell above prints. In R they are 0.0085, 0.0418 and 0.204, all different, and the one-standard-error rule lands in the stretch of the path where glucose is the only survivor. In Python they are C = 0.386, C = 0.0788 and C = 0.053, and the last two keep the same five predictors. Neither language puts the tuned penalty near either of the other two.",
     "crumbs": [
       "Day 5 — Supervised Learning.Regularization&Trees",
       "<span class='chapter-number'>21</span>  <span class='chapter-title'>Exercise 5.5 — Shrinking coefficients towards zero</span>"
@@ -3009,593 +3009,573 @@
   {
     "objectID": "day6-01-importance.html",
     "href": "day6-01-importance.html",
-    "title": "22  Exercise 6.1 — Importance, and a column of pure noise",
+    "title": "22  Exercise 9.1 — Importance, and a column of pure noise",
     "section": "",
     "text": "22.1 Objectives",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 6.1 — Importance, and a column of pure noise</span>"
+      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 9.1 — Importance, and a column of pure noise</span>"
     ]
   },
   {
     "objectID": "day6-01-importance.html#objectives",
     "href": "day6-01-importance.html#objectives",
-    "title": "22  Exercise 6.1 — Importance, and a column of pure noise",
+    "title": "22  Exercise 9.1 — Importance, and a column of pure noise",
     "section": "",
     "text": "Fit a random forest and read two different importance rankings off it.\nState, for each measure, what it is a measure of and which question it answers.\nUse a pure-noise control to decide how much of a ranking to believe.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 6.1 — Importance, and a column of pure noise</span>"
+      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 9.1 — Importance, and a column of pure noise</span>"
     ]
   },
   {
     "objectID": "day6-01-importance.html#why-this-here",
     "href": "day6-01-importance.html#why-this-here",
-    "title": "22  Exercise 6.1 — Importance, and a column of pure noise",
+    "title": "22  Exercise 9.1 — Importance, and a column of pure noise",
     "section": "22.2 Why this, here",
     "text": "22.2 Why this, here\nChapter 20 left you with a forest that predicts better than the logistic regression of Chapter 14 and cannot be read. The obvious next move is to ask the forest which variables it used. Every library will answer that question. The problem is that they answer different questions, give different rankings, and none of them will tell you so. We settle it the way you would settle any measurement question: by measuring something whose true value we already know.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 6.1 — Importance, and a column of pure noise</span>"
+      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 9.1 — Importance, and a column of pure noise</span>"
     ]
   },
   {
     "objectID": "day6-01-importance.html#the-model-we-will-spend-the-day-explaining",
     "href": "day6-01-importance.html#the-model-we-will-spend-the-day-explaining",
-    "title": "22  Exercise 6.1 — Importance, and a column of pure noise",
+    "title": "22  Exercise 9.1 — Importance, and a column of pure noise",
     "section": "22.3 The model we will spend the day explaining",
     "text": "22.3 The model we will spend the day explaining\nWe add one predictor that cannot possibly matter — a column of random numbers, drawn independently of everything else, named noise. It is not a trick on the model. It is a control on the importance measures: whatever any of them says about noise, we know the right answer is nothing.\n\nRPython\n\n\n\nlibrary(readr); library(dplyr); library(parsnip); library(rsample)\nlibrary(yardstick); library(vip); library(ggplot2)\n\nset.seed(123)\ndia &lt;- read_csv(\"data/diabetes.csv\", show_col_types = FALSE) |&gt;\n  mutate(diabetes = factor(diabetes, levels = c(\"neg\", \"pos\")),\n         noise    = round(rnorm(n()), 2))\n\nsplit &lt;- initial_split(dia, prop = 0.7, strata = diabetes)\ntrain &lt;- training(split)\ntest  &lt;- testing(split)\n\nrf_fit &lt;- rand_forest(trees = 500, mtry = 3, min_n = 10) |&gt;\n  set_engine(\"ranger\", importance = \"impurity\", seed = 123) |&gt;\n  set_mode(\"classification\") |&gt;\n  fit(diabetes ~ ., data = train)\n\npreds &lt;- predict(rf_fit, test, type = \"prob\") |&gt; bind_cols(test)\nroc_auc(preds, truth = diabetes, .pred_pos, event_level = \"second\")\n\n#&gt; # A tibble: 1 × 3\n#&gt;   .metric .estimator .estimate\n#&gt;   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;\n#&gt; 1 roc_auc binary         0.787\n\n\n\n\n\nimport numpy as np, pandas as pd\nimport matplotlib.pyplot as plt\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.ensemble import RandomForestClassifier\nfrom sklearn.metrics import roc_auc_score\nfrom sklearn.inspection import permutation_importance\n\ndia = pd.read_csv(\"data/diabetes.csv\")\ny = (dia[\"diabetes\"] == \"pos\").astype(int)\nX = dia.drop(columns=[\"diabetes\"]).copy()\nX[\"noise\"] = np.random.default_rng(42).normal(size=len(X)).round(2)\n\nX_train, X_test, y_train, y_test = train_test_split(\n    X, y, test_size=0.3, random_state=123, stratify=y)\n\nrf = RandomForestClassifier(n_estimators=300, random_state=123).fit(X_train, y_train)\nauc = roc_auc_score(y_test, rf.predict_proba(X_test)[:, 1])\nround(auc, 3)\n\n#&gt; 0.756\n\n\n\n\n\nBoth forests score a test AUC in the high 0.7s. Note the event_level = \"second\" in the R call: the factor levels are neg, pos, and yardstick treats the first level as the event, so without that argument you would be scoring the model’s ability to detect absence of diabetes.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 6.1 — Importance, and a column of pure noise</span>"
+      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 9.1 — Importance, and a column of pure noise</span>"
     ]
   },
   {
     "objectID": "day6-01-importance.html#measure-1-impurity-importance",
     "href": "day6-01-importance.html#measure-1-impurity-importance",
-    "title": "22  Exercise 6.1 — Importance, and a column of pure noise",
+    "title": "22  Exercise 9.1 — Importance, and a column of pure noise",
     "section": "22.4 Measure 1 — impurity importance",
     "text": "22.4 Measure 1 — impurity importance\nEvery split in every tree reduces Gini impurity by some amount. Impurity importance adds those reductions up, per variable, over the whole forest. It is free: the forest already computed it while fitting. It is also entirely internal — it is a summary of what happened inside the training rows, and no test data enters it anywhere.\n\nRPython\n\n\n\nimp &lt;- vi(rf_fit)\nimp\n\n#&gt; # A tibble: 9 × 2\n#&gt;   Variable Importance\n#&gt;   &lt;chr&gt;         &lt;dbl&gt;\n#&gt; 1 glucose        62.1\n#&gt; 2 age            24.8\n#&gt; 3 pedigree       20.7\n#&gt; 4 mass           19.8\n#&gt; 5 noise          18.8\n#&gt; 6 pregnant       16.8\n#&gt; 7 pressure       12.6\n#&gt; 8 insulin        11.0\n#&gt; 9 triceps        10.9\n\nvip(rf_fit, num_features = 9) + labs(title = \"Impurity importance\")\n\n\n\n\n\n\n\n\n\n\n\nimp = pd.Series(rf.feature_importances_, index=X.columns).sort_values()\nprint(imp.round(3))\n\n#&gt; triceps     0.061\n#&gt; insulin     0.066\n#&gt; pressure    0.068\n#&gt; pregnant    0.075\n#&gt; noise       0.101\n#&gt; age         0.107\n#&gt; pedigree    0.125\n#&gt; mass        0.127\n#&gt; glucose     0.271\n#&gt; dtype: float64\n\nfig, ax = plt.subplots(figsize=(6.5, 3.5))\nimp.plot(kind=\"barh\", ax=ax, color=\"steelblue\")\nax.set_xlabel(\"mean decrease in impurity\")\nfig.tight_layout(); plt.show()",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 6.1 — Importance, and a column of pure noise</span>"
+      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 9.1 — Importance, and a column of pure noise</span>"
     ]
   },
   {
     "objectID": "day6-01-importance.html#task-1-find-the-control",
     "href": "day6-01-importance.html#task-1-find-the-control",
-    "title": "22  Exercise 6.1 — Importance, and a column of pure noise",
+    "title": "22  Exercise 9.1 — Importance, and a column of pure noise",
     "section": "22.5 Task 1 — Find the control",
     "text": "22.5 Task 1 — Find the control\nLook at the ranking you just printed and find noise in it. Then let the check say it out loud: check_noise_control() reports where the control landed and what it is worth relative to the strongest predictor.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\ncheck_noise_control(______)\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\ncheck_noise_control(______)\n\n\n\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nThe check wants the importances themselves, not the model. In R that is the object vi() returned; in Python it is the Series you built from feature_importances_. The check finds noise by name.\n\n\n\nThe check prints [fix]. That is not a mistake in your code. It is the check doing its job on a measure that has just handed a third of its top score to a column of random numbers.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 6.1 — Importance, and a column of pure noise</span>"
+      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 9.1 — Importance, and a column of pure noise</span>"
     ]
   },
   {
     "objectID": "day6-01-importance.html#task-2-ask-a-different-question",
     "href": "day6-01-importance.html#task-2-ask-a-different-question",
-    "title": "22  Exercise 6.1 — Importance, and a column of pure noise",
+    "title": "22  Exercise 9.1 — Importance, and a column of pure noise",
     "section": "22.6 Task 2 — Ask a different question",
     "text": "22.6 Task 2 — Ask a different question\nPermutation importance asks something else entirely: if I destroy this variable, how much worse does the model get? Shuffle one column of the test set, re-score, record the drop in AUC, put the column back, repeat. Nothing is refitted; the model is held fixed and the data is damaged.\nFill in the two blanks: which rows to permute, and which metric to score.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\npred_pos &lt;- function(object, newdata) predict(object, newdata, type = \"prob\")$.pred_pos\n\nset.seed(123)\nperm &lt;- vi(rf_fit, method = \"permute\",\n           train = ______, target = \"diabetes\",\n           metric = ______, event_level = \"second\",\n           pred_wrapper = pred_pos, nsim = 20,\n           smaller_is_better = FALSE)\nperm\ncheck_noise_control(perm)\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\nresult = permutation_importance(rf, ______, ______, n_repeats=20,\n                                random_state=123, scoring=______)\nperm = pd.Series(result.importances_mean, index=X.columns).sort_values()\nprint(perm.round(4))\ncheck_noise_control(perm)\n\n\n\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nPermutation importance needs rows the model has not been fitted on, and a metric to measure the damage with. You have both already: the held-out set, and the AUC you reported above. In Python the metric is a string scikit-learn recognises; in R it is a yardstick metric name.\n\n\n\nThis time the check passes. Under permutation the control is worth a few per cent of glucose at most, which is what zero looks like once sampling noise is added to it. Report which variables changed rank between the two measures.\n\n\n\n\n\n\nWarningBelow the top two, the ordering is not real\n\n\n\nIn both languages glucose dominates and age is a distant second. Everything below that is a cluster of near-zero values whose spread across repeats is as large as the values themselves — noise finishes inside that cluster, in R slightly above zero and in Python slightly below it. Do not report a rank order within a cluster like that. Report the cluster.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 6.1 — Importance, and a column of pure noise</span>"
+      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 9.1 — Importance, and a column of pure noise</span>"
     ]
   },
   {
     "objectID": "day6-01-importance.html#the-result-that-should-bother-you",
     "href": "day6-01-importance.html#the-result-that-should-bother-you",
-    "title": "22  Exercise 6.1 — Importance, and a column of pure noise",
+    "title": "22  Exercise 9.1 — Importance, and a column of pure noise",
     "section": "22.7 The result that should bother you",
     "text": "22.7 The result that should bother you\nImpurity importance put noise fifth of nine, ahead of blood pressure, insulin and triceps skinfold — three measurements a diabetes clinic actually takes. Reason it through in three steps.\n\nThe forest is allowed to split on noise, and with mtry = 3 it is offered the chance about a third of the time. A continuous variable with 768 distinct-ish values offers a great many candidate split points, so by chance some of them separate the training rows well.\nEach of those lucky splits reduces training impurity, and impurity importance counts every one of them. Nothing in the measure asks whether the reduction survives on rows the forest has not seen.\nSo impurity importance is a faithful description of how the forest was built. It is not evidence about which variables carry signal. Those are different claims, and only the second one is what anybody wants.\n\nThis is not an obscure edge case. It is the default output of feature_importances_ and of vip(), it appears in papers, and the control that exposes it costs one line.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 6.1 — Importance, and a column of pure noise</span>"
+      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 9.1 — Importance, and a column of pure noise</span>"
     ]
   },
   {
     "objectID": "day6-01-importance.html#task-3-is-the-noise-column-doing-any-harm",
     "href": "day6-01-importance.html#task-3-is-the-noise-column-doing-any-harm",
-    "title": "22  Exercise 6.1 — Importance, and a column of pure noise",
+    "title": "22  Exercise 9.1 — Importance, and a column of pure noise",
     "section": "22.8 Task 3 — Is the noise column doing any harm?",
     "text": "22.8 Task 3 — Is the noise column doing any harm?\nIf impurity importance is right that noise matters, dropping it should hurt. Refit the forest without it and compare test AUC.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nrf_clean &lt;- rand_forest(trees = 500, mtry = 3, min_n = 10) |&gt;\n  set_engine(\"ranger\", seed = 123) |&gt;\n  set_mode(\"classification\") |&gt;\n  fit(diabetes ~ ., data = ______)\n\npredict(rf_clean, test, type = \"prob\") |&gt;\n  bind_cols(test) |&gt;\n  roc_auc(truth = diabetes, .pred_pos, event_level = \"second\")\n\n\n\n\n# Replace every ______ below, then run this cell.\nrf_clean = RandomForestClassifier(n_estimators=300, random_state=123).fit(\n    X_train.drop(columns=______), y_train)\nauc_clean = roc_auc_score(y_test, rf_clean.predict_proba(\n    X_test.drop(columns=______))[:, 1])\nprint(round(auc_clean, 3), \"versus\", round(auc, 3), \"with the noise column\")\n\n\n\n\nThe AUC moves by about one point in the second decimal — in Python it goes up a little, in R down a little. That is the same size as the spread you get from refitting the forest with ten different seeds and changing nothing else, so it is not a difference at all. A variable that one importance measure ranked fifth of nine is worth nothing to the prediction.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 6.1 — Importance, and a column of pure noise</span>"
+      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 9.1 — Importance, and a column of pure noise</span>"
     ]
   },
   {
     "objectID": "day6-01-importance.html#reflection",
     "href": "day6-01-importance.html#reflection",
-    "title": "22  Exercise 6.1 — Importance, and a column of pure noise",
+    "title": "22  Exercise 9.1 — Importance, and a column of pure noise",
     "section": "22.9 Reflection",
     "text": "22.9 Reflection\n\nImpurity importance and permutation importance disagreed. Write the sentence you would say to a clinical collaborator who asks which one is correct — without using the word “wrong”.\nPermutation importance is computed on held-out rows here. What would change if you computed it on the training rows instead, and which of the two would you report in a paper?\nYou now have a control for importance. What would the equivalent control be for a claim that the model is well calibrated?",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 6.1 — Importance, and a column of pure noise</span>"
+      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 9.1 — Importance, and a column of pure noise</span>"
     ]
   },
   {
     "objectID": "day6-01-importance.html#stretch",
     "href": "day6-01-importance.html#stretch",
-    "title": "22  Exercise 6.1 — Importance, and a column of pure noise",
+    "title": "22  Exercise 9.1 — Importance, and a column of pure noise",
     "section": "22.10 Stretch",
     "text": "22.10 Stretch\n\n\n\n\n\n\nNoteStretch 1 — Two controls, not one\n\n\n\nAdd a second control: a column of integers 1:n, a row identifier. It carries no information either, but it has one distinct value per patient. Where does impurity importance put it, and what does the comparison with noise tell you about which features that measure favours?\n\n\n\n\n\n\n\n\nNoteStretch 2 — Correlated predictors break both measures\n\n\n\nAdd a copy of glucose with a little jitter, so the two columns are nearly identical. What happens to glucose’s permutation importance, and why? Write down the sentence a reader would wrongly conclude from the new ranking.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 6.1 — Importance, and a column of pure noise</span>"
+      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 9.1 — Importance, and a column of pure noise</span>"
     ]
   },
   {
     "objectID": "day6-01-importance.html#what-you-can-and-cannot-now-claim",
     "href": "day6-01-importance.html#what-you-can-and-cannot-now-claim",
-    "title": "22  Exercise 6.1 — Importance, and a column of pure noise",
+    "title": "22  Exercise 9.1 — Importance, and a column of pure noise",
     "section": "22.11 What you can and cannot now claim",
     "text": "22.11 What you can and cannot now claim\nCan: that for this forest, on these held-out rows, permuting glucose costs about 0.14 of AUC and permuting anything else costs almost nothing; and that a column known to be meaningless was ranked fifth of nine by the forest’s own built-in importance.\nCannot: anything about an individual patient. Both measures are averages over the whole test set, and an average over 231 people cannot tell you why the model said what it said about one of them — which is what Chapter 23 is for.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 6.1 — Importance, and a column of pure noise</span>"
+      "<span class='chapter-number'>22</span>  <span class='chapter-title'>Exercise 9.1 — Importance, and a column of pure noise</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html",
     "href": "day6-02-shap.html",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "",
     "text": "23.1 Objectives",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#objectives",
     "href": "day6-02-shap.html#objectives",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "",
     "text": "Compute SHAP values for a fitted forest and check that they add up to the prediction.\nRead a beeswarm plot and a force plot, and say in one sentence what the model did for one named patient.\nSay why a SHAP summary and a logistic regression coefficient are not comparable until one of them is rescaled.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#why-this-here",
     "href": "day6-02-shap.html#why-this-here",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "23.2 Why this, here",
-    "text": "23.2 Why this, here\nChapter 22 gave you two rankings, both of them averages over 231 people. Neither can answer the question a clinician actually asks in front of a patient: why this number, for her? SHAP answers exactly that, and then lets you average the per-patient answers back up into a global picture. It is the most useful tool on this day and the easiest to overclaim with, which is why it sits between the measure that was plainly describing the model (6.1) and the chapter that says so in R (Chapter 24).\n\n\n\n\n\n\nNoteThis chapter is Python only\n\n\n\nshap is a Python library with no equivalent of comparable maturity in R. R gets its local explanations from DALEX in Chapter 24, by a different algorithm (sampling-based Shapley values) that answers the same question. Read this chapter even if you intend to work in R: the ideas transfer and the plots are the ones you will be shown by other people.",
+    "text": "23.2 Why this, here\nChapter 22 gave you two rankings, both of them averages over 231 people. Neither can answer the question a clinician actually asks in front of a patient: why this number, for her? SHAP answers exactly that, and then lets you average the per-patient answers back up into a global picture. It is the most useful tool on this day and the easiest to overclaim with, which is why it sits between the measure that was plainly describing the model (9.1) and the chapter that says so in R (Chapter 24).\n\n\n\n\n\n\nNoteThis chapter is Python only\n\n\n\nshap is a Python library with no equivalent of comparable maturity in R. R gets its local explanations from DALEX in Chapter 24, by a different algorithm (sampling-based Shapley values) that answers the same question. Read this chapter even if you intend to work in R: the ideas transfer and the plots are the ones you will be shown by other people.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#the-model-again-and-its-shap-values",
     "href": "day6-02-shap.html#the-model-again-and-its-shap-values",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "23.3 The model, again, and its SHAP values",
     "text": "23.3 The model, again, and its SHAP values\nEach chapter is a fresh session, so we refit the forest from Chapter 22 — same data, same split, same control column.\n\nimport numpy as np, pandas as pd\nimport matplotlib, matplotlib.pyplot as plt\nimport shap\n\n# trim the surrounding whitespace when a figure is saved; shap's force plot\n# draws outside the axes and is otherwise clipped at the top\nmatplotlib.rcParams[\"savefig.bbox\"] = \"tight\"\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.ensemble import RandomForestClassifier\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import roc_auc_score\n\ndia = pd.read_csv(\"data/diabetes.csv\")\ny = (dia[\"diabetes\"] == \"pos\").astype(int)\nX = dia.drop(columns=[\"diabetes\"]).copy()\nX[\"noise\"] = np.random.default_rng(42).normal(size=len(X)).round(2)\n\nX_train, X_test, y_train, y_test = train_test_split(\n    X, y, test_size=0.3, random_state=123, stratify=y)\n\nrf = RandomForestClassifier(n_estimators=300, random_state=123).fit(X_train, y_train)\nauc = roc_auc_score(y_test, rf.predict_proba(X_test)[:, 1])\nprint(\"test AUC\", round(auc, 3))\n\n#&gt; test AUC 0.756\n\n\nA SHAP value is one number per patient per variable: how much that variable moved this patient’s predicted probability away from the base value, where the base value is the average prediction over the training rows. The values are constructed so that they add up exactly:\n\\[\\hat{p}(x_i) = \\phi_0 + \\sum_{j=1}^{p} \\phi_{ij}\\]\nwith \\(\\phi_0\\) the base value and \\(\\phi_{ij}\\) the contribution of variable \\(j\\) to patient \\(i\\). That identity is the whole reason SHAP is worth more than an importance bar chart: it is an exact decomposition of a specific prediction, not a summary statistic.\n\nexplainer = shap.TreeExplainer(rf)\nsv = explainer.shap_values(X_test)          # (patients, variables, classes)\nphi = sv[:, :, 1]                           # the 'pos' class\nbase = explainer.expected_value[1]\n\nprint(\"shape\", sv.shape)\n\n#&gt; shape (231, 9, 2)\n\nprint(\"base value\", round(base, 3), \" training prevalence\", round(y_train.mean(), 3))\n\n#&gt; base value 0.366  training prevalence 0.365\n\n\nThe base value is the training prevalence, as it must be: with no information about a patient, the forest’s best guess is the average.\n\n\n\n\n\n\nNoteHow long this takes, and what to do if it is slow\n\n\n\nTreeExplainer is exact for forests and it explains these 231 test patients in well under a second. Cost grows with the number of patients, trees and tree depth, so a larger forest or the full 768 rows will take longer. If it does, explain a random subsample — X_test.sample(100, random_state=1) — and say in your write-up that you did. A beeswarm of 100 patients looks almost identical to one of 231; a mean absolute SHAP value computed from 100 is a little noisier.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#global-view-1-the-bar-plot",
     "href": "day6-02-shap.html#global-view-1-the-bar-plot",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "23.4 Global view 1 — the bar plot",
     "text": "23.4 Global view 1 — the bar plot\nAveraging \\(|\\phi_{ij}|\\) down the patients gives a global importance: how much this variable moves predictions, in probability units, for a typical patient.\n\nshap.summary_plot(phi, X_test, plot_type=\"bar\", show=False, plot_size=(7.5, 3.5))\nplt.tight_layout()\nplt.show()",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#task-1-the-beeswarm-and-the-control-again",
     "href": "day6-02-shap.html#task-1-the-beeswarm-and-the-control-again",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "23.5 Task 1 — The beeswarm, and the control again",
     "text": "23.5 Task 1 — The beeswarm, and the control again\nThe bar plot throws away everything except the magnitude. The beeswarm keeps it: one dot per patient per variable, placed at its SHAP value, coloured by how high that patient’s value of the variable was. Draw it, then run the control check on the mean absolute SHAP values.\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\n\nshap.summary_plot(______, X_test, show=False, plot_size=(6.5, 4))\nplt.tight_layout(); plt.show()\n\nshap_importance = pd.Series(np.abs(______).mean(axis=0), index=X.columns)\ncheck_noise_control(shap_importance)\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nBoth blanks want the same object: the matrix of SHAP values for the positive class that you built above. np.abs() and .mean(axis=0) collapse it down the patients.\n\n\n\nRead three things off the beeswarm before you move on.\n\nGlucose: the red dots are on the right. High glucose pushes the prediction up, consistently, and by up to 0.4 in probability.\nPressure and triceps: a vertical smudge at zero. The model barely uses them.\nnoise: a smudge too — but a slightly wider one than pressure’s, and the control check fails again, at around 12% of glucose. SHAP is honest about the model, and the model does use the noise column.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#local-view-one-patient",
     "href": "day6-02-shap.html#local-view-one-patient",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "23.6 Local view — one patient",
     "text": "23.6 Local view — one patient\nNow the thing the averages could not do. Patient 0 of the test set:\n\ni = 0\nx_i = X_test.iloc[[i]]\nprint(\"row\", X_test.index[i],\n      \"| predicted\", round(rf.predict_proba(x_i)[0, 1], 3),\n      \"| actual\", \"pos\" if y_test.iloc[i] == 1 else \"neg\")\n\n#&gt; row 211 | predicted 0.713 | actual neg\n\nprint(x_i.T.rename(columns={X_test.index[i]: \"value\"}))\n\n#&gt;             value\n#&gt; pregnant   13.000\n#&gt; glucose   167.000\n#&gt; pressure   90.000\n#&gt; triceps    23.000\n#&gt; insulin   105.000\n#&gt; mass       38.300\n#&gt; pedigree    0.415\n#&gt; age        41.000\n#&gt; noise      -1.330\n\n\n\nshap.force_plot(base, phi[i], x_i.iloc[0], matplotlib=True, show=False,\n                figsize=(16, 3.2))\nplt.show()\n\n\n\n\n\n\n\n\nRead the force plot as a tug of war on one number. It starts at the base value and ends at this patient’s prediction; red segments push right, blue segments push left, and the width of each is its SHAP value. For this patient a glucose of 167 contributes about +0.31 on its own — more than everything else put together.\nNow the sentence that this chapter exists for. The model gave this patient a predicted probability of about 0.71. She does not have diabetes. The force plot is still entirely correct: it is a faithful account of how the forest arrived at 0.71. It is not an account of her physiology, and if you read it aloud as “her high glucose is driving her diabetes risk” you have changed the subject without noticing.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#task-2-check-the-arithmetic",
     "href": "day6-02-shap.html#task-2-check-the-arithmetic",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "23.7 Task 2 — Check the arithmetic",
     "text": "23.7 Task 2 — Check the arithmetic\nThe additivity identity above is a claim you can test. Pick any patient, add the base value to their SHAP values, and compare with the model’s prediction.\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\n\nj = 17                                   # any row of the test set\nreconstructed = ______ + phi[j].sum()\npredicted     = rf.predict_proba(X_test.iloc[[j]])[0, 1]\nprint(round(reconstructed, 6), round(predicted, 6))\ncheck_metric_range(abs(reconstructed - ______), 0, 1e-6, \"reconstruction error\")\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nThe identity has three parts: the base value, the sum of this patient’s contributions, and the prediction. Two of them are already on the line.\n\n\n\nThe error is of the order of \\(10^{-16}\\). TreeExplainer is not approximating here — for a tree ensemble it computes the Shapley values exactly.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#a-fairer-comparison-logistic-regression-coefficients",
     "href": "day6-02-shap.html#a-fairer-comparison-logistic-regression-coefficients",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "23.8 A fairer comparison — logistic regression coefficients",
     "text": "23.8 A fairer comparison — logistic regression coefficients\nThe usual next slide puts SHAP next to the coefficients of a logistic regression and invites you to compare the two rankings. Done naively that comparison is meaningless, and it is worth seeing why.\n\nlr = LogisticRegression(max_iter=1000, solver=\"liblinear\",\n                        random_state=123).fit(X_train, y_train)\nprint(\"logistic regression test AUC\", round(roc_auc_score(y_test, lr.predict_proba(X_test)[:, 1]), 3))\n\n#&gt; logistic regression test AUC 0.762\n\ncoef = pd.Series(lr.coef_[0], index=X.columns)\nprint(\"\\nraw coefficients, log-odds per unit:\")\n\n#&gt; \n#&gt; raw coefficients, log-odds per unit:\n\nprint(coef.round(3))\n\n#&gt; pregnant    0.096\n#&gt; glucose     0.029\n#&gt; pressure   -0.014\n#&gt; triceps     0.002\n#&gt; insulin     0.000\n#&gt; mass        0.015\n#&gt; pedigree    0.519\n#&gt; age        -0.004\n#&gt; noise      -0.031\n#&gt; dtype: float64\n\n\nThe largest coefficient by a factor of five belongs to pedigree. That is an artefact of the units: pedigree runs from about 0.08 to 2.4, while glucose runs to 199, so a coefficient “per unit” means something a hundred times smaller for glucose. Multiply each coefficient by the training standard deviation of its variable and you have the change in log-odds per standard deviation, which is comparable across variables.\n\ncoef_sd = (coef * X_train.std()).sort_values()\nprint(coef_sd.round(3))\n\n#&gt; pressure   -0.301\n#&gt; age        -0.052\n#&gt; noise      -0.030\n#&gt; triceps     0.030\n#&gt; insulin     0.053\n#&gt; mass        0.126\n#&gt; pedigree    0.192\n#&gt; pregnant    0.374\n#&gt; glucose     0.950\n#&gt; dtype: float64\n\nfig, ax = plt.subplots(figsize=(6.5, 3.5))\ncoef_sd.plot(kind=\"barh\", ax=ax, color=\"mediumseagreen\")\nax.axvline(0, color=\"grey\", linewidth=1)\nax.set_xlabel(\"change in log-odds per 1 SD\")\nfig.tight_layout(); plt.show()\n\n\n\n\n\n\n\n\nOn that scale glucose is the largest by a wide margin and pedigree has dropped to fourth. The ranking reversed because of a unit conversion, not because of anything in the data.\nTwo further things are worth noticing. The logistic regression’s test AUC is about the same as the forest’s: the black box bought you nothing here, which is worth remembering before you spend a day explaining it. And pressure gets a substantial negative standardised coefficient while the forest gives it almost no SHAP at all — two models of the same data disagreeing about a variable, which is a fact about the models.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#task-3-put-the-four-measures-side-by-side",
     "href": "day6-02-shap.html#task-3-put-the-four-measures-side-by-side",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "23.9 Task 3 — Put the four measures side by side",
     "text": "23.9 Task 3 — Put the four measures side by side\nBuild one table with a column per method, each scaled to its own maximum so the columns are on a common footing, and read off where the control sits in each.\n\n# Replace every ______ below, then run this cell.\nfrom sklearn.inspection import permutation_importance\n\nperm = pd.Series(permutation_importance(\n    rf, X_test, y_test, n_repeats=20, random_state=123,\n    scoring=\"roc_auc\").importances_mean, index=X.columns)\n\ncomparison = pd.DataFrame({\n    \"impurity\":    pd.Series(rf.feature_importances_, index=X.columns),\n    \"permutation\": perm,\n    \"mean |SHAP|\": pd.Series(np.abs(phi).mean(axis=0), index=X.columns),\n    \"|coef| per SD\": ______,\n})\ncomparison = comparison / comparison.______()\nprint(comparison.round(2).sort_values(\"mean |SHAP|\", ascending=False))\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nThe fourth column is the standardised coefficients you just computed, without their signs — importance measures have no direction, so take the absolute value. Scaling a data frame by its column maxima is one method call.\n\n\n\nEvery column agrees that glucose is first. Below that they disagree about almost everything, and the noise row is between 0 and 0.37 depending on which method you happened to run.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#the-result-that-should-bother-you",
     "href": "day6-02-shap.html#the-result-that-should-bother-you",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "23.10 The result that should bother you",
     "text": "23.10 The result that should bother you\nAn explanation does not know whether the model is any good. Here is the same forest fitted to the same predictors with the outcome column shuffled, so that there is no relationship left to learn.\n\ny_shuffled = np.random.default_rng(0).permutation(y_train.values)\nrf_null = RandomForestClassifier(n_estimators=300, random_state=123).fit(X_train, y_shuffled)\nprint(\"test AUC of the shuffled-label forest:\",\n      round(roc_auc_score(y_test, rf_null.predict_proba(X_test)[:, 1]), 3))\n\n#&gt; test AUC of the shuffled-label forest: 0.467\n\nphi_null = shap.TreeExplainer(rf_null).shap_values(X_test)[:, :, 1]\nshap.summary_plot(phi_null, X_test, show=False, plot_size=(6.5, 4))\nplt.tight_layout(); plt.show()\n\n\n\n\n\n\n\n\nThe AUC is about 0.47 — worse than a coin toss. The beeswarm is still a beeswarm: variables are ranked, dots are coloured, one predictor leads the others by a clear margin. The contributions are about a third the size of the real model’s, which you would only notice by looking at the axis, and shap will not tell you.\n\nSHAP explains the function the model computes. It has no access to the outcome, so it cannot know the function is worthless.\nTherefore a SHAP plot is never evidence that a model works. The evidence that a model works is a held-out score against a baseline, and it has to come first.\nAnd the ordering in a SHAP plot of a model that does not work is just the ordering of its overfitting.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#reflection",
     "href": "day6-02-shap.html#reflection",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "23.11 Reflection",
     "text": "23.11 Reflection\n\nA colleague shows you a beeswarm plot in a slide deck. Write down the two questions you would ask before reading anything off it.\nThe force plot for patient 0 was a correct explanation of a prediction that was wrong about the patient. Explain, in one sentence each, what the plot does and does not license you to say.\nSHAP values for this model are in probability units and sum to the prediction. What would be lost if they were reported on the log-odds scale instead, and what would be gained?",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#stretch",
     "href": "day6-02-shap.html#stretch",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "23.12 Stretch",
     "text": "23.12 Stretch\n\n\n\n\n\n\nNoteStretch 1 — Two patients with the same prediction\n\n\n\nFind two test patients whose predicted probabilities agree to within 0.01 and plot a force plot for each. If the explanations differ, what does that tell you about the model that the prediction alone did not?\n\n\n\n\n\n\n\n\nNoteStretch 2 — Explain the logistic regression instead\n\n\n\nshap.LinearExplainer gives SHAP values for the logistic regression. Compute them and compare with the standardised coefficients. They should agree almost exactly, and the reason they do tells you what SHAP adds for a forest and does not add for a linear model.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-02-shap.html#what-you-can-and-cannot-now-claim",
     "href": "day6-02-shap.html#what-you-can-and-cannot-now-claim",
-    "title": "23  Exercise 6.2 — SHAP, one patient at a time",
+    "title": "23  Exercise 9.2 — SHAP, one patient at a time",
     "section": "23.13 What you can and cannot now claim",
     "text": "23.13 What you can and cannot now claim\nCan: that for this forest, this patient’s prediction of 0.71 decomposes exactly into a base rate of 0.37 plus a set of contributions dominated by glucose; and that the same decomposition, done on a model that cannot predict anything, looks much the same.\nCannot: that glucose caused anything, that lowering it would lower the prediction for a future patient, or that the forest has found something about diabetes. The first of those needs a causal question asked properly; the others need an experiment. Chapter 24 asks the same questions in R, and adds the one plot that at least looks like an intervention — and shows why it is not one.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 6.2 — SHAP, one patient at a time</span>"
+      "<span class='chapter-number'>23</span>  <span class='chapter-title'>Exercise 9.2 — SHAP, one patient at a time</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html",
     "href": "day6-03-dalex.html",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "",
     "text": "24.1 Objectives",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html#objectives",
     "href": "day6-03-dalex.html#objectives",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "",
     "text": "Wrap a fitted tidymodels workflow in a DALEX explainer, and check that the explainer sees the outcome you think it does.\nObtain global importance, a partial dependence profile and a local Shapley explanation from the same object.\nSay what a partial dependence profile assumes, and name a variable in this dataset for which the assumption fails.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html#why-this-here",
     "href": "day6-03-dalex.html#why-this-here",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "24.2 Why this, here",
     "text": "24.2 Why this, here\nChapter 22 and Chapter 23 were Python. The methods are not Python’s: DALEX gives you permutation importance, Shapley attributions, partial dependence and individual conditional expectation from one explainer object, wrapped around any model that can predict. This chapter answers the same questions in R, on the same data and the same control column, so you can see that the conclusions belong to the methods and not to the language. It also adds the one family of plot that Python’s shap does not give you, and that is the one with the sharpest assumption buried in it.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html#one-explainer-any-model",
     "href": "day6-03-dalex.html#one-explainer-any-model",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "24.3 One explainer, any model",
     "text": "24.3 One explainer, any model\nDALEX works by wrapping the model in a uniform interface: the data, the true outcome, and a function that turns rows into predictions. Everything else is computed from that, which is why the same code works for a forest, a regression or something written by someone else entirely.\n\nlibrary(readr); library(dplyr); library(tidymodels)\nlibrary(DALEX); library(DALEXtra); library(vip); library(ggplot2)\n\nset.seed(123)\ndia &lt;- read_csv(\"data/diabetes.csv\", show_col_types = FALSE) |&gt;\n  mutate(diabetes = factor(diabetes, levels = c(\"neg\", \"pos\")),\n         noise    = round(rnorm(n()), 2))\n\nsplit &lt;- initial_split(dia, prop = 0.7, strata = diabetes)\ntrain &lt;- training(split)\ntest  &lt;- testing(split)\n\nrf_wf &lt;- workflow() |&gt;\n  add_recipe(recipe(diabetes ~ ., data = train) |&gt;\n               step_normalize(all_numeric_predictors())) |&gt;\n  add_model(rand_forest(trees = 500, mtry = 3, min_n = 10) |&gt;\n              set_engine(\"ranger\", importance = \"impurity\", seed = 123) |&gt;\n              set_mode(\"classification\"))\n\nrf_fit &lt;- fit(rf_wf, data = train)\n\nexplainer &lt;- explain_tidymodels(\n  rf_fit,\n  data  = select(test, -diabetes),\n  y     = as.numeric(test$diabetes == \"pos\"),\n  label = \"random forest\",\n  verbose = FALSE\n)\n\n\n\n\n\n\n\nWarningRead the y argument twice\n\n\n\ndiabetes is a factor, and as.numeric() on a factor returns the level codes — 1 and 2, not 0 and 1. Pass that to explain_tidymodels() and the explainer believes every patient has an outcome of at least 1 while the model predicts probabilities below 1, so every residual is positive and the mean residual is about 1. Nothing errors. The importance plot still draws. Compare with as.numeric(test$diabetes == \"pos\"), which gives the 0/1 the explainer expects.\nThe diagnostic is free: print the explainer with verbose = TRUE and read the residual line. If the mean residual is not near zero, the outcome is wrong.\n\n\n\n# the free diagnostic: residuals should straddle zero\nround(summary(explainer$residuals), 3)\n\n#&gt;    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. \n#&gt;  -0.844  -0.291  -0.078   0.001   0.283   0.932",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html#task-1-global-importance-and-the-control-for-the-third-time",
     "href": "day6-03-dalex.html#task-1-global-importance-and-the-control-for-the-third-time",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "24.4 Task 1 — Global importance, and the control for the third time",
     "text": "24.4 Task 1 — Global importance, and the control for the third time\nmodel_parts() is permutation importance: it shuffles each variable B times and records the loss. For a classification task the default loss is one minus AUC, so a variable that matters has a higher dropout loss than the full model.\n\nset.seed(123)\nmp &lt;- model_parts(explainer, B = 20)\nplot(mp)\n\n\n\n\n\n\n\n\n_full_model_ marks the intact loss and _baseline_ the loss of a model that predicts the mean, so the distance between them is all the AUC the forest has. Turn the losses into drops and run the control check.\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\n\nlosses &lt;- as.data.frame(______) |&gt;\n  group_by(variable) |&gt;\n  summarise(loss = mean(dropout_loss), .groups = \"drop\")\nfull   &lt;- losses$loss[losses$variable == \"_full_model_\"]\ndrops  &lt;- setNames(losses$loss - ______, losses$variable)\ndrops  &lt;- drops[!names(drops) %in% c(\"_baseline_\", \"_full_model_\")]\n\nround(sort(drops, decreasing = TRUE), 4)\ncheck_noise_control(drops)\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nThe quantity you want is each variable’s mean loss minus the loss of the intact model, which is the row model_parts() labels _full_model_. The object to summarise is the one you just plotted.\n\n\n\nThe picture matches Python’s to the extent that you should expect: glucose far ahead, age second, everything else in an undifferentiated band, and the control inside that band at a few per cent of glucose.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html#partial-dependence-the-average-patient-who-does-not-exist",
     "href": "day6-03-dalex.html#partial-dependence-the-average-patient-who-does-not-exist",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "24.5 Partial dependence — the average patient who does not exist",
     "text": "24.5 Partial dependence — the average patient who does not exist\nA partial dependence profile asks: if I set this variable to \\(v\\) for every patient in the data, leaving all their other values alone, what does the model predict on average? Sweep \\(v\\) across the observed range and you get a curve.\n\npdp_glucose  &lt;- model_profile(explainer, variable = \"glucose\",  type = \"partial\")\npdp_pedigree &lt;- model_profile(explainer, variable = \"pedigree\", type = \"partial\")\nplot(pdp_glucose, pdp_pedigree)\n\n\n\n\n\n\n\n\nGlucose moves the average prediction from about 0.19 to about 0.74 across its range — a real and large effect. Pedigree moves it very little, and most of what movement there is sits at the sparse right-hand end of the variable.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html#task-2-one-curve-per-patient",
     "href": "day6-03-dalex.html#task-2-one-curve-per-patient",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "24.6 Task 2 — One curve per patient",
     "text": "24.6 Task 2 — One curve per patient\nThe average hides how much the patients differ. geom = \"profiles\" draws the individual conditional expectation curves — one per patient — with the average on top.\n\n# Replace every ______ below, then run this cell.\nplot(pdp_glucose, geom = ______) +\n  ggtitle(\"Ceteris paribus profiles for glucose, with the average\")\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nThe argument is geom, and the value is named in the sentence above the cell. ?plot.model_profile lists the alternatives.\n\n\n\nDescribe the spread. Do all patients respond to glucose in the same way, and would you be happy to quote the average curve to someone asking about one patient?",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html#local-explanation-the-same-patient-a-different-algorithm",
     "href": "day6-03-dalex.html#local-explanation-the-same-patient-a-different-algorithm",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "24.7 Local explanation — the same patient, a different algorithm",
     "text": "24.7 Local explanation — the same patient, a different algorithm\npredict_parts(type = \"shap\") computes Shapley values by sampling orderings of the variables, rather than exploiting the tree structure as TreeExplainer does. It is slower and approximate, and it works for models that are not trees.\n\npatient &lt;- test[1, setdiff(names(test), \"diabetes\")]\npatient\n\n#&gt; # A tibble: 1 × 9\n#&gt;   pregnant glucose pressure triceps insulin  mass pedigree   age noise\n#&gt;      &lt;dbl&gt;   &lt;dbl&gt;    &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;\n#&gt; 1        8     129       84       0       0  27.6    0.828    44 -0.23\n\ncat(\"predicted:\", round(predict(explainer, patient), 3),\n    \" actual:\", as.character(test$diabetes[1]), \"\\n\")\n\n#&gt; predicted: 0.655  actual: pos\n\nset.seed(123)\nlocal_shap &lt;- predict_parts(explainer, new_observation = patient,\n                            type = \"shap\", B = 25)\nplot(local_shap)\n\n\n\n\n\n\n\n\nThe bars are the same quantity as Chapter 23’s force plot, drawn differently and estimated by a different algorithm. The boxplots behind them are the spread across the 25 sampled orderings — a feature the Python plot does not show you, and a useful reminder that these contributions are estimates with uncertainty unless your model is a tree ensemble.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html#task-3-the-forests-own-importance-for-comparison",
     "href": "day6-03-dalex.html#task-3-the-forests-own-importance-for-comparison",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "24.8 Task 3 — The forest’s own importance, for comparison",
     "text": "24.8 Task 3 — The forest’s own importance, for comparison\nvip() reads the impurity importance the ranger engine stored while fitting. Plot it, and put it next to the permutation ranking from Task 1.\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\nimp &lt;- vi(extract_fit_parsnip(______))\nimp\ncheck_noise_control(imp)\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nvi() needs the model itself, not the workflow that contains it. extract_fit_parsnip() reaches inside a fitted workflow and hands you the parsnip fit.\n\n\n\nSame disagreement as in Python, in the same direction: impurity puts the control fifth of nine at around 30% of glucose, permutation puts it in the noise band at a few per cent. Two measures, one model, one figure each, and only the second one is about prediction.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html#the-result-that-should-bother-you",
     "href": "day6-03-dalex.html#the-result-that-should-bother-you",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "24.9 The result that should bother you",
     "text": "24.9 The result that should bother you\nAsk for a partial dependence profile of insulin.\n\n# the profile averages the model over the explainer's data, which is the test set\ncat(\"rows with insulin recorded as 0:\",\n    sum(test$insulin == 0), \"of\", nrow(test), \"\\n\")\n\n#&gt; rows with insulin recorded as 0: 130 of 231\n\ncat(\"largest observed insulin:\", max(test$insulin), \"\\n\")\n\n#&gt; largest observed insulin: 846\n\nplot(model_profile(explainer, variable = \"insulin\", type = \"partial\"))\n\n\n\n\n\n\n\n\nIt is a smooth, gently rising curve, and it is nonsense. Three steps.\n\nMore than half the rows the profile averages over record insulin as exactly zero, which is not a measurement — it is a missing value written as a number, the defect you met in Chapter 5. The curve’s left-hand end is the model’s behaviour on “not measured”, plotted as though it were a concentration.\nThe curve’s right-hand end sets insulin to its maximum for every patient, including the ones whose insulin was never measured and the ones for whom that combination of values is physiologically impossible. Partial dependence averages the model over rows that do not exist and could not exist.\nSo the curve is well defined as a property of the fitted function, and it is not an answer to “what happens if insulin rises”. That question is causal, and nothing on this page can answer it.\n\nThe same objection applies, more weakly, to every other partial dependence plot you will ever be shown. Variables are correlated; holding the others fixed while moving one walks you off the data.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html#reflection",
     "href": "day6-03-dalex.html#reflection",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "24.10 Reflection",
     "text": "24.10 Reflection\n\nDALEX and shap gave the same patient’s explanation by different algorithms. What would you conclude if they had disagreed substantially, and what would you check first?\nThe partial dependence plot for glucose looks like a dose–response curve. Write the sentence that distinguishes what it shows from what a dose–response curve shows.\nYou have now explained this forest in two languages with four methods. What is the single piece of evidence that would most change your willingness to put it in front of a clinician — and is it on any of these pages?",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html#stretch",
     "href": "day6-03-dalex.html#stretch",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "24.11 Stretch",
     "text": "24.11 Stretch\n\n\n\n\n\n\nNoteStretch 1 — Explain a model DALEX has never heard of\n\n\n\nFit a logistic regression with glm() and build an explainer for it with DALEX::explain(), passing your own predict_function. Put its model_parts() next to the forest’s. The point is not the comparison; it is that the explainer needed nothing from the model except the ability to predict.\n\n\n\n\n\n\n\n\nNoteStretch 2 — Accumulated local effects\n\n\n\nRe-draw the insulin profile with type = \"accumulated\". ALE profiles average the model’s local slope over the data that actually exists, rather than over a grid of invented rows. How much does the curve change, and does the change support or undermine the reading you gave in step 3 above?",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-03-dalex.html#what-you-can-and-cannot-now-claim",
     "href": "day6-03-dalex.html#what-you-can-and-cannot-now-claim",
-    "title": "24  Exercise 6.3 — The same questions in R, with DALEX",
+    "title": "24  Exercise 9.3 — The same questions in R, with DALEX",
     "section": "24.12 What you can and cannot now claim",
     "text": "24.12 What you can and cannot now claim\nCan: that this forest, explained in R by three methods, tells the same story as the Python explanations of Chapter 23 — glucose dominates, nothing else is clearly separated from the control, and the model’s own impurity importance disagrees with all of it.\nCannot: that any of this is evidence about diabetes. Every figure on this page is a description of a function that was fitted to 537 rows of one file. What that function has to do with patients is a question none of today’s tools can be made to answer.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 6.3 — The same questions in R, with DALEX</span>"
+      "<span class='chapter-number'>24</span>  <span class='chapter-title'>Exercise 9.3 — The same questions in R, with DALEX</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html",
     "href": "day6-04-subgroups.html",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "",
     "text": "25.1 Objectives",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html#objectives",
     "href": "day6-04-subgroups.html#objectives",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "",
     "text": "Compute sensitivity, specificity and AUC inside subgroups of a test set, and report each one beside the number of rows and the number of cases it rests on.\nBuild a noise floor for a between-group gap by permuting the group labels, and say whether an observed gap clears it.\nExplain why the group a subgroup table flags as worst served is usually the smallest one, and name what you would need to measure a real disparity.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html#why-this-here",
     "href": "day6-04-subgroups.html#why-this-here",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "25.2 Why this, here",
     "text": "25.2 Why this, here\nChapter 22, Chapter 23 and Chapter 24 asked which variables the model used. None of them asked who the model works for. Every metric in this booklet — Chapter 18’ AUC, Chapter 15’ sensitivity, Chapter 20’s comparison table — has been computed on all 231 test rows at once, and a single number over 231 people is an average over people who are not interchangeable. Chapter 2 asked where the model is wrong. A service has to answer a harder version: for whom. This exercise splits the test set and asks that question, and then spends most of its time on whether the answer means anything.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html#worked-example-one-model-scored-on-everyone",
     "href": "day6-04-subgroups.html#worked-example-one-model-scored-on-everyone",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "25.3 Worked example — one model, scored on everyone",
-    "text": "25.3 Worked example — one model, scored on everyone\nWe audit the random forest of Chapter 20 rather than the logistic regression of Chapter 14, for one reason: it is the model Day 6 has spent all day explaining, and an equity audit in practice arrives after the explanation, on the model somebody is proposing to deploy. Nothing in the method depends on that choice — Stretch 1 repeats the whole page on the logistic regression, and the interesting question is whether the two models fail the same people.\n\nRPython\n\n\n\nlibrary(tidymodels); library(readr); library(dplyr); library(ggplot2)\n\ndiabetes &lt;- read_csv(\"data/diabetes.csv\") |&gt;\n  mutate(diabetes = factor(diabetes, levels = c(\"pos\", \"neg\")))\n\nset.seed(123)\nsplit &lt;- initial_split(diabetes, prop = 0.7, strata = diabetes)\ntrain &lt;- training(split); test &lt;- testing(split)\n\nrf_fit &lt;- rand_forest(trees = 500) |&gt;\n  set_engine(\"ranger\", seed = 123) |&gt;\n  set_mode(\"classification\") |&gt;\n  fit(diabetes ~ ., data = train)\n\npred &lt;- augment(rf_fit, test)\n\n# every metric in one place, and the two counts that have to travel with them\nmetrics_in &lt;- function(d) {\n  tibble(n     = nrow(d),\n         cases = sum(d$diabetes == \"pos\"),\n         sens  = if (any(d$diabetes == \"pos\")) sens_vec(d$diabetes, d$.pred_class) else NA_real_,\n         spec  = if (any(d$diabetes == \"neg\")) spec_vec(d$diabetes, d$.pred_class) else NA_real_,\n         auc   = if (n_distinct(d$diabetes) == 2) roc_auc_vec(d$diabetes, d$.pred_pos) else NA_real_)\n}\n\nby_group &lt;- function(d, col) {\n  d |&gt; group_by(group = .data[[col]]) |&gt; group_modify(~ metrics_in(.x)) |&gt; ungroup()\n}\n\nmetrics_in(pred)\n\n#&gt; # A tibble: 1 × 5\n#&gt;       n cases  sens  spec   auc\n#&gt;   &lt;int&gt; &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;\n#&gt; 1   231    84 0.536 0.850 0.824\n\n\n\n\n\nimport pandas as pd, numpy as np\nimport matplotlib.pyplot as plt\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.ensemble import RandomForestClassifier\nfrom sklearn.metrics import recall_score, roc_auc_score\n\ndiabetes = pd.read_csv(\"data/diabetes.csv\")\nX = diabetes.drop(columns=\"diabetes\")\ny = (diabetes[\"diabetes\"] == \"pos\").astype(int)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3,\n                                          random_state=123, stratify=y)\n\nrf_fit = RandomForestClassifier(n_estimators=500, random_state=123).fit(X_tr, y_tr)\n\npred = X_te.copy()\npred[\"truth\"] = y_te\npred[\"pred\"]  = rf_fit.predict(X_te)\npred[\"prob\"]  = rf_fit.predict_proba(X_te)[:, 1]\n\n# every metric in one place, and the two counts that have to travel with them\ndef metrics_in(d):\n    t, yhat, p = d[\"truth\"].values, d[\"pred\"].values, d[\"prob\"].values\n    return pd.Series({\n        \"n\": len(t), \"cases\": int(t.sum()),\n        \"sens\": recall_score(t, yhat) if t.sum() else np.nan,\n        \"spec\": recall_score(1 - t, 1 - yhat) if (1 - t).sum() else np.nan,\n        \"auc\":  roc_auc_score(t, p) if 0 &lt; t.sum() &lt; len(t) else np.nan})\n\ndef by_group(d, col):\n    return pd.DataFrame({g: metrics_in(sub)\n                         for g, sub in d.groupby(col, observed=True)}).T\n\nmetrics_in(pred).round(3)\n\n#&gt; n        231.000\n#&gt; cases     84.000\n#&gt; sens       0.631\n#&gt; spec       0.748\n#&gt; auc        0.768\n#&gt; dtype: float64\n\n\n\n\n\nOne row, 231 patients, 84 of them with diabetes. R’s split gives a sensitivity of 0.54 and an AUC of 0.82; Python’s gives 0.63 and 0.77. That row is the only performance statement the booklet has made so far, and a commissioner reading it has no way to tell whether it describes everybody equally.\n\n\n\n\n\n\nNotecases, not just n\n\n\n\nmetrics_in() returns two counts, and the second one is the one people forget. Sensitivity is computed only on the patients who have the disease, so a group of 63 women containing 8 cases gives you a sensitivity estimated from 8 observations, however reassuring the 63 looks in the table.",
+    "text": "25.3 Worked example — one model, scored on everyone\nWe audit the random forest of Chapter 20 rather than the logistic regression of Chapter 14, for one reason: it is the model Day 9 has spent all day explaining, and an equity audit in practice arrives after the explanation, on the model somebody is proposing to deploy. Nothing in the method depends on that choice — Stretch 1 repeats the whole page on the logistic regression, and the interesting question is whether the two models fail the same people.\n\nRPython\n\n\n\nlibrary(tidymodels); library(readr); library(dplyr); library(ggplot2)\n\ndiabetes &lt;- read_csv(\"data/diabetes.csv\") |&gt;\n  mutate(diabetes = factor(diabetes, levels = c(\"pos\", \"neg\")))\n\nset.seed(123)\nsplit &lt;- initial_split(diabetes, prop = 0.7, strata = diabetes)\ntrain &lt;- training(split); test &lt;- testing(split)\n\nrf_fit &lt;- rand_forest(trees = 500) |&gt;\n  set_engine(\"ranger\", seed = 123) |&gt;\n  set_mode(\"classification\") |&gt;\n  fit(diabetes ~ ., data = train)\n\npred &lt;- augment(rf_fit, test)\n\n# every metric in one place, and the two counts that have to travel with them\nmetrics_in &lt;- function(d) {\n  tibble(n     = nrow(d),\n         cases = sum(d$diabetes == \"pos\"),\n         sens  = if (any(d$diabetes == \"pos\")) sens_vec(d$diabetes, d$.pred_class) else NA_real_,\n         spec  = if (any(d$diabetes == \"neg\")) spec_vec(d$diabetes, d$.pred_class) else NA_real_,\n         auc   = if (n_distinct(d$diabetes) == 2) roc_auc_vec(d$diabetes, d$.pred_pos) else NA_real_)\n}\n\nby_group &lt;- function(d, col) {\n  d |&gt; group_by(group = .data[[col]]) |&gt; group_modify(~ metrics_in(.x)) |&gt; ungroup()\n}\n\nmetrics_in(pred)\n\n#&gt; # A tibble: 1 × 5\n#&gt;       n cases  sens  spec   auc\n#&gt;   &lt;int&gt; &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;\n#&gt; 1   231    84 0.536 0.850 0.824\n\n\n\n\n\nimport pandas as pd, numpy as np\nimport matplotlib.pyplot as plt\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.ensemble import RandomForestClassifier\nfrom sklearn.metrics import recall_score, roc_auc_score\n\ndiabetes = pd.read_csv(\"data/diabetes.csv\")\nX = diabetes.drop(columns=\"diabetes\")\ny = (diabetes[\"diabetes\"] == \"pos\").astype(int)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3,\n                                          random_state=123, stratify=y)\n\nrf_fit = RandomForestClassifier(n_estimators=500, random_state=123).fit(X_tr, y_tr)\n\npred = X_te.copy()\npred[\"truth\"] = y_te\npred[\"pred\"]  = rf_fit.predict(X_te)\npred[\"prob\"]  = rf_fit.predict_proba(X_te)[:, 1]\n\n# every metric in one place, and the two counts that have to travel with them\ndef metrics_in(d):\n    t, yhat, p = d[\"truth\"].values, d[\"pred\"].values, d[\"prob\"].values\n    return pd.Series({\n        \"n\": len(t), \"cases\": int(t.sum()),\n        \"sens\": recall_score(t, yhat) if t.sum() else np.nan,\n        \"spec\": recall_score(1 - t, 1 - yhat) if (1 - t).sum() else np.nan,\n        \"auc\":  roc_auc_score(t, p) if 0 &lt; t.sum() &lt; len(t) else np.nan})\n\ndef by_group(d, col):\n    return pd.DataFrame({g: metrics_in(sub)\n                         for g, sub in d.groupby(col, observed=True)}).T\n\nmetrics_in(pred).round(3)\n\n#&gt; n        231.000\n#&gt; cases     84.000\n#&gt; sens       0.631\n#&gt; spec       0.748\n#&gt; auc        0.768\n#&gt; dtype: float64\n\n\n\n\n\nOne row, 231 patients, 84 of them with diabetes. R’s split gives a sensitivity of 0.54 and an AUC of 0.82; Python’s gives 0.63 and 0.77. That row is the only performance statement the booklet has made so far, and a commissioner reading it has no way to tell whether it describes everybody equally.\n\n\n\n\n\n\nNotecases, not just n\n\n\n\nmetrics_in() returns two counts, and the second one is the one people forget. Sensitivity is computed only on the patients who have the disease, so a group of 63 women containing 8 cases gives you a sensitivity estimated from 8 observations, however reassuring the 63 looks in the table.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html#task-1-split-the-test-set-and-report-the-gap",
     "href": "day6-04-subgroups.html#task-1-split-the-test-set-and-report-the-gap",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "25.4 Task 1 — Split the test set, and report the gap",
     "text": "25.4 Task 1 — Split the test set, and report the gap\nCut the test set two ways — by age band and by number of pregnancies — and compute the three metrics inside each band. Report, for each grouping, the distance between the best and the worst group, with the group sizes beside it.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\n\npred &lt;- pred |&gt;\n  mutate(age_band  = cut(age, c(-Inf, 30, 40, 50, Inf), right = FALSE,\n                         labels = c(\"21-29\", \"30-39\", \"40-49\", \"50+\")),\n         preg_band = ______(pregnant, c(-Inf, 1, 3, 6, Inf), right = FALSE,\n                            labels = c(\"0\", \"1-2\", \"3-5\", \"6+\")))\n\nby_age  &lt;- by_group(pred, ______)\nby_preg &lt;- by_group(pred, \"preg_band\")\nby_age\nby_preg\n\ngap_sens &lt;- max(by_age$sens) - ______(by_age$sens)\ncat(\"age bands - gap in sensitivity:\", round(gap_sens, 3),\n    \" specificity:\", round(max(by_age$spec) - min(by_age$spec), 3),\n    \" AUC:\",         round(max(by_age$auc)  - min(by_age$auc),  3), \"\\n\")\n\ncheck_metric_range(gap_sens, 0, 1, \"sensitivity gap\")\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\n\npred[\"age_band\"]  = pd.cut(pred[\"age\"], [0, 30, 40, 50, np.inf], right=False,\n                           labels=[\"21-29\", \"30-39\", \"40-49\", \"50+\"])\npred[\"preg_band\"] = pd.______(pred[\"pregnant\"], [0, 1, 3, 6, np.inf], right=False,\n                              labels=[\"0\", \"1-2\", \"3-5\", \"6+\"])\n\nby_age  = by_group(pred, ______)\nby_preg = by_group(pred, \"preg_band\")\nprint(by_age.round(3))\nprint(by_preg.round(3))\n\ngap_sens = by_age[\"sens\"].max() - by_age[\"sens\"].______()\nprint(\"age bands - gap in sensitivity:\", round(gap_sens, 3),\n      \" specificity:\", round(by_age[\"spec\"].max() - by_age[\"spec\"].min(), 3),\n      \" AUC:\",         round(by_age[\"auc\"].max()  - by_age[\"auc\"].min(),  3))\n\ncheck_metric_range(gap_sens, 0, 1, \"sensitivity gap\")\n\n\n\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nBoth languages have one function that turns a numeric column into bands with labels you choose; in R it is base, in Python it lives in pandas. The gap is the range of a column, so max() and min() are all you need — and if your answer comes back as a missing value, one band had only one class in it, which check_metric_range() will tell you by failing.\n\n\n\nThe age table is the kind of table that gets into a slide deck. In R the 40–49 band has a sensitivity of 0.73 against 0.46 for the under-30s; in Python the over-50s sit at 0.46 against 0.82 for the 40–49s. Before reading anything into either, look at the n and cases columns.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html#task-2-how-large-a-gap-does-chance-produce",
     "href": "day6-04-subgroups.html#task-2-how-large-a-gap-does-chance-produce",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "25.5 Task 2 — How large a gap does chance produce?",
     "text": "25.5 Task 2 — How large a gap does chance produce?\nThe honest question is not whether the groups differ. With four groups and 231 rows they will always differ. The question is whether they differ by more than they would if there were nothing to find.\nBuild the comparison the only way that needs no assumptions: shuffle the band labels among the test rows, so the groups keep their sizes and lose their meaning, recompute the gap, and do it a thousand times. That distribution is the noise floor.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\n\nset.seed(123)\nnull_gaps &lt;- replicate(1000, {\n  shuffled &lt;- pred |&gt; mutate(age_band = ______(age_band))\n  g &lt;- by_group(shuffled, \"age_band\")\n  max(g$sens) - min(g$sens)\n})\n\nround(quantile(null_gaps, c(0.5, 0.95)), 3)\ncheck_gap_vs_noise(______, null_gaps, \"sensitivity gap across age bands\")\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\n\nrng = np.random.default_rng(123)\nshuffled, null_gaps = pred.copy(), []\nfor _ in range(1000):\n    shuffled[\"age_band\"] = rng.______(pred[\"age_band\"].values)\n    g = by_group(shuffled, \"age_band\")\n    null_gaps.append(g[\"sens\"].max() - g[\"sens\"].min())\nnull_gaps = np.array(null_gaps)\n\nprint(np.quantile(null_gaps, [0.5, 0.95]).round(3))\ncheck_gap_vs_noise(______, null_gaps, \"sensitivity gap across age bands\")\n\n\n\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nShuffling a column is one function call: in R it is the same function you use to draw a sample, called with no size argument; in Python it is a method of the random generator you have already created. Nothing else in the loop changes.\nA [fix] from check_gap_vs_noise() is a result, not a bug. Read its detail line before you touch the code.\n\n\n\ncheck_gap_vs_noise() reports the observed gap, the median of the permuted gaps, their 95th centile and a permutation p-value. For the age bands it fails, in both languages: the gap in sensitivity across age is 0.28 in R against a median permuted gap of 0.28, and 0.36 in Python against a median of 0.26. Made-up groups of the same sizes produce a gap this large about half the time in R and about a fifth of the time in Python.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html#a-second-grouping-where-the-answer-is-different",
     "href": "day6-04-subgroups.html#a-second-grouping-where-the-answer-is-different",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "25.6 A second grouping, where the answer is different",
-    "text": "25.6 A second grouping, where the answer is different\nRun the same two steps on the pregnancy bands. This is a worked example, not a task: the code is Task 1’s and Task 2’s with one column name changed, so it is written out here in full.\n\nRPython\n\n\n\npreg &lt;- pred |&gt;\n  mutate(preg_band = cut(pregnant, c(-Inf, 1, 3, 6, Inf), right = FALSE,\n                         labels = c(\"0\", \"1-2\", \"3-5\", \"6+\")))\nby_preg &lt;- by_group(preg, \"preg_band\")\nby_preg\n\n#&gt; # A tibble: 4 × 6\n#&gt;   group     n cases  sens  spec   auc\n#&gt;   &lt;fct&gt; &lt;int&gt; &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;\n#&gt; 1 0        24    14 0.786 0.6   0.721\n#&gt; 2 1-2      63     8 0.25  0.964 0.789\n#&gt; 3 3-5      72    23 0.261 0.980 0.813\n#&gt; 4 6+       72    39 0.667 0.545 0.716\n\ngap_preg &lt;- max(by_preg$sens) - min(by_preg$sens)\n\nset.seed(123)\nnull_preg &lt;- replicate(1000, {\n  g &lt;- by_group(mutate(preg, preg_band = sample(preg_band)), \"preg_band\")\n  max(g$sens) - min(g$sens)\n})\n\ncheck_gap_vs_noise(gap_preg, null_preg, \"sensitivity gap across pregnancy bands\")\n\n#&gt; [ok]  sensitivity gap across pregnancy bands is larger than the gap chance alone produces  (observed 0.536, median null 0.242, 95th centile 0.458, p = 0.026 (1000 permutations))\n\nggplot(tibble(gap = null_preg), aes(gap)) +\n  geom_histogram(bins = 30, fill = \"grey80\", colour = \"white\") +\n  geom_vline(xintercept = gap_preg, linewidth = 1) +\n  labs(x = \"sensitivity gap between four groups of the same sizes, labels shuffled\",\n       y = \"permutations\",\n       title = \"The noise floor, and the gap we observed (vertical line)\")\n\n\n\n\n\n\n\n\n\n\n\npreg = pred.copy()\npreg[\"preg_band\"] = pd.cut(preg[\"pregnant\"], [0, 1, 3, 6, np.inf], right=False,\n                           labels=[\"0\", \"1-2\", \"3-5\", \"6+\"])\nby_preg = by_group(preg, \"preg_band\")\nprint(by_preg.round(3))\n\n#&gt;         n  cases   sens   spec    auc\n#&gt; 0    23.0   17.0  0.765  0.500  0.706\n#&gt; 1-2  57.0    6.0  0.167  0.882  0.647\n#&gt; 3-5  68.0   17.0  0.412  0.882  0.704\n#&gt; 6+   83.0   44.0  0.727  0.436  0.638\n\ngap_preg = by_preg[\"sens\"].max() - by_preg[\"sens\"].min()\n\nrng = np.random.default_rng(123)\nshuffled, null_preg = preg.copy(), []\nfor _ in range(1000):\n    shuffled[\"preg_band\"] = rng.permutation(preg[\"preg_band\"].values)\n    g = by_group(shuffled, \"preg_band\")\n    null_preg.append(g[\"sens\"].max() - g[\"sens\"].min())\nnull_preg = np.array(null_preg)\n\ncheck_gap_vs_noise(gap_preg, null_preg, \"sensitivity gap across pregnancy bands\")\n\n#&gt; [ok]  sensitivity gap across pregnancy bands is larger than the gap chance alone produces  (observed 0.598, median null 0.233, 95th centile 0.465, p = 0.009 (1000 permutations))\n#&gt; 0.008991008991008992\n\nfig, ax = plt.subplots(figsize=(6.5, 3))\nax.hist(null_preg, bins=30, color=\"0.8\", edgecolor=\"white\")\n\n#&gt; (array([15., 31., 46., 51., 67., 83., 92., 85., 71., 90., 59., 71., 56.,\n#&gt;        41., 42., 25., 15., 12., 10.,  9.,  7.,  9.,  5.,  3.,  1.,  1.,\n#&gt;         1.,  1.,  0.,  1.]), array([0.03167421, 0.05587093, 0.08006764, 0.10426436, 0.12846108,\n#&gt;        0.1526578 , 0.17685452, 0.20105124, 0.22524795, 0.24944467,\n#&gt;        0.27364139, 0.29783811, 0.32203483, 0.34623155, 0.37042826,\n#&gt;        0.39462498, 0.4188217 , 0.44301842, 0.46721514, 0.49141186,\n#&gt;        0.51560857, 0.53980529, 0.56400201, 0.58819873, 0.61239545,\n#&gt;        0.63659217, 0.66078888, 0.6849856 , 0.70918232, 0.73337904,\n#&gt;        0.75757576]), &lt;BarContainer object of 30 artists&gt;)\n\nax.axvline(gap_preg, color=\"black\", lw=1.5)\n\n#&gt; &lt;matplotlib.lines.Line2D object at 0x316618990&gt;\n\nax.set_xlabel(\"sensitivity gap between four groups of the same sizes, labels shuffled\")\n\n#&gt; Text(0.5, 0, 'sensitivity gap between four groups of the same sizes, labels shuffled')\n\nax.set_ylabel(\"permutations\")\n\n#&gt; Text(0, 0.5, 'permutations')\n\nax.set_title(\"The noise floor, and the gap we observed (vertical line)\")\n\n#&gt; Text(0.5, 1.0, 'The noise floor, and the gap we observed (vertical line)')\n\nfig.tight_layout()\n\n\n\n\n\n\n\n\n\n\n\nThis one clears the floor: a gap of 0.54 in R against a 95th centile of 0.46 (p = 0.03), and 0.60 in Python against 0.47 (p = 0.01). Hold on to it until the end of the page, because the group driving it is the one with six or eight cases in it.",
+    "text": "25.6 A second grouping, where the answer is different\nRun the same two steps on the pregnancy bands. This is a worked example, not a task: the code is Task 1’s and Task 2’s with one column name changed, so it is written out here in full.\n\nRPython\n\n\n\npreg &lt;- pred |&gt;\n  mutate(preg_band = cut(pregnant, c(-Inf, 1, 3, 6, Inf), right = FALSE,\n                         labels = c(\"0\", \"1-2\", \"3-5\", \"6+\")))\nby_preg &lt;- by_group(preg, \"preg_band\")\nby_preg\n\n#&gt; # A tibble: 4 × 6\n#&gt;   group     n cases  sens  spec   auc\n#&gt;   &lt;fct&gt; &lt;int&gt; &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;\n#&gt; 1 0        24    14 0.786 0.6   0.721\n#&gt; 2 1-2      63     8 0.25  0.964 0.789\n#&gt; 3 3-5      72    23 0.261 0.980 0.813\n#&gt; 4 6+       72    39 0.667 0.545 0.716\n\ngap_preg &lt;- max(by_preg$sens) - min(by_preg$sens)\n\nset.seed(123)\nnull_preg &lt;- replicate(1000, {\n  g &lt;- by_group(mutate(preg, preg_band = sample(preg_band)), \"preg_band\")\n  max(g$sens) - min(g$sens)\n})\n\ncheck_gap_vs_noise(gap_preg, null_preg, \"sensitivity gap across pregnancy bands\")\n\n#&gt; [ok]  sensitivity gap across pregnancy bands is larger than the gap chance alone produces  (observed 0.536, median null 0.242, 95th centile 0.458, p = 0.026 (1000 permutations))\n\nggplot(tibble(gap = null_preg), aes(gap)) +\n  geom_histogram(bins = 30, fill = \"grey80\", colour = \"white\") +\n  geom_vline(xintercept = gap_preg, linewidth = 1) +\n  labs(x = \"sensitivity gap between four groups of the same sizes, labels shuffled\",\n       y = \"permutations\",\n       title = \"The noise floor, and the gap we observed (vertical line)\")\n\n\n\n\n\n\n\n\n\n\n\npreg = pred.copy()\npreg[\"preg_band\"] = pd.cut(preg[\"pregnant\"], [0, 1, 3, 6, np.inf], right=False,\n                           labels=[\"0\", \"1-2\", \"3-5\", \"6+\"])\nby_preg = by_group(preg, \"preg_band\")\nprint(by_preg.round(3))\n\n#&gt;         n  cases   sens   spec    auc\n#&gt; 0    23.0   17.0  0.765  0.500  0.706\n#&gt; 1-2  57.0    6.0  0.167  0.882  0.647\n#&gt; 3-5  68.0   17.0  0.412  0.882  0.704\n#&gt; 6+   83.0   44.0  0.727  0.436  0.638\n\ngap_preg = by_preg[\"sens\"].max() - by_preg[\"sens\"].min()\n\nrng = np.random.default_rng(123)\nshuffled, null_preg = preg.copy(), []\nfor _ in range(1000):\n    shuffled[\"preg_band\"] = rng.permutation(preg[\"preg_band\"].values)\n    g = by_group(shuffled, \"preg_band\")\n    null_preg.append(g[\"sens\"].max() - g[\"sens\"].min())\nnull_preg = np.array(null_preg)\n\ncheck_gap_vs_noise(gap_preg, null_preg, \"sensitivity gap across pregnancy bands\")\n\n#&gt; [ok]  sensitivity gap across pregnancy bands is larger than the gap chance alone produces  (observed 0.598, median null 0.233, 95th centile 0.465, p = 0.009 (1000 permutations))\n#&gt; 0.008991008991008992\n\nfig, ax = plt.subplots(figsize=(6.5, 3))\nax.hist(null_preg, bins=30, color=\"0.8\", edgecolor=\"white\")\n\n#&gt; (array([15., 31., 46., 51., 67., 83., 92., 85., 71., 90., 59., 71., 56.,\n#&gt;        41., 42., 25., 15., 12., 10.,  9.,  7.,  9.,  5.,  3.,  1.,  1.,\n#&gt;         1.,  1.,  0.,  1.]), array([0.03167421, 0.05587093, 0.08006764, 0.10426436, 0.12846108,\n#&gt;        0.1526578 , 0.17685452, 0.20105124, 0.22524795, 0.24944467,\n#&gt;        0.27364139, 0.29783811, 0.32203483, 0.34623155, 0.37042826,\n#&gt;        0.39462498, 0.4188217 , 0.44301842, 0.46721514, 0.49141186,\n#&gt;        0.51560857, 0.53980529, 0.56400201, 0.58819873, 0.61239545,\n#&gt;        0.63659217, 0.66078888, 0.6849856 , 0.70918232, 0.73337904,\n#&gt;        0.75757576]), &lt;BarContainer object of 30 artists&gt;)\n\nax.axvline(gap_preg, color=\"black\", lw=1.5)\n\n#&gt; &lt;matplotlib.lines.Line2D object at 0x321367a50&gt;\n\nax.set_xlabel(\"sensitivity gap between four groups of the same sizes, labels shuffled\")\n\n#&gt; Text(0.5, 0, 'sensitivity gap between four groups of the same sizes, labels shuffled')\n\nax.set_ylabel(\"permutations\")\n\n#&gt; Text(0, 0.5, 'permutations')\n\nax.set_title(\"The noise floor, and the gap we observed (vertical line)\")\n\n#&gt; Text(0.5, 1.0, 'The noise floor, and the gap we observed (vertical line)')\n\nfig.tight_layout()\n\n\n\n\n\n\n\n\n\n\n\nThis one clears the floor: a gap of 0.54 in R against a 95th centile of 0.46 (p = 0.03), and 0.60 in Python against 0.47 (p = 0.01). Hold on to it until the end of the page, because the group driving it is the one with six or eight cases in it.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html#task-3-put-an-interval-on-every-group",
     "href": "day6-04-subgroups.html#task-3-put-an-interval-on-every-group",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "25.7 Task 3 — Put an interval on every group",
     "text": "25.7 Task 3 — Put an interval on every group\nA p-value for the gap does not tell a service how good the model is for the over-50s. For that you need an interval around each group’s own estimate. Resample the rows within a band, with replacement, recompute sensitivity, and take the 2.5th and 97.5th centiles.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nboot_sens &lt;- function(d, B = 1000) {\n  v &lt;- replicate(B, {\n    i &lt;- sample(nrow(d), replace = ______)\n    if (any(d$diabetes[i] == \"pos\")) sens_vec(d$diabetes[i], d$.pred_class[i]) else NA_real_\n  })\n  quantile(v, c(0.025, ______), na.rm = TRUE)\n}\n\nset.seed(123)\nintervals &lt;- lapply(levels(pred$age_band), function(g) {\n  d  &lt;- dplyr::filter(pred, age_band == g)\n  ci &lt;- boot_sens(d)\n  tibble(group = g, n = nrow(d), cases = sum(d$diabetes == \"pos\"),\n         sens  = sens_vec(d$diabetes, d$.pred_class),\n         lo = ci[[1]], hi = ci[[2]], width = ci[[2]] - ci[[1]])\n}) |&gt; bind_rows()\nintervals\n\ncat(\"widest interval:\", intervals$group[which.max(intervals$width)],\n    \"| smallest band:\", intervals$group[which.min(intervals$n)],\n    \"| lowest AUC:\",    as.character(by_age$group[which.min(by_age$auc)]), \"\\n\")\n\n\n\n\n# Replace every ______ below, then run this cell.\ndef boot_sens(d, rng, B=1000):\n    t, yhat = d[\"truth\"].values, d[\"pred\"].values\n    v = [recall_score(t[i], yhat[i]) if t[i].sum() else np.nan\n         for i in (rng.integers(0, len(d), ______) for _ in range(B))]\n    return np.nanquantile(v, [0.025, ______])\n\nrng = np.random.default_rng(123)\nrows = []\nfor g, d in pred.groupby(\"age_band\", observed=True):\n    lo, hi = boot_sens(d, rng)\n    rows.append({\"group\": g, \"n\": len(d), \"cases\": int(d[\"truth\"].sum()),\n                 \"sens\": recall_score(d[\"truth\"], d[\"pred\"]),\n                 \"lo\": lo, \"hi\": hi, \"width\": hi - lo})\nintervals = pd.DataFrame(rows)\nprint(intervals.round(3))\n\nprint(\"widest interval:\", intervals.loc[intervals[\"width\"].idxmax(), \"group\"],\n      \"| smallest band:\", intervals.loc[intervals[\"n\"].idxmin(), \"group\"],\n      \"| lowest AUC:\",    by_age[\"auc\"].idxmin())\n\n\n\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nA bootstrap resample is the same size as the group it came from, drawn with replacement — that is the whole idea, and it is one argument in R and one argument in Python. The upper centile is whatever makes the interval symmetric around 95%.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html#the-result-that-should-bother-you",
     "href": "day6-04-subgroups.html#the-result-that-should-bother-you",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "25.8 The result that should bother you",
     "text": "25.8 The result that should bother you\nThe over-50s are the worst-served group in this test set. In R their AUC of 0.73 is the lowest of the four bands; in Python their AUC of 0.45 is the lowest of the four and below chance, which would mean the forest is worse than a coin for women over 50. They are also the band a service would most want to get right.\nThree steps.\n\nThe over-50s band has 19 rows in R and 23 in Python, of which 11 are cases in both. It is the smallest band, it has the widest bootstrap interval of the four — 0.33 to 0.90 in R, 0.17 to 0.75 in Python — and the width of that interval, around 0.57 to 0.58, is larger than the entire gap between the best and worst band that we set out to interpret. The smallest group gets the most extreme point estimate because it has the fewest cases to average over, and the same thinness is what makes the estimate extreme and what makes it uncertain.\nThe direction is not stable either. The same band, the same model specification, the same seed: in R the over-50s have a sensitivity of 0.64, above the overall 0.54, and in Python 0.46, below the overall 0.63. The only difference between the two is which rows landed in the test set. A worst-served group that changes places when you reshuffle the split is a property of the split.\nPermuting the labels says the same thing without any of the interpretation. Four made-up age bands of the same sizes produce a sensitivity gap of 0.28 or more in half of a thousand permutations, and the observed gap is 0.28. A difference smaller than the noise floor is not a finding, and ranking the bands by sensitivity is then an elaborate way of ranking them by size.\n\nThe pregnancy grouping is the useful counter-case, and it is only half a counter-case. That gap does clear the floor (p = 0.03 in R, p = 0.01 in Python), so something there is not chance. Then look at which band is driving it: the women with one or two pregnancies, sensitivity 0.25 in R and 0.17 in Python — estimated from 8 cases and 6 cases respectively, inside a group of 63 and 57 rows. Repeat Task 3 on the pregnancy bands and that band’s interval runs from 0.00 upwards. So even the gap that survives the permutation test rests on single-digit event counts, and we have looked at six gaps on this page — two groupings by three metrics — while testing two of them. A p-value of 0.03 is not a licence when the search was that wide.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html#what-this-cannot-be-evidence-of",
     "href": "day6-04-subgroups.html#what-this-cannot-be-evidence-of",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "25.9 What this cannot be evidence of",
     "text": "25.9 What this cannot be evidence of\n\n\n\n\n\n\nImportantThe method is real; the finding is not\n\n\n\nA subgroup gap measured on 231 test rows of a teaching extract is not evidence about any service. The smallest age band here holds eleven cases — few enough that a gap of the size you are about to find can be produced by chance alone — and no sentence of the form “the model under-serves group X” can be carried out of this chapter.\nThat is not a reason to skip the exercise; it is the exercise. Someone auditing a deployed model for equity has to be able to tell a disparity from an artefact of the data they were handed, and the only way to practise is on data where you already know the answer. What you would need to make a real claim is nameable: data from the service you are auditing, with the subgroup actually recorded rather than inferred; a list of subgroups written down before anyone looks at a metric; and enough cases in each of them — events, not rows — that the interval is narrower than the difference you would act on. On this page the third condition fails by a factor of several for every band.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html#reflection",
     "href": "day6-04-subgroups.html#reflection",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "25.10 Reflection",
     "text": "25.10 Reflection\n\nYour service wants a dashboard with one sensitivity per age band. Write the sentence you would put under the table so that a reader cannot misread a small group as a failing one. It should be a sentence, not a number.\nWhere does the list of subgroups come from? You cannot search the data for the grouping with the largest gap and then report that gap — explain why not, and say who should decide the list instead.\nSuppose the over-50s disparity were real. Name two responses a service could make that are not “retrain the model”, and say what evidence would tell you which to choose.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html#stretch",
     "href": "day6-04-subgroups.html#stretch",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "25.11 Stretch",
     "text": "25.11 Stretch\n\n\n\n\n\n\nNoteStretch 1 — Do the two models fail the same people?\n\n\n\nRepeat the whole page on the logistic regression of Chapter 14, fitted to the same training rows. Put its subgroup table next to the forest’s. If the two models disagree about which band is worst served, what does that tell you about the disparity — and what would it take for them to agree for the right reason rather than by chance?\n\n\n\n\n\n\n\n\nNoteStretch 2 — How many cases would you need?\n\n\n\nKeep the model and simulate the audit you wish you could run. Draw groups of 25, 50, 100 and 400 cases by resampling the test set, and record how often a true sensitivity difference of 0.10 between two groups is detectable at all. The answer tells you the minimum size of a subgroup worth reporting, and it is larger than anything on this page.\n\n\n\n\n\n\n\n\nNoteStretch 3 — A threshold per group\n\n\n\nChapter 15 chose one threshold for everybody. Choose one per age band so that every band reaches the same sensitivity, and report what it costs in specificity and in extra referrals. Then write the paragraph you would have to put in front of a clinical governance committee to justify applying a different rule to patients of different ages.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
     "objectID": "day6-04-subgroups.html#what-you-can-and-cannot-now-claim",
     "href": "day6-04-subgroups.html#what-you-can-and-cannot-now-claim",
-    "title": "25  Exercise 6.4 — For whom is the model worst?",
+    "title": "25  Exercise 9.4 — For whom is the model worst?",
     "section": "25.12 What you can and cannot now claim",
     "text": "25.12 What you can and cannot now claim\nCan: that you can compute a model’s performance inside subgroups of a test set, report each estimate with the number of cases behind it and a bootstrap interval around it, and build a permutation noise floor that says whether a between-group gap is larger than chance produces. That is the whole machinery of a fairness audit’s measurement step, and it is not difficult.\nCannot: that this model under-serves anybody. The test set has 231 rows, the smallest band has 11 cases, and the one gap that cleared the noise floor was driven by a group with six. What you have practised is the arithmetic and the discipline of reporting it; the claim itself needs a service’s own data, a prespecified subgroup list and event counts an order of magnitude larger. An estimate reported without uncertainty is not an estimate — the same point this page makes about people rather than about variables.",
     "crumbs": [
       "Day 9 — Explainable AI",
-      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 6.4 — For whom is the model worst?</span>"
-    ]
-  },
-  {
-    "objectID": "roadmap.html",
-    "href": "roadmap.html",
-    "title": "26  Roadmap — the rest of the module",
-    "section": "",
-    "text": "26.1 Principles the later days should keep\nThis booklet grows by teaching day. Six are written; the ones below that are not are the obvious continuations, each with the loose end it picks up.\nDays 2 to 6 were built from the module’s earlier standalone sites, and the conversion changed three things on purpose: both languages now read the same file, every reported number is produced by code in the chapter rather than quoted from an earlier run, and each exercise carries a control. Each day’s dayN-CHANGES.md, kept out of the published booklet, records what differs from the original pages.\nThese are what make the booklet a course rather than a pile of notebooks.",
-    "crumbs": [
-      "<span class='chapter-number'>26</span>  <span class='chapter-title'>Roadmap — the rest of the module</span>"
-    ]
-  },
-  {
-    "objectID": "roadmap.html#principles-the-later-days-should-keep",
-    "href": "roadmap.html#principles-the-later-days-should-keep",
-    "title": "26  Roadmap — the rest of the module",
-    "section": "",
-    "text": "Every exercise carries a control. A student who has only run a pipeline believes its output. One who has watched the same pipeline survive — or fail — a baseline, a shuffled label, or a no-shift extract believes the method. Day 1 has three controls: the predict-the-mean baseline, extract A, and the refitted-coefficient comparison.\nNothing is introduced before the object it acts on. Cross-validation is only meaningful once a student has felt a single split wobble.\nEach exercise ends with what cannot be claimed. The limitation is not a disclaimer; it is the hook for the next day.\nBoth languages, every time. Where they genuinely differ, say so and say why, rather than presenting one as a translation of the other.\nEvery dataset is introduced where it is first used. What it holds, the clinical question it stands in for, and what is wrong with it — stated in the exercise rather than deferred to an appendix. data/PROVENANCE.txt records where each file came from.\nEvery day fits on twenty printed pages. The site carries the discussion; the worksheet carries the tasks. If a day will not fit, the narrative moves into a ::: {.web-only} block rather than the tasks being cut.",
-    "crumbs": [
-      "<span class='chapter-number'>26</span>  <span class='chapter-title'>Roadmap — the rest of the module</span>"
+      "<span class='chapter-number'>25</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
     ]
   },
   {
