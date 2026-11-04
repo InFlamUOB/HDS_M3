@@ -16,6 +16,7 @@ r_pkgs  <- c("tidymodels", "tidyverse", "data.table", "rpart", "reticulate",
              "naniar", "mice", "finalfit",   # missingness (Day 2)
              "rpart.plot",  # drawing trees (Day 5)
              "ranger",      # the random forest engine (Day 5)
+             "glmnet",      # penalised regression (Day 5.5)
              "vip",         # variable importance (Days 5-6)
              "DALEX", "DALEXtra")            # model explanation (Day 6)
 py_pkgs <- c("pandas", "numpy", "matplotlib", "seaborn", "scikit-learn", "joblib",

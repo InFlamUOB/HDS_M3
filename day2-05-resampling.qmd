@@ -1,0 +1,714 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 2.5 — One split is not an estimate {#sec-resampling}
+
+**45 minutes · work individually**
+
+::: {.callout-important}
+## A suggested addition, not part of the original module
+This exercise was proposed and drafted by the assistant that rebuilt the
+booklet, not ported from an earlier version of the module. Day 2 ends by admitting that a leak-free single split is still a weak estimate, and Exercise 1.2 Stretch 2 had you watch the MAE move between seeds; nothing then taught resampling, yet Day 5 uses `vfold_cv()` to tune. This closes that gap. Treat it as a
+draft to accept, rewrite or delete: nothing else depends on it, and removing it
+means deleting this file and its line in `_quarto.yml`.
+:::
+
+## Objectives
+
+::: {.objective-list}
+- Produce the distribution of a test metric over repeated splits of one
+  dataset, and state its spread as a number you computed.
+- Build k-fold cross-validation on the training rows, and report the mean
+  score with its standard error.
+- For any number a model produces, say which rows were fitted, which rows chose
+  a setting, and which rows were spent.
+:::
+
+## Why this, here
+
+@sec-leakage ended with a pipeline whose preprocessing is fitted on the
+training rows alone, and with the admission that this still is not a good
+estimate of anything. Exercise 1.2 Stretch 2 asked you to rerun a pipeline with
+twenty seeds and watch the score move; nothing since has said what to do about
+it. This exercise does three things: it measures how much the number moves, it
+replaces it with an estimate that moves less, and it shows that the rule you
+learned in @sec-leakage has to be applied again inside the resampling loop,
+where it is much harder to see.
+
+::: {.callout-note}
+## Where this sits in the week
+Day 2 is already a long day, and this exercise does not depend on anything in
+@sec-first-look to @sec-transforming — only on the pipeline rebuilt in its
+first cell. It can equally well open Day 5, where @sec-decision-trees needs
+`vfold_cv()` in its second task. Run it wherever the timetable has room; the
+module lead decides.
+:::
+
+## The pipeline from Exercise 2.4, rebuilt
+
+The same regression, the same preprocessing, the same seed: predict body mass
+index from skin-fold thickness, blood pressure, age and number of pregnancies,
+with the imputation and scaling fitted inside the workflow so they can only see
+the training rows.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(readr); library(dplyr); library(tidymodels)
+tidymodels_prefer()
+
+diabetes <- read_csv("data/diabetes.csv", show_col_types = FALSE)
+dia <- diabetes |>
+  mutate(across(c(glucose, pressure, triceps, insulin, mass), ~ na_if(.x, 0))) |>
+  filter(!is.na(mass)) |>
+  select(mass, triceps, pressure, age, pregnant, glucose)
+
+set.seed(42)
+split <- initial_split(dia, prop = 0.8)
+train <- training(split); test <- testing(split)
+
+rec <- recipe(mass ~ triceps + pressure + age + pregnant, data = train) |>
+  step_impute_mean(all_predictors()) |>
+  step_normalize(all_predictors())
+wf <- workflow() |> add_recipe(rec) |> add_model(linear_reg() |> set_engine("lm"))
+
+mae_baseline <- mean(abs(test$mass - mean(train$mass)))
+mae_once <- collect_metrics(last_fit(wf, split = split, metrics = metric_set(mae)))$.estimate
+c(baseline = mae_baseline, one_split = mae_once)
+```
+
+## Python
+
+```{python}
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split, KFold, cross_val_score
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+
+diabetes = pd.read_csv("data/diabetes.csv")
+dia = diabetes.copy()
+impossible = ["glucose", "pressure", "triceps", "insulin", "mass"]
+dia[impossible] = dia[impossible].replace(0, np.nan)
+dia = dia.dropna(subset=["mass"])[
+    ["mass", "triceps", "pressure", "age", "pregnant", "glucose"]]
+preds = ["triceps", "pressure", "age", "pregnant"]
+
+def build_pipeline():
+    numeric = Pipeline([("impute", SimpleImputer(strategy="mean")),
+                        ("scale", StandardScaler())])
+    return Pipeline([("prep", ColumnTransformer([("num", numeric, preds)])),
+                     ("model", LinearRegression())])
+
+train, test = train_test_split(dia, test_size=0.2, random_state=42)
+
+mae_baseline = np.abs(test["mass"] - train["mass"].mean()).mean()
+pipe = build_pipeline().fit(train[preds], train["mass"])
+mae_once = mean_absolute_error(test["mass"], pipe.predict(test[preds]))
+print(mae_baseline, mae_once)
+```
+:::
+
+One number each: 4.46 BMI units in R against a baseline of 5.56, and 4.92
+against 5.87 in Python. These are the numbers @sec-leakage reported, and the
+question this exercise asks is what they are estimates *of*.
+
+The pipeline is wrapped in a function in Python, and in a workflow in R, for a
+reason that matters below: both have to be refitted from scratch many times,
+and a fitted object carried over from one split to the next has already seen
+the rows the next split is about to hold out.
+
+## Task 1 — Fifty splits of the same data
+
+Nothing about the data, the pipeline or the preprocessing changes. Only the
+random number that decides which 151 rows are held out. Repeat the whole
+pipeline 50 times, collect the 50 test MAEs, and report the lowest, the
+highest and the standard deviation.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+
+one_split_mae <- function(seed) {
+  set.seed(______)
+  sp <- initial_split(dia, prop = 0.8)
+  collect_metrics(last_fit(wf, split = sp, metrics = metric_set(mae)))$.estimate
+}
+
+maes <- vapply(1:50, one_split_mae, numeric(1))
+c(lowest = min(maes), highest = max(maes), spread = max(maes) - min(maes),
+  mean = mean(maes), sd = ______)
+check_metric_range(sd(maes), 0.1, 0.5, "standard deviation of the 50 MAEs")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`vapply()` applies a function to each element of a vector and returns a vector
+of a declared type; the function it is given here takes one seed and returns
+one MAE. `last_fit()` re-estimates every recipe step on the training half of
+whichever split it is handed, so the workflow built above can be reused
+unchanged. The spread of a sample is `sd()`.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+
+one_split_mae <- function(seed) {
+  set.seed(seed)
+  sp <- initial_split(dia, prop = 0.8)
+  collect_metrics(last_fit(wf, split = sp, metrics = metric_set(mae)))$.estimate
+}
+
+maes <- vapply(1:50, one_split_mae, numeric(1))
+c(lowest = min(maes), highest = max(maes), spread = max(maes) - min(maes),
+  mean = mean(maes), sd = sd(maes))
+check_metric_range(sd(maes), 0.1, 0.5, "standard deviation of the 50 MAEs")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+
+def one_split_mae(seed):
+    tr, te = train_test_split(dia, test_size=0.2, random_state=______)
+    p = build_pipeline().fit(tr[preds], tr["mass"])
+    return mean_absolute_error(te["mass"], p.predict(te[preds]))
+
+maes = np.array([one_split_mae(s) for s in range(1, 51)])
+print(f"lowest {maes.min():.3f} highest {maes.max():.3f} "
+      f"spread {np.ptp(maes):.3f} mean {maes.mean():.3f} "
+      f"sd {______:.3f}")
+check_metric_range(maes.std(ddof=1), 0.1, 0.5, "standard deviation of the 50 MAEs")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`build_pipeline()` returns a new unfitted pipeline each time it is called, which
+is what the loop needs. For the spread, `np.ndarray` has a `.std()` method, and
+its `ddof=` argument decides whether you get the population or the sample
+standard deviation; the sample one is what you want here.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+
+def one_split_mae(seed):
+    tr, te = train_test_split(dia, test_size=0.2, random_state=seed)
+    p = build_pipeline().fit(tr[preds], tr["mass"])
+    return mean_absolute_error(te["mass"], p.predict(te[preds]))
+
+maes = np.array([one_split_mae(s) for s in range(1, 51)])
+print(f"lowest {maes.min():.3f} highest {maes.max():.3f} "
+      f"spread {np.ptp(maes):.3f} mean {maes.mean():.3f} "
+      f"sd {maes.std(ddof=1):.3f}")
+check_metric_range(maes.std(ddof=1), 0.1, 0.5, "standard deviation of the 50 MAEs")
+```
+:::
+:::
+:::
+
+The fifty numbers run from 4.01 to 5.20 in R and from 4.13 to 5.26 in Python: a
+spread of about 1.1 to 1.2 BMI units, produced by nothing but the choice of
+seed. The standard deviation is 0.28 in R and 0.21 in Python.
+
+Now put that next to the result of @sec-leakage. The difference between the
+honest pipeline and the worst leak measured there was about half a BMI unit.
+The difference between two equally honest analysts who each ran this pipeline
+once, with different seeds, can be twice that. Every conclusion Day 2 drew by
+comparing pipelines on one split was drawn against a ruler with that much play
+in it.
+
+Worse, you cannot tell from one run which draw you got. Seed 42 is in the
+fifty. In R its MAE is the nineteenth smallest of the fifty and sits 0.13 below
+their mean; in Python the same number 42 gives the forty-eighth of fifty, 0.38
+above the mean and among the worst draws available. Two students, two
+languages, the same code: one of them would have reported a pipeline that looks
+slightly better than it is, the other one that looks about a third of a BMI
+unit worse.
+
+## Task 2 — Ten folds, one estimate, one standard error
+
+Fifty repeats of an 80/20 split is not the usual way to do this, because the
+fifty test sets overlap heavily and each one wastes a fifth of the data at
+every repeat. Cross-validation partitions the rows instead: cut the **training
+rows** into ten parts, fit on nine, score on the one left out, ten times, so
+that every training row is scored exactly once and every score comes from a
+model that did not see it.
+
+Note which rows are being cut. The test set is not in this at all — it stays
+closed.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+set.seed(42)
+folds <- vfold_cv(______, v = 10)        # which rows go into the folds?
+folds
+
+cv_res <- fit_resamples(wf, resamples = ______, metrics = metric_set(mae))
+collect_metrics(cv_res)
+
+cv_mean <- collect_metrics(cv_res)$mean
+cv_se   <- collect_metrics(cv_res)$std_err
+per_fold <- collect_metrics(cv_res, summarize = FALSE)$.estimate
+c(folds_lowest = min(per_fold), folds_highest = max(per_fold))
+check_beats_baseline(cv_mean, mae_baseline)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`vfold_cv()` takes a data frame; the whole argument of this task is which
+frame it must not be given. `fit_resamples()` takes the same workflow you
+already built and the resamples object, and refits the recipe inside every
+fold. `collect_metrics(..., summarize = FALSE)` returns one row per fold rather
+than the average.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+set.seed(42)
+folds <- vfold_cv(train, v = 10)
+folds
+
+cv_res <- fit_resamples(wf, resamples = folds, metrics = metric_set(mae))
+collect_metrics(cv_res)
+
+cv_mean <- collect_metrics(cv_res)$mean
+cv_se   <- collect_metrics(cv_res)$std_err
+per_fold <- collect_metrics(cv_res, summarize = FALSE)$.estimate
+c(folds_lowest = min(per_fold), folds_highest = max(per_fold))
+check_beats_baseline(cv_mean, mae_baseline)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+folds = KFold(n_splits=______, shuffle=True, random_state=42)
+
+fold_mae = -cross_val_score(build_pipeline(), ______[preds], ______["mass"],
+                            cv=folds, scoring="neg_mean_absolute_error")
+cv_mean = fold_mae.mean()
+cv_se   = fold_mae.std(ddof=1) / np.sqrt(10)
+print(np.round(fold_mae, 3))
+print(f"mean {cv_mean:.3f}, standard error {cv_se:.3f}, "
+      f"folds {fold_mae.min():.3f} to {fold_mae.max():.3f}")
+check_beats_baseline(cv_mean, mae_baseline)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`cross_val_score` clones the estimator and refits it inside every fold, which
+is why it is handed `build_pipeline()` and not the `pipe` already fitted above.
+Scikit-learn's scorers are oriented so that higher is better, hence the minus
+sign in front of a mean absolute error. The two blanks after it are the same
+frame, and it is not `dia`.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+folds = KFold(n_splits=10, shuffle=True, random_state=42)
+
+fold_mae = -cross_val_score(build_pipeline(), train[preds], train["mass"],
+                            cv=folds, scoring="neg_mean_absolute_error")
+cv_mean = fold_mae.mean()
+cv_se   = fold_mae.std(ddof=1) / np.sqrt(10)
+print(np.round(fold_mae, 3))
+print(f"mean {cv_mean:.3f}, standard error {cv_se:.3f}, "
+      f"folds {fold_mae.min():.3f} to {fold_mae.max():.3f}")
+check_beats_baseline(cv_mean, mae_baseline)
+```
+:::
+:::
+:::
+
+The ten-fold mean is 4.56 in R and 4.47 in Python, with a standard error of
+0.15 and 0.17. Two things in that output are worth more than the mean.
+
+First, the individual folds are *more* variable than the fifty splits were:
+3.91 to 5.35 in R, 3.72 to 5.36 in Python. That is not a contradiction. Each
+fold scores about 60 rows where each split scored 151, so a single fold is a
+noisier measurement than a single split; what cross-validation gives you is not
+a quieter measurement but ten of them, averaged.
+
+Second, count the fits. Fifty repeated splits cost fifty fits and returned a
+mean whose standard error is 0.03 to 0.04. Ten folds cost ten fits and returned
+a mean whose standard error is 0.15 to 0.17 — against a standard deviation of
+0.21 to 0.28 for the single number you would otherwise have reported. Ten fits
+therefore bought a reduction in uncertainty of between a fifth and a half, not
+the factor of three that dividing by $\sqrt{10}$ might have suggested, because
+the ten training sets overlap in nine tenths of their rows and the ten scores
+are not independent. On 604 rows and a linear model all of this is a second or
+two; on a model that takes an hour to fit, the choice between 10 folds, 5
+folds and one split is a budget decision, and it is the usual reason published
+models are evaluated on one split.
+
+## The result that should bother you
+
+Everything above refits the preprocessing inside every fold, because the
+workflow and the `Pipeline` leave no other option. The common failure in
+practice is to do one preprocessing step by hand first — on the whole training
+set, once, because it is tidier — and then cross-validate what comes out. This
+is @sec-leakage's mistake moved inside the resampling loop, and the loop hides
+it.
+
+Here is that mistake with a step that can carry real information: choosing
+which predictors to keep. Two hundred columns of pure random numbers are
+added to the training rows, the ten most correlated with BMI are selected, and
+the selected set is cross-validated. Then the same thing, with the selection
+repeated inside each fold.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+set.seed(7)
+noise <- as.data.frame(matrix(rnorm(nrow(train) * 200), nrow(train), 200))
+names(noise) <- paste0("noise", 1:200)
+train_noise <- bind_cols(train["mass"], noise)
+noise_cols  <- names(noise)
+
+top_k <- function(d, k = 10) {
+  r <- vapply(noise_cols, function(v) abs(cor(d[[v]], d$mass)), numeric(1))
+  names(sort(r, decreasing = TRUE))[1:k]
+}
+chosen_once <- top_k(train_noise)        # chosen ONCE, on all the training rows
+
+set.seed(99)
+noise_folds <- vfold_cv(train_noise, v = 10)
+fold_score <- function(sp, choose) {
+  fit_rows <- analysis(sp); score_rows <- assessment(sp)
+  m <- lm(reformulate(choose(fit_rows), "mass"), data = fit_rows)
+  mean(abs(score_rows$mass - predict(m, score_rows)))
+}
+
+cv_outside <- mean(vapply(noise_folds$splits,
+                          function(sp) fold_score(sp, function(d) chosen_once), numeric(1)))
+cv_inside  <- mean(vapply(noise_folds$splits,
+                          function(sp) fold_score(sp, top_k), numeric(1)))
+cv_nothing <- mean(vapply(noise_folds$splits, function(sp)
+  mean(abs(assessment(sp)$mass - mean(analysis(sp)$mass))), numeric(1)))
+
+c(selected_outside = cv_outside, selected_inside = cv_inside,
+  predict_the_mean = cv_nothing)
+```
+
+```{r}
+source("checks/checks.R")
+check_beats_baseline(cv_outside, cv_nothing)
+check_beats_baseline(cv_inside,  cv_nothing)
+```
+
+## Python
+
+```{python}
+from sklearn.feature_selection import SelectKBest, f_regression
+from sklearn.dummy import DummyRegressor
+
+rng = np.random.default_rng(7)
+noise = pd.DataFrame(rng.normal(size=(len(train), 200)),
+                     columns=[f"noise{i}" for i in range(1, 201)],
+                     index=train.index)
+y = train["mass"]
+noise_folds = KFold(n_splits=10, shuffle=True, random_state=99)
+
+chosen_once = SelectKBest(f_regression, k=10).fit(noise, y)   # ONCE, on all of it
+cv_outside = -cross_val_score(LinearRegression(),
+                              noise.loc[:, chosen_once.get_support()], y,
+                              cv=noise_folds,
+                              scoring="neg_mean_absolute_error").mean()
+
+cv_inside = -cross_val_score(Pipeline([("select", SelectKBest(f_regression, k=10)),
+                                       ("model", LinearRegression())]),
+                             noise, y, cv=noise_folds,
+                             scoring="neg_mean_absolute_error").mean()
+
+cv_nothing = -cross_val_score(DummyRegressor(strategy="mean"), noise, y,
+                              cv=noise_folds,
+                              scoring="neg_mean_absolute_error").mean()
+
+print(cv_outside, cv_inside, cv_nothing)
+```
+
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+check_beats_baseline(cv_outside, cv_nothing)
+check_beats_baseline(cv_inside,  cv_nothing)
+```
+:::
+
+There is no signal in those 200 columns. They are random numbers, and no
+estimate of a model built from them should beat predicting the mean. Selected
+outside the loop, the cross-validated MAE is 5.39 in R and 5.26 in Python
+against a do-nothing 5.47 and 5.37: it beats the baseline, and
+`check_beats_baseline()` prints `[ok]`. Selected inside the loop, the same ten
+folds, the same rule, the same random numbers, give 5.73 and 5.75 — worse than
+the baseline, which is the truth.
+
+1. The selection step read the outcome. It was allowed to read it on all 604
+   training rows, including the 60 that each fold then held out for scoring.
+2. So every fold's held-out rows had already voted on which ten columns the
+   model would use. The ten fits inside the loop are honest; the thing being
+   evaluated is not a procedure applied to 544 rows, it is a procedure that
+   already saw 604.
+3. Cross-validation cannot detect this, because it only controls what happens
+   after it is handed the data. A fitted step performed before the loop is
+   invisible to it — the loop faithfully cross-validates a model that has
+   already been given the answers.
+
+The same mistake made with the imputation and scaling of @sec-leakage costs
+almost nothing, as Stretch 1 asks you to confirm. The difference is not how
+careless the analyst was. It is the same distinction @sec-leakage drew: a mean
+carries almost no row-specific information, and a choice made among 200
+candidates by looking at the outcome carries a great deal.
+
+Note also what the self-check did. `check_beats_baseline()` printed `[ok]` for
+a pipeline built on random numbers. A check is only as good as the assumption
+written into it, and no check in this booklet can see what you did to the data
+before you called it.
+
+## Task 3 — Three kinds of row
+
+Assemble the three estimates of the same pipeline into one table, then write
+the sentence it supports. Keep the `model_fits` column: the three numbers are
+not equally cheap, and the table is useless without that.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+tibble(
+  estimate = c("one split (Exercise 2.4)", "50 repeated splits",
+               "10-fold on the training rows"),
+  value = c(mae_once, mean(maes), ______),
+  uncertainty = c(NA, sd(maes), cv_se),
+  model_fits = c(1, ______, 10)
+)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+tibble(
+  estimate = c("one split (Exercise 2.4)", "50 repeated splits",
+               "10-fold on the training rows"),
+  value = c(mae_once, mean(maes), cv_mean),
+  uncertainty = c(NA, sd(maes), cv_se),
+  model_fits = c(1, 50, 10)
+)
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+pd.DataFrame({
+    "estimate": ["one split (Exercise 2.4)", "50 repeated splits",
+                 "10-fold on the training rows"],
+    "value": [mae_once, maes.mean(), ______],
+    "uncertainty": [np.nan, maes.std(ddof=1), cv_se],
+    "model_fits": [1, ______, 10],
+}).round(3)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+pd.DataFrame({
+    "estimate": ["one split (Exercise 2.4)", "50 repeated splits",
+                 "10-fold on the training rows"],
+    "value": [mae_once, maes.mean(), cv_mean],
+    "uncertainty": [np.nan, maes.std(ddof=1), cv_se],
+    "model_fits": [1, 50, 10],
+}).round(3)
+```
+:::
+:::
+:::
+
+Then answer in writing, in one sentence each: **which rows were fitted, which
+rows chose something, and which rows were spent** in each of the three lines of
+your table. The middle role is empty in all three, because nothing has been
+chosen yet — @sec-decision-trees is where it fills up, and it is the reason the
+folds exist at all.
+
+That distinction is what the rest of the booklet runs on, and it is worth
+writing out once:
+
+| Role | Which rows | How often they can be used |
+|---|---|---|
+| **Fitted** | the analysis part of a fold, or the training set for the final model | as often as you like |
+| **Chose a setting** | the assessment part of each fold | as often as you like, but a score computed on them is no longer held out |
+| **Spent** | the test set | once, at the very end, and never again |
+
+: {tbl-colwidths="[22,44,34]"}
+
+A row may do the first two jobs in different folds; that is what resampling is.
+A row that does the third must never have done either of the others. Measure
+your own three estimates against that. The worked example opened the test set
+once. Task 1 opened fifty different test sets, which is defensible only because
+its purpose was to measure the spread and not to report a performance — the
+mean of those fifty is not a held-out number, because every row was fitted in
+some repeats and scored in others. Task 2 is the only one of the three that
+left the test rows closed.
+
+## Reflection
+
+1. Your colleague reports a model with a cross-validated MAE of 4.5 and a
+   test-set MAE of 4.9, and concludes that the model has overfitted. Give a
+   different explanation that fits the same two numbers, and say what you would
+   ask to tell them apart.
+2. Ten-fold cross-validation reports a standard error computed from ten numbers
+   that are not independent of each other. In which direction do you expect
+   that standard error to be wrong, and what would you do if the decision you
+   were about to make depended on it?
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Expected values** (R with seed 42, Python with `random_state=42`; the two
+languages split differently, so they do not match, and the point of the page is
+that neither number is special). One split: 4.4–4.5 in R, 4.9–5.0 in Python,
+against baselines of 5.5–5.6 and 5.8–5.9. Fifty splits: lowest around 4.0–4.1,
+highest around 5.2–5.3, standard deviation 0.20–0.29. Ten folds: mean 4.4–4.6,
+standard error 0.14–0.18, with individual folds from about 3.7 to 5.4. The
+noise control: selection outside the loop 5.2–5.4, inside 5.6–5.8, do-nothing
+5.3–5.5. Over twelve different noise seeds in each language the outside-the-loop estimate beat
+the do-nothing baseline in eleven of twelve, the inside-the-loop estimate in
+none of twelve, and the optimism ran from 0.24 to 0.58 BMI units.
+
+**The teaching line.** The spread in Task 1 is the whole page, and it lands
+hardest if the room has already reported single numbers to each other on Day 2.
+Ask for a show of hands on "who would have reported 4.4" before showing the
+range. Then ask what the honest sentence is: not "the MAE is 4.5" but "around
+4.5, give or take 0.2 depending on which rows we held out".
+
+**Do not oversell cross-validation.** Ten folds reduced the uncertainty by
+between a fifth and a half here, not by $\sqrt{10}$. A student who leaves
+believing that cross-validation makes an estimate precise has swapped one
+superstition for another. What it removes is the dependence on one arbitrary
+partition, and that is enough to justify it.
+
+**Reflection 1.** The honest competing explanation is noise: a difference of
+0.4 BMI units is within the fold-to-fold and split-to-split spread this page
+measured, so the two numbers are compatible with no overfitting at all. What to
+ask for: the standard error of the resampled estimate, and the size of the test
+set. This is the argument @sec-random-forest makes again with AUC.
+
+**Reflection 2.** Too small. The folds share nine tenths of their training rows,
+so the ten scores are positively correlated and the naive standard error
+understates the variability of the whole procedure. There is no unbiased
+estimator of it. If the decision rests on it, repeat the whole
+cross-validation with several different fold assignments and look at the spread
+of the means, which is Stretch 2.
+
+**Common failures.** (1) `vfold_cv(dia, ...)` instead of `vfold_cv(train, ...)`
+in Task 2 — the commonest, and worth catching out loud, because it quietly puts
+the test rows back in. (2) In Python, passing the already-fitted `pipe` to
+`cross_val_score` instead of `build_pipeline()`; scikit-learn clones it, so it
+works, but the student should be able to say why re-using a fitted object would
+not. (3) Forgetting the minus sign on `neg_mean_absolute_error` and reporting a
+negative MAE. (4) In Task 1, expecting the R and Python ranges to match.
+
+**Task 3's answer.** One split: 604 rows fitted, nothing chosen, 151 rows
+spent. Fifty splits: a different 604 fitted each time, nothing chosen, and the
+test set spent fifty times over, so the number is a description of the
+procedure rather than a held-out estimate. Ten folds: 544 rows fitted per fold,
+nothing chosen yet, nothing spent. A student who writes "the test set" in the
+third line has not noticed that `vfold_cv()` was given `train`.
+
+**Timing.** Task 1 and Task 2 are the two that must happen; together they are
+25 minutes. If you are short, run the noise control from the front — it takes
+two minutes to execute and the three numbers are enough — and set Task 3 as
+reading.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — The same mistake with a harmless step
+Repeat the control, but instead of selecting columns, fit the imputation and
+scaling once on the whole training set, bake the training rows, and
+cross-validate the result. Compare it with Task 2's estimate. The difference is
+in the fourth decimal place, and knowing which fitted steps cost nothing is
+worth as much as knowing which ones are fatal.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — How stable is the cross-validated estimate itself?
+Repeat the ten-fold estimate with five different fold assignments
+(`vfold_cv(train, v = 10, repeats = 5)`, or five different `random_state`
+values for `KFold`) and look at the spread of the five means. Compare it with
+the standard error Task 2 printed. Which of the two would you quote in a paper?
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 3 — Five folds, or leave one out
+Run the same estimate with `v = 5` and with `v = nrow(train)`. The last one
+fits 604 models and holds out a single patient each time. Report the mean and
+the time taken. Then say what the standard error of a leave-one-out estimate
+means, given that the 604 models differ from one another in one row.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that this pipeline predicts BMI to within about 4.5 units on held-out
+rows, with a standard error of about 0.15 — and that you can produce that
+second half of the sentence, in either language, with one resampling object and
+ten fits, rather than reporting a single split that these data would have put
+anywhere between 4.0 and 5.3.
+
+**Cannot:** that any comparison you have made between two pipelines is larger
+than that uncertainty. Nothing today compared two models; @sec-decision-trees
+does, with a hyperparameter grid scored on exactly the resamples you have just
+built, and @sec-random-forest then asks whether the winner's margin survives
+the standard error you have just learned to read.

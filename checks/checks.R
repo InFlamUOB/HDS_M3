@@ -217,3 +217,71 @@ check_noise_control <- function(importance, noise = "noise", tol = 0.1) {
                              v[[noise]], v[[1]]))
   invisible(share)
 }
+
+# Day 6: an observed gap between subgroups, against the gap that appears when
+# the groups are made up. `null_values` is the vector of gaps produced by
+# shuffling the group labels (or by any other procedure under which there is
+# nothing to find). A [fix] here means the observed gap sits inside the noise
+# floor, which at these sample sizes is the usual result and not a mistake in
+# your code - read the detail line and @sec-subgroups.
+check_gap_vs_noise <- function(observed, null_values, label = "gap") {
+  null_values <- null_values[is.finite(null_values)]
+  usable <- is.numeric(observed) && length(observed) == 1 &&
+            is.finite(observed) && length(null_values) > 1
+  if (!usable) {
+    return(invisible(hds_check(
+      paste0(label, " can be compared with a noise floor"), FALSE,
+      hint = paste("pass one observed gap and a vector of gaps from permuted",
+                   "labels; an NA usually means a subgroup had only one class"),
+      detail = sprintf("observed %s, %d usable null values",
+                       paste(format(observed), collapse = ", "), length(null_values)))))
+  }
+  q95 <- unname(stats::quantile(null_values, 0.95))
+  p   <- (sum(null_values >= observed) + 1) / (length(null_values) + 1)
+  hds_check(paste0(label, " is larger than the gap chance alone produces"),
+            observed > q95,
+            hint = paste("a gap inside the noise floor is not a finding;",
+                         "report the intervals and the group sizes, not the ordering"),
+            detail = sprintf("observed %.3f, median null %.3f, 95th centile %.3f, p = %.3f (%d permutations)",
+                             observed, stats::median(null_values), q95, p,
+                             length(null_values)))
+  invisible(p)
+}
+
+# Day 5: which predictors did a penalised fit actually keep? `coefficients` is
+# either a named numeric vector or a data frame with columns term and estimate
+# (what tidy() returns for a glmnet fit). `controls` names the columns known to
+# carry no signal. The check passes when none of them survived, and reports how
+# many real predictors were dropped alongside them, because that is the price.
+# A [fix] here is not necessarily a mistake in your code - read the detail line
+# and @sec-regularisation.
+check_selection <- function(coefficients, controls = "noise",
+                            label = "the penalised fit") {
+  v <- if (is.data.frame(coefficients)) {
+    stats::setNames(coefficients$estimate, coefficients$term)
+  } else {
+    coefficients
+  }
+  if (!is.numeric(v) || is.null(names(v))) {
+    return(invisible(hds_check("coefficients is a named numeric vector", FALSE,
+      hint = "pass tidy(fit), or a vector whose names are the predictors")))
+  }
+  v <- v[names(v) != "(Intercept)"]
+  absent <- setdiff(controls, names(v))
+  if (length(absent)) {
+    return(invisible(hds_check("every control column is present", FALSE,
+      hint = "add the controls to the predictors before fitting, or set controls= to their names",
+      detail = paste0("missing: ", paste(absent, collapse = ", ")))))
+  }
+  kept    <- controls[v[controls] != 0]
+  real    <- setdiff(names(v), controls)
+  dropped <- real[v[real] == 0]
+  hds_check(paste0(label, " kept none of the ", length(controls), " controls"),
+            length(kept) == 0,
+            hint = paste("a penalty chosen to predict well is not chosen to select variables;",
+                         "look at what the whole path does before you report a variable list"),
+            detail = sprintf("controls kept: %s; real predictors dropped: %s",
+                             if (length(kept)) paste(kept, collapse = ", ") else "none",
+                             if (length(dropped)) paste(dropped, collapse = ", ") else "none"))
+  invisible(list(controls_kept = kept, dropped = dropped))
+}

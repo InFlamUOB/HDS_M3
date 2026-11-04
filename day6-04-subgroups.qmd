@@ -1,0 +1,784 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 6.4 — For whom is the model worst? {#sec-subgroups}
+
+**45 minutes · work individually, discuss in plenary**
+
+::: {.callout-important}
+## A suggested addition, not part of the original module
+This exercise was proposed and drafted by the assistant that rebuilt the
+booklet, not ported from an earlier version of the module. Exercise 1.2 Task 3 asked where a model is wrong; the question a service has to answer is for whom. The booklet measures performance on everyone at once and never splits it. Treat it as a
+draft to accept, rewrite or delete: nothing else depends on it, and removing it
+means deleting this file and its line in `_quarto.yml`.
+:::
+
+:::: {.web-only}
+Every cell on this page is a real R or Python cell, run against
+`data/diabetes.csv` with the Day 5.4 split.
+::::
+
+## Objectives
+
+::: {.objective-list}
+- Compute sensitivity, specificity and AUC inside subgroups of a test set, and
+  report each one beside the number of rows and the number of cases it rests
+  on.
+- Build a noise floor for a between-group gap by permuting the group labels,
+  and say whether an observed gap clears it.
+- Explain why the group a subgroup table flags as worst served is usually the
+  smallest one, and name what you would need to measure a real disparity.
+:::
+
+## Why this, here
+
+@sec-importance, @sec-shap and @sec-dalex asked which variables the model used.
+None of them asked who the model works for. Every metric in this booklet —
+@sec-classification-metrics' AUC, @sec-thresholds' sensitivity, @sec-random-forest's
+comparison table — has been computed on all 231 test rows at once, and a single
+number over 231 people is an average over people who are not interchangeable.
+@sec-pipeline asked where the model is wrong. A service has to answer a harder
+version: for whom. This exercise splits the test set and asks that question,
+and then spends most of its time on whether the answer means anything.
+
+## Worked example — one model, scored on everyone
+
+We audit the random forest of @sec-random-forest rather than the logistic
+regression of @sec-logistic-regression, for one reason: it is the model Day 6
+has spent all day explaining, and an equity audit in practice arrives after the
+explanation, on the model somebody is proposing to deploy. Nothing in the
+method depends on that choice — Stretch 1 repeats the whole page on the
+logistic regression, and the interesting question is whether the two models
+fail the same people.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+library(tidymodels); library(readr); library(dplyr); library(ggplot2)
+
+diabetes <- read_csv("data/diabetes.csv") |>
+  mutate(diabetes = factor(diabetes, levels = c("pos", "neg")))
+
+set.seed(123)
+split <- initial_split(diabetes, prop = 0.7, strata = diabetes)
+train <- training(split); test <- testing(split)
+
+rf_fit <- rand_forest(trees = 500) |>
+  set_engine("ranger", seed = 123) |>
+  set_mode("classification") |>
+  fit(diabetes ~ ., data = train)
+
+pred <- augment(rf_fit, test)
+
+# every metric in one place, and the two counts that have to travel with them
+metrics_in <- function(d) {
+  tibble(n     = nrow(d),
+         cases = sum(d$diabetes == "pos"),
+         sens  = if (any(d$diabetes == "pos")) sens_vec(d$diabetes, d$.pred_class) else NA_real_,
+         spec  = if (any(d$diabetes == "neg")) spec_vec(d$diabetes, d$.pred_class) else NA_real_,
+         auc   = if (n_distinct(d$diabetes) == 2) roc_auc_vec(d$diabetes, d$.pred_pos) else NA_real_)
+}
+
+by_group <- function(d, col) {
+  d |> group_by(group = .data[[col]]) |> group_modify(~ metrics_in(.x)) |> ungroup()
+}
+
+metrics_in(pred)
+```
+
+## Python
+
+```{python}
+import pandas as pd, numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import recall_score, roc_auc_score
+
+diabetes = pd.read_csv("data/diabetes.csv")
+X = diabetes.drop(columns="diabetes")
+y = (diabetes["diabetes"] == "pos").astype(int)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3,
+                                          random_state=123, stratify=y)
+
+rf_fit = RandomForestClassifier(n_estimators=500, random_state=123).fit(X_tr, y_tr)
+
+pred = X_te.copy()
+pred["truth"] = y_te
+pred["pred"]  = rf_fit.predict(X_te)
+pred["prob"]  = rf_fit.predict_proba(X_te)[:, 1]
+
+# every metric in one place, and the two counts that have to travel with them
+def metrics_in(d):
+    t, yhat, p = d["truth"].values, d["pred"].values, d["prob"].values
+    return pd.Series({
+        "n": len(t), "cases": int(t.sum()),
+        "sens": recall_score(t, yhat) if t.sum() else np.nan,
+        "spec": recall_score(1 - t, 1 - yhat) if (1 - t).sum() else np.nan,
+        "auc":  roc_auc_score(t, p) if 0 < t.sum() < len(t) else np.nan})
+
+def by_group(d, col):
+    return pd.DataFrame({g: metrics_in(sub)
+                         for g, sub in d.groupby(col, observed=True)}).T
+
+metrics_in(pred).round(3)
+```
+:::
+
+One row, 231 patients, 84 of them with diabetes. R's split gives a sensitivity
+of 0.54 and an AUC of 0.82; Python's gives 0.63 and 0.77. That row is the only
+performance statement the booklet has made so far, and a commissioner reading
+it has no way to tell whether it describes everybody equally.
+
+::: {.callout-note}
+## `cases`, not just `n`
+`metrics_in()` returns two counts, and the second one is the one people forget.
+Sensitivity is computed only on the patients who have the disease, so a group
+of 63 women containing 8 cases gives you a sensitivity estimated from 8
+observations, however reassuring the 63 looks in the table.
+:::
+
+## Task 1 — Split the test set, and report the gap
+
+Cut the test set two ways — by age band and by number of pregnancies — and
+compute the three metrics inside each band. Report, for each grouping, the
+distance between the best and the worst group, with the group sizes beside it.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+
+pred <- pred |>
+  mutate(age_band  = cut(age, c(-Inf, 30, 40, 50, Inf), right = FALSE,
+                         labels = c("21-29", "30-39", "40-49", "50+")),
+         preg_band = ______(pregnant, c(-Inf, 1, 3, 6, Inf), right = FALSE,
+                            labels = c("0", "1-2", "3-5", "6+")))
+
+by_age  <- by_group(pred, ______)
+by_preg <- by_group(pred, "preg_band")
+by_age
+by_preg
+
+gap_sens <- max(by_age$sens) - ______(by_age$sens)
+cat("age bands - gap in sensitivity:", round(gap_sens, 3),
+    " specificity:", round(max(by_age$spec) - min(by_age$spec), 3),
+    " AUC:",         round(max(by_age$auc)  - min(by_age$auc),  3), "\n")
+
+check_metric_range(gap_sens, 0, 1, "sensitivity gap")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+
+pred <- pred |>
+  mutate(age_band  = cut(age, c(-Inf, 30, 40, 50, Inf), right = FALSE,
+                         labels = c("21-29", "30-39", "40-49", "50+")),
+         preg_band = cut(pregnant, c(-Inf, 1, 3, 6, Inf), right = FALSE,
+                         labels = c("0", "1-2", "3-5", "6+")))
+
+by_age  <- by_group(pred, "age_band")
+by_preg <- by_group(pred, "preg_band")
+by_age
+by_preg
+
+gap_sens <- max(by_age$sens) - min(by_age$sens)
+cat("age bands - gap in sensitivity:", round(gap_sens, 3),
+    " specificity:", round(max(by_age$spec) - min(by_age$spec), 3),
+    " AUC:",         round(max(by_age$auc)  - min(by_age$auc),  3), "\n")
+
+check_metric_range(gap_sens, 0, 1, "sensitivity gap")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+
+pred["age_band"]  = pd.cut(pred["age"], [0, 30, 40, 50, np.inf], right=False,
+                           labels=["21-29", "30-39", "40-49", "50+"])
+pred["preg_band"] = pd.______(pred["pregnant"], [0, 1, 3, 6, np.inf], right=False,
+                              labels=["0", "1-2", "3-5", "6+"])
+
+by_age  = by_group(pred, ______)
+by_preg = by_group(pred, "preg_band")
+print(by_age.round(3))
+print(by_preg.round(3))
+
+gap_sens = by_age["sens"].max() - by_age["sens"].______()
+print("age bands - gap in sensitivity:", round(gap_sens, 3),
+      " specificity:", round(by_age["spec"].max() - by_age["spec"].min(), 3),
+      " AUC:",         round(by_age["auc"].max()  - by_age["auc"].min(),  3))
+
+check_metric_range(gap_sens, 0, 1, "sensitivity gap")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+
+pred["age_band"]  = pd.cut(pred["age"], [0, 30, 40, 50, np.inf], right=False,
+                           labels=["21-29", "30-39", "40-49", "50+"])
+pred["preg_band"] = pd.cut(pred["pregnant"], [0, 1, 3, 6, np.inf], right=False,
+                           labels=["0", "1-2", "3-5", "6+"])
+
+by_age  = by_group(pred, "age_band")
+by_preg = by_group(pred, "preg_band")
+print(by_age.round(3))
+print(by_preg.round(3))
+
+gap_sens = by_age["sens"].max() - by_age["sens"].min()
+print("age bands - gap in sensitivity:", round(gap_sens, 3),
+      " specificity:", round(by_age["spec"].max() - by_age["spec"].min(), 3),
+      " AUC:",         round(by_age["auc"].max()  - by_age["auc"].min(),  3))
+
+check_metric_range(gap_sens, 0, 1, "sensitivity gap")
+```
+:::
+:::
+:::
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Both languages have one function that turns a numeric column into bands with
+labels you choose; in R it is base, in Python it lives in `pandas`. The gap is
+the range of a column, so `max()` and `min()` are all you need — and if your
+answer comes back as a missing value, one band had only one class in it, which
+`check_metric_range()` will tell you by failing.
+:::
+
+The age table is the kind of table that gets into a slide deck. In R the 40–49
+band has a sensitivity of 0.73 against 0.46 for the under-30s; in Python the
+over-50s sit at 0.46 against 0.82 for the 40–49s. Before reading anything into
+either, look at the `n` and `cases` columns.
+
+## Task 2 — How large a gap does chance produce?
+
+The honest question is not whether the groups differ. With four groups and 231
+rows they will always differ. The question is whether they differ by more than
+they would if there were nothing to find.
+
+Build the comparison the only way that needs no assumptions: shuffle the band
+labels among the test rows, so the groups keep their sizes and lose their
+meaning, recompute the gap, and do it a thousand times. That distribution is
+the noise floor.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+source("checks/checks.R")
+
+set.seed(123)
+null_gaps <- replicate(1000, {
+  shuffled <- pred |> mutate(age_band = ______(age_band))
+  g <- by_group(shuffled, "age_band")
+  max(g$sens) - min(g$sens)
+})
+
+round(quantile(null_gaps, c(0.5, 0.95)), 3)
+check_gap_vs_noise(______, null_gaps, "sensitivity gap across age bands")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+source("checks/checks.R")
+
+set.seed(123)
+null_gaps <- replicate(1000, {
+  shuffled <- pred |> mutate(age_band = sample(age_band))
+  g <- by_group(shuffled, "age_band")
+  max(g$sens) - min(g$sens)
+})
+
+round(quantile(null_gaps, c(0.5, 0.95)), 3)
+check_gap_vs_noise(gap_sens, null_gaps, "sensitivity gap across age bands")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+
+rng = np.random.default_rng(123)
+shuffled, null_gaps = pred.copy(), []
+for _ in range(1000):
+    shuffled["age_band"] = rng.______(pred["age_band"].values)
+    g = by_group(shuffled, "age_band")
+    null_gaps.append(g["sens"].max() - g["sens"].min())
+null_gaps = np.array(null_gaps)
+
+print(np.quantile(null_gaps, [0.5, 0.95]).round(3))
+check_gap_vs_noise(______, null_gaps, "sensitivity gap across age bands")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+
+rng = np.random.default_rng(123)
+shuffled, null_gaps = pred.copy(), []
+for _ in range(1000):
+    shuffled["age_band"] = rng.permutation(pred["age_band"].values)
+    g = by_group(shuffled, "age_band")
+    null_gaps.append(g["sens"].max() - g["sens"].min())
+null_gaps = np.array(null_gaps)
+
+print(np.quantile(null_gaps, [0.5, 0.95]).round(3))
+check_gap_vs_noise(gap_sens, null_gaps, "sensitivity gap across age bands")
+```
+:::
+:::
+:::
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Shuffling a column is one function call: in R it is the same function you use
+to draw a sample, called with no size argument; in Python it is a method of the
+random generator you have already created. Nothing else in the loop changes.
+
+A `[fix]` from `check_gap_vs_noise()` is a result, not a bug. Read its detail
+line before you touch the code.
+:::
+
+`check_gap_vs_noise()` reports the observed gap, the median of the permuted
+gaps, their 95th centile and a permutation p-value. For the age bands it fails,
+in both languages: the gap in sensitivity across age is 0.28 in R against a
+median permuted gap of 0.28, and 0.36 in Python against a median of 0.26. Made-up
+groups of the same sizes produce a gap this large about half the time in R and
+about a fifth of the time in Python.
+
+## A second grouping, where the answer is different
+
+Run the same two steps on the pregnancy bands. This is a worked example, not a
+task: the code is Task 1's and Task 2's with one column name changed, so
+it is written out here in full.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| fig-width: 6.5
+#| fig-height: 3
+preg <- pred |>
+  mutate(preg_band = cut(pregnant, c(-Inf, 1, 3, 6, Inf), right = FALSE,
+                         labels = c("0", "1-2", "3-5", "6+")))
+by_preg <- by_group(preg, "preg_band")
+by_preg
+
+gap_preg <- max(by_preg$sens) - min(by_preg$sens)
+
+set.seed(123)
+null_preg <- replicate(1000, {
+  g <- by_group(mutate(preg, preg_band = sample(preg_band)), "preg_band")
+  max(g$sens) - min(g$sens)
+})
+
+check_gap_vs_noise(gap_preg, null_preg, "sensitivity gap across pregnancy bands")
+
+ggplot(tibble(gap = null_preg), aes(gap)) +
+  geom_histogram(bins = 30, fill = "grey80", colour = "white") +
+  geom_vline(xintercept = gap_preg, linewidth = 1) +
+  labs(x = "sensitivity gap between four groups of the same sizes, labels shuffled",
+       y = "permutations",
+       title = "The noise floor, and the gap we observed (vertical line)")
+```
+
+## Python
+
+```{python}
+#| fig-width: 6.5
+#| fig-height: 3
+preg = pred.copy()
+preg["preg_band"] = pd.cut(preg["pregnant"], [0, 1, 3, 6, np.inf], right=False,
+                           labels=["0", "1-2", "3-5", "6+"])
+by_preg = by_group(preg, "preg_band")
+print(by_preg.round(3))
+
+gap_preg = by_preg["sens"].max() - by_preg["sens"].min()
+
+rng = np.random.default_rng(123)
+shuffled, null_preg = preg.copy(), []
+for _ in range(1000):
+    shuffled["preg_band"] = rng.permutation(preg["preg_band"].values)
+    g = by_group(shuffled, "preg_band")
+    null_preg.append(g["sens"].max() - g["sens"].min())
+null_preg = np.array(null_preg)
+
+check_gap_vs_noise(gap_preg, null_preg, "sensitivity gap across pregnancy bands")
+
+fig, ax = plt.subplots(figsize=(6.5, 3))
+ax.hist(null_preg, bins=30, color="0.8", edgecolor="white")
+ax.axvline(gap_preg, color="black", lw=1.5)
+ax.set_xlabel("sensitivity gap between four groups of the same sizes, labels shuffled")
+ax.set_ylabel("permutations")
+ax.set_title("The noise floor, and the gap we observed (vertical line)")
+fig.tight_layout()
+```
+:::
+
+This one clears the floor: a gap of 0.54 in R against a 95th centile of 0.46
+(p = 0.03), and 0.60 in Python against 0.47 (p = 0.01). Hold on to it until the
+end of the page, because the group driving it is the one with six or eight
+cases in it.
+
+## Task 3 — Put an interval on every group
+
+A p-value for the gap does not tell a service how good the model is for the
+over-50s. For that you need an interval around each group's own estimate.
+Resample the rows within a band, with replacement, recompute sensitivity, and
+take the 2.5th and 97.5th centiles.
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+boot_sens <- function(d, B = 1000) {
+  v <- replicate(B, {
+    i <- sample(nrow(d), replace = ______)
+    if (any(d$diabetes[i] == "pos")) sens_vec(d$diabetes[i], d$.pred_class[i]) else NA_real_
+  })
+  quantile(v, c(0.025, ______), na.rm = TRUE)
+}
+
+set.seed(123)
+intervals <- lapply(levels(pred$age_band), function(g) {
+  d  <- dplyr::filter(pred, age_band == g)
+  ci <- boot_sens(d)
+  tibble(group = g, n = nrow(d), cases = sum(d$diabetes == "pos"),
+         sens  = sens_vec(d$diabetes, d$.pred_class),
+         lo = ci[[1]], hi = ci[[2]], width = ci[[2]] - ci[[1]])
+}) |> bind_rows()
+intervals
+
+cat("widest interval:", intervals$group[which.max(intervals$width)],
+    "| smallest band:", intervals$group[which.min(intervals$n)],
+    "| lowest AUC:",    as.character(by_age$group[which.min(by_age$auc)]), "\n")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+#| fig-width: 6.5
+#| fig-height: 3
+boot_sens <- function(d, B = 1000) {
+  v <- replicate(B, {
+    i <- sample(nrow(d), replace = TRUE)
+    if (any(d$diabetes[i] == "pos")) sens_vec(d$diabetes[i], d$.pred_class[i]) else NA_real_
+  })
+  quantile(v, c(0.025, 0.975), na.rm = TRUE)
+}
+
+set.seed(123)
+intervals <- lapply(levels(pred$age_band), function(g) {
+  d  <- dplyr::filter(pred, age_band == g)
+  ci <- boot_sens(d)
+  tibble(group = g, n = nrow(d), cases = sum(d$diabetes == "pos"),
+         sens  = sens_vec(d$diabetes, d$.pred_class),
+         lo = ci[[1]], hi = ci[[2]], width = ci[[2]] - ci[[1]])
+}) |> bind_rows()
+intervals
+
+cat("widest interval:", intervals$group[which.max(intervals$width)],
+    "| smallest band:", intervals$group[which.min(intervals$n)],
+    "| lowest AUC:",    as.character(by_age$group[which.min(by_age$auc)]), "\n")
+
+ggplot(intervals, aes(x = sens, y = group)) +
+  geom_errorbar(aes(xmin = lo, xmax = hi), orientation = "y", width = 0.15) +
+  geom_point(aes(size = cases)) +
+  geom_vline(xintercept = sens_vec(pred$diabetes, pred$.pred_class), linetype = 2) +
+  labs(x = "sensitivity (dashed line: all 231 test rows)", y = NULL, size = "cases",
+       title = "Sensitivity by age band, with 95% bootstrap intervals")
+```
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+def boot_sens(d, rng, B=1000):
+    t, yhat = d["truth"].values, d["pred"].values
+    v = [recall_score(t[i], yhat[i]) if t[i].sum() else np.nan
+         for i in (rng.integers(0, len(d), ______) for _ in range(B))]
+    return np.nanquantile(v, [0.025, ______])
+
+rng = np.random.default_rng(123)
+rows = []
+for g, d in pred.groupby("age_band", observed=True):
+    lo, hi = boot_sens(d, rng)
+    rows.append({"group": g, "n": len(d), "cases": int(d["truth"].sum()),
+                 "sens": recall_score(d["truth"], d["pred"]),
+                 "lo": lo, "hi": hi, "width": hi - lo})
+intervals = pd.DataFrame(rows)
+print(intervals.round(3))
+
+print("widest interval:", intervals.loc[intervals["width"].idxmax(), "group"],
+      "| smallest band:", intervals.loc[intervals["n"].idxmin(), "group"],
+      "| lowest AUC:",    by_age["auc"].idxmin())
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+#| fig-width: 6.5
+#| fig-height: 3
+def boot_sens(d, rng, B=1000):
+    t, yhat = d["truth"].values, d["pred"].values
+    v = [recall_score(t[i], yhat[i]) if t[i].sum() else np.nan
+         for i in (rng.integers(0, len(d), len(d)) for _ in range(B))]
+    return np.nanquantile(v, [0.025, 0.975])
+
+rng = np.random.default_rng(123)
+rows = []
+for g, d in pred.groupby("age_band", observed=True):
+    lo, hi = boot_sens(d, rng)
+    rows.append({"group": g, "n": len(d), "cases": int(d["truth"].sum()),
+                 "sens": recall_score(d["truth"], d["pred"]),
+                 "lo": lo, "hi": hi, "width": hi - lo})
+intervals = pd.DataFrame(rows)
+print(intervals.round(3))
+
+print("widest interval:", intervals.loc[intervals["width"].idxmax(), "group"],
+      "| smallest band:", intervals.loc[intervals["n"].idxmin(), "group"],
+      "| lowest AUC:",    by_age["auc"].idxmin())
+
+fig, ax = plt.subplots(figsize=(6.5, 3))
+ax.errorbar(intervals["sens"], intervals["group"],
+            xerr=[intervals["sens"] - intervals["lo"],
+                  intervals["hi"] - intervals["sens"]],
+            fmt="o", capsize=3, color="black")
+ax.axvline(recall_score(pred["truth"], pred["pred"]), ls="--", color="grey")
+ax.set_xlabel("sensitivity (dashed line: all 231 test rows)")
+ax.set_title("Sensitivity by age band, with 95% bootstrap intervals")
+fig.tight_layout()
+```
+:::
+:::
+:::
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+A bootstrap resample is the same size as the group it came from, drawn with
+replacement — that is the whole idea, and it is one argument in R and one
+argument in Python. The upper centile is whatever makes the interval symmetric
+around 95%.
+:::
+
+## The result that should bother you
+
+The over-50s are the worst-served group in this test set. In R their AUC of
+0.73 is the lowest of the four bands; in Python their AUC of 0.45 is the lowest
+of the four and below chance, which would mean the forest is worse than a coin
+for women over 50. They are also the band a service would most want to get
+right.
+
+Three steps.
+
+1. The over-50s band has 19 rows in R and 23 in Python, of which 11 are cases
+   in both. It is the smallest band, it has the widest bootstrap interval of
+   the four — 0.33 to 0.90 in R, 0.17 to 0.75 in Python — and the width of that
+   interval, around 0.57 to 0.58, is larger than the entire gap between the
+   best and worst band that we set out to interpret. The smallest group gets
+   the most extreme point estimate because it has the fewest cases to average
+   over, and the same thinness is what makes the estimate extreme and what
+   makes it uncertain.
+2. The direction is not stable either. The same band, the same model
+   specification, the same seed: in R the over-50s have a sensitivity of 0.64,
+   above the overall 0.54, and in Python 0.46, below the overall 0.63. The only
+   difference between the two is which rows landed in the test set. A
+   worst-served group that changes places when you reshuffle the split is a
+   property of the split.
+3. Permuting the labels says the same thing without any of the interpretation.
+   Four made-up age bands of the same sizes produce a sensitivity gap of 0.28
+   or more in half of a thousand permutations, and the observed gap is 0.28. A
+   difference smaller than the noise floor is not a finding, and ranking the
+   bands by sensitivity is then an elaborate way of ranking them by size.
+
+The pregnancy grouping is the useful counter-case, and it is only half a
+counter-case. That gap does clear the floor (p = 0.03 in R, p = 0.01 in
+Python), so something there is not chance. Then look at which band is driving
+it: the women with one or two pregnancies, sensitivity 0.25 in R and 0.17 in
+Python — estimated from 8 cases and 6 cases respectively, inside a group of 63
+and 57 rows. Repeat Task 3 on the pregnancy bands and that band's interval runs from
+0.00 upwards. So even the gap
+that survives the permutation test rests on single-digit event counts, and we
+have looked at six gaps on this page — two groupings by three metrics — while
+testing two of them. A p-value of 0.03 is not a licence when the search was
+that wide.
+
+## What this cannot be evidence of
+
+::: {.callout-important}
+## The method is real; the finding is not
+`data/diabetes.csv` is a synthetic replacement for the withdrawn Pima dataset
+(@sec-data-diabetes). Its rows were generated, and nothing in that generator
+encodes a mechanism by which a model should work less well for older women.
+Any disparity on this page is therefore an artefact of the simulation and of
+231 test rows, and no sentence of the form "the model under-serves group X"
+can be carried out of this chapter.
+
+That is not a reason to skip the exercise; it is the exercise. Someone auditing
+a deployed model for equity has to be able to tell a disparity from an artefact
+of the data they were handed, and the only way to practise is on data where you
+already know the answer. What you would need to make a real claim is nameable:
+data from the service you are auditing, with the subgroup actually recorded
+rather than inferred; a list of subgroups written down before anyone looks at a
+metric; and enough cases in each of them — events, not rows — that the interval
+is narrower than the difference you would act on. On this page the third
+condition fails by a factor of several for every band.
+:::
+
+## Reflection
+
+1. Your service wants a dashboard with one sensitivity per age band. Write the
+   sentence you would put under the table so that a reader cannot misread a
+   small group as a failing one. It should be a sentence, not a number.
+2. Where does the list of subgroups come from? You cannot search the data for
+   the grouping with the largest gap and then report that gap — explain why
+   not, and say who should decide the list instead.
+3. Suppose the over-50s disparity were real. Name two responses a service could
+   make that are not "retrain the model", and say what evidence would tell you
+   which to choose.
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Answers.** (1) Anything that puts the event count and the interval in the
+reader's eye — for example, that each band's sensitivity is estimated from the
+cases in that band only, that the smallest band's interval spans more than half
+the scale, and that the bands cannot be ranked on these data. (2) From the
+service, the population and the regulatory context, before the analysis:
+protected characteristics, groups known to be under-served, groups the model
+will actually be used on. Searching for the largest gap is multiple testing
+with the multiplicity hidden, and this page shows the machinery — the maximum
+gap over four random bands has a distribution with a median of about 0.26 to
+0.28, so
+the largest of several searched gaps is almost guaranteed to look impressive.
+(3) Candidates: a different threshold for that group (@sec-thresholds), extra
+human review of its negatives, restricting the model's licensed population to
+the groups it was validated in, or collecting more data before deploying at
+all. Which one depends on the cost of a missed case versus a false alarm in
+that group, and on whether the group's own members would accept a different
+rule being applied to them.
+
+**Expected values.** Both splits, seed 123. Quote ranges; the forest is
+stochastic and the bootstrap moves the last digit.
+
+| | R (ranger) | Python (sklearn) |
+|---|---|---|
+| test set | 231 rows, 84 cases | 231 rows, 84 cases |
+| overall sens / spec / AUC | 0.54 / 0.85 / 0.82 | 0.63 / 0.75 / 0.77 |
+| age bands, n | 136 / 43 / 33 / 19 | 131 / 41 / 36 / 23 |
+| age bands, cases | 35 / 23 / 15 / 11 | 32 / 19 / 22 / 11 |
+| gap in sens / spec / AUC by age | 0.28 / 0.44 / 0.10 | 0.36 / 0.50 / 0.35 |
+| permuted age gap: median, 95th | 0.28, 0.55 | 0.26, 0.50 |
+| p for the age gap | 0.45–0.55 | 0.18–0.25 |
+| gap in sens by pregnancies | 0.54 | 0.60 |
+| p for the pregnancy gap | 0.02–0.04 | 0.005–0.02 |
+| widest 95% interval (50+) | 0.33–0.90 | 0.17–0.75 |
+
+: {tbl-colwidths="[34,33,33]"}
+
+The 40–49 band is the most extreme in R (sensitivity 0.73) and the over-50s in
+Python (0.46); in both languages the two smallest bands hold the two most
+extreme estimates, which is the point.
+
+**Common failures.** (1) Computing the gap on a column containing `NA`, because
+a band had one class only — `max()` returns `NA` and the check fails with the
+class printed rather than a number; this is worth letting happen. (2) Reading a
+`[fix]` from `check_gap_vs_noise()` as a broken answer. Say in advance that the
+expected result is a failure and that the detail line is the output. (3)
+Permuting the outcome instead of the group label, which tests something else
+entirely — if someone does it, it is a good two minutes. (4) Bootstrapping the
+whole test set rather than within the band, which gives every band almost the
+same interval. (5) Expecting the two languages to agree on which band is worst.
+They do not, and that is step 2 of the argument.
+
+**Timing.** The permutations are about seven seconds in R and eight in Python
+for a thousand; the bootstrap is faster. If you are behind, set the loops to
+200 and keep all three tasks — the p-values move in the second decimal and no
+conclusion changes. Do not drop Task 2 to save Task 3: the noise floor is the
+reason this page exists.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — Do the two models fail the same people?
+Repeat the whole page on the logistic regression of @sec-logistic-regression,
+fitted to the same training rows. Put its subgroup table next to the forest's.
+If the two models disagree about which band is worst served, what does that
+tell you about the disparity — and what would it take for them to agree for the
+right reason rather than by chance?
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — How many cases would you need?
+Keep the model and simulate the audit you wish you could run. Draw groups of
+25, 50, 100 and 400 cases by resampling the test set, and record how often a
+true sensitivity difference of 0.10 between two groups is detectable at all.
+The answer tells you the minimum size of a subgroup worth reporting, and it is
+larger than anything on this page.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 3 — A threshold per group
+@sec-thresholds chose one threshold for everybody. Choose one per age band so
+that every band reaches the same sensitivity, and report what it costs in
+specificity and in extra referrals. Then write the paragraph you would have to
+put in front of a clinical governance committee to justify applying a different
+rule to patients of different ages.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that you can compute a model's performance inside subgroups of a test
+set, report each estimate with the number of cases behind it and a bootstrap
+interval around it, and build a permutation noise floor that says whether a
+between-group gap is larger than chance produces. That is the whole machinery
+of a fairness audit's measurement step, and it is not difficult.
+
+**Cannot:** that this model under-serves anybody. The data are synthetic, the
+test set has 231 rows, the smallest band has 11 cases, and the one gap that
+cleared the noise floor was driven by a group with six. What you have practised
+is the arithmetic and the discipline of reporting it; the claim itself needs
+real data, a prespecified subgroup list and event counts an order of magnitude
+larger. @sec-day6-consolidation's third loose end — that an estimate reported
+without uncertainty is not an estimate — is the same point this page makes
+about people rather than about variables.

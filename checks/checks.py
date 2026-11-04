@@ -28,6 +28,8 @@ __all__ = [
     "check_beats_prevalence",
     "check_overfit_gap",
     "check_noise_control",
+    "check_gap_vs_noise",
+    "check_selection",
 ]
 
 
@@ -239,3 +241,68 @@ def check_noise_control(importance, noise="noise", tol=0.1):
               detail=f"'{noise}' ranks {rank} of {len(s)}, {100 * share:.0f}% of "
                      f"'{s.index[0]}' ({s[noise]:.4g} vs {s.iloc[0]:.4g})")
     return share
+
+
+def check_gap_vs_noise(observed, null_values, label="gap"):
+    """Day 6: an observed gap between subgroups, against the gap that appears
+    when the groups are made up.
+
+    `null_values` is the vector of gaps produced by shuffling the group labels
+    (or by any other procedure under which there is nothing to find). A [fix]
+    here means the observed gap sits inside the noise floor, which at these
+    sample sizes is the usual result and not a mistake in your code - read the
+    detail line, and the chapter.
+    """
+    null_values = np.asarray(null_values, dtype=float).ravel()
+    null_values = null_values[np.isfinite(null_values)]
+    usable = (np.isscalar(observed) and np.isfinite(observed)
+              and null_values.size > 1)
+    if not usable:
+        return hds_check(f"{label} can be compared with a noise floor", False,
+                         hint="pass one observed gap and a vector of gaps from "
+                              "permuted labels; a nan usually means a subgroup "
+                              "had only one class",
+                         detail=f"observed {observed}, {null_values.size} usable "
+                                "null values")
+    q95 = float(np.quantile(null_values, 0.95))
+    p = (float((null_values >= observed).sum()) + 1) / (null_values.size + 1)
+    hds_check(f"{label} is larger than the gap chance alone produces",
+              float(observed) > q95,
+              hint="a gap inside the noise floor is not a finding; report the "
+                   "intervals and the group sizes, not the ordering",
+              detail=f"observed {float(observed):.3f}, median null "
+                     f"{float(np.median(null_values)):.3f}, 95th centile {q95:.3f}, "
+                     f"p = {p:.3f} ({null_values.size} permutations)")
+    return p
+
+
+def check_selection(coefficients, controls=("noise",), label="the penalised fit"):
+    """Day 5: which predictors did a penalised fit actually keep?
+
+    `coefficients` is a pandas Series (or a dict) whose index is the predictor
+    names. `controls` names the columns known to carry no signal. The check
+    passes when none of them survived, and reports how many real predictors
+    were dropped alongside them, because that is the price. A [fix] here is not
+    necessarily a mistake in your code - read the detail line, and the chapter.
+    """
+    s = pd.Series(coefficients).drop(labels=["(Intercept)", "intercept"],
+                                     errors="ignore")
+    controls = list(controls)
+    absent = [c for c in controls if c not in s.index]
+    if absent:
+        return hds_check("every control column is present", False,
+                         hint="add the controls to the predictors before fitting, "
+                              "or set controls= to their names",
+                         detail="missing: " + ", ".join(map(str, absent)))
+    kept = [c for c in controls if s[c] != 0]
+    real = [c for c in s.index if c not in controls]
+    dropped = [c for c in real if s[c] == 0]
+    hds_check(f"{label} kept none of the {len(controls)} controls",
+              len(kept) == 0,
+              hint="a penalty chosen to predict well is not chosen to select "
+                   "variables; look at what the whole path does before you "
+                   "report a variable list",
+              detail=f"controls kept: {', '.join(kept) if kept else 'none'}; "
+                     f"real predictors dropped: "
+                     f"{', '.join(dropped) if dropped else 'none'}")
+    return {"controls_kept": kept, "dropped": dropped}
