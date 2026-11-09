@@ -6,33 +6,117 @@ engine: knitr
 
 # Exercise 1.1 — Python vs R {#sec-python-r}
 
-:::: {.web-only}
-Every cell on this page is a real R or Python cell. Copy the code in your chosen
-language, run it, and read the output. Then read the other tab. The point is not
-to memorise either one — it is to be able to open a colleague's script in the
-language you do not use and still follow what it does.
+::::: web-only
+## The libraries
+
+A note on vocabulary. R calls them **packages** and loads them with `library(dplyr)`; Python calls them **modules** or **packages** and loads them with `import pandas as pd` or `from sklearn.metrics import roc_auc_score`. Then in R, `library(dplyr)` puts *every* dplyr function within reach, whereas Python makes you name what you want. That is why R code reads `filter(...)` and Python code reads `pd.read_csv(...)` — the prefix tells you where the function came from, and in R you have to remember.
+
+:::: {.callout-tip collapse="true"}
+## Extra
+
+::: web-only
+Try out `dplyr::filter()` in R does it work?
+:::
 ::::
 
-## Why both
+### Key R packages
 
-The two languages carry two different ideas of what an analysis *is*. In R the
-thing you hold is the data frame, and the verbs act on whole columns. In Python
-the thing you hold is an object, and you call methods on it. Most of what looks
-unfamiliar in the other language comes from that one difference, so it is worth
-keeping in mind as you read.
+#### The tidyverse — getting data into shape
 
-This page walks through the four libraries you will use most, one pairing at a
-time: the Python library first by name, then the R package that does the same
-job.
+[tidyverse](https://www.tidyverse.org/) is not one package but a family that shares a design: data frames in, data frames out, verbs that read as English (for example, a dplyr pipeline is a *sentence*. `data |> filter(age > 60) |> summarise(mean(los))` reads left to right in the order the work happens) and the pipe (`|>` or `%>%`) to chain them. `library(tidyverse)` loads them all at once. The key packages `tidyverse`contains are:
 
-## The data
+| Package | What it does |
+|------------------------------------|------------------------------------|
+| [readr](https://readr.tidyverse.org/) | reads `.csv` into a data frame — `read_csv()` |
+| [dplyr](https://dplyr.tidyverse.org/) | the verbs: `filter`, `select`, `mutate`, `group_by`, `summarise`, `arrange` |
+| [ggplot2](https://ggplot2.tidyverse.org/) | plots built by adding layers — `ggplot() + geom_point()` |
+| [tidyr](https://tidyr.tidyverse.org/) | reshaping between wide and long — `pivot_longer()` |
 
-Five patients, two columns: `age` in years, and `score`, an Injury Severity
-Score. Small enough that you can check every result by eye, which is the only
-reason to use a toy dataset — from @sec-pipeline onwards the files are real
-extracts with real problems.
+### tidymodels — fitting and evaluating
 
-::: {.panel-tabset}
+[tidymodels](https://www.tidymodels.org/) is also a collection of packages.It is to modelling what the tidyverse is to data handling: a family of packages with one grammar. Its central idea is that *specifying* a model is separate from *fitting* it, and separate again from *which implementation* does the arithmetic. Key packages it contains are:
+
+| Package | What it does |
+|------------------------------------|------------------------------------|
+| [parsnip](https://parsnip.tidymodels.org/) | one vocabulary for many models — `linear_reg()`, `logistic_reg()`, `rand_forest()` |
+| [recipes](https://recipes.tidymodels.org/) | preprocessing as a fitted object — `step_normalize()`, `step_impute_mean()` |
+| [rsample](https://rsample.tidymodels.org/) | splitting and resampling — `initial_split()`, `vfold_cv()` |
+| [yardstick](https://yardstick.tidymodels.org/) | evaluation metrics — `rmse()`, `roc_auc()`, `sens()`, `spec()` |
+
+**To call a specific ML algorithm you set an engine.** For example, `set_engine("ranger")` means "fit this random forest using the ranger package". The specification stays the same; the engine is swapped.
+
+| Engine | Package | Used for |
+|------------------------|------------------------|------------------------|
+| `"lm"`, `"glm"` | base R | linear and logistic regression |
+| `"rpart"` | [rpart](https://cran.r-project.org/package=rpart) | a single decision tree |
+| `"ranger"` | [ranger](https://imbs-hl.github.io/ranger/) | random forests, fast |
+| `"glmnet"` | [glmnet](https://glmnet.stanford.edu/) | lasso and ridge |
+
+### Key Python packages
+
+### The scientific stack
+
+| Library | What it does |
+|-------------------------|-----------------------------------------------|
+| [pandas](https://pandas.pydata.org/docs/) | the `DataFrame` — `read_csv()`, `groupby()`, `describe()` |
+| [numpy](https://numpy.org/doc/stable/) | arrays and the maths on them; what pandas is built on |
+| [matplotlib](https://matplotlib.org/stable/) | plots, built by commanding an `Axes` object |
+| [scipy](https://docs.scipy.org/doc/scipy/) | scientific algorithms; here `optimize.minimize` |
+
+### scikit-learn
+
+In [scikit-learn](https://scikit-learn.org/stable/) every object follows the same contract: `.fit(X, y)` learns from data, `.transform(X)` or `.predict(X)` applies what was learned, and `.fit_transform()` does both. Once you know that, a model you have never seen before is usable in one line.
+
+It is organised into submodules and here are a few to note:
+
+| Submodule | What lives there |
+|------------------------------------|------------------------------------|
+| `linear_model` | `LinearRegression`, `LogisticRegression`, `Lasso` |
+| `model_selection` | `train_test_split`, `cross_val_score`, `GridSearchCV` |
+| `metrics` | `mean_absolute_error`, `roc_auc_score`, `confusion_matrix` |
+| `preprocessing` | `StandardScaler`, `MinMaxScaler`, `OneHotEncoder` |
+| `pipeline` | `Pipeline` — the object that makes leakage hard to commit |
+| `compose` | `ColumnTransformer` — different preprocessing per column |
+| `impute` | `SimpleImputer`, `IterativeImputer` |
+| `tree`, `ensemble` | `DecisionTreeClassifier`, `RandomForestClassifier` |
+| `inspection` | `permutation_importance`, `partial_dependence` |
+| `dummy` | `DummyClassifier` — the baseline you must beat |
+
+The [scikit-learn user guide](https://scikit-learn.org/stable/user_guide.html) explains the statistics as well as the code, and is worth reading.
+
+## The same job in both languages
+
+| Job | R | Python |
+|------------------------|------------------------|------------------------|
+| read a csv | `readr::read_csv()` | `pandas.read_csv()` |
+| filter rows | `dplyr::filter()` | `df[df.col > x]` or `df.query()` |
+| group and summarise | `dplyr::group_by() \|> summarise()` | `df.groupby().agg()` |
+| plot | `ggplot2` | `matplotlib` |
+| split train/test | `rsample::initial_split()` | `train_test_split()` |
+| preprocess without leaking | `recipes` inside a `workflow()` | `Pipeline` + `ColumnTransformer` |
+| fit a model | `parsnip` spec `\|> fit()` | `estimator.fit(X, y)` |
+| score it | `yardstick` | `sklearn.metrics` |
+
+## If a library is missing
+
+A missing package produces `Error in library(x) : there is no package called 'x'` in R, or `ModuleNotFoundError: No module named 'x'` in Python. Install it:
+
+``` r
+install.packages("naniar")
+```
+
+``` python
+pip install shap
+```
+
+Every cell on this page is a real R or Python cell. Copy the code in your chosen language, run it, and read the output. Then read the other tab. Python code will appear as **vermillion** and R as **blue**.
+:::::
+
+## Lets see them in action
+
+Lets create a dataset of five patients with two columns: `age` in years, and `score`, an Injury Severity Score.
+
+::: panel-tabset
 ## R
 
 ```{r}
@@ -56,12 +140,11 @@ data
 ```
 :::
 
-## `pandas` → `dplyr`, from the tidyverse
+## Data wrangling: `pandas` → `dplyr`, from the tidyverse
 
-Both are for data wrangling: selecting, filtering, sorting, summarising. Here,
-keeping only the patients over 20.
+Both are for data wrangling: selecting, filtering, sorting, summarising. Here, keeping only the patients over 20.
 
-::: {.panel-tabset}
+::: panel-tabset
 ## R
 
 ```{r}
@@ -80,18 +163,11 @@ filtered_data.head()
 ```
 :::
 
-Read the two side by side. `filter(age > 20)` names the column directly, because
-dplyr already knows which frame you mean. `data[data["age"] > 20]` has to name
-the frame twice: once to build the vector of `True`/`False`, once to subset with
-it. Same result, different notion of where the data lives.
+## ML pipeline: `scikit-learn` → `tidymodels`
 
-## `scikit-learn` → `tidymodels`
+Both are for building machine learning pipelines. Here, fitting a linear regression of score on age.
 
-Both are for building machine learning pipelines. Here, fitting a linear
-regression of score on age.
-
-In R you have already done this in Module 2, with `lm()` from the `stats`
-package in base R:
+In R you have already done this in Module 2, with `lm()` from the `stats` package in base R:
 
 ```{r}
 model <- lm(score ~ age, data = data)
@@ -111,21 +187,16 @@ model_py.fit(X, y)
 print(model_py.intercept_, model_py.coef_)
 ```
 
-The coefficients agree. They are a property of the data, not of the software,
-and that is the reassuring half of this page.
+The coefficients agree!
 
-What differs is what each returns. `lm()` hands back a statistical summary —
-standard errors, residuals, an F test — because R's linear model was written for
-inference. `LinearRegression` hands back coefficients and a `.predict()` method,
-because scikit-learn's was written for prediction. Neither is wrong; they were
-built to answer different questions.
+What differs is what each returns. `lm()` hands back a statistical summary — standard errors, residuals, an F test — because R's linear model was written for inference. `LinearRegression` hands back coefficients and a `.predict()` method, because scikit-learn's was written for prediction.
 
-R can also do it the scikit-learn way. `tidymodels` sets the model up in the
-same three moves — define the algorithm, give it the data, fit it:
+R can also do it the scikit-learn/ML way. `tidymodels` sets the model up in the same three moves — define the algorithm, give it the data, fit it:
 
 ```{r}
 #| message: false
 #| warning: false
+#| 
 library(tidymodels)
 
 lm_model <- linear_reg() %>%
@@ -138,18 +209,13 @@ lm_fit <- lm_model %>%
 lm_fit[["fit"]][["coefficients"]]
 ```
 
-Note what `set_engine("lm")` is doing: the specification above says *linear
-regression* and nothing about how to compute it, and the engine supplies the
-arithmetic. Swap in `"glmnet"` and the first half of that code is unchanged.
-That separation is what makes the pipeline in @sec-pipeline swappable, and it is
-why `tidymodels` is worth the extra typing for a model `lm()` could have fitted
-in one line.
+Note what `set_engine("lm")` is doing: the specification above says *linear regression* and nothing about how to compute it, and the engine supplies the arithmetic. Swap in `"glmnet"` and the first half of that code is unchanged.
 
-## `seaborn` → `ggplot2`
+## Visualization: `matplotlib, seaborn` → `ggplot2`
 
 Both are for plotting. Here, a scatter of score against age.
 
-::: {.panel-tabset}
+::: panel-tabset
 ## R
 
 ```{r}
@@ -171,16 +237,13 @@ plt.show()
 ```
 :::
 
-The `+` in ggplot2 is not decoration. A plot is a stack of layers and you add
-them one at a time, which is why the next task is a one-line change rather than
-a rewrite.
+The `+` in ggplot2 is not decoration. A plot is a stack of layers and you add them one at a time, which is why the next task is a one-line change rather than a rewrite.
 
-## `numpy` → base R
+## Algebra:`numpy` → base R
 
-numpy is Python's array library; in R, arrays and the arithmetic on them are in
-the language itself, so there is nothing to load. Here, a dot product.
+numpy is Python's array library; in R, arrays and the arithmetic on them are in the language itself (preloaded package called `base`) , so there is nothing to load. Here, a dot product.
 
-::: {.panel-tabset}
+::: panel-tabset
 ## R
 
 ```{r}
@@ -202,18 +265,13 @@ print(dot_product)
 ```
 :::
 
-`a * b` multiplies element by element in both languages, and `sum()` adds the
-result. `np.dot` does both in one step. This is the pairing where R needs no
-library at all, which is worth knowing when you read R code and cannot find the
-import.
+`a * b` multiplies element by element in both languages, and `sum()` adds the result. `np.dot` does both in one step. Check out `%*%` too
 
-## Task — Put the regression on the plot
+## Exercise: Put the regression on the plot
 
-Add the fitted line to the scatter. In ggplot2 it is one more layer: look up
-`geom_smooth()` and give it `method = "lm"`. Then find the Python equivalent —
-seaborn has a function that draws a scatter *and* its regression line together.
+Add the fitted line to the scatter. In ggplot2 it is one more layer: look up `geom_smooth()` and give it `method = "lm"`. Then find the Python equivalent — seaborn has a function that draws a scatter *and* its regression line together.
 
-::: {.panel-tabset}
+::::::: panel-tabset
 ## R
 
 ```{r}
@@ -224,9 +282,10 @@ ggplot(data, aes(x = age, y = score)) +
   ______(method = "lm", se = FALSE)
 ```
 
-::: {.content-visible when-meta="show-solutions"}
+:::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
+
 ```{r}
 #| message: false
 ggplot(data, aes(x = age, y = score)) +
@@ -234,11 +293,9 @@ ggplot(data, aes(x = age, y = score)) +
   geom_smooth(method = "lm", se = FALSE)
 ```
 
-`se = FALSE` turns off the confidence band. Leave it on and you will see how
-wide it is with five points, which is an honest picture of what this data can
-support.
+`se = FALSE` turns off the confidence band. Leave it on and you will see how wide it is with five points, which is an honest picture of what this data can support.
 :::
-:::
+::::
 
 ## Python
 
@@ -249,44 +306,31 @@ sns.______(x = "age", y = "score", data = data)
 plt.show()
 ```
 
-::: {.content-visible when-meta="show-solutions"}
+:::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
+
 ```{python}
 sns.regplot(x = "age", y = "score", data = data)
 plt.show()
 ```
 
-`sns.regplot()` draws the points and fits the line in one call. `sns.lmplot()`
-does the same and will also split the plot by a grouping column.
+`sns.regplot()` draws the points and fits the line in one call. `sns.lmplot()` does the same and will also split the plot by a grouping column.
 :::
-:::
-:::
+::::
+:::::::
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-In R the layer you want starts with `geom_`. In Python the seaborn function you
-want starts with `reg`.
+
+In R the layer you want starts with `geom_`. In Python the seaborn function you want starts with `reg`.
 :::
 
 ## Where to look things up
 
-Take your time now and explore these two libraries a little further. When
-something in class is unclear, these are the first places to look — both are
-written to teach, not only to document:
+Take your time now and explore these packages a little further. When something in class is unclear, these are the first places to look:
 
-- [scikit-learn](https://scikit-learn.org/stable/) — the user guide explains the
-  statistics as well as the code
-- [tidymodels](https://www.tidymodels.org) — start with *Get Started*
+-   [scikit-learn](https://scikit-learn.org/stable/) — the user guide explains the statistics as well as the code
+-   [tidymodels](https://www.tidymodels.org) — start with *Get Started*
 
-A longer side-by-side comparison of the two languages, if you want one:
-[occasionaldivergences.com/posts/python-intro](https://occasionaldivergences.com/posts/python-intro/).
-
-## What you can and cannot now claim
-
-**Can:** that you can filter, fit and plot in both languages, and that the
-coefficients you obtained are a property of the data rather than of the software
-that computed them.
-
-**Cannot:** anything about how well this model predicts. Five patients, and every
-number computed on the same five. That is where @sec-pipeline starts.
+A longer side-by-side comparison of the two languages, if you want one: [occasionaldivergences.com/posts/python-intro](https://occasionaldivergences.com/posts/python-intro/).
