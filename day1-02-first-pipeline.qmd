@@ -6,48 +6,70 @@ engine: knitr
 
 # Exercise 1.2 — Your first ML pipeline {#sec-pipeline}
 
+## Overview
 
-## Objectives
+In this exercise you will build your **first machine learning pipeline**, using
+a *linear regression algorithm*. A pipeline is a **sequence of reproducible
+steps** that takes raw data and produces predictions.
 
-::: {.objective-list}
-- State the five steps of a supervised pipeline and what each protects against.
-- Fit, evaluate and save a model in both languages.
-- Compare a model's error against a baseline that does no learning, and say
-  whether the model earned its keep.
-- Explain why a model fitted and evaluated on the same rows tells you nothing.
-:::
+The structure matters because we want models that work beyond the rows we fitted
+them to. You have already built a linear regression in Module 2. Here the same
+model sits inside a workflow with extra steps, whose job is to test how well it
+performs on **new, unseen data**. That workflow keeps growing over the next few
+days as we add concepts to it.
 
-## The pipeline, and what each step is for
+**The five steps**
 
-| Step | What it does | What it protects you against |
-|---|---|---|
-| 1. Load and inspect | reads the file, checks it is what you think | silently modelling the wrong column, or a number read as text |
-| 2. Define X and y | separates predictors from outcome | accidentally predicting the outcome from itself |
-| 3. Split | holds rows back, untouched | scoring your homework with the answers in front of you |
-| 4. Fit | estimates parameters, **on the training rows only** | — |
-| 5. Evaluate | scores the held-out rows once | believing a number that was guaranteed to be good |
+1. Load the data
+2. Define the features (**X**) and the outcome (**y**)
+3. Split into train and test
+4. Fit the algorithm on the **training** data
+5. Evaluate on the **held-out test** data
 
-: {tbl-colwidths="[20,38,42]"}
+| Step | What it protects you against |
+|---|---|
+| 1. Load and inspect | silently modelling the wrong column, or a number read as text |
+| 2. Define X and y | accidentally predicting the outcome from itself |
+| 3. Split | scoring your homework with the answers in front of you |
+| 4. Fit on training only | — |
+| 5. Evaluate once | believing a number that was guaranteed to be good |
 
-Step 3 is what distinguishes this from Module 2. In statistics you fit to all
-the data and ask whether a relationship is real. In machine learning you
-withhold rows and ask whether the model is any use on rows it has never seen.
-Different question, different procedure.
+: {tbl-colwidths="[32,68]"}
+
+Step 3 is what separates this from Module 2. In statistics you fit to all the
+data and ask whether a relationship is real. In machine learning you hold rows
+back and ask whether the model is any use on rows it has never seen.
 
 ::: {.callout-note}
 ## Today's validation is the simplest possible one
-A single 80/20 split makes generalisation concrete, which is why we start here.
-It is also noisy: the score depends on which rows happened to land in the test
-set. Stretch 2 measures how much. Cross-validation arrives on Day 2.
+We use a **train/test split**: the model learns from one subset and is scored on
+another. It is easy to follow and it makes *generalisation* concrete, which is
+why we start here.
+
+It is also wasteful and unstable. A single split uses the data inefficiently,
+and the score depends on which rows happened to land in the test set — the
+extension at the end measures how much. Later we add **resampling**:
+cross-validation, repeated splits and bootstrapping, which let us evaluate more
+reliably, tune more effectively, and get more out of a limited dataset. For now
+the simple split is the right tool for learning the fundamentals.
 :::
 
-## Task 1 — Sanity-check before you model
+## The data
 
-`data/los_data.csv` holds 1000 admissions to a general medical service: `LOS`
-(length of stay in days, the outcome), `Age` in years, and `Severity`, a 1–10
-clinical score recorded on arrival. It stands in for the question a bed manager
-asks every morning — *how long is this patient likely to stay?* Before modelling
-anything, look at it.
+We use `data/los_data.csv` — [download it here](data/los_data.csv), or take the
+whole folder from the zip on the [introduction page](index.qmd). It is a
+simplified hospital scenario, 1000 admissions to a general medical service:
+
+- **Outcome (y):** `LOS`, length of stay in days
+- **Features (X):**
+  - `Age` — patient age in years
+  - `Severity` — a severity score representing illness burden, 1 to 10
+
+We treat this as a purely *predictive* problem: given a patient's age and
+severity, can we forecast their length of stay? That is the question a bed
+manager asks every morning.
+
+### Look at it before you model it
 
 ::: {.panel-tabset}
 ## R
@@ -67,7 +89,7 @@ los.describe()
 ```
 :::
 
-Answer three questions in writing.
+Answer three questions in writing before going on.
 
 1. What is the oldest patient here, and is that plausible?
 2. What is the median length of stay, and is *that* plausible for an admission?
@@ -93,79 +115,209 @@ acute LOS is a few days, right-skewed. The honest response to both is to go back
 to whoever built the extract — that is the answer you want, not "winsorise it".
 (3) The deeper point: this LOS is *symmetric*, so there is no long right tail at
 all, which is the most recognisable feature of real LOS data.
-`data/los_data_skewed.csv` is the realistic version, used on Day 2.
+`data/los_data_skewed.csv` is the realistic version, used later.
 :::
 :::
 
-## The pipeline, end to end
+------------------------------------------------------------------------
 
-::: {.panel-tabset}
-## R
+## Part A — Python (scikit-learn)
 
-```{r}
-library(parsnip); library(rsample); library(yardstick)
+Each step below mirrors the five above: define X and y, split, fit, score on
+unseen rows. We also save the fitted model, because in practice a model is
+trained once and then reused on new incoming data.
 
-set.seed(42)
-split <- initial_split(los, prop = 0.8)
-train <- training(split)
-test  <- testing(split)
-
-los_fit <- linear_reg() |> set_engine("lm") |> fit(LOS ~ Age + Severity, data = train)
-
-preds <- predict(los_fit, test) |> bind_cols(test)
-mae(preds, truth = LOS, estimate = .pred)
-```
-
-## Python
+### Setup
 
 ```{python}
+import pandas as pd
+import numpy as np
+import joblib
+import os, tempfile
+
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error
+import matplotlib.pyplot as plt
+```
 
-X, y = los[["Age", "Severity"]], los["LOS"]
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+### 1) Load the data
 
-model = LinearRegression().fit(X_train, y_train)
-mae_test = mean_absolute_error(y_test, model.predict(X_test))
+```{python}
+df = pd.read_csv("data/los_data.csv")
+df.head()
+```
+
+### 2) Define X and y
+
+```{python}
+X = df[["Age", "Severity"]]   # 2-D: a frame, one column per feature
+y = df["LOS"]                 # 1-D: the outcome
+```
+
+The double brackets are not a typo. scikit-learn wants a *matrix* of predictors
+and a *vector* of outcomes, and `df["Age"]` would give it a vector where it
+expects a matrix.
+
+### 3) Split into train and test
+
+```{python}
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+X_train.shape, X_test.shape
+```
+
+### 4) Fit the algorithm, and save it
+
+```{python}
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+joblib.dump(model, os.path.join(tempfile.gettempdir(), "los_fit_model.pkl"))
+
+model.intercept_, model.coef_
+```
+
+In your own project you would save it beside your script — `joblib.dump(model,
+"los_fit_model.pkl")`. Here it goes to a temporary folder so the booklet does
+not leave files behind.
+
+### 5) Evaluate on the test set
+
+To say whether the predictions are any good we have to measure them. We use the
+**mean absolute error**: take the absolute difference between each prediction
+and the truth, then average over the test set.
+
+$$
+\text{MAE} = \frac{1}{n} \sum_{i=1}^{n} \left| y_i - \hat{y}_i \right|
+$$
+
+Because we are predicting length of stay, MAE tells us how many days our
+predictions are wrong by, on average.
+
+```{python}
+pred_test = model.predict(X_test)
+mae_test = mean_absolute_error(y_test, pred_test)
 mae_test
 ```
-:::
+
+Later in the module we compare MAE with RMSE, R² and median absolute error, and
+look at when each is preferable.
+
+### 6) Visualise predicted against actual
+
+```{python}
+fig, ax = plt.subplots()
+ax.scatter(y_test, pred_test, alpha=0.5)
+lo = min(y_test.min(), pred_test.min())
+hi = max(y_test.max(), pred_test.max())
+ax.plot([lo, hi], [lo, hi])              # the 45 degree line: perfect prediction
+ax.set_xlabel("Actual LOS (days)")
+ax.set_ylabel("Predicted LOS (days)")
+ax.set_title("Predicted vs actual (test set)")
+plt.show()
+```
+
+A perfect model would put every point on the diagonal. How far the cloud sits
+from that line, and whether it drifts away from it at one end, is the whole
+story of the model in one picture.
+
+------------------------------------------------------------------------
+
+## Part B — R (tidymodels)
+
+The same pipeline again, in R, using **tidymodels**. Compare it step by step
+with Part A: the vocabulary differs, the five steps do not.
+
+### Setup
+
+```{r}
+#| message: false
+#| warning: false
+library(tidymodels)
+library(readr)
+library(ggplot2)
+```
+
+### 1) Load the data
+
+```{r}
+#| message: false
+df <- read_csv("data/los_data.csv")
+head(df)
+```
+
+### 2) Split into train and test
+
+```{r}
+set.seed(42)
+
+split <- initial_split(df, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
+```
+
+### 3) Specify the model
+
+```{r}
+los_model <- linear_reg() %>%
+  set_engine("lm")
+```
+
+Notice that nothing has been fitted yet, and no data has been mentioned. The
+specification says *linear regression, computed by `lm`* and stops there. This
+separation is what lets you swap the algorithm later without touching the rest.
+
+### 4) Fit, save, and evaluate
+
+```{r}
+los_fit <- los_model %>%
+  fit(LOS ~ Age + Severity, data = train)
+
+saveRDS(los_fit, file.path(tempdir(), "los_fit_model.RDS"))
+
+test_pred <- predict(los_fit, test) %>% bind_cols(test)
+mae(test_pred, truth = LOS, estimate = .pred)
+```
+
+### 5) Visualise predicted against actual
+
+```{r}
+ggplot(test_pred, aes(x = LOS, y = .pred)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0) +
+  labs(x = "Actual length of stay (days)",
+       y = "Predicted length of stay (days)") +
+  coord_equal()
+```
 
 ::: {.callout-warning}
 ## Why the two MAEs are not the same number
 `set.seed(42)` and `random_state=42` do not select the same rows. They are
-different generators; the seed is not a shared address. The two languages
-therefore have different test sets and different test scores — ours differ by
-about 0.3 days.
+different generators, and the seed is not a shared address. So the two languages
+have different test sets and different scores — ours differ by about 0.3 days.
 
-That is expected. What *would* be a problem is a difference large enough to
-change your conclusion. Both numbers are near 3.2–3.4 days, so both support the
-same statement. Day 2 replaces the single split with cross-validation, after
-which the two agree much more closely, because the score stops depending on one
-arbitrary partition.
+That is expected. What would be a problem is a difference large enough to change
+your conclusion. Both numbers are near 3.2 to 3.4 days, so both support the same
+statement. Cross-validation later replaces the single split, after which the two
+agree much more closely, because the score stops depending on one arbitrary
+partition.
 :::
-
-$$\text{MAE} = \frac{1}{n}\sum_{i=1}^{n} \left| y_i - \hat{y}_i \right|$$
-
-The average size of the error, in the outcome's units: *our prediction of a
-patient's length of stay is wrong by about three days on average*. That
-sentence is the entire output of the model, and you should be able to say it
-without looking at the code.
 
 ::: {.callout-note appearance="simple"}
-## Where a model lives
-In practice you fit once and predict many times, so the fitted object is the
-deliverable: `saveRDS(los_fit, "los_model.RDS")` in R, `joblib.dump(model,
-"los_model.pkl")` in Python. Write one now and you have a file in your project
-folder that outlives the session — which is where the awkward questions start:
-which data fitted it, which package version wrote it, and whether the copy in
-production is this one. That is why production systems keep models in a registry
-rather than a folder. A saved model is a serialised object of one language's
-runtime; neither can read the other's.
+## A saved model is not a safe model
+You now have a file that outlives the session, which is where the awkward
+questions start: which data fitted it, which package version wrote it, and
+whether the copy in production is this one. That is why production systems keep
+models in a registry rather than a folder. Note also that a `.pkl` and an `.RDS`
+are serialised objects of one language's runtime — neither can read the other's.
 :::
 
-## Task 2 — Earn the number: is three days any good?
+------------------------------------------------------------------------
+
+## Task 1 — Earn the number: is three days any good?
 
 A model is only as impressive as what you compare it with. Build the dumbest
 possible predictor — predict the mean training LOS for every patient, ignoring
@@ -178,20 +330,17 @@ age and severity — and compute its MAE on the same test set.
 #| eval: false
 # Replace every ______ below, then run this cell.
 source("checks/checks.R")
-mae_model    <- mae(preds, truth = LOS, estimate = .pred)$.estimate
+mae_model    <- mae(test_pred, truth = LOS, estimate = .pred)$.estimate
 mae_baseline <- mean(abs(test$LOS - ______))
 check_beats_baseline(mae_model, mae_baseline)
 ```
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-```{r}
-#| eval: false
-# The baseline prediction is ONE number, used for every test patient: the mean
-# outcome of the TRAINING rows. So there is no model to fit - just the mean of
-# one column, and then the average absolute difference from the test outcomes.
-# mean() and abs() are all you need.
-```
+The baseline prediction is one number, used for every test patient: the mean
+outcome of the **training** rows. There is no model to fit — just the mean of one
+column, then the average absolute difference from the test outcomes. `mean()`
+and `abs()` are all you need.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
@@ -199,7 +348,7 @@ check_beats_baseline(mae_model, mae_baseline)
 ## Worked answer
 ```{r}
 source("checks/checks.R")
-mae_model    <- mae(preds, truth = LOS, estimate = .pred)$.estimate
+mae_model    <- mae(test_pred, truth = LOS, estimate = .pred)$.estimate
 mae_baseline <- mean(abs(test$LOS - mean(train$LOS)))
 check_beats_baseline(mae_model, mae_baseline)
 ```
@@ -211,7 +360,7 @@ check_beats_baseline(mae_model, mae_baseline)
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import numpy as np, sys; sys.path.append("checks")
+import sys; sys.path.append("checks")
 from checks import *
 mae_baseline = mean_absolute_error(y_test, np.full(len(y_test), ______))
 check_beats_baseline(mae_test, mae_baseline)
@@ -221,7 +370,7 @@ check_beats_baseline(mae_test, mae_baseline)
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import numpy as np, sys; sys.path.append("checks")
+import sys; sys.path.append("checks")
 from checks import *
 mae_baseline = mean_absolute_error(y_test, np.full(len(y_test), y_train.mean()))
 check_beats_baseline(mae_test, mae_baseline)
@@ -231,21 +380,21 @@ check_beats_baseline(mae_test, mae_baseline)
 :::
 
 The check prints the model's error as a percentage of the baseline's. Write that
-percentage down: it is the honest headline figure for this model.
+percentage down — it is the honest headline figure for this model.
 
 Then answer: **what would it have meant if the model had not beaten the
-baseline?** It is a short answer and it is not "the model is bad".
+baseline?** It is a short answer, and it is not "the model is bad".
 
-## Task 3 — Where is the model wrong?
+## Task 2 — Where is the model wrong?
 
-MAE averages over every patient and so hides who is being badly served. Plot the
+MAE averages over every patient, so it hides who is being badly served. Plot the
 residuals — actual minus predicted — against the prediction.
 
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-preds |>
-  mutate(resid = ______) |>
+test_pred %>%
+  mutate(resid = ______) %>%
   ggplot(aes(x = .pred, y = resid)) +
   geom_point(alpha = 0.4) +
   geom_hline(yintercept = 0) +
@@ -256,9 +405,8 @@ preds |>
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-library(ggplot2)
-preds |>
-  mutate(resid = LOS - .pred) |>
+test_pred %>%
+  mutate(resid = LOS - .pred) %>%
   ggplot(aes(x = .pred, y = resid)) +
   geom_point(alpha = 0.4) +
   geom_hline(yintercept = 0) +
@@ -271,23 +419,28 @@ Is the error the same size everywhere, or systematically worse for some
 patients? If a clinician asked "can I trust this for my oldest patients?", what
 would you say, and what in the plot supports it?
 
-## Task 4 — Run the whole pipeline on data you have never seen
+------------------------------------------------------------------------
 
-`data/birthweight.csv` holds 600 pregnancies: `bpd` (biparietal diameter, mm),
-`ad` (abdominal diameter, mm) and `bw` (birth weight, g). Predict `bw` from
-`bpd` and `ad`, with an 80/20 split, using exactly the five steps above.
+## Exercise
 
-Nothing about the pipeline changes — that is the task. The columns, units and
-clinical question are all different and the code is structurally identical. If
-you are rewriting more than the variable names and the file path, stop and ask
-why.
+Now apply exactly the same pipeline design to a different dataset. The point is
+that you can swap in new data and a new target, and the structure does not
+change.
+
+Remember the baby weight exercise from Module 2? Build a pipeline that predicts
+birth weight (`bw`) from two ultrasound measurements, `bpd` (biparietal
+diameter, mm) and `ad` (abdominal diameter, mm). The file is
+`data/birthweight.csv` — [download it here](data/birthweight.csv) — and it holds
+600 pregnancies. Use a test size of 20%, as above.
+
+If you are rewriting more than the variable names and the file path, stop and
+ask why.
 
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
 source("checks/checks.R")
 bwt <- read_csv("data/birthweight.csv")
-check_data(bwt, n_expected = 600)   # note: this check expects columns Age/Severity/LOS and will complain
 
 set.seed(42)
 ______
@@ -295,19 +448,23 @@ ______
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-```{r}
-#| eval: false
-# Exactly the five steps above, with three names changed. The functions you
-# need are the ones you have already used: initial_split(), training(),
-# testing(), linear_reg() |> set_engine("lm") |> fit(), predict(), mae().
-# The formula is bw ~ bpd + ad.
-```
+Exactly the five steps above, with three names changed. The functions are the
+ones you have already used: `initial_split()`, `training()`, `testing()`,
+`linear_reg() %>% set_engine("lm") %>% fit()`, `predict()`, `mae()`. The formula
+is `bw ~ bpd + ad`.
+:::
+
+### Solution
+
+::: {.callout-note appearance="simple"}
+Released after the session.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
+#| message: false
 source("checks/checks.R")
 bwt <- read_csv("data/birthweight.csv")
 
@@ -316,8 +473,8 @@ split_bwt <- initial_split(bwt, prop = 0.8)
 train_bwt <- training(split_bwt); test_bwt <- testing(split_bwt)
 check_split(train_bwt, test_bwt, bwt, prop = 0.8)
 
-fit_bwt   <- linear_reg() |> set_engine("lm") |> fit(bw ~ bpd + ad, data = train_bwt)
-preds_bwt <- predict(fit_bwt, test_bwt) |> bind_cols(test_bwt)
+fit_bwt   <- linear_reg() %>% set_engine("lm") %>% fit(bw ~ bpd + ad, data = train_bwt)
+preds_bwt <- predict(fit_bwt, test_bwt) %>% bind_cols(test_bwt)
 
 mae_bwt          <- mae(preds_bwt, truth = bw, estimate = .pred)$.estimate
 mae_bwt_baseline <- mean(abs(test_bwt$bw - mean(train_bwt$bw)))
@@ -328,37 +485,47 @@ check_beats_baseline(mae_bwt, mae_bwt_baseline)
 
 Report the test MAE, the baseline MAE, and one sentence a midwife could use.
 
-::: {.callout-note appearance="simple"}
-Notice what `check_data(bwt, n_expected = 600)` does above: it complains, because
-it was written for the LOS columns. A check is only as good as the assumption
-written into it, and a check you do not read is worse than no check.
-:::
-
 ::: {.content-visible when-profile="instructor"}
 ::: {.instructor}
 **Expected values** (regenerated data varies in the last digit). LOS: test MAE
 ≈ 3.2–3.4 days, baseline ≈ 13.0 days, so about a quarter of the baseline error;
 coefficients ≈ intercept −8.4, Age 0.93, Severity 3.44. Birth weight: test MAE
 ≈ 190–220 g against a baseline of ≈ 310–340 g — a relatively much weaker model,
-which is a good prompt for Day 3's discussion of what an MAE in grams is worth.
+and a good prompt for the later discussion of what an MAE in grams is worth.
 
-**Task 2's real answer.** A model that fails to beat the baseline has not shown
+**Task 1's real answer.** A model that fails to beat the baseline has not shown
 the predictors are useless; it has shown that *this* model extracted nothing
 from them — wrong functional form, wrong scale, or too little signal. Expect,
 and correct, the student who concludes "age and severity don't matter".
 
-**Common failures.** (1) Fitting on `los` rather than `train`: the MAE looks
+**Common failures.** (1) Fitting on `df` rather than `train`: the MAE looks
 suspiciously good, so ask anyone reporting under 3 to show their `fit()` call.
-(2) In Python, `los["Age"]` instead of `los[["Age"]]`, giving a shape error —
+(2) In Python, `df["Age"]` instead of `df[["Age"]]`, giving a shape error —
 worth letting them hit. (3) Expecting objects from Exercise 1.1 to still exist:
 each page is a separate session.
 :::
 :::
 
-## Stretch
+## Struggling, or want more?
+
+- [scikit-learn — getting started](https://scikit-learn.org/stable/getting_started.html)
+- [tidymodels — build a model](https://www.tidymodels.org/start/models/)
+
+## Extension (optional)
+
+Just as the pipeline can be rerun on a different dataset, it can be rerun with a
+different **algorithm**. The structure stays; only the learning algorithm
+changes.
 
 ::: {.callout-note appearance="simple"}
-## Stretch 1 — Prove the split is doing something
+## Swap the algorithm, keep the pipeline
+Replace linear regression with `decision_tree(mode = "regression") %>%
+set_engine("rpart")`, changing nothing else. Does it do better? Keep the answer —
+you need it in @sec-shift, where it matters far more than it does here.
+:::
+
+::: {.callout-note appearance="simple"}
+## Prove the split is doing something
 Refit on **all 1000 rows**, then evaluate on the test subset. The MAE improves.
 Explain in one sentence why that number is worthless — then explain why it is
 only *slightly* better here, and what kind of model would make it dramatically
@@ -366,18 +533,11 @@ better.
 :::
 
 ::: {.callout-note appearance="simple"}
-## Stretch 2 — How much does the split matter?
+## How much does the split matter?
 Repeat the pipeline with 20 different seeds and collect the 20 test MAEs. Report
 the smallest and the largest. Ours ranged from about 3.0 to 3.7 days — a spread
 of 0.7 days produced by nothing but the choice of seed. Which would you have
 reported, having run it once?
-:::
-
-::: {.callout-note appearance="simple"}
-## Stretch 3 — Swap the algorithm, keep the pipeline
-Replace linear regression with `decision_tree(mode = "regression") |>
-set_engine("rpart")`, changing nothing else. Does it do better? Keep the answer:
-you need it in @sec-shift, where it matters far more than it does here.
 :::
 
 ## What you can and cannot now claim
