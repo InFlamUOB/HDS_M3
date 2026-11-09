@@ -6,222 +6,212 @@ engine: knitr
 
 # Exercise 1.1 — Python vs R {#sec-python-r}
 
-
 :::: {.web-only}
-Every cell on this page is a real R or Python cell. Copy and paste the code in your chosen language now and check understanding. The point of this exercise is to make sure you can do the same analysis in either language, and that you can explain why the two languages differ in their approach.
+Every cell on this page is a real R or Python cell. Copy the code in your chosen
+language, run it, and read the output. Then read the other tab. The point is not
+to memorise either one — it is to be able to open a colleague's script in the
+language you do not use and still follow what it does.
 ::::
-
-
 
 ## Why both
 
-R and Python encode two different ideas of what an analysis *is*. In R the unit
-is the data frame and the verbs act on whole columns; in Python the unit is the
-object and you call methods on it. Most differences you meet today follow from
-that one difference.
+The two languages carry two different ideas of what an analysis *is*. In R the
+thing you hold is the data frame, and the verbs act on whole columns. In Python
+the thing you hold is an object, and you call methods on it. Most of what looks
+unfamiliar in the other language comes from that one difference, so it is worth
+keeping in mind as you read.
 
-## Pandas Equivalent: dplyr from tidyverse
-
-Used for data wrangling. Example: Filtering a dataset.
-
-::: {.panel-tabset}
-## R
-
-```{r}
-library(dplyr)
-
-data <- data.frame(age = c(23, 45, 12, 56,70 ), score = c(87, 56, 30, 77,80))
-filtered_data <- data %>% filter(age > 20)
-
-head(filtered_data)
-```
-
-## Python
-
-```{python}
-import pandas as pd
-data = pd.DataFrame({'age': [23, 45, 12, 56,70 ], 'Injury Severity Score': [87, 56, 30, 77,80]})
-filtered_data = data[data['age'] > 20]
-
-filtered_data.head()
-```
-:::
-
-
-## Scikit-learn Equivalent: tidymodels
-
-Used for machine learning pipelines
-
-Example: Fitting a linear regression algorithm
-
-::: {.panel-tabset}
-## R
-
-```{r}
-library(dplyr)
-
-data <- data.frame(age = c(23, 45, 12, 56,70 ), score = c(87, 56, 30, 77,80))
-filtered_data <- data %>% filter(age > 20)
-
-head(filtered_data)
-```
-
-## Python
-
-```{python}
-import pandas as pd
-data = pd.DataFrame({'age': [23, 45, 12, 56,70 ], 'Injury Severity Score': [87, 56, 30, 77,80]})
-filtered_data = data[data['age'] > 20]
-
-filtered_data.head()
-```
-:::
-
-
-In R you have previously (Module 2) fitted linear regression algorithms using the `stats` package (part of base R) with the functions `glm` and `lm`
-
+This page walks through the four libraries you will use most, one pairing at a
+time: the Python library first by name, then the R package that does the same
+job.
 
 ## The data
 
-`data/los_data.csv` holds 1000 admissions to a general medical service, with
-three columns: `LOS`, the length of stay in days; `Age` in years; and
-`Severity`, a 1–10 clinical score recorded on arrival. Longer stays cost beds,
-so a service that could anticipate them could plan around them — that is the
-question the file stands in for, and the one Exercise 1.2 builds a model to
-answer. Today it is simply something concrete to read, filter, summarise and
-plot in both languages.
-
-## Load and look
+Five patients, two columns: `age` in years, and `score`, an Injury Severity
+Score. Small enough that you can check every result by eye, which is the only
+reason to use a toy dataset — from @sec-pipeline onwards the files are real
+extracts with real problems.
 
 ::: {.panel-tabset}
 ## R
 
 ```{r}
-library(readr)
-los <- read_csv("data/los_data.csv")
-head(los)
+data <- data.frame(
+  age   = c(23, 45, 12, 56, 70),
+  score = c(87, 56, 30, 77, 80)
+)
+data
 ```
 
 ## Python
 
 ```{python}
 import pandas as pd
-los = pd.read_csv("data/los_data.csv")
-los.info()
+
+data = pd.DataFrame({
+    "age":   [23, 45, 12, 56, 70],
+    "score": [87, 56, 30, 77, 80]
+})
+data
 ```
 :::
 
-A difference worth noticing immediately: `read_csv()` guesses column types and
-*tells you what it guessed*; `pd.read_csv()` guesses and says nothing. A column
-of ages containing one entry of `"unknown"` becomes `character` in R, with a
-message, and `object` in pandas, in silence.
+## `pandas` → `dplyr`, from the tidyverse
 
-## Filter, and summarise by group
-
-This is where the two look least alike.
+Both are for data wrangling: selecting, filtering, sorting, summarising. Here,
+keeping only the patients over 20.
 
 ::: {.panel-tabset}
 ## R
 
 ```{r}
+#| message: false
 library(dplyr)
-los |>
-  mutate(sev_band = if_else(Severity > 7, "high", "low")) |>
-  group_by(sev_band) |>
-  summarise(n = n(), mean_los = mean(LOS), .groups = "drop")
+
+filtered_data <- data %>% filter(age > 20)
+head(filtered_data)
 ```
 
 ## Python
 
 ```{python}
-(los
- .assign(sev_band=lambda d: (d["Severity"] > 7).map({True: "high", False: "low"}))
- .groupby("sev_band")["LOS"]
- .agg(n="size", mean_los="mean")
- .reset_index())
+filtered_data = data[data["age"] > 20]
+filtered_data.head()
 ```
 :::
 
-## Fit a linear model
+Read the two side by side. `filter(age > 20)` names the column directly, because
+dplyr already knows which frame you mean. `data[data["age"] > 20]` has to name
+the frame twice: once to build the vector of `True`/`False`, once to subset with
+it. Same result, different notion of where the data lives.
 
-::: {.panel-tabset}
-## R
+## `scikit-learn` → `tidymodels`
+
+Both are for building machine learning pipelines. Here, fitting a linear
+regression of score on age.
+
+In R you have already done this in Module 2, with `lm()` from the `stats`
+package in base R:
 
 ```{r}
-fit_r <- lm(LOS ~ Age + Severity, data = los)
-coef(fit_r)
+model <- lm(score ~ age, data = data)
+summary(model)
 ```
 
-## Python
+In Python the same fit comes from scikit-learn:
 
 ```{python}
 from sklearn.linear_model import LinearRegression
-X = los[["Age", "Severity"]]     # 2-D: a frame, not a series
-y = los["LOS"]                   # 1-D
-fit_py = LinearRegression().fit(X, y)
-fit_py.intercept_, fit_py.coef_
+
+model_py = LinearRegression()
+X = data[["age"]]    # 2-D: a frame, because sklearn expects a matrix of predictors
+y = data["score"]    # 1-D: a series, the target
+
+model_py.fit(X, y)
+print(model_py.intercept_, model_py.coef_)
 ```
-:::
 
-Two things differ here and only one matters. `lm()` returns a statistical
-summary — standard errors, residuals, an F test — because R's linear model was
-written for inference; `LinearRegression` returns coefficients and a
-`.predict()` method, because scikit-learn's was written for prediction. That is
-a difference in purpose. The coefficients themselves agree to every decimal you
-care to print, because both solve the same least-squares problem on the same
-rows. That is not a difference at all.
+The coefficients agree. They are a property of the data, not of the software,
+and that is the reassuring half of this page.
 
-## Draw it
+What differs is what each returns. `lm()` hands back a statistical summary —
+standard errors, residuals, an F test — because R's linear model was written for
+inference. `LinearRegression` hands back coefficients and a `.predict()` method,
+because scikit-learn's was written for prediction. Neither is wrong; they were
+built to answer different questions.
+
+R can also do it the scikit-learn way. `tidymodels` sets the model up in the
+same three moves — define the algorithm, give it the data, fit it:
+
+```{r}
+#| message: false
+#| warning: false
+library(tidymodels)
+
+lm_model <- linear_reg() %>%
+            set_engine("lm") %>%      # use lm()'s implementation underneath
+            set_mode("regression")
+
+lm_fit <- lm_model %>%
+          fit(score ~ age, data = data)
+
+lm_fit[["fit"]][["coefficients"]]
+```
+
+Note what `set_engine("lm")` is doing: the specification above says *linear
+regression* and nothing about how to compute it, and the engine supplies the
+arithmetic. Swap in `"glmnet"` and the first half of that code is unchanged.
+That separation is what makes the pipeline in @sec-pipeline swappable, and it is
+why `tidymodels` is worth the extra typing for a model `lm()` could have fitted
+in one line.
+
+## `seaborn` → `ggplot2`
+
+Both are for plotting. Here, a scatter of score against age.
 
 ::: {.panel-tabset}
 ## R
 
 ```{r}
+#| message: false
 library(ggplot2)
-ggplot(los, aes(x = Age, y = LOS)) +
-  geom_point(alpha = 0.3, colour = "red") +
-  geom_smooth(method = "lm", se = FALSE) +
-  labs(x = "Age (years)", y = "Length of stay (days)")
+
+ggplot(data, aes(x = age, y = score)) +
+  geom_point()
 ```
 
 ## Python
 
 ```{python}
+import seaborn as sns
 import matplotlib.pyplot as plt
-fig, ax = plt.subplots()
-ax.scatter(los["Age"], los["LOS"], alpha=0.3)
-ax.set_xlabel("Age (years)"); ax.set_ylabel("Length of stay (days)")
+
+sns.scatterplot(x = data["age"], y = data["score"])
 plt.show()
 ```
 :::
 
-## Task 1 — The idiom table
+The `+` in ggplot2 is not decoration. A plot is a stack of layers and you add
+them one at a time, which is why the next task is a one-line change rather than
+a rewrite.
 
-Fill in the missing cells. Guess from the examples above before looking
-anything up.
+## `numpy` → base R
 
-| Operation | R (tidyverse) | Python (pandas) |
-|---|---|---|
-| keep some rows | `filter(Age > 65)` | `df[df["Age"] > 65]` |
-| keep some columns | `select(Age, LOS)` | ? |
-| make a new column | `mutate(z = Age / 10)` | ? |
-| sort | ? | `df.sort_values("LOS")` |
-| count by group | `count(sev_band)` | ? |
-| first six rows | `head(los)` | ? |
-| number of rows | `nrow(los)` | ? |
+numpy is Python's array library; in R, arrays and the arithmetic on them are in
+the language itself, so there is nothing to load. Here, a dot product.
 
-: {tbl-colwidths="[28,36,36]"}
+::: {.panel-tabset}
+## R
 
-::: {.callout-tip collapse="true"}
-## Stuck?
-Every answer is one tidyverse verb or one DataFrame method: `arrange()`,
-`df.assign()`, `df.value_counts()`, `df.head()`, `len(df)`.
+```{r}
+a <- c(1, 2, 3)
+b <- c(4, 5, 6)
+dot_product <- sum(a * b)
+dot_product
+```
+
+## Python
+
+```{python}
+import numpy as np
+
+a = np.array([1, 2, 3])
+b = np.array([4, 5, 6])
+dot_product = np.dot(a, b)
+print(dot_product)
+```
 :::
 
-## Task 2 — The same number, twice
+`a * b` multiplies element by element in both languages, and `sum()` adds the
+result. `np.dot` does both in one step. This is the pairing where R needs no
+library at all, which is worth knowing when you read R code and cannot find the
+import.
 
-Compute the mean length of stay among patients with `Severity` above 7, in both
-languages. Replace each `______`.
+## Task — Put the regression on the plot
+
+Add the fitted line to the scatter. In ggplot2 it is one more layer: look up
+`geom_smooth()` and give it `method = "lm"`. Then find the Python equivalent —
+seaborn has a function that draws a scatter *and* its regression line together.
 
 ::: {.panel-tabset}
 ## R
@@ -229,19 +219,24 @@ languages. Replace each `______`.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
-mean_los_high <- los |> filter(______) |> pull(LOS) |> ______
-check_metric_range(mean_los_high, 70, 100, "mean LOS, high severity")
+ggplot(data, aes(x = age, y = score)) +
+  geom_point() +
+  ______(method = "lm", se = FALSE)
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
-mean_los_high <- los |> filter(Severity > 7) |> pull(LOS) |> mean()
-check_metric_range(mean_los_high, 70, 100, "mean LOS, high severity")
+#| message: false
+ggplot(data, aes(x = age, y = score)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
 ```
+
+`se = FALSE` turns off the confidence band. Leave it on and you will see how
+wide it is with five points, which is an honest picture of what this data can
+support.
 :::
 :::
 
@@ -250,120 +245,48 @@ check_metric_range(mean_los_high, 70, 100, "mean LOS, high severity")
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
-mean_los_high = los.loc[______, "LOS"].______
-check_metric_range(mean_los_high, 70, 100, "mean LOS, high severity")
+sns.______(x = "age", y = "score", data = data)
+plt.show()
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
-mean_los_high = los.loc[los["Severity"] > 7, "LOS"].mean()
-check_metric_range(mean_los_high, 70, 100, "mean LOS, high severity")
+sns.regplot(x = "age", y = "score", data = data)
+plt.show()
 ```
+
+`sns.regplot()` draws the points and fits the line in one call. `sns.lmplot()`
+does the same and will also split the plot by a grouping column.
 :::
 :::
 :::
-
-The two should agree exactly — same rows, same arithmetic. If they do not, you
-have filtered differently, and the usual cause is `>` against `>=`.
-
-## Task 3 — Put the model on the plot
-
-Add the fitted values from the **two-predictor** model to a scatter of LOS
-against age. This is not the same as the `geom_smooth()` line above, which fits
-`LOS ~ Age` alone and ignores severity — and the difference is the point of the
-task.
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-los$fitted <- ______
-ggplot(los, aes(x = Age)) +
-  geom_point(aes(y = LOS), alpha = 0.3) +
-  geom_point(aes(y = fitted), colour = "red", size = 0.6) +
-  labs(x = "Age (years)", y = "Length of stay (days)")
-```
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-# `fit_r` is already fitted. You want its predictions for every row.
-los$fitted <- predict(______)
-```
+In R the layer you want starts with `geom_`. In Python the seaborn function you
+want starts with `reg`.
 :::
 
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-los$fitted <- predict(fit_r)
-ggplot(los, aes(x = Age)) +
-  geom_point(aes(y = LOS), alpha = 0.3) +
-  geom_point(aes(y = fitted), colour = "red", size = 0.6) +
-  labs(x = "Age (years)", y = "Length of stay (days)")
-```
-:::
-:::
+## Where to look things up
 
-The fitted values do not fall on a single line against age. Why not? Your answer
-to that is worth more than the plot.
+Take your time now and explore these two libraries a little further. When
+something in class is unclear, these are the first places to look — both are
+written to teach, not only to document:
 
-## Task 4 — Find a difference that matters
+- [scikit-learn](https://scikit-learn.org/stable/) — the user guide explains the
+  statistics as well as the code
+- [tidymodels](https://www.tidymodels.org) — start with *Get Started*
 
-Between you, find **one** place where the two languages genuinely give different
-results for the same instruction, and one where they only appear to. A sentence
-each. Somewhere to start: random number generation, how each handles a missing
-value inside `mean()`, and what happens when you index a frame with a number.
-
-::: {.content-visible when-profile="instructor"}
-::: {.instructor}
-**Model answers.** *Genuinely different*: the random number streams —
-`set.seed(42)` and `random_state=42` select different rows, so any split,
-bootstrap or shuffle differs between languages. This is the one that bites in
-1.2, and it is worth saying in plenary. Also genuine: `mean()` on a vector
-containing `NA` returns `NA` in R, while pandas `.mean()` skips missing values,
-so the same instruction gives a number in one language and a refusal in the
-other. *Only apparently different*: the regression coefficients (identical least
-squares), `nrow()` against `len()`, and 0- against 1-based indexing, which
-changes the code you type but not the rows you get.
-
-**If a pair finishes early**, ask which language's default for missing values
-they would prefer in a clinical audit, and to defend it. There is no right
-answer; there is a right standard of argument.
-:::
-:::
-
-## Stretch
-
-::: {.callout-note appearance="simple"}
-## Stretch 1 — parsnip, so that 1.2 feels familiar
-Refit with `parsnip`, the part of `tidymodels` that standardises model fitting:
-`linear_reg() |> set_engine("lm") |> fit(LOS ~ Age + Severity, data = los)`.
-The coefficients are identical, because `set_engine("lm")` means it is calling
-`lm()`. What `tidymodels` adds is one interface in front of many engines, which
-is what makes the pipeline in 1.2 swappable.
-:::
-
-::: {.callout-note appearance="simple"}
-## Stretch 2 — Make the same split in both languages
-Draw an 80/20 split in R, write the row indices out, and reproduce the identical
-split in Python. This is tedious, and that is the lesson: cross-language
-reproducibility is not free, and the professional answer is to split once, in
-one language, and save the result.
-:::
+A longer side-by-side comparison of the two languages, if you want one:
+[occasionaldivergences.com/posts/python-intro](https://occasionaldivergences.com/posts/python-intro/).
 
 ## What you can and cannot now claim
 
-**Can:** that you can perform the five basic operations in both languages, and
-that the coefficients you obtained are a property of the data rather than of the
-software.
+**Can:** that you can filter, fit and plot in both languages, and that the
+coefficients you obtained are a property of the data rather than of the software
+that computed them.
 
-**Cannot:** anything about how well this model predicts. Every number here was
-computed on the same 1000 rows the model was fitted to. That is @sec-pipeline.
+**Cannot:** anything about how well this model predicts. Five patients, and every
+number computed on the same five. That is where @sec-pipeline starts.
