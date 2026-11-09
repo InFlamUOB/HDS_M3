@@ -401,6 +401,9 @@ baseline?** It is a short answer, and it is not "the model is bad".
 MAE averages over every patient, so it hides who is being badly served. Plot the
 residuals — actual minus predicted — against the prediction.
 
+::: {.panel-tabset}
+## R
+
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
@@ -426,6 +429,36 @@ test_pred %>%
 :::
 :::
 
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+resid = ______
+fig, ax = plt.subplots()
+ax.scatter(pred_test, resid, alpha=0.4)
+ax.axhline(0)
+ax.set_xlabel("Predicted LOS (days)")
+ax.set_ylabel("Residual (days)")
+plt.show()
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+resid = y_test - pred_test
+fig, ax = plt.subplots()
+ax.scatter(pred_test, resid, alpha=0.4)
+ax.axhline(0)
+ax.set_xlabel("Predicted LOS (days)")
+ax.set_ylabel("Residual (days)")
+plt.show()
+```
+:::
+:::
+:::
+
 Is the error the same size everywhere, or systematically worse for some
 patients? If a clinician asked "can I trust this for my oldest patients?", what
 would you say, and what in the plot supports it?
@@ -447,6 +480,9 @@ diameter, mm) and `ad` (abdominal diameter, mm). The file is
 If you are rewriting more than the variable names and the file path, stop and
 ask why.
 
+::: {.panel-tabset}
+## R
+
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
@@ -458,25 +494,12 @@ set.seed(42)
 ______
 ```
 
-::: {.callout-note appearance="simple"}
-`check_data()` complains here, and it is right to. It was written for the LOS
-columns and you have handed it a different file. A check is only as good as the
-assumption written into it, and a check you do not read is worse than no check
-at all.
-:::
-
 ::: {.callout-tip collapse="true"}
 ## Stuck?
 Exactly the five steps above, with three names changed. The functions are the
 ones you have already used: `initial_split()`, `training()`, `testing()`,
 `linear_reg() %>% set_engine("lm") %>% fit()`, `predict()`, `mae()`. The formula
 is `bw ~ bpd + ad`.
-:::
-
-### Solution
-
-::: {.callout-note appearance="simple"}
-Released after the session.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
@@ -500,6 +523,64 @@ mae_bwt_baseline <- mean(abs(test_bwt$bw - mean(train_bwt$bw)))
 check_beats_baseline(mae_bwt, mae_bwt_baseline)
 ```
 :::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+import sys; sys.path.append("checks")
+from checks import *
+bwt = pd.read_csv("data/birthweight.csv")
+check_data(bwt, n_expected=600)      # read what this prints before going on
+
+______
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The same six cells as Part A, with three names changed. `X` is
+`bwt[["bpd", "ad"]]`, `y` is `bwt["bw"]`, and everything after that —
+`train_test_split`, `LinearRegression().fit()`, `mean_absolute_error` — is
+copied unchanged.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+import sys; sys.path.append("checks")
+from checks import *
+bwt = pd.read_csv("data/birthweight.csv")
+
+X_bwt, y_bwt = bwt[["bpd", "ad"]], bwt["bw"]
+Xb_train, Xb_test, yb_train, yb_test = train_test_split(
+    X_bwt, y_bwt, test_size=0.2, random_state=42
+)
+check_split(Xb_train, Xb_test, X_bwt, prop=0.8)
+
+fit_bwt = LinearRegression().fit(Xb_train, yb_train)
+
+mae_bwt          = mean_absolute_error(yb_test, fit_bwt.predict(Xb_test))
+mae_bwt_baseline = mean_absolute_error(yb_test, np.full(len(yb_test), yb_train.mean()))
+check_beats_baseline(mae_bwt, mae_bwt_baseline)
+```
+:::
+:::
+:::
+
+::: {.callout-note appearance="simple"}
+`check_data()` complains in both languages, and it is right to. It was written
+for the LOS columns and you have handed it a different file. A check is only as
+good as the assumption written into it, and a check you do not read is worse
+than no check at all.
+:::
+
+### Solution
+
+::: {.callout-note appearance="simple"}
+Released after the session.
 :::
 
 Report the test MAE, the baseline MAE, and one sentence a midwife could use.
