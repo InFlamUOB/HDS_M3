@@ -7,7 +7,10 @@ Three faults that render without complaint:
     which makes the render fail or, worse, publish a broken result;
   * a worked answer that is not inside a `when-meta="show-solutions"` block, so
     it would be published before the session;
-  * a link to a chapter file that does not exist.
+  * a link to a chapter file that does not exist;
+  * the same `{#sec-...}` label defined twice. Labels are global to the book,
+    so a copy-pasted chapter silently steals every `@sec-...` pointing at the
+    original, and Quarto reports nothing.
 
 It also prints whether solutions are currently released, since that is a
 deliberate switch and worth seeing before a push.
@@ -16,7 +19,21 @@ import pathlib, re, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CHUNK = re.compile(r"^```\{(r|python)\}\n((?:#\|[^\n]*\n)*)(.*?)\n```[ \t]*$", re.S | re.M)
+LABEL = re.compile(r"\{#(sec-[A-Za-z0-9_-]+)\}")
 problems: list[str] = []
+
+
+def check_labels() -> None:
+    """Every {#sec-...} must be unique across the whole book."""
+    seen: dict[str, list[str]] = {}
+    for page in sorted(ROOT.glob("*.qmd")) + sorted(ROOT.glob("appendix/*.qmd")):
+        for label in LABEL.findall(page.read_text()):
+            seen.setdefault(label, []).append(page.name)
+    for label, where in sorted(seen.items()):
+        if len(where) > 1:
+            problems.append(f"{{#{label}}} is defined {len(where)} times "
+                            f"({', '.join(where)}); every @{label} will point at "
+                            "whichever Quarto saw first")
 
 def main() -> int:
     cfg = (ROOT / "_quarto.yml").read_text()
@@ -51,6 +68,8 @@ def main() -> int:
 
         print(f"  {name:<34} {n_worked:>2} worked, {n_task:>2} tasks, "
               f"{len(spans):>2} worked answers")
+
+    check_labels()
 
     print(f"\nsolutions are {'RELEASED (published to students)' if released else 'hidden'}")
     if problems:

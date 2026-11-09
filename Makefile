@@ -11,16 +11,19 @@
 #   make check              source checks (blanks, hidden answers, links)
 #   make links              check the built site for dead links
 #   make all DAY=1          data + site + instructor + worksheets
-#   make clean              remove build output
+#   make quick FILE=x.qmd   render one chapter for a fast look while writing
+#   make clean              remove the built site, keep the execution cache
+#   make clean-all          also drop the cache, forcing a full re-run
 
 DAY ?= 1
+FILE ?= index.qmd
 TITLE ?= Title of the day
 QUARTO ?= quarto
 PYTHON ?= python3
 RSCRIPT ?= Rscript
 
 .DEFAULT_GOAL := help
-.PHONY: help setup-r preview site instructor worksheets day data data-zip check links all clean
+.PHONY: help setup-r preview site instructor worksheets day data data-zip check links all quick clean clean-all
 
 help:
 	@grep -E '^#   make' $(MAKEFILE_LIST) | sed 's/^#   //'
@@ -69,5 +72,21 @@ links:
 
 all: data site links instructor worksheets
 
+# A fast look at one chapter while you are writing it. Cross-references to
+# other chapters cannot resolve in a partial build and render as ?? -- that is
+# the partial build, not a fault to chase. Run a full `make site` before you
+# commit, because that is what gets published.
+quick:
+	$(QUARTO) render $(FILE) --to html
+	@echo
+	@echo 'Partial build. Any ?? cross-reference is an artefact of rendering one file;'
+	@echo 'run `make site` before committing.'
+
+# Keeps _freeze, so the next `make site` re-runs only what changed.
 clean:
-	rm -rf _book _book-instructor _freeze .quarto print/.quarto print/*.typ
+	rm -rf _book _book-instructor .quarto print/.quarto print/*.typ
+
+# Also drops the execution cache: use this after changing a dataset, or when a
+# chapter's output looks stale in a way you cannot explain.
+clean-all: clean
+	rm -rf _freeze
