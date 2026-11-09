@@ -116,7 +116,6 @@ measurement. One of them can.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 zeros <- diabetes |>
   summarise(across(where(is.numeric), ~ sum(______))) |>
   pivot_longer(everything(), names_to = "variable", values_to = "n_zero") |>
@@ -125,7 +124,7 @@ zeros <- diabetes |>
 zeros
 
 insulin_pct <- zeros$pct[zeros$variable == "insulin"]
-check_metric_range(insulin_pct, 45, 60, "percentage of insulin values that are zero")
+insulin_pct   # expect 45 to 60
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -138,7 +137,6 @@ check_metric_range(insulin_pct, 45, 60, "percentage of insulin values that are z
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 zeros <- diabetes |>
   summarise(across(where(is.numeric), ~ sum(.x == 0))) |>
   pivot_longer(everything(), names_to = "variable", values_to = "n_zero") |>
@@ -147,7 +145,7 @@ zeros <- diabetes |>
 zeros
 
 insulin_pct <- zeros$pct[zeros$variable == "insulin"]
-check_metric_range(insulin_pct, 45, 60, "percentage of insulin values that are zero")
+insulin_pct   # expect 45 to 60
 ```
 :::
 :::
@@ -157,8 +155,6 @@ check_metric_range(insulin_pct, 45, 60, "percentage of insulin values that are z
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 num = diabetes.select_dtypes("number")
 zeros = (pd.DataFrame({"n_zero": (num == ______).sum()})
          .assign(pct=lambda d: 100 * d["n_zero"] / ______)
@@ -166,15 +162,13 @@ zeros = (pd.DataFrame({"n_zero": (num == ______).sum()})
 print(zeros)
 
 insulin_pct = zeros.loc["insulin", "pct"]
-check_metric_range(insulin_pct, 45, 60, "percentage of insulin values that are zero")
+print(insulin_pct)   # expect 45 to 60
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 num = diabetes.select_dtypes("number")
 zeros = (pd.DataFrame({"n_zero": (num == 0).sum()})
          .assign(pct=lambda d: 100 * d["n_zero"] / len(diabetes))
@@ -182,7 +176,7 @@ zeros = (pd.DataFrame({"n_zero": (num == 0).sum()})
 print(zeros)
 
 insulin_pct = zeros.loc["insulin", "pct"]
-check_metric_range(insulin_pct, 45, 60, "percentage of insulin values that are zero")
+print(insulin_pct)   # expect 45 to 60
 ```
 :::
 :::
@@ -206,12 +200,11 @@ columns, leaving `pregnant` alone, and recompute the mean and median of
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 impossible <- c("glucose", "pressure", "triceps", "insulin", "mass")
 dia <- diabetes |> mutate(across(all_of(impossible), ~ na_if(.x, ______)))
 
 mean_insulin <- mean(dia$insulin, na.rm = ______)
-check_metric_range(mean_insulin, 140, 180, "mean insulin, zeros removed")
+mean_insulin   # expect 140 to 180
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -224,12 +217,11 @@ refuses to average a vector containing `NA` unless you tell it to skip them.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 impossible <- c("glucose", "pressure", "triceps", "insulin", "mass")
 dia <- diabetes |> mutate(across(all_of(impossible), ~ na_if(.x, 0)))
 
 mean_insulin <- mean(dia$insulin, na.rm = TRUE)
-check_metric_range(mean_insulin, 140, 180, "mean insulin, zeros removed")
+mean_insulin   # expect 140 to 180
 
 dia |>
   summarise(across(all_of(impossible),
@@ -246,28 +238,24 @@ dia |>
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 impossible = ["glucose", "pressure", "triceps", "insulin", "mass"]
 dia = diabetes.copy()
 dia[impossible] = dia[impossible].replace(______, np.nan)
 
 mean_insulin = dia["insulin"].______
-check_metric_range(mean_insulin, 140, 180, "mean insulin, zeros removed")
+print(mean_insulin)   # expect 140 to 180
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 impossible = ["glucose", "pressure", "triceps", "insulin", "mass"]
 dia = diabetes.copy()
 dia[impossible] = dia[impossible].replace(0, np.nan)
 
 mean_insulin = dia["insulin"].mean()
-check_metric_range(mean_insulin, 140, 180, "mean insulin, zeros removed")
+print(mean_insulin)   # expect 140 to 180
 
 print(dia[impossible].agg(["count", "mean", "median"]).round(1))
 ```
@@ -363,12 +351,11 @@ correlation changes most.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 cor_na <- cor(dia[num_cols], use = "______")
 round(cor_na - cor_raw, 2)
 
 ins_tri <- cor_na["insulin", "triceps"]
-check_metric_range(ins_tri, 0.0, 0.3, "insulin-triceps correlation, zeros removed")
+ins_tri   # expect 0.0 to 0.3
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -382,12 +369,11 @@ options do — they are not equivalent.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 cor_na <- cor(dia[num_cols], use = "pairwise.complete.obs")
 round(cor_na - cor_raw, 2)
 
 ins_tri <- cor_na["insulin", "triceps"]
-check_metric_range(ins_tri, 0.0, 0.3, "insulin-triceps correlation, zeros removed")
+ins_tri   # expect 0.0 to 0.3
 ```
 :::
 :::
@@ -397,26 +383,22 @@ check_metric_range(ins_tri, 0.0, 0.3, "insulin-triceps correlation, zeros remove
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 cor_na = dia[num_cols].______      # pandas skips missing values pairwise by default
 print((cor_na - cor_raw).round(2))
 
 ins_tri = cor_na.loc["insulin", "triceps"]
-check_metric_range(ins_tri, 0.0, 0.3, "insulin-triceps correlation, zeros removed")
+print(ins_tri)   # expect 0.0 to 0.3
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 cor_na = dia[num_cols].corr()
 print((cor_na - cor_raw).round(2))
 
 ins_tri = cor_na.loc["insulin", "triceps"]
-check_metric_range(ins_tri, 0.0, 0.3, "insulin-triceps correlation, zeros removed")
+print(ins_tri)   # expect 0.0 to 0.3
 ```
 :::
 :::

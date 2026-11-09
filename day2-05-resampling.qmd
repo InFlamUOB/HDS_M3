@@ -41,8 +41,8 @@ where it is much harder to see.
 ## Where this sits in the week
 Day 2 is already a long day, and this exercise does not depend on anything in
 @sec-first-look to @sec-transforming — only on the pipeline rebuilt in its
-first cell. It can equally well open Day 5, where @sec-decision-trees needs
-`vfold_cv()` in its second task. Run it wherever the timetable has room; the
+first cell. It can equally well open Day 5, where the decision-trees exercise
+needs `vfold_cv()` in its second task. Run it wherever the timetable has room; the
 module lead decides.
 :::
 
@@ -138,7 +138,6 @@ highest and the standard deviation.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 
 one_split_mae <- function(seed) {
   set.seed(______)
@@ -149,7 +148,7 @@ one_split_mae <- function(seed) {
 maes <- vapply(1:50, one_split_mae, numeric(1))
 c(lowest = min(maes), highest = max(maes), spread = max(maes) - min(maes),
   mean = mean(maes), sd = ______)
-check_metric_range(sd(maes), 0.1, 0.5, "standard deviation of the 50 MAEs")
+sd(maes)   # expect 0.1 to 0.5
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -165,7 +164,6 @@ unchanged. The spread of a sample is `sd()`.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 
 one_split_mae <- function(seed) {
   set.seed(seed)
@@ -176,7 +174,7 @@ one_split_mae <- function(seed) {
 maes <- vapply(1:50, one_split_mae, numeric(1))
 c(lowest = min(maes), highest = max(maes), spread = max(maes) - min(maes),
   mean = mean(maes), sd = sd(maes))
-check_metric_range(sd(maes), 0.1, 0.5, "standard deviation of the 50 MAEs")
+sd(maes)   # expect 0.1 to 0.5
 ```
 :::
 :::
@@ -186,8 +184,6 @@ check_metric_range(sd(maes), 0.1, 0.5, "standard deviation of the 50 MAEs")
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 
 def one_split_mae(seed):
     tr, te = train_test_split(dia, test_size=0.2, random_state=______)
@@ -198,7 +194,7 @@ maes = np.array([one_split_mae(s) for s in range(1, 51)])
 print(f"lowest {maes.min():.3f} highest {maes.max():.3f} "
       f"spread {np.ptp(maes):.3f} mean {maes.mean():.3f} "
       f"sd {______:.3f}")
-check_metric_range(maes.std(ddof=1), 0.1, 0.5, "standard deviation of the 50 MAEs")
+print(maes.std(ddof=1))   # expect 0.1 to 0.5
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -213,8 +209,6 @@ standard deviation; the sample one is what you want here.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 
 def one_split_mae(seed):
     tr, te = train_test_split(dia, test_size=0.2, random_state=seed)
@@ -225,7 +219,7 @@ maes = np.array([one_split_mae(s) for s in range(1, 51)])
 print(f"lowest {maes.min():.3f} highest {maes.max():.3f} "
       f"spread {np.ptp(maes):.3f} mean {maes.mean():.3f} "
       f"sd {maes.std(ddof=1):.3f}")
-check_metric_range(maes.std(ddof=1), 0.1, 0.5, "standard deviation of the 50 MAEs")
+print(maes.std(ddof=1))   # expect 0.1 to 0.5
 ```
 :::
 :::
@@ -268,7 +262,6 @@ closed.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 set.seed(42)
 folds <- vfold_cv(______, v = 10)        # which rows go into the folds?
 folds
@@ -280,7 +273,8 @@ cv_mean <- collect_metrics(cv_res)$mean
 cv_se   <- collect_metrics(cv_res)$std_err
 per_fold <- collect_metrics(cv_res, summarize = FALSE)$.estimate
 c(folds_lowest = min(per_fold), folds_highest = max(per_fold))
-check_beats_baseline(cv_mean, mae_baseline)
+c(model = cv_mean, baseline = mae_baseline,
+  percent_of_baseline = 100 * cv_mean / mae_baseline)
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -296,7 +290,6 @@ than the average.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 set.seed(42)
 folds <- vfold_cv(train, v = 10)
 folds
@@ -308,7 +301,8 @@ cv_mean <- collect_metrics(cv_res)$mean
 cv_se   <- collect_metrics(cv_res)$std_err
 per_fold <- collect_metrics(cv_res, summarize = FALSE)$.estimate
 c(folds_lowest = min(per_fold), folds_highest = max(per_fold))
-check_beats_baseline(cv_mean, mae_baseline)
+c(model = cv_mean, baseline = mae_baseline,
+  percent_of_baseline = 100 * cv_mean / mae_baseline)
 ```
 :::
 :::
@@ -318,8 +312,6 @@ check_beats_baseline(cv_mean, mae_baseline)
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 folds = KFold(n_splits=______, shuffle=True, random_state=42)
 
 fold_mae = -cross_val_score(build_pipeline(), ______[preds], ______["mass"],
@@ -329,7 +321,7 @@ cv_se   = fold_mae.std(ddof=1) / np.sqrt(10)
 print(np.round(fold_mae, 3))
 print(f"mean {cv_mean:.3f}, standard error {cv_se:.3f}, "
       f"folds {fold_mae.min():.3f} to {fold_mae.max():.3f}")
-check_beats_baseline(cv_mean, mae_baseline)
+print(cv_mean, mae_baseline, 100 * cv_mean / mae_baseline)
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -345,8 +337,6 @@ frame, and it is not `dia`.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 folds = KFold(n_splits=10, shuffle=True, random_state=42)
 
 fold_mae = -cross_val_score(build_pipeline(), train[preds], train["mass"],
@@ -356,7 +346,7 @@ cv_se   = fold_mae.std(ddof=1) / np.sqrt(10)
 print(np.round(fold_mae, 3))
 print(f"mean {cv_mean:.3f}, standard error {cv_se:.3f}, "
       f"folds {fold_mae.min():.3f} to {fold_mae.max():.3f}")
-check_beats_baseline(cv_mean, mae_baseline)
+print(cv_mean, mae_baseline, 100 * cv_mean / mae_baseline)
 ```
 :::
 :::
@@ -434,9 +424,10 @@ c(selected_outside = cv_outside, selected_inside = cv_inside,
 ```
 
 ```{r}
-source("checks/checks.R")
-check_beats_baseline(cv_outside, cv_nothing)
-check_beats_baseline(cv_inside,  cv_nothing)
+c(model = cv_outside, baseline = cv_nothing,
+  percent_of_baseline = 100 * cv_outside / cv_nothing)
+c(model = cv_inside, baseline = cv_nothing,
+  percent_of_baseline = 100 * cv_inside / cv_nothing)
 ```
 
 ## Python
@@ -471,18 +462,16 @@ print(cv_outside, cv_inside, cv_nothing)
 ```
 
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
-check_beats_baseline(cv_outside, cv_nothing)
-check_beats_baseline(cv_inside,  cv_nothing)
+print(cv_outside, cv_nothing, 100 * cv_outside / cv_nothing)
+print(cv_inside, cv_nothing, 100 * cv_inside / cv_nothing)
 ```
 :::
 
 There is no signal in those 200 columns. They are random numbers, and no
 estimate of a model built from them should beat predicting the mean. Selected
 outside the loop, the cross-validated MAE is 5.39 in R and 5.26 in Python
-against a do-nothing 5.47 and 5.37: it beats the baseline, and
-`check_beats_baseline()` prints `[ok]`. Selected inside the loop, the same ten
+against a do-nothing 5.47 and 5.37: it beats the baseline, and the comparison
+says so. Selected inside the loop, the same ten
 folds, the same rule, the same random numbers, give 5.73 and 5.75 — worse than
 the baseline, which is the truth.
 
@@ -503,10 +492,11 @@ careless the analyst was. It is the same distinction @sec-leakage drew: a mean
 carries almost no row-specific information, and a choice made among 200
 candidates by looking at the outcome carries a great deal.
 
-Note also what the self-check did. `check_beats_baseline()` printed `[ok]` for
-a pipeline built on random numbers. A check is only as good as the assumption
-written into it, and no check in this booklet can see what you did to the data
-before you called it.
+Note also what the comparison showed: a pipeline built on nothing but random
+numbers still came out ahead of the baseline. Comparing against a baseline tells
+you whether a number is good; it cannot tell you whether the number was earned
+honestly. Nothing you print at the end can see what you did to the data before
+you printed it.
 
 ## Task 3 — Three kinds of row
 
@@ -577,8 +567,8 @@ pd.DataFrame({
 Then answer in writing, in one sentence each: **which rows were fitted, which
 rows chose something, and which rows were spent** in each of the three lines of
 your table. The middle role is empty in all three, because nothing has been
-chosen yet — @sec-decision-trees is where it fills up, and it is the reason the
-folds exist at all.
+chosen yet — the decision-trees exercise is where it fills up, and it is the
+reason the folds exist at all.
 
 That distinction is what the rest of the booklet runs on, and it is worth
 writing out once:
@@ -640,7 +630,7 @@ partition, and that is enough to justify it.
 0.4 BMI units is within the fold-to-fold and split-to-split spread this page
 measured, so the two numbers are compatible with no overfitting at all. What to
 ask for: the standard error of the resampled estimate, and the size of the test
-set. This is the argument @sec-random-forest makes again with AUC.
+set. This is the argument the random-forest exercise makes again with AUC.
 
 **Reflection 2.** Too small. The folds share nine tenths of their training rows,
 so the ten scores are positively correlated and the naive standard error
@@ -707,7 +697,7 @@ ten fits, rather than reporting a single split that these data would have put
 anywhere between 4.0 and 5.3.
 
 **Cannot:** that any comparison you have made between two pipelines is larger
-than that uncertainty. Nothing today compared two models; @sec-decision-trees
-does, with a hyperparameter grid scored on exactly the resamples you have just
-built, and @sec-random-forest then asks whether the winner's margin survives
-the standard error you have just learned to read.
+than that uncertainty. Nothing today compared two models; the decision-trees
+exercise does, with a hyperparameter grid scored on exactly the resamples you
+have just built, and the random-forest exercise then asks whether the winner's
+margin survives the standard error you have just learned to read.
