@@ -4,7 +4,7 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 2.4 — Leakage {#sec-leakage}
+# Exercise 2.5 — Leakage {#sec-leakage}
 
 
 ## Objectives
@@ -210,7 +210,6 @@ both MAEs and the difference.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 global_means <- lapply(dia[preds], mean, na.rm = ______)      # all rows: the leak
 train_means  <- lapply(train[preds], mean, na.rm = TRUE)
 
@@ -223,7 +222,8 @@ fit_t <- lm(model_formula, data = fill_na(train, train_means))
 mae_imp_ok <- mean(abs(test$mass - predict(fit_t, fill_na(test, train_means))))
 
 c(leaky = mae_imp_leak, honest = mae_imp_ok, difference = mae_imp_leak - mae_imp_ok)
-check_beats_baseline(mae_imp_ok, mae_baseline)
+c(model = mae_imp_ok, baseline = mae_baseline,
+  percent_of_baseline = 100 * mae_imp_ok / mae_baseline)
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -237,7 +237,6 @@ argument: which frame the means were computed from.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 global_means <- lapply(dia[preds], mean, na.rm = TRUE)        # all rows: the leak
 train_means  <- lapply(train[preds], mean, na.rm = TRUE)
 
@@ -250,7 +249,8 @@ fit_t <- lm(model_formula, data = fill_na(train, train_means))
 mae_imp_ok <- mean(abs(test$mass - predict(fit_t, fill_na(test, train_means))))
 
 c(leaky = mae_imp_leak, honest = mae_imp_ok, difference = mae_imp_leak - mae_imp_ok)
-check_beats_baseline(mae_imp_ok, mae_baseline)
+c(model = mae_imp_ok, baseline = mae_baseline,
+  percent_of_baseline = 100 * mae_imp_ok / mae_baseline)
 ```
 :::
 :::
@@ -260,8 +260,6 @@ check_beats_baseline(mae_imp_ok, mae_baseline)
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 imp_leak = SimpleImputer(strategy="mean").fit(______[preds])   # all rows: the leak
 imp_ok   = SimpleImputer(strategy="mean").fit(train[preds])
 
@@ -276,15 +274,13 @@ mae_imp_ok = mean_absolute_error(
     test["mass"], fit_t.predict(imp_ok.transform(test[preds])))
 
 print(mae_imp_leak, mae_imp_ok, mae_imp_leak - mae_imp_ok)
-check_beats_baseline(mae_imp_ok, mae_baseline)
+print(mae_imp_ok, mae_baseline, 100 * mae_imp_ok / mae_baseline)
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 imp_leak = SimpleImputer(strategy="mean").fit(dia[preds])      # all rows: the leak
 imp_ok   = SimpleImputer(strategy="mean").fit(train[preds])
 
@@ -299,7 +295,7 @@ mae_imp_ok = mean_absolute_error(
     test["mass"], fit_t.predict(imp_ok.transform(test[preds])))
 
 print(mae_imp_leak, mae_imp_ok, mae_imp_leak - mae_imp_ok)
-check_beats_baseline(mae_imp_ok, mae_baseline)
+print(mae_imp_ok, mae_baseline, 100 * mae_imp_ok / mae_baseline)
 ```
 :::
 :::
@@ -435,7 +431,6 @@ fitted on what it is given.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 rec <- recipe(mass ~ triceps + pressure + age + pregnant, data = ______) |>
   step_impute_mean(all_predictors()) |>
   step_normalize(all_predictors())
@@ -447,7 +442,8 @@ wf <- workflow() |>
 final <- last_fit(wf, split = split, metrics = metric_set(mae))
 mae_pipeline <- collect_metrics(final)$.estimate
 mae_pipeline
-check_beats_baseline(mae_pipeline, mae_baseline)
+c(model = mae_pipeline, baseline = mae_baseline,
+  percent_of_baseline = 100 * mae_pipeline / mae_baseline)
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -462,7 +458,6 @@ you are demonstrating.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 rec <- recipe(mass ~ triceps + pressure + age + pregnant, data = train) |>
   step_impute_mean(all_predictors()) |>
   step_normalize(all_predictors())
@@ -474,7 +469,8 @@ wf <- workflow() |>
 final <- last_fit(wf, split = split, metrics = metric_set(mae))
 mae_pipeline <- collect_metrics(final)$.estimate
 mae_pipeline
-check_beats_baseline(mae_pipeline, mae_baseline)
+c(model = mae_pipeline, baseline = mae_baseline,
+  percent_of_baseline = 100 * mae_pipeline / mae_baseline)
 ```
 :::
 :::
@@ -484,8 +480,6 @@ check_beats_baseline(mae_pipeline, mae_baseline)
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 
@@ -497,15 +491,13 @@ pipe = Pipeline([("prep", prep), ("model", LinearRegression())])
 pipe.fit(______[preds], ______["mass"])
 mae_pipeline = mean_absolute_error(test["mass"], pipe.predict(test[preds]))
 print(mae_pipeline)
-check_beats_baseline(mae_pipeline, mae_baseline)
+print(mae_pipeline, mae_baseline, 100 * mae_pipeline / mae_baseline)
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 
@@ -517,7 +509,7 @@ pipe = Pipeline([("prep", prep), ("model", LinearRegression())])
 pipe.fit(train[preds], train["mass"])
 mae_pipeline = mean_absolute_error(test["mass"], pipe.predict(test[preds]))
 print(mae_pipeline)
-check_beats_baseline(mae_pipeline, mae_baseline)
+print(mae_pipeline, mae_baseline, 100 * mae_pipeline / mae_baseline)
 ```
 :::
 :::

@@ -4,7 +4,7 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 2.2 — Missing data {#sec-missing-data}
+# Exercise 2.3 — Missing data {#sec-missing-data}
 
 
 ## Objectives
@@ -143,7 +143,6 @@ distribution.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 set.seed(1)
 sim_incomplete <- replicate(300, {
   m <- sapply(1:13, function(i) sample(c(rep(TRUE, ______), rep(FALSE, 180))))
@@ -153,8 +152,7 @@ range(sim_incomplete); mean(sim_incomplete)
 
 observed <- sum(rowSums(is.na(heart)) > ______)
 observed
-check_metric_range(observed, min(sim_incomplete), max(sim_incomplete),
-                   "incomplete rows in the real file, against the simulated range")
+c(observed = observed, low = min(sim_incomplete), high = max(sim_incomplete))
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -167,7 +165,6 @@ of 20 `TRUE`s and 180 `FALSE`s. A row is incomplete if it has at least one.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 set.seed(1)
 sim_incomplete <- replicate(300, {
   m <- sapply(1:13, function(i) sample(c(rep(TRUE, 20), rep(FALSE, 180))))
@@ -177,8 +174,7 @@ range(sim_incomplete); mean(sim_incomplete)
 
 observed <- sum(rowSums(is.na(heart)) > 0)
 observed
-check_metric_range(observed, min(sim_incomplete), max(sim_incomplete),
-                   "incomplete rows in the real file, against the simulated range")
+c(observed = observed, low = min(sim_incomplete), high = max(sim_incomplete))
 ```
 :::
 :::
@@ -188,8 +184,6 @@ check_metric_range(observed, min(sim_incomplete), max(sim_incomplete),
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 rng = np.random.default_rng(1)
 def one_sim():
     m = np.zeros((200, 13), dtype=bool)
@@ -202,16 +196,13 @@ print(sim_incomplete.min(), sim_incomplete.max(), sim_incomplete.mean())
 
 observed = (heart.isna().sum(axis=1) > ______).sum()
 print(observed)
-check_metric_range(observed, sim_incomplete.min(), sim_incomplete.max(),
-                   "incomplete rows in the real file, against the simulated range")
+print(observed, sim_incomplete.min(), sim_incomplete.max())
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 rng = np.random.default_rng(1)
 def one_sim():
     m = np.zeros((200, 13), dtype=bool)
@@ -224,8 +215,7 @@ print(sim_incomplete.min(), sim_incomplete.max(), sim_incomplete.mean())
 
 observed = (heart.isna().sum(axis=1) > 0).sum()
 print(observed)
-check_metric_range(observed, sim_incomplete.min(), sim_incomplete.max(),
-                   "incomplete rows in the real file, against the simulated range")
+print(observed, sim_incomplete.min(), sim_incomplete.max())
 ```
 :::
 :::
@@ -270,7 +260,6 @@ way.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 num_cols <- c("age", "trestbps", "chol", "thalach", "oldpeak")
 
 heart_imp <- heart |>
@@ -280,7 +269,7 @@ sd_before <- sd(heart$chol, na.rm = TRUE)
 sd_after  <- sd(heart_imp$chol)
 c(before = sd_before, after = sd_after, ratio = sd_after / sd_before)
 
-check_metric_range(sum(is.na(heart_imp[num_cols])), 0, 0, "missing values left")
+sum(is.na(heart_imp[num_cols]))   # expect 0 to 0
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -294,7 +283,6 @@ the number it replaces with.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 num_cols <- c("age", "trestbps", "chol", "thalach", "oldpeak")
 
 heart_imp <- heart |>
@@ -304,7 +292,7 @@ sd_before <- sd(heart$chol, na.rm = TRUE)
 sd_after  <- sd(heart_imp$chol)
 c(before = sd_before, after = sd_after, ratio = sd_after / sd_before)
 
-check_metric_range(sum(is.na(heart_imp[num_cols])), 0, 0, "missing values left")
+sum(is.na(heart_imp[num_cols]))   # expect 0 to 0
 
 cor(heart$chol, heart$thalach, use = "pairwise.complete.obs")
 cor(heart_imp$chol, heart_imp$thalach)
@@ -317,8 +305,6 @@ cor(heart_imp$chol, heart_imp$thalach)
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 from sklearn.impute import SimpleImputer
 
 num_cols = ["age", "trestbps", "chol", "thalach", "oldpeak"]
@@ -330,15 +316,13 @@ sd_before = heart["chol"].std()
 sd_after = heart_imp["chol"].std()
 print(sd_before, sd_after, sd_after / sd_before)
 
-check_metric_range(heart_imp[num_cols].isna().sum().sum(), 0, 0, "missing values left")
+print(heart_imp[num_cols].isna().sum().sum())   # expect 0 to 0
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 from sklearn.impute import SimpleImputer
 
 num_cols = ["age", "trestbps", "chol", "thalach", "oldpeak"]
@@ -350,7 +334,7 @@ sd_before = heart["chol"].std()
 sd_after = heart_imp["chol"].std()
 print(sd_before, sd_after, sd_after / sd_before)
 
-check_metric_range(heart_imp[num_cols].isna().sum().sum(), 0, 0, "missing values left")
+print(heart_imp[num_cols].isna().sum().sum())   # expect 0 to 0
 
 print(heart[["chol", "thalach"]].corr().iloc[0, 1])
 print(heart_imp[["chol", "thalach"]].corr().iloc[0, 1])
@@ -447,8 +431,6 @@ names(baked)
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
@@ -465,15 +447,13 @@ prep = ColumnTransformer([
 out = prep.fit_transform(heart)
 print(out.shape)
 print(prep.get_feature_names_out())
-check_metric_range(np.isnan(out).sum(), 0, 0, "missing values in the design matrix")
+print(np.isnan(out).sum())   # expect 0 to 0
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
@@ -490,7 +470,7 @@ prep = ColumnTransformer([
 out = prep.fit_transform(heart)
 print(out.shape)
 print(prep.get_feature_names_out())
-check_metric_range(np.isnan(out).sum(), 0, 0, "missing values in the design matrix")
+print(np.isnan(out).sum())   # expect 0 to 0
 ```
 :::
 :::
