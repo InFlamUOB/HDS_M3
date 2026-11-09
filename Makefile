@@ -7,6 +7,7 @@
 #   make worksheets DAY=1   printable PDFs for one day
 #   make day DAY=2 TITLE="..."  scaffold the next day and register it
 #   make data               regenerate every dataset from scripts/make_data.R
+#   make data-zip           rebuild hds-m3-data.zip, the student download
 #   make check              source checks (blanks, hidden answers, links)
 #   make links              check the built site for dead links
 #   make all DAY=1          data + site + instructor + worksheets
@@ -19,7 +20,7 @@ PYTHON ?= python3
 RSCRIPT ?= Rscript
 
 .DEFAULT_GOAL := help
-.PHONY: help setup-r preview site instructor worksheets day data check links all clean
+.PHONY: help setup-r preview site instructor worksheets day data data-zip check links all clean
 
 help:
 	@grep -E '^#   make' $(MAKEFILE_LIST) | sed 's/^#   //'
@@ -30,7 +31,10 @@ setup-r:
 preview:
 	$(QUARTO) preview
 
-site:
+data-zip:
+	@$(PYTHON) scripts/make_data_zip.py
+
+site: data-zip
 	$(QUARTO) render --to html
 
 instructor:
