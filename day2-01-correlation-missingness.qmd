@@ -1,0 +1,509 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 2.2 — Correlation and missingness {#sec-correlation-missing}
+
+Again, this practical is also in R. This is an example of the great amount of resources available in open-source programming languages (will also be able to find similar things in Python), where new packages are developed and made available constantly. As key insight, explore, probably what you need is already out there for you to use!
+
+------------------------------------------------------------------------
+
+## Correlation
+
+For you to see the breadth of possibilities out there, here is an example of different ways in which to describe and learn about the correlation matrix of your dataset.
+
+```{r, message=FALSE}
+
+
+# Install required libraries (if not already installed)
+
+#install.packages(c("ggplot2", "corrplot", "ggcorrplot", 
+#"PerformanceAnalytics", "GGally", "psych", "corrr"))
+
+# Load necessary libraries
+library(ggplot2)
+library(corrplot)
+library(ggcorrplot)
+library(PerformanceAnalytics)
+library(GGally)
+library(psych)
+library(corrr)
+```
+
+To assess the association between two variables, you can produce a scatter plot like below:
+
+```{r}
+set.seed(123)
+x <- rnorm(100)
+y <- x + rnorm(100, sd = 0.5)
+
+ggplot(data = data.frame(x, y), aes(x = x, y = y)) +
+  geom_point(color = "blue", size = 2) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "Correlation Plot with ggplot2",
+       x = "X values", y = "Y values") +
+  theme_minimal()
+```
+
+Now we are going to produce the correlation matrix, where in a go, you get insight of all the association happening in your dataset.For this we are going to use the mtcars data (A built-in dataset that contains measurements on 11 different attributes for 32 different cars). More specifically, the chosen variables are:
+
+-   mpg (Miles per Gallon): Represents the fuel efficiency of the car. Higher values, better efficiency.
+
+-   disp (Displacement): Represents the engine displacement, which is the total volume of all the cylinders in the engine.
+
+-   hp (Horsepower): Represents the power output of the car's engine.
+
+-   wt (Weight): Represents the weight of the car.
+
+```{r}
+data <- mtcars[, c("mpg", "disp", "hp", "wt")]
+```
+
+Can you calculate the correlation between them? Try out at least a pair.Remember there are different ways in which to calculate correlation <https://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r> and you can specify the type in your code `cor(x, y, method = c("pearson", "kendall", "spearman"))`
+
+```{r}
+
+```
+
+Now that you know what to expect, lets proceed with the correlation matrices (same thing as above, but all in a go!):
+
+### -----corrplot Correlation Matrix -----
+
+```{r}
+cor_matrix <- cor(data)
+corrplot(cor_matrix, method = "circle", type = "upper", 
+         title = "Correlation Matrix", addCoef.col = "black")
+```
+
+### -----corrplot Correlation Matrix -----
+
+```{r}
+ggcorrplot(cor_matrix, 
+           method = "square", 
+           type = "lower", 
+           lab = TRUE, 
+           title = "mtcars", 
+           lab_size = 3) +
+  theme_minimal()
+```
+
+### -----PerformanceAnalytics Pairwise Correlation Plot -----
+
+```{r}
+chart.Correlation(data, histogram = TRUE, pch = 19)
+```
+
+###-----GGally Pairwise Correlation Plot -----
+
+```{r}
+ggpairs(data, 
+        title = "Pairwise Correlation Plot with GGally",
+        lower = list(continuous = wrap("smooth", method = "lm")),
+        upper = list(continuous = wrap("cor", size = 3)))
+```
+
+###----- psych Enhanced Pairwise Correlation Plot -----
+
+```{r}
+pairs.panels(data, 
+             method = "pearson", 
+             hist.col = "lightblue", 
+             density = TRUE, 
+             ellipses = TRUE)
+```
+
+###----- Base R Heatmap -----
+
+```{r}
+# ----- 8. Base R Heatmap -----
+heatmap(cor_matrix, symm = TRUE, 
+        main = "Correlation Heatmap", 
+        col = colorRampPalette(c("red", "white", "blue"))(20))
+```
+
+```{r}
+# ----- 10. corrr Tidy Correlation -----
+cor_matrix_tidy <- correlate(data)
+cor_matrix_tidy %>% 
+  fashion() %>% 
+  print()
+
+# Network-style correlation plot
+cor_matrix_tidy %>% 
+  network_plot(min_cor = 0.3)
+
+```
+
+What are your insights? Do they make sense? Remember:
+
+-   mpg (Miles per Gallon): Represents the fuel efficiency of the car. Higher values, better efficiency.
+
+-   disp (Displacement): Represents the engine displacement, which is the total volume of all the cylinders in the engine.
+
+-   hp (Horsepower): Represents the power output of the car's engine.
+
+-   wt (Weight): Represents the weight of the car.
+
+------------------------------------------------------------------------
+
+## What a correlation does with values that are not real
+
+`mtcars` is clean. Clinical files are not, and the usual way they are not clean
+is that somebody recorded an absent measurement as a number. Before trusting any
+of the matrices above, look at `data/diabetes.csv`: 768 adults, eight
+measurements and an outcome.
+
+```{r}
+#| message: false
+library(readr)
+library(dplyr)
+
+diabetes <- read_csv("data/diabetes.csv")
+
+diabetes |>
+  summarise(across(where(is.numeric), ~ sum(.x == 0))) |>
+  t()
+```
+
+A plasma glucose of zero is not a low reading, and a body mass index of zero is
+not a thin patient. Both are impossible, so the zero is standing in for "not
+measured". Replace the impossible ones with `NA` and compare the two matrices:
+
+```{r}
+cols <- c("glucose", "pressure", "triceps", "insulin", "mass")
+
+dia_na <- diabetes |>
+  mutate(across(all_of(cols), ~ na_if(.x, 0)))
+
+round(cor(diabetes[cols]), 2)
+round(cor(dia_na[cols], use = "pairwise.complete.obs"), 2)
+```
+
+::: {.callout-warning}
+## The result that should bother you
+The strongest association in the raw matrix is mostly an artefact of the zeros,
+and one of the real associations was hidden by them. Both directions, in the
+same table.
+
+1. **`insulin` with `triceps` falls from about 0.47 to about 0.17** once the
+   zeros are treated as missing. Every one of the 251 rows with a zero skin-fold
+   also has a zero insulin, so a quarter of the file sits exactly at the origin
+   of that scatter plot. Points at the origin, far below the real values, pull a
+   regression line through themselves. The association was between the two
+   recording failures, not between the two hormonal quantities.
+2. **`triceps` with `mass` rises from about 0.38 to about 0.61.** Skin-fold
+   thickness and body mass index measure overlapping things and should agree;
+   the zeros were diluting that agreement towards the middle.
+3. So the zeros did not add noise. Noise attenuates everything. They *moved*
+   correlations, up for pairs that share a missingness pattern and down for
+   pairs that do not — and nothing in the output marks which is which.
+:::
+
+::: {.callout-note appearance="simple"}
+## `NA` is not a worse answer than a number
+Students often resist this step because the dataset "gets smaller". It does not
+get smaller; it stops lying. A mean over 363 measured insulins is an estimate of
+something. A mean over 768 values of which 405 are a clerical convention is an
+estimate of nothing, and it will not announce itself as one.
+:::
+
+Which is why the second half of this practical is about seeing the holes.
+
+------------------------------------------------------------------------
+
+## Missing pipelines
+
+As with the correlation matrices before, there are really good packages to help you understand the missingness structure of your data. This is my recommendation:
+
+```{r, message=FALSE, warning=FALSE}
+
+#Remember, if you do not have these packages installed, install them first with (install.packages())
+
+library(naniar)
+library(finalfit)
+library(ggplot2)
+library(mice)
+```
+
+Here I will be using the `airquality` dataset (available as default in all R) but everything would be ready for you to introduce your own dataset in a future.
+
+```{r}
+summary(airquality)
+```
+
+We can already see with a simple summary, the ammount of missings we have per column. But what is their underlying structure?
+
+```{r}
+YourDataset <- airquality
+```
+
+### Plot 1
+
+```{r}
+ll <- data.frame(is.na(YourDataset))
+```
+
+Open up this ll object. What are you seeing here? `is.na()` detects all values coded as `NA` and gives a logical output, `TRUE` if truly a missing value and `FALSE` if not
+
+```{r}
+#| eval: false
+View(ll)
+```
+
+```{r, warning=FALSE, message=FALSE}
+cols <- sapply(ll, is.logical)
+ll[, cols] <- lapply(ll[, cols], as.numeric)
+
+Miss1 <- UpSetR::upset(ll,
+                       nsets = 20, number.angles = 10, point.size = 3.5, line.size = 2,
+                       mainbar.y.label = "Missing Values", sets.x.label = "Total Number Missing Values",
+                       text.scale = c(2.3, 2.3, 2, 2, 2, 1.75), order.by = "freq", sets.bar.color = "red3"
+)
+
+
+Miss1
+```
+
+Here we can see common patterns! If missing values were to happen at the same time in different variables, we would see it clearly. Lets store this figure into our own directories so we can then use it for our final research output!
+
+```{r}
+#| eval: false
+pdf("MissingVal1.pdf", 10, 20)
+print(Miss1)
+dev.off()
+```
+
+### Plot 2
+
+```{r}
+print(vis_miss(YourDataset, warn_large_data = FALSE) + 
+        theme(axis.text.x =  element_text(angle = 90)))
+
+
+# uncomment to have your pdf created
+#pdf("Missing2.pdf", 20, 10)
+#print(vis_miss(YourDataset, warn_large_data = FALSE) + 
+#        theme(axis.text.x =  element_text(angle = 90)))
+#dev.off()
+```
+
+Very clear outline of missingness in the whole dataset. But be careful in big datasets!
+
+### Plot 3
+
+```{r}
+
+missing_pattern(YourDataset)
+
+# uncomment to have your pdf created
+
+#pdf("PlotMissing3.pdf", 4,11)
+#
+#print(missing_pattern(YourDataset))
+#
+#dev.off()
+#
+
+
+```
+
+Final, very clear overview of patterns per variable. Spend a moment trying to understand these values. This function works great with big datasets too, although sometimes it gets a bit busy with lots of numbers.
+
+
+Open up your three newly created pdfs!
+
+::: {.callout-tip appearance="simple"}
+The two `pdf()` blocks are set not to run when the booklet is built, so that it
+does not litter the repository. Run them yourself — that is the point of them.
+:::
+
+### Naming what you are looking at
+
+The three plots above describe a *pattern*. The word for why the pattern exists
+is a *mechanism*, and there are three:
+
+- **MCAR**, missing completely at random: the holes are unrelated to anything,
+  observed or not. Dropping incomplete rows is safe and only costs you power.
+- **MAR**, missing at random: the holes depend on things you *did* record — a
+  test ordered only for patients over 60. Imputation from the other columns is
+  reasonable, because the information needed is present.
+- **MNAR**, missing not at random: the holes depend on the unrecorded value
+  itself — a weight absent because the patient could not stand. No amount of
+  imputation recovers this, and nothing in the data will tell you it is
+  happening.
+
+You cannot test which one you have. The diagnosis comes from knowing how the
+data was collected, which is why "ask whoever collected it" is a methods step
+and not an excuse.
+
+Two things worth noticing in what you have just plotted:
+
+1. In `airquality`, `Ozone` is missing far more often than `Solar.R`, and the
+   two are sometimes missing together — a bundle, the signature of a process
+   that skips several measurements at once.
+2. In the diabetes file in the first half, every missing `triceps` was also a
+   missing `insulin`. That nesting is what a real process looks like: tests are
+   ordered in bundles, bundles are skipped together, and the patients they are
+   skipped for are not a random sample. **No clinic produces missingness
+   completely at random.**
+
+### Filling the holes, and measuring what you changed
+
+Describing the pattern comes first, because the pattern decides whether filling
+the holes is reasonable at all. The simplest fill is the median of the observed
+values; the honest habit is to measure what it did to the spread.
+
+```{r}
+#| message: false
+aq <- airquality
+
+aq_median <- aq |>
+  mutate(across(everything(), ~ ifelse(is.na(.x), median(.x, na.rm = TRUE), .x)))
+
+c(observed_sd = sd(aq$Ozone, na.rm = TRUE),
+  median_imputed_sd = sd(aq_median$Ozone))
+```
+
+The standard deviation falls, because every filled value sits exactly at the
+centre. You have not recovered 37 ozone readings; you have added 37 copies of
+the median and told the model they are measurements.
+
+`mice` (multivariate imputation by chained equations) fills each gap by
+predicting it from the other columns, and does the whole thing several times so
+that downstream estimates can carry the uncertainty. One complete frame from it
+is still a guess, but it is a guess that respects the relationships between
+columns rather than flattening them.
+
+```{r}
+#| message: false
+imp <- mice(aq, m = 5, printFlag = FALSE, seed = 1)
+ozone_imp <- complete(imp, 1)$Ozone
+
+c(observed_sd = sd(aq$Ozone, na.rm = TRUE),
+  median_imputed_sd = sd(aq_median$Ozone),
+  mice_sd = sd(ozone_imp))
+```
+
+Use the version of this you can defend. On a file with 10% missing and a
+single-value imputation, say so in the methods; on anything important, use
+multiple imputation and say that.
+
+::: {.callout-warning}
+## The one rule that outranks the method
+Whatever you fill with, compute it on the training rows only. A median taken
+over the whole file before splitting has already carried information from the
+test rows into the training ones, and the score you report afterwards is
+flattered by it. That is the subject of @sec-leakage.
+:::
+
+------------------------------------------------------------------------
+## The same steps in Python
+
+The same two ideas, without the commentary. `mtcars` and `airquality` are built
+into R; in Python the equivalents come from the data folder you downloaded.
+
+```{python}
+#| message: false
+#| warning: false
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+diabetes = pd.read_csv("data/diabetes.csv")
+heart = pd.read_csv("data/longisland_heart.csv")
+```
+
+### Correlation
+
+`pandas` computes the matrix; `seaborn` draws it. These two are the equivalent
+of `corrplot` and `ggcorrplot`.
+
+```{python}
+cols = ["glucose", "pressure", "triceps", "insulin", "mass"]
+cor = diabetes[cols].corr()
+
+fig, ax = plt.subplots(figsize=(5.5, 4.5))
+sns.heatmap(cor, annot=True, fmt=".2f", cmap="RdBu_r", vmin=-1, vmax=1, ax=ax)
+plt.show()
+```
+
+`pairplot` is the equivalent of `ggpairs()` and `pairs.panels()`:
+
+```{python}
+sns.pairplot(diabetes[["glucose", "insulin", "mass"]],
+             plot_kws=dict(alpha=0.3, s=12), height=1.9)
+plt.show()
+```
+
+And the same comparison as above — the matrix before and after the impossible
+zeros become missing. `.corr()` drops missing pairs by default, which is what
+`use = "pairwise.complete.obs"` does in R.
+
+```{python}
+dia_na = diabetes.copy()
+dia_na[cols] = dia_na[cols].replace(0, np.nan)
+
+print(diabetes[cols].corr().round(2))
+print(dia_na[cols].corr().round(2))
+```
+
+### Missingness
+
+Counts per column, then the whole file as an image — the equivalent of
+`vis_miss()`:
+
+```{python}
+print(heart.isna().sum())
+
+fig, ax = plt.subplots(figsize=(9, 3.5))
+ax.imshow(heart.isna().T, aspect="auto", interpolation="nearest",
+          cmap="viridis")
+ax.set_yticks(range(heart.shape[1]))
+ax.set_yticklabels(heart.columns, fontsize=7)
+ax.set_xlabel("Patient (row order)")
+ax.set_title("Missing values (yellow)")
+plt.show()
+```
+
+Which columns go missing *together* — the question the UpSet plot answers:
+
+```{python}
+pattern = (heart.isna()
+           .groupby(list(heart.columns[heart.isna().any()]))
+           .size()
+           .sort_values(ascending=False)
+           .head(8))
+print(pattern)
+```
+
+Median imputation, and what it did to the spread:
+
+```{python}
+from sklearn.impute import SimpleImputer
+
+num = heart.select_dtypes("number")
+filled = pd.DataFrame(SimpleImputer(strategy="median").fit_transform(num),
+                      columns=num.columns)
+
+print(num["chol"].std(), filled["chol"].std())
+```
+
+`IterativeImputer` is the closest thing to `mice`: it predicts each column from
+the others in turn. It is still experimental, so it has to be switched on.
+
+```{python}
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+from sklearn.impute import IterativeImputer
+
+iter_filled = pd.DataFrame(
+    IterativeImputer(random_state=1, max_iter=10).fit_transform(num),
+    columns=num.columns)
+
+print(num["chol"].std(), filled["chol"].std(), iter_filled["chol"].std())
+```
+
+The same rule applies: fit the imputer on the training rows and `transform` the
+test rows with it, never `fit_transform` on the whole file.
