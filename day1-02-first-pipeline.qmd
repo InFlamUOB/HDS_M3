@@ -132,13 +132,19 @@ all, which is the most recognisable feature of real LOS data.
 
 ------------------------------------------------------------------------
 
-## Part A — Python (scikit-learn)
+## The pipeline, step by step
 
-Each step below mirrors the five above: define X and y, split, fit, score on
-unseen rows. We also save the fitted model, because in practice a model is
-trained once and then reused on new incoming data.
+The same five steps, in both languages, side by side: **Python with
+scikit-learn** on the left, **R with tidymodels** on the right. Read down one
+column if you are working in one language; read across if you want to see how
+the same idea is spelled in the other. We also save the fitted model, because
+in practice a model is trained once and then reused on new incoming data.
 
 ### Setup
+
+::: {.columns}
+::: {.column width="48%"}
+**Python**
 
 ```{python}
 import pandas as pd
@@ -146,25 +152,82 @@ import numpy as np
 import joblib
 import os, tempfile
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import (
+    train_test_split,
+)
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error
 import matplotlib.pyplot as plt
 ```
+:::
+::: {.column width="4%"}
+:::
+::: {.column width="48%"}
+**R**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidymodels)
+library(readr)
+library(ggplot2)
+```
+:::
+:::
 
 ### 1) Load the data
+
+::: {.columns}
+::: {.column width="48%"}
+**Python**
 
 ```{python}
 df = pd.read_csv("data/los_data.csv")
 df.head()
 ```
+:::
+::: {.column width="4%"}
+:::
+::: {.column width="48%"}
+**R**
 
-### 2) Define X and y
+```{r}
+#| message: false
+df <- read_csv("data/los_data.csv")
+head(df)
+```
+:::
+:::
+
+### 2) Say what predicts what
+
+This is the first place the two languages genuinely differ. scikit-learn wants
+the predictors and the outcome handed over as separate objects. tidymodels
+takes them as a formula at the moment of fitting, so there is nothing to do
+here --- which is why the right-hand column is empty until step 4.
+
+::: {.columns}
+::: {.column width="48%"}
+**Python**
 
 ```{python}
-X = df[["Age", "Severity"]]   # 2-D: a frame, one column per feature
-y = df["LOS"]                 # 1-D: the outcome
+# 2-D: a frame, one column per feature
+X = df[["Age", "Severity"]]
+# 1-D: the outcome
+y = df["LOS"]
 ```
+:::
+::: {.column width="4%"}
+:::
+::: {.column width="48%"}
+**R**
+
+Nothing to define yet. The formula
+`LOS ~ Age + Severity` in step 4 says
+the same thing, at the point where it
+is used.
+:::
+:::
 
 The double brackets are not a typo. scikit-learn wants a *matrix* of predictors
 and a *vector* of outcomes, and `df["Age"]` would give it a vector where it
@@ -172,28 +235,79 @@ expects a matrix.
 
 ### 3) Split into train and test
 
+::: {.columns}
+::: {.column width="48%"}
+**Python**
+
 ```{python}
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
+X_train, X_test, y_train, y_test = (
+    train_test_split(X, y, test_size=0.2,
+                     random_state=42)
 )
 
 X_train.shape, X_test.shape
 ```
+:::
+::: {.column width="4%"}
+:::
+::: {.column width="48%"}
+**R**
 
-### 4) Fit the algorithm, and save it
+```{r}
+set.seed(42)
+
+split <- initial_split(df, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
+```
+:::
+:::
+
+### 4) Fit the model, and save it
+
+::: {.columns}
+::: {.column width="48%"}
+**Python**
 
 ```{python}
 model = LinearRegression()
 model.fit(X_train, y_train)
 
-joblib.dump(model, os.path.join(tempfile.gettempdir(), "los_fit_model.pkl"))
+path = os.path.join(tempfile.gettempdir(),
+                    "los_fit_model.pkl")
+joblib.dump(model, path)
 
 model.intercept_, model.coef_
 ```
+:::
+::: {.column width="4%"}
+:::
+::: {.column width="48%"}
+**R**
 
-In your own project you would save it beside your script — `joblib.dump(model,
-"los_fit_model.pkl")`. Here it goes to a temporary folder so the booklet does
-not leave files behind.
+```{r}
+los_model <- linear_reg() %>%
+  set_engine("lm")
+
+los_fit <- los_model %>%
+  fit(LOS ~ Age + Severity, data = train)
+
+saveRDS(los_fit,
+        file.path(tempdir(),
+                  "los_fit_model.RDS"))
+```
+:::
+:::
+
+In your own project you would save it beside your script --- `joblib.dump(model,
+"los_fit_model.pkl")` or `saveRDS(los_fit, "los_fit_model.RDS")`. Here it goes
+to a temporary folder so the booklet does not leave files behind.
+
+On the R side, notice that `linear_reg()` fits nothing and mentions no data.
+The specification says *linear regression, computed by `lm`* and stops there.
+That separation is what lets you swap the algorithm later without touching the
+rest --- and it is the step scikit-learn folds into the one `LinearRegression()`
+call above.
 
 ### 5) Evaluate on the test set
 
@@ -208,101 +322,74 @@ $$
 Because we are predicting length of stay, MAE tells us how many days our
 predictions are wrong by, on average.
 
+::: {.columns}
+::: {.column width="48%"}
+**Python**
+
 ```{python}
 pred_test = model.predict(X_test)
-mae_test = mean_absolute_error(y_test, pred_test)
+mae_test = mean_absolute_error(y_test,
+                               pred_test)
 mae_test
 ```
+:::
+::: {.column width="4%"}
+:::
+::: {.column width="48%"}
+**R**
+
+```{r}
+test_pred <- predict(los_fit, test) %>%
+  bind_cols(test)
+
+mae(test_pred, truth = LOS,
+    estimate = .pred)
+```
+:::
+:::
 
 Later in the module we compare MAE with RMSE, R² and median absolute error, and
 look at when each is preferable.
 
 ### 6) Visualise predicted against actual
 
+::: {.columns}
+::: {.column width="48%"}
+**Python**
+
 ```{python}
 fig, ax = plt.subplots()
 ax.scatter(y_test, pred_test, alpha=0.5)
 lo = min(y_test.min(), pred_test.min())
 hi = max(y_test.max(), pred_test.max())
-ax.plot([lo, hi], [lo, hi])              # the 45 degree line: perfect prediction
+# the 45 degree line: perfect prediction
+ax.plot([lo, hi], [lo, hi])
 ax.set_xlabel("Actual LOS (days)")
 ax.set_ylabel("Predicted LOS (days)")
-ax.set_title("Predicted vs actual (test set)")
 plt.show()
 ```
+:::
+::: {.column width="4%"}
+:::
+::: {.column width="48%"}
+**R**
+
+```{r}
+ggplot(test_pred, aes(x = LOS, y = .pred)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0) +
+  labs(x = "Actual LOS (days)",
+       y = "Predicted LOS (days)") +
+  coord_equal()
+```
+:::
+:::
 
 A perfect model would put every point on the diagonal. How far the cloud sits
 from that line, and whether it drifts away from it at one end, is the whole
 story of the model in one picture.
 
 ------------------------------------------------------------------------
-
-## Part B — R (tidymodels)
-
-The same pipeline again, in R, using **tidymodels**. Compare it step by step
-with Part A: the vocabulary differs, the five steps do not.
-
-### Setup
-
-```{r}
-#| message: false
-#| warning: false
-library(tidymodels)
-library(readr)
-library(ggplot2)
-```
-
-### 1) Load the data
-
-```{r}
-#| message: false
-df <- read_csv("data/los_data.csv")
-head(df)
-```
-
-### 2) Split into train and test
-
-```{r}
-set.seed(42)
-
-split <- initial_split(df, prop = 0.8)
-train <- training(split)
-test  <- testing(split)
-```
-
-### 3) Specify the model
-
-```{r}
-los_model <- linear_reg() %>%
-  set_engine("lm")
-```
-
-Notice that nothing has been fitted yet, and no data has been mentioned. The
-specification says *linear regression, computed by `lm`* and stops there. This
-separation is what lets you swap the algorithm later without touching the rest.
-
-### 4) Fit, save, and evaluate
-
-```{r}
-los_fit <- los_model %>%
-  fit(LOS ~ Age + Severity, data = train)
-
-saveRDS(los_fit, file.path(tempdir(), "los_fit_model.RDS"))
-
-test_pred <- predict(los_fit, test) %>% bind_cols(test)
-mae(test_pred, truth = LOS, estimate = .pred)
-```
-
-### 5) Visualise predicted against actual
-
-```{r}
-ggplot(test_pred, aes(x = LOS, y = .pred)) +
-  geom_point(alpha = 0.5) +
-  geom_abline(slope = 1, intercept = 0) +
-  labs(x = "Actual length of stay (days)",
-       y = "Predicted length of stay (days)") +
-  coord_equal()
-```
 
 ::: {.callout-warning}
 ## Why the two MAEs are not the same number
@@ -340,10 +427,11 @@ age and severity — and compute its MAE on the same test set.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 mae_model    <- mae(test_pred, truth = LOS, estimate = .pred)$.estimate
 mae_baseline <- mean(abs(test$LOS - ______))
-check_beats_baseline(mae_model, mae_baseline)
+
+c(model = mae_model, baseline = mae_baseline,
+  percent_of_baseline = 100 * mae_model / mae_baseline)
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -358,10 +446,11 @@ and `abs()` are all you need.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 mae_model    <- mae(test_pred, truth = LOS, estimate = .pred)$.estimate
 mae_baseline <- mean(abs(test$LOS - mean(train$LOS)))
-check_beats_baseline(mae_model, mae_baseline)
+
+c(model = mae_model, baseline = mae_baseline,
+  percent_of_baseline = 100 * mae_model / mae_baseline)
 ```
 :::
 :::
@@ -371,27 +460,26 @@ check_beats_baseline(mae_model, mae_baseline)
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 mae_baseline = mean_absolute_error(y_test, np.full(len(y_test), ______))
-check_beats_baseline(mae_test, mae_baseline)
+
+mae_test, mae_baseline, 100 * mae_test / mae_baseline
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
-mae_baseline = mean_absolute_error(y_test, np.full(len(y_test), y_train.mean()))
-check_beats_baseline(mae_test, mae_baseline)
+mae_baseline = mean_absolute_error(y_test,
+                                   np.full(len(y_test), y_train.mean()))
+
+mae_test, mae_baseline, 100 * mae_test / mae_baseline
 ```
 :::
 :::
 :::
 
-The check prints the model's error as a percentage of the baseline's. Write that
-percentage down — it is the honest headline figure for this model.
+That last line gives the model's error as a percentage of the baseline's. Write
+that percentage down — it is the honest headline figure for this model.
 
 Then answer: **what would it have meant if the model had not beaten the
 baseline?** It is a short answer, and it is not "the model is bad".
@@ -486,9 +574,8 @@ ask why.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 bwt <- read_csv("data/birthweight.csv")
-check_data(bwt, n_expected = 600)   # read what this prints before going on
+nrow(bwt)        # 600 pregnancies, if you have the right file
 
 set.seed(42)
 ______
@@ -507,20 +594,23 @@ is `bw ~ bpd + ad`.
 ## Worked answer
 ```{r}
 #| message: false
-source("checks/checks.R")
 bwt <- read_csv("data/birthweight.csv")
 
 set.seed(42)
 split_bwt <- initial_split(bwt, prop = 0.8)
-train_bwt <- training(split_bwt); test_bwt <- testing(split_bwt)
-check_split(train_bwt, test_bwt, bwt, prop = 0.8)
+train_bwt <- training(split_bwt)
+test_bwt  <- testing(split_bwt)
+c(train = nrow(train_bwt), test = nrow(test_bwt))
 
-fit_bwt   <- linear_reg() %>% set_engine("lm") %>% fit(bw ~ bpd + ad, data = train_bwt)
+fit_bwt   <- linear_reg() %>%
+  set_engine("lm") %>%
+  fit(bw ~ bpd + ad, data = train_bwt)
 preds_bwt <- predict(fit_bwt, test_bwt) %>% bind_cols(test_bwt)
 
 mae_bwt          <- mae(preds_bwt, truth = bw, estimate = .pred)$.estimate
 mae_bwt_baseline <- mean(abs(test_bwt$bw - mean(train_bwt$bw)))
-check_beats_baseline(mae_bwt, mae_bwt_baseline)
+
+c(model = mae_bwt, baseline = mae_bwt_baseline)
 ```
 :::
 :::
@@ -530,10 +620,8 @@ check_beats_baseline(mae_bwt, mae_bwt_baseline)
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 bwt = pd.read_csv("data/birthweight.csv")
-check_data(bwt, n_expected=600)      # read what this prints before going on
+len(bwt)         # 600 pregnancies, if you have the right file
 
 ______
 ```
@@ -550,31 +638,25 @@ copied unchanged.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 bwt = pd.read_csv("data/birthweight.csv")
 
 X_bwt, y_bwt = bwt[["bpd", "ad"]], bwt["bw"]
 Xb_train, Xb_test, yb_train, yb_test = train_test_split(
     X_bwt, y_bwt, test_size=0.2, random_state=42
 )
-check_split(Xb_train, Xb_test, X_bwt, prop=0.8)
+len(Xb_train), len(Xb_test)
 
 fit_bwt = LinearRegression().fit(Xb_train, yb_train)
 
-mae_bwt          = mean_absolute_error(yb_test, fit_bwt.predict(Xb_test))
-mae_bwt_baseline = mean_absolute_error(yb_test, np.full(len(yb_test), yb_train.mean()))
-check_beats_baseline(mae_bwt, mae_bwt_baseline)
+mae_bwt = mean_absolute_error(yb_test, fit_bwt.predict(Xb_test))
+mae_bwt_baseline = mean_absolute_error(
+    yb_test, np.full(len(yb_test), yb_train.mean())
+)
+
+mae_bwt, mae_bwt_baseline
 ```
 :::
 :::
-:::
-
-::: {.callout-note appearance="simple"}
-`check_data()` complains in both languages, and it is right to. It was written
-for the LOS columns and you have handed it a different file. A check is only as
-good as the assumption written into it, and a check you do not read is worse
-than no check at all.
 :::
 
 ### Solution
