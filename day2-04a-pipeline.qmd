@@ -1,0 +1,760 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 2.6 — The same steps in a pipeline {#sec-pipeline-steps}
+
+## Objectives
+
+By the end of this exercise you will be able to:
+
+- distinguish a repair that is **fixed** from a step that is **fitted**, and
+  say which of the two must wait until after the split;
+- assemble the cleaning, imputation, encoding and scaling of
+  @sec-cleaning–@sec-scaling into one object in both languages;
+- measure, rather than assert, what three different leaks do to a reported
+  error;
+- explain why one of those leaks changes nothing at all, and why that is not a
+  reason to commit it.
+
+## Why this, here
+
+Three exercises have each applied a sequence of plain functions to the whole
+table. Every one of them worked. Nothing errored, the output looked right, and
+at no point did anything warn you.
+
+That is the problem this exercise exists for. Look back at what those functions
+actually did:
+
+| step | what it learned from the data |
+|---|---|
+| group rare sites into `Other` | which sites are rare |
+| median imputation | the median of each column |
+| one-hot encoding | the list of categories that exist |
+| standardising | each column's mean and standard deviation |
+
+Each one is a quantity **estimated from the rows it was shown**. Estimate it
+from all 150 rows and then hold 30 of them back as a test set, and those 30
+rows were never held back at all — their values are inside the medians, the
+category list and the scaling constants that the model was trained with.
+
+A pipeline fixes this not by being tidier, but by making the fit/apply
+distinction impossible to get wrong.
+
+## The target, and the one rule about it
+
+We predict `bp_systolic` from age, BMI and the two categorical columns.
+
+Thirteen rows have no recorded blood pressure. **Do not impute them.** An
+imputed target is a value you invented, scored against itself — the model would
+be rewarded for reproducing your own median. Drop those rows and say so.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+import pandas as pd
+import numpy as np
+
+num = ["age", "bmi"]
+cat = ["referral_source",
+       "hospital_site"]
+ref_map = {
+    "GP": "GP", "gp": "GP",
+    "General Practitioner": "GP",
+    "A&E": "A&E",
+    "Self-referral": "Self-referral",
+}
+
+d = pd.read_csv(
+    "data/clinic_extract.csv"
+)
+for c in num + ["bp_systolic"]:
+    d[c] = pd.to_numeric(
+        d[c], errors="coerce"
+    )
+d["referral_source"] = (
+    d["referral_source"].map(ref_map)
+)
+d = d[d["bp_systolic"].notna()]
+d = d.reset_index(drop=True)
+d.shape
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidymodels)
+library(readr)
+
+num <- c("age", "bmi")
+
+d <- read_csv(
+  "data/clinic_extract.csv",
+  show_col_types = FALSE
+) |>
+  mutate(across(
+    all_of(c(num, "bp_systolic")),
+    ~ suppressWarnings(as.numeric(.x))
+  )) |>
+  mutate(referral_source = recode(
+    referral_source,
+    "gp" = "GP",
+    "General Practitioner" = "GP"
+  )) |>
+  filter(!is.na(bp_systolic))
+
+dim(d)
+```
+:::
+::::::
+
+::: {.callout-important appearance="simple"}
+## Fixed repairs can happen before the split. Fitted steps cannot.
+Notice what we just did before splitting: mapped three spellings of `GP` onto
+one, and dropped rows with no target. Both are safe, because neither looks at
+the data to decide what to do. The lookup table was written from domain
+knowledge, not estimated, and it would be identical if the test rows did not
+exist.
+
+That is the test to apply to any step: **would this step produce a different
+answer if I ran it on a different sample?** If no, it can go anywhere. If yes,
+it has to be fitted on the training rows and merely applied to everything else.
+:::
+
+## Split first
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+from sklearn.model_selection import (
+    train_test_split,
+)
+
+X = d[num + cat]
+y = d["bp_systolic"]
+
+X_tr, X_te, y_tr, y_te = (
+    train_test_split(
+        X, y,
+        test_size=0.2,
+        random_state=42,
+    )
+)
+print(X_tr.shape, X_te.shape)
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+set.seed(42)
+sp <- initial_split(d, prop = 0.8)
+train <- training(sp)
+test  <- testing(sp)
+
+c(nrow(train), nrow(test))
+```
+:::
+::::::
+
+A baseline, so every number below has something to be judged against. The
+simplest honest guess is the median of the training targets.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+guess = y_tr.median()
+base_py = np.abs(y_te - guess).mean()
+round(base_py, 3)
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+guess <- median(train$bp_systolic)
+base_r <- mean(abs(
+  test$bp_systolic - guess
+))
+round(base_r, 3)
+```
+:::
+::::::
+
+## The same four steps, as one object
+
+Each line below is a step you already performed by hand. Read across: a
+`step_*` on the right is the same idea as an entry in the `ColumnTransformer`
+on the left.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+from sklearn.pipeline import Pipeline
+from sklearn.compose import (
+    ColumnTransformer,
+)
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import (
+    OneHotEncoder,
+    StandardScaler,
+)
+from sklearn.linear_model import (
+    LinearRegression,
+)
+
+numeric = Pipeline([
+    ("impute", SimpleImputer(
+        strategy="median")),
+    ("scale", StandardScaler()),
+])
+
+categorical = OneHotEncoder(
+    handle_unknown="ignore",
+    min_frequency=0.07,
+)
+
+pre = ColumnTransformer([
+    ("num", numeric, num),
+    ("cat", categorical, cat),
+])
+
+pipe = Pipeline([
+    ("pre", pre),
+    ("model", LinearRegression()),
+])
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+rec <- recipe(
+  bp_systolic ~ age + bmi +
+    referral_source + hospital_site,
+  data = train
+) |>
+  step_other(
+    all_nominal_predictors(),
+    threshold = 0.07
+  ) |>
+  step_impute_median(
+    all_numeric_predictors()
+  ) |>
+  step_dummy(
+    all_nominal_predictors()
+  ) |>
+  step_normalize(
+    all_numeric_predictors()
+  )
+
+wf <- workflow() |>
+  add_recipe(rec) |>
+  add_model(linear_reg())
+```
+:::
+::::::
+
+Four steps, in the order you applied them by hand: group the rare category,
+fill the gaps, turn categories into columns, put the numbers on one scale.
+`handle_unknown="ignore"` and `step_other()` are the two halves of the
+unseen-category problem from @sec-cleaning — one tolerates a category it has
+never met, the other reduces the chance of meeting one.
+
+Now fit. This is the step where the distinction becomes mechanical: `fit` is
+given the training rows **only**, and nothing you do afterwards can
+accidentally show it the rest.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+from sklearn.metrics import (
+    mean_absolute_error,
+)
+
+pipe.fit(X_tr, y_tr)
+honest_py = mean_absolute_error(
+    y_te, pipe.predict(X_te)
+)
+print(round(honest_py, 3),
+      "vs baseline",
+      round(base_py, 3))
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+fitted_wf <- fit(wf, data = train)
+
+preds <- predict(fitted_wf, test)
+honest_r <- mean(abs(
+  test$bp_systolic - preds$.pred
+))
+print(c(round(honest_r, 3),
+        baseline = round(base_r, 3)))
+```
+:::
+::::::
+
+The two languages give different numbers because they split differently — the
+same seed does not mean the same rows. Both are comparing a fitted model
+against a do-nothing baseline on rows neither model was trained on, and both
+should be clearly better than it.
+
+------------------------------------------------------------------------
+
+## Three leaks, measured
+
+Now break it, three ways, and measure each. The instructive part is that the
+three do not behave alike.
+
+### Leak 1 — Scaling before the split
+
+The textbook leak: standardise the whole table, then split.
+
+To isolate the scaling, the imputation is done correctly in **both** arms —
+training-row medians throughout — so the only thing that differs is where the
+mean and standard deviation came from.
+
+```{python}
+#| echo: true
+idx = np.arange(len(X))
+i_tr, i_te = train_test_split(idx, test_size=0.2, random_state=42)
+
+X_all = X.copy()
+X_all[num] = X_all[num].fillna(X.iloc[i_tr][num].median())
+
+# WRONG: mean and sd computed from every row
+mu, sd = X_all[num].mean(), X_all[num].std()
+leaked = X_all.copy()
+leaked[num] = (leaked[num] - mu) / sd
+
+# RIGHT: constants from the training rows only
+Ltr, Lte, ytr2, yte2 = train_test_split(leaked, y, test_size=0.2, random_state=42)
+Htr, Hte, _, _ = train_test_split(X_all, y, test_size=0.2, random_state=42)
+mu2, sd2 = Htr[num].mean(), Htr[num].std()
+Htr, Hte = Htr.copy(), Hte.copy()
+Htr[num] = (Htr[num] - mu2) / sd2
+Hte[num] = (Hte[num] - mu2) / sd2
+
+enc = OneHotEncoder(handle_unknown="ignore", sparse_output=False).fit(Htr[cat])
+def design(frame):
+    return np.hstack([frame[num].values, enc.transform(frame[cat])])
+
+leak1 = mean_absolute_error(yte2, LinearRegression()
+                            .fit(design(Ltr), ytr2).predict(design(Lte)))
+fine1 = mean_absolute_error(yte2, LinearRegression()
+                            .fit(design(Htr), ytr2).predict(design(Hte)))
+print("leaked %.6f" % leak1)
+print("honest %.6f" % fine1)
+print("difference %.2e" % abs(leak1 - fine1))
+```
+
+The difference is zero, to the limit of floating-point arithmetic. Not small —
+**zero**.
+
+This is worth understanding rather than memorising. Standardising subtracts a
+constant and divides by a constant. Ordinary least squares responds by
+multiplying each coefficient by exactly the reciprocal of that constant, so the
+fitted values are identical either way. The leak transferred information, and
+the model had no way to use it.
+
+::: {.callout-warning appearance="simple"}
+## Do not conclude that scaling leakage is harmless
+It was harmless *here*, for *this model*. Change one thing and it is not:
+
+- **Any regularised model** — ridge, lasso, elastic net — penalises
+  coefficients by size, so the scale genuinely changes which features survive.
+- **Anything distance-based** — k-nearest neighbours, k-means, SVMs with an RBF
+  kernel — is defined in terms of scaled distances.
+- **Min-Max instead of Standard**, where, as @sec-scaling measured, one extreme
+  test-set value can rescale the entire training column.
+
+The honest summary is that this particular leak is undetectable in this
+particular setting, and you will not generally know in advance which setting
+you are in. The cost of doing it correctly is one line.
+:::
+
+### Leak 2 — Imputation before the split
+
+Fill the gaps with a median computed from all 137 rows, then split.
+
+```{python}
+# WRONG: median over every row, including the test rows
+all_med = X[num].median()
+A = X.copy(); A[num] = A[num].fillna(all_med)
+
+# RIGHT: median over the training rows only
+Btr, Bte, ytr3, yte3 = train_test_split(X, y, test_size=0.2, random_state=42)
+tr_med = Btr[num].median()
+Btr, Bte = Btr.copy(), Bte.copy()
+Btr[num] = Btr[num].fillna(tr_med)
+Bte[num] = Bte[num].fillna(tr_med)
+
+Atr, Ate, _, _ = train_test_split(A, y, test_size=0.2, random_state=42)
+enc2 = OneHotEncoder(handle_unknown="ignore", sparse_output=False).fit(Btr[cat])
+def design2(frame):
+    return np.hstack([frame[num].values, enc2.transform(frame[cat])])
+
+leak2 = mean_absolute_error(yte3, LinearRegression()
+                            .fit(design2(Atr), ytr3).predict(design2(Ate)))
+fine2 = mean_absolute_error(yte3, LinearRegression()
+                            .fit(design2(Btr), ytr3).predict(design2(Bte)))
+print("leaked %.4f" % leak2)
+print("honest %.4f" % fine2)
+print("difference %.4f" % (fine2 - leak2))
+```
+
+Around three hundredths of a mmHg, and on this seed the leaked version is
+slightly **worse** — a leak is not obliged to flatter you. Twenty values were
+imputed (11 in `age`, 9 in `bmi`), and the two medians they were filled with
+barely differ, because 109 training rows and 137 total rows have almost the
+same median. Change the seed and the sign of that difference changes with it,
+which is the signature of noise rather than of an effect.
+
+So leaks 1 and 2 are, on this dataset, unmeasurable. If the lesson were "leaks
+inflate your score", you would be entitled to conclude that leakage is a
+theoretical worry. Leak 3 is why that conclusion is wrong.
+
+### Leak 3 — The imputer that was shown the answer
+
+Instead of a median, use a nearest-neighbour imputer — a sensible choice, and
+the one @sec-imputation argued for. Fit it on a table that still has the target
+column in it.
+
+This is not a contrived mistake. It is what happens when you impute a dataframe
+before separating features from target, which is the natural order to work in.
+
+```{python}
+from sklearn.impute import KNNImputer
+
+# WRONG: the imputer can see bp_systolic while filling age and bmi
+with_target = X[num].copy()
+with_target["bp_systolic"] = y.values
+filled = pd.DataFrame(
+    KNNImputer(n_neighbors=5).fit_transform(with_target),
+    columns=with_target.columns,
+)
+C = X.copy(); C[num] = filled[num].values
+
+# RIGHT: the imputer is fitted on training features only, target withheld
+Dtr, Dte, ytr4, yte4 = train_test_split(X, y, test_size=0.2, random_state=42)
+ki = KNNImputer(n_neighbors=5).fit(Dtr[num])
+Dtr, Dte = Dtr.copy(), Dte.copy()
+Dtr[num] = ki.transform(Dtr[num])
+Dte[num] = ki.transform(Dte[num])
+
+Ctr, Cte, _, _ = train_test_split(C, y, test_size=0.2, random_state=42)
+enc3 = OneHotEncoder(handle_unknown="ignore", sparse_output=False).fit(Dtr[cat])
+def design3(frame):
+    return np.hstack([frame[num].values, enc3.transform(frame[cat])])
+
+leak3 = mean_absolute_error(yte4, LinearRegression()
+                            .fit(design3(Ctr), ytr4).predict(design3(Cte)))
+fine3 = mean_absolute_error(yte4, LinearRegression()
+                            .fit(design3(Dtr), ytr4).predict(design3(Dte)))
+print("leaked %.4f" % leak3)
+print("honest %.4f" % fine3)
+print("flattered by %.4f mmHg (%.1f%%)"
+      % (fine3 - leak3, 100 * (fine3 - leak3) / fine3))
+```
+
+That one is real, and it is in the direction that gets published: the leaky
+model looks **better**. The imputer used each patient's blood pressure to
+decide what their missing BMI was, so BMI now carries a trace of the answer —
+and the model reads it back out.
+
+Nothing errored. Nothing warned. The only symptom was a better number, which is
+the symptom nobody investigates.
+
+::: {.callout-note appearance="simple"}
+## Why this is the leak that matters
+Compare the three. Leaks 1 and 2 moved a constant into the preprocessing;
+leak 3 moved **the target** into a feature. That is the distinction worth
+carrying: leakage is serious in proportion to how much it tells a feature about
+the thing you are trying to predict.
+:::
+
+------------------------------------------------------------------------
+
+## Task 1 — Put leak 3 inside the pipeline, where it cannot happen
+
+::: {.panel-tabset}
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+knn_numeric = Pipeline([
+    ("impute", KNNImputer(n_neighbors=5)),
+    ("scale", StandardScaler()),
+])
+
+pre_knn = ColumnTransformer([
+    ("num", knn_numeric, ______),
+    ("cat", OneHotEncoder(handle_unknown="ignore", min_frequency=0.07), cat),
+])
+pipe_knn = Pipeline([("pre", pre_knn), ("model", LinearRegression())])
+
+pipe_knn.fit(X_tr, ______)
+print(round(mean_absolute_error(y_te, pipe_knn.predict(X_te)), 4))
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The first blank is the list of numeric column names; the second is the training
+target. Note what you are *not* able to pass: there is no argument that would
+let the imputer see `y_te`.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+knn_numeric = Pipeline([
+    ("impute", KNNImputer(n_neighbors=5)),
+    ("scale", StandardScaler()),
+])
+
+pre_knn = ColumnTransformer([
+    ("num", knn_numeric, num),
+    ("cat", OneHotEncoder(handle_unknown="ignore", min_frequency=0.07), cat),
+])
+pipe_knn = Pipeline([("pre", pre_knn), ("model", LinearRegression())])
+
+pipe_knn.fit(X_tr, y_tr)
+print(round(mean_absolute_error(y_te, pipe_knn.predict(X_te)), 4))
+```
+
+This lands near the honest number from leak 3, not the flattering one. The
+pipeline did not detect the leak or warn about it — it made the leak
+unexpressible, because `fit` receives `X_tr` and `y_tr` as separate arguments
+and the imputer is only ever handed the first.
+:::
+:::
+
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+rec_knn <- recipe(
+  bp_systolic ~ age + bmi + referral_source + hospital_site,
+  data = ______
+) |>
+  step_other(all_nominal_predictors(), threshold = 0.07) |>
+  step_impute_knn(all_numeric_predictors(), neighbors = 5) |>
+  step_dummy(all_nominal_predictors()) |>
+  step_normalize(all_numeric_predictors())
+
+wf_knn <- workflow() |> add_recipe(rec_knn) |> add_model(linear_reg())
+fit_knn <- fit(wf_knn, data = ______)
+
+mean(abs(test$bp_systolic - predict(fit_knn, test)$.pred))
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Both blanks are the same thing. A recipe is told which data defines its
+*structure*, and a workflow is told which data to *fit* on — and in a correct
+analysis those are the same rows.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+rec_knn <- recipe(
+  bp_systolic ~ age + bmi + referral_source + hospital_site,
+  data = train
+) |>
+  step_other(all_nominal_predictors(), threshold = 0.07) |>
+  step_impute_knn(all_numeric_predictors(), neighbors = 5) |>
+  step_dummy(all_nominal_predictors()) |>
+  step_normalize(all_numeric_predictors())
+
+wf_knn <- workflow() |> add_recipe(rec_knn) |> add_model(linear_reg())
+fit_knn <- fit(wf_knn, data = train)
+
+mean(abs(test$bp_systolic - predict(fit_knn, test)$.pred))
+```
+
+The recipe names `bp_systolic` on the left of the formula, so every `step_*`
+knows it is the outcome and no step will use it as a predictor. That is the
+structural reason the leak cannot occur: the role of each column is declared
+once, and respected by everything downstream.
+:::
+:::
+:::
+
+------------------------------------------------------------------------
+
+## Task 2 — The scoreboard
+
+Collect the day's numbers in one table and write the sentence you would put in
+a paper.
+
+::: {.panel-tabset}
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+board = pd.DataFrame({
+    "approach": ["baseline (median)", "honest pipeline",
+                 "leak 1 (scale early)", "leak 2 (impute early)",
+                 "leak 3 (imputer saw target)"],
+    "MAE": [base_py, honest_py, leak1, leak2, ______],
+})
+board["pct_of_baseline"] = (100 * board["MAE"] / ______).round(1)
+board.sort_values("MAE")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The first blank is the leaked MAE from the third demonstration. The second is
+the baseline, so each row is expressed as a percentage of doing nothing.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+board = pd.DataFrame({
+    "approach": ["baseline (median)", "honest pipeline",
+                 "leak 1 (scale early)", "leak 2 (impute early)",
+                 "leak 3 (imputer saw target)"],
+    "MAE": [base_py, honest_py, leak1, leak2, leak3],
+})
+board["pct_of_baseline"] = (100 * board["MAE"] / base_py).round(1)
+board.sort_values("MAE")
+```
+
+The sentence to write is the honest pipeline's number, with the split and the
+baseline named: *predicting systolic pressure from age, BMI and referral
+details, a linear model achieved a mean absolute error of X mmHg on a held-out
+20%, against Y mmHg for predicting the training median.*
+
+The leaky row sits above it and is not reportable, however much better it
+looks.
+:::
+:::
+
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+board <- data.frame(
+  approach = c("baseline (median)", "honest pipeline"),
+  MAE = c(base_r, ______)
+)
+board$pct_of_baseline <- round(100 * board$MAE / base_r, 1)
+board
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The blank is the honest MAE computed from the fitted workflow earlier in this
+chapter.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+board <- data.frame(
+  approach = c("baseline (median)", "honest pipeline"),
+  MAE = c(base_r, honest_r)
+)
+board$pct_of_baseline <- round(100 * board$MAE / base_r, 1)
+board
+```
+:::
+:::
+:::
+
+------------------------------------------------------------------------
+
+## Reflection
+
+1. Recoding three spellings of `GP` was done **before** the split and median
+   imputation **after**. State the rule that separates them in one sentence,
+   without using the words "pipeline" or "leak".
+2. Leak 1 produced a difference of zero. Write the reply you would give a
+   colleague who concludes from this that scaling before splitting is fine.
+3. Leak 3 made the model look better by around half a mmHg. If you had not run
+   the honest version alongside it, what would have told you something was
+   wrong?
+4. The pipeline did not warn you about anything. In what sense, then, did it
+   help — and what class of mistake does it still leave you free to make?
+
+## Stretch
+
+### Stretch 1 — Make leak 1 bite
+Replace `LinearRegression` with `Ridge(alpha=10)` and run leak 1 again, then
+replace `StandardScaler` with `MinMaxScaler` and run it a third time. Report
+which combination produces a measurable difference and explain why, using the
+scaler comparison from @sec-scaling.
+
+### Stretch 2 — How much of this is just the split?
+Every number above rests on one 80/20 split. Re-run the honest pipeline with
+twenty different seeds, collect the MAEs, and report the range. Then look again
+at the size of leak 3 and say whether you would still call it detectable.
+
+### Stretch 3 — Build a leak you cannot see
+Add a feature of your own that leaks — a group mean, a count, a ratio computed
+across the whole table — fit the pipeline, and see whether anyone looking only
+at your code review could spot it.
+
+## What you can and cannot now claim
+
+You can say the whole sequence from raw file to fitted model is expressed as one
+object, that every fitted step inside it is fitted on the training rows only,
+and that the reported error is honest in the specific sense that no quantity
+used to produce it was computed from the rows it was measured on.
+
+You can also say something sharper than "leakage is bad": you have measured
+three leaks and found two of them undetectable and one of them worth half a
+mmHg of false credit, and you know which property distinguished them.
+
+You cannot claim this error estimate is precise. It rests on one split of 137
+rows, 27 of which are in the test set. Stretch 2 asks you to find out how much
+that single number moves when only the seed changes — and the answer is likely
+to be larger than leak 3 was.

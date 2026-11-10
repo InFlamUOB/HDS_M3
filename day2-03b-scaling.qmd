@@ -1,0 +1,598 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 2.5 — Scaling, transformation and features {#sec-scaling}
+
+## Objectives
+
+By the end of this exercise you will be able to:
+
+- put features measured on different scales onto a comparable one, three
+  different ways, and say what each one assumes;
+- predict which scaler an extreme value will damage, and check your prediction;
+- treat the log and the square root as one family rather than two tricks;
+- say what a squared term buys a linear model and why the model is still
+  linear;
+- count the columns a feature-engineering step adds, and say why the count
+  matters.
+
+## Why this, here
+
+@sec-imputation left a complete table. Its three numeric columns are still
+measured in unrelated units: `age` in years, `bmi` in kg/m², `bp_systolic` in
+mmHg. Nothing is wrong with that — but several models behave as though the
+numbers were comparable, and will quietly let the column with the widest range
+dominate.
+
+Everything in this exercise is still a plain function applied to a whole
+column. @sec-pipeline-steps then shows why every single step here is a step
+that has to be *fitted*, and what goes wrong when you fit it at the wrong
+moment.
+
+## Starting point
+
+```{r}
+#| message: false
+#| warning: false
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+
+num_cols <- c("age", "bmi", "bp_systolic")
+
+clinic <- read_csv("data/clinic_extract.csv", show_col_types = FALSE) |>
+  mutate(across(all_of(num_cols), ~ suppressWarnings(as.numeric(.x)))) |>
+  mutate(across(all_of(num_cols), ~ if_else(is.na(.x), median(.x, na.rm = TRUE), .x)))
+
+sapply(clinic[num_cols], range)
+```
+
+```{python}
+#| echo: false
+import pandas as pd, numpy as np
+num_cols = ["age", "bmi", "bp_systolic"]
+clinic = pd.read_csv("data/clinic_extract.csv")
+for c in num_cols:
+    clinic[c] = pd.to_numeric(clinic[c], errors="coerce")
+clinic[num_cols] = clinic[num_cols].fillna(clinic[num_cols].median())
+```
+
+Three columns, three ranges, none of them comparable. `bp_systolic` spans the
+widest numeric distance, and to a model that measures distances — anything
+using a Euclidean distance, and anything regularised — that width is
+indistinguishable from importance.
+
+------------------------------------------------------------------------
+
+## Three scalers
+
+### Min-Max: squeeze into [0, 1]
+
+Subtract the minimum, divide by the range. Every value lands between 0 and 1,
+and the shape of the distribution is untouched.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+from sklearn.preprocessing import (
+    MinMaxScaler,
+    StandardScaler,
+    RobustScaler,
+)
+
+mm = MinMaxScaler()
+X_mm = mm.fit_transform(clinic[num_cols])
+pd.DataFrame(
+    X_mm, columns=num_cols
+).describe().loc[["min", "max"]]
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+minmax <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+X_mm <- clinic |>
+  mutate(across(all_of(num_cols), minmax))
+
+sapply(X_mm[num_cols], range)
+```
+:::
+::::::
+
+### Standard: centre and divide by the standard deviation
+
+Subtract the mean, divide by the standard deviation. Each column now has mean
+0 and standard deviation 1. Values are not bounded — an extreme observation
+stays extreme, which is usually what you want.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+ss = StandardScaler()
+X_ss = ss.fit_transform(clinic[num_cols])
+pd.DataFrame(
+    X_ss, columns=num_cols
+).agg(["mean", "std"]).round(3)
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+X_ss <- clinic |>
+  mutate(across(all_of(num_cols),
+                ~ as.numeric(scale(.x))))
+
+round(rbind(
+  mean = sapply(X_ss[num_cols], mean),
+  sd   = sapply(X_ss[num_cols], sd)
+), 3)
+```
+:::
+::::::
+
+### Robust: use the median and the IQR
+
+Subtract the median, divide by the interquartile range. Both are quantities an
+extreme value barely moves, which is the whole idea.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+rs = RobustScaler()
+X_rs = rs.fit_transform(clinic[num_cols])
+pd.DataFrame(
+    X_rs, columns=num_cols
+).describe().loc[["50%", "max"]].round(2)
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+robust <- function(x) {
+  (x - median(x)) / IQR(x)
+}
+X_rs <- clinic |>
+  mutate(across(all_of(num_cols), robust))
+
+round(rbind(
+  median = sapply(X_rs[num_cols], median),
+  max    = sapply(X_rs[num_cols], max)
+), 2)
+```
+:::
+::::::
+
+## What the one bad value does to each
+
+`bmi` contains a transcription slip: 61.2 where 26.1 was meant. It is a single
+row out of 150. Watch what each scaler does with it.
+
+```{r}
+i <- which.max(clinic$bmi)
+
+data.frame(
+  scaler  = c("Min-Max", "Standard", "Robust"),
+  outlier = c(X_mm$bmi[i], X_ss$bmi[i], X_rs$bmi[i]),
+  median_row = c(median(X_mm$bmi), median(X_ss$bmi), median(X_rs$bmi)),
+  bulk_max_excl_outlier = c(max(X_mm$bmi[-i]), max(X_ss$bmi[-i]), max(X_rs$bmi[-i]))
+) |>
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
+```
+
+Read the last column against the second, and be precise about what you see.
+
+Under **Min-Max** the outlier is pinned at 1 by definition, and because it sets
+the maximum, every other value is divided by a range it inflated. The 149 good
+rows now span 0 to 0.62 — one bad row has taken 38% of the available scale and
+left the real data crowded into the rest. Under **Standard** and **Robust** the
+outlier is not pinned at all: it sits out at roughly 5.8 units in both, which
+is the honest description of a value that far from the centre.
+
+So the three are not as different here as the usual advice implies, because
+this outlier is only moderately extreme. The difference appears when it gets
+worse. The slip was 61.2 in place of 26.1 — suppose a digit had gone in front
+instead:
+
+```{r}
+worse <- clinic$bmi
+worse[i] <- 161.2
+
+rbind(
+  `bulk max, Min-Max`  = c(now = max(minmax(clinic$bmi)[-i]), worse = max(minmax(worse)[-i])),
+  `bulk max, Standard` = c(max(as.numeric(scale(clinic$bmi))[-i]),
+                           max(as.numeric(scale(worse))[-i])),
+  `bulk max, Robust`   = c(max(robust(clinic$bmi)[-i]), max(robust(worse)[-i]))
+) |> round(2)
+```
+
+**Min-Max** collapses: the range it divides by is now set entirely by the bad
+row, so the real data is squeezed towards zero. **Standard** shrinks too, since
+the standard deviation is inflated by the squared distance of that one point.
+**Robust** does not move at all — the median and the interquartile range cannot
+be shifted by a single extreme value, which is the entire reason it exists.
+
+That is the rule worth keeping: Min-Max is the most fragile, Standard is
+affected but less so, and Robust is indifferent.
+
+::: {.callout-note appearance="simple"}
+## The choice is about the column, not the algorithm
+Robust scaling is not uniformly better. If a column has no extreme values,
+Min-Max and Standard give you a bounded or a familiar scale and nothing is
+lost. Reach for Robust when you have looked at the distribution and seen a tail
+— which is why @sec-histograms came first.
+:::
+
+------------------------------------------------------------------------
+
+## Task 1 — Scale, and measure the damage
+
+::: {.panel-tabset}
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+i = clinic["bmi"].______()           # position of the largest bmi
+
+for name, scaler in [("minmax", MinMaxScaler()),
+                     ("standard", StandardScaler()),
+                     ("robust", ______())]:
+    z = scaler.fit_transform(clinic[["bmi"]]).ravel()
+    bulk = np.delete(z, i)
+    print(name, "outlier %.2f  bulk max %.2f" % (z[i], bulk.______()))
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The first blank returns the index of the maximum. The second is the scaler that
+uses the median and IQR. The third is the largest value of the remaining rows.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+i = clinic["bmi"].argmax()
+
+for name, scaler in [("minmax", MinMaxScaler()),
+                     ("standard", StandardScaler()),
+                     ("robust", RobustScaler())]:
+    z = scaler.fit_transform(clinic[["bmi"]]).ravel()
+    bulk = np.delete(z, i)
+    print(name, "outlier %.2f  bulk max %.2f" % (z[i], bulk.max()))
+```
+
+The gap between the outlier and the bulk maximum is the diagnostic. Under
+Min-Max it is enormous; under Robust the bulk keeps its range.
+:::
+:::
+
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+i <- which.max(clinic$bmi)
+
+for (nm in c("minmax", "standard", "robust")) {
+  z <- switch(nm,
+    minmax   = minmax(clinic$bmi),
+    standard = as.numeric(scale(clinic$bmi)),
+    robust   = ______(clinic$bmi)
+  )
+  cat(nm, "outlier", round(z[i], 2),
+      " bulk max", round(max(z[______]), 2), "\n")
+}
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The first blank is the helper defined earlier in this chapter. The second
+excludes one position from a vector — a minus sign does it.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+i <- which.max(clinic$bmi)
+
+for (nm in c("minmax", "standard", "robust")) {
+  z <- switch(nm,
+    minmax   = minmax(clinic$bmi),
+    standard = as.numeric(scale(clinic$bmi)),
+    robust   = robust(clinic$bmi)
+  )
+  cat(nm, "outlier", round(z[i], 2),
+      " bulk max", round(max(z[-i]), 2), "\n")
+}
+```
+:::
+:::
+:::
+
+------------------------------------------------------------------------
+
+## Transformation: changing the shape, not the scale
+
+Scaling moves a distribution and stretches it. It does not change its shape: a
+skewed column scaled three ways is still skewed three ways. Changing the shape
+takes a non-linear function.
+
+Base R has no `skewness()`, so define it once — the third moment over the
+standard deviation cubed:
+
+```{r}
+skewness <- function(x) {
+  x <- x[!is.na(x)]
+  mean((x - mean(x))^3) / mean((x - mean(x))^2)^1.5
+}
+
+cat("bmi skew, as recorded:", round(skewness(clinic$bmi), 2), "\n")
+cat("after square root    :", round(skewness(sqrt(clinic$bmi)), 2), "\n")
+cat("after log            :", round(skewness(log(clinic$bmi)), 2), "\n")
+```
+
+Scaling, for contrast, leaves skewness **exactly** where it was — subtracting a
+constant and dividing by a constant cannot change a shape:
+
+```{r}
+cat("min-max scaled :", round(skewness(minmax(clinic$bmi)), 2), "\n")
+cat("standardised   :", round(skewness(as.numeric(scale(clinic$bmi))), 2), "\n")
+```
+
+### Log and square root are the same idea at different strengths
+
+It is tempting to learn these as separate recipes. They are one family. Raising
+a column to a power $\lambda$ covers all of them: $\lambda = 1$ leaves the data
+alone, $\lambda = 0.5$ is the square root, $\lambda = 0$ is the log, and
+$\lambda = 2$ squares it. Smaller $\lambda$ pulls a long right tail in harder.
+
+```{r}
+#| fig-height: 2.6
+powers <- c("square (2)" = 2, "none (1)" = 1, "sqrt (0.5)" = 0.5, "log (0)" = 0)
+
+purrr::imap_dfr(powers, function(lam, nm) {
+  v <- if (lam == 0) log(clinic$bmi) else clinic$bmi^lam
+  data.frame(label = nm, value = as.numeric(scale(v)))
+}) |>
+  mutate(label = factor(label, levels = names(powers))) |>
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 25) +
+  facet_wrap(~ label, nrow = 1, scales = "free_x") +
+  labs(x = NULL, y = NULL)
+```
+
+Each panel is standardised, so only the shape differs. Read left to right and
+you are turning one dial. Choosing between log and square root is choosing how
+far to turn it — not choosing between two unrelated techniques.
+
+One constraint comes with the family: the log of zero is undefined and the log
+of a negative number does not exist. `bmi` is strictly positive so it is safe
+here, but a column containing zeros — a count of previous admissions, say —
+needs `log1p`, or a transformation built to tolerate zeros.
+
+------------------------------------------------------------------------
+
+## Feature engineering: why would $x^2$ work?
+
+A linear model fits
+
+$$\hat{y} = \beta_0 + \beta_1 x$$
+
+which is a straight line in $x$. If the real relationship bends, a straight
+line cannot follow it. Add a squared column and you fit
+
+$$\hat{y} = \beta_0 + \beta_1 x + \beta_2 x^2$$
+
+which is a curve in $x$ — and still a **linear model**, because "linear" refers
+to the parameters, not the features. $\beta_1$ and $\beta_2$ still enter as
+plain multipliers, so the fitting is the same arithmetic it always was. You
+changed the data, not the algorithm.
+
+Here is the thing it buys, on a relationship that genuinely bends:
+
+```{r}
+#| fig-height: 2.8
+set.seed(7)
+d <- data.frame(x = runif(120, -3, 3))
+d$y <- 2 + 0.5 * d$x + 1.2 * d$x^2 + rnorm(120, 0, 1.5)
+
+straight <- lm(y ~ x, data = d)
+curved   <- lm(y ~ x + I(x^2), data = d)
+
+cat("straight line, residual SD:", round(sigma(straight), 2), "\n")
+cat("with x squared,            ", round(sigma(curved), 2), "\n")
+
+d |>
+  mutate(straight = fitted(straight), curved = fitted(curved)) |>
+  pivot_longer(c(straight, curved), names_to = "model", values_to = "fit") |>
+  ggplot(aes(x = x)) +
+  geom_point(aes(y = y), alpha = 0.4, size = 1) +
+  geom_line(aes(y = fit, colour = model), linewidth = 0.9) +
+  labs(x = "x", y = "y", colour = NULL)
+```
+
+The straight line is not wrong so much as unable. It has no parameter capable
+of representing curvature, so it averages the bend away and leaves it in the
+residuals.
+
+### What it costs
+
+```{python}
+from sklearn.preprocessing import PolynomialFeatures
+
+pf = PolynomialFeatures(degree=2, include_bias=False)
+wide = pf.fit_transform(clinic[num_cols])
+print("columns:", len(num_cols), "->", wide.shape[1])
+print(pf.get_feature_names_out(num_cols))
+```
+
+Three columns became nine: each original, each square, and each pairwise
+product. At degree 2 that is manageable. The growth is quadratic in the number
+of features, so the same step on 30 columns gives 495, most of them nearly
+duplicates of each other — and every one is a column that can be fitted on the
+wrong rows.
+
+------------------------------------------------------------------------
+
+## Task 2 — Add a term and check it earns its place
+
+::: {.panel-tabset}
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+m1 <- lm(bp_systolic ~ age, data = clinic)
+m2 <- lm(bp_systolic ~ age + I(age^______), data = clinic)
+
+cat("residual SD, straight:", round(sigma(m1), 3), "\n")
+cat("residual SD, squared :", round(sigma(______), 3), "\n")
+cat("p-value on the squared term:",
+    round(summary(m2)$coefficients["I(age^2)", "Pr(>|t|)"], 3), "\n")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The first blank is the power. The second is the model you just fitted. `I()`
+is what stops the formula interpreting `^` as an interaction.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+m1 <- lm(bp_systolic ~ age, data = clinic)
+m2 <- lm(bp_systolic ~ age + I(age^2), data = clinic)
+
+cat("residual SD, straight:", round(sigma(m1), 3), "\n")
+cat("residual SD, squared :", round(sigma(m2), 3), "\n")
+cat("p-value on the squared term:",
+    round(summary(m2)$coefficients["I(age^2)", "Pr(>|t|)"], 3), "\n")
+```
+
+This is the useful negative result. The squared term barely moves the residual
+spread and its p-value is nowhere near significant, because this data was
+simulated with a straight-line relationship between age and blood pressure.
+Adding $x^2$ does not create curvature; it only lets you fit curvature that is
+there. Compare with the simulated bending example above, where it was.
+:::
+:::
+
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+from sklearn.linear_model import LinearRegression
+
+X1 = clinic[["age"]].values
+X2 = np.column_stack([clinic["age"], clinic["age"] ** ______])
+y = clinic["bp_systolic"].values
+
+for name, X in [("straight", X1), ("squared", X2)]:
+    pred = LinearRegression().fit(X, y).predict(X)
+    rmse = np.sqrt(((y - pred) ** 2).______())
+    print(name, round(rmse, 3))
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The first blank is the power; the second is the method that averages the
+squared residuals before the square root is taken.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+from sklearn.linear_model import LinearRegression
+
+X1 = clinic[["age"]].values
+X2 = np.column_stack([clinic["age"], clinic["age"] ** 2])
+y = clinic["bp_systolic"].values
+
+for name, X in [("straight", X1), ("squared", X2)]:
+    pred = LinearRegression().fit(X, y).predict(X)
+    rmse = np.sqrt(((y - pred) ** 2).mean())
+    print(name, round(rmse, 3))
+```
+
+Note that this measures fit on the *same* rows the model was fitted to, so the
+squared version cannot score worse — an extra parameter never increases
+training error. That is why the R version's p-value is the more informative
+answer, and why @sec-pipeline-steps insists on a held-out split.
+:::
+:::
+:::
+
+------------------------------------------------------------------------
+
+## Reflection
+
+1. Min-Max compressed the whole `bmi` column because one value set the maximum.
+   Which of the three scalers would you choose for a variable where the extreme
+   values are real and clinically important, and why?
+2. Standardising a column makes its mean 0 and its standard deviation 1. Does
+   it make the column normally distributed? Justify your answer using the
+   skewness numbers above.
+3. The squared term helped on simulated curved data and not on `age`. What does
+   that tell you about adding polynomial terms as a routine step?
+4. Degree-2 polynomial features took 3 columns to 9. At what point does that
+   stop being a feature-engineering step and start being a problem, and what
+   would you look at to decide?
+
+## Stretch
+
+### Stretch 1 — Find the turning power yourself
+Write a loop over $\lambda$ from $-1$ to $2$ in steps of $0.25$, compute the
+skewness of `bmi` raised to each power (using the log at $\lambda = 0$), and
+plot skewness against $\lambda$. Read the value that brings it closest to zero
+off your own plot. You have just performed a Box-Cox transformation by hand.
+
+### Stretch 2 — Scaling where it changes an answer
+Fit a k-nearest-neighbours classifier for `outcome` on the three numeric
+columns, once unscaled and once standardised, and compare. Then explain the
+difference in terms of what a Euclidean distance does when one column is
+measured in hundreds and another in tens.
+
+## What you can and cannot now claim
+
+You can say the features are on comparable scales, that you chose the scaler
+having looked at the distribution rather than by habit, that you know what the
+one bad `bmi` value does to each option, and that you can add a polynomial term
+and test whether it earned its place.
+
+You cannot claim any of these numbers would survive contact with new data. Every
+minimum, maximum, mean, standard deviation, median and IQR above was computed
+from all 150 rows — including the rows you are about to hold out and call a
+test set. Each one is a quantity *learned from data*, and learning it from the
+wrong rows is the subject of @sec-pipeline-steps.
