@@ -6,7 +6,7 @@ engine: knitr
 
 # Exercise 2.2 — Correlation and missingness {#sec-correlation-missing}
 
-Again, this practical is also in R. This is an example of the great amount of resources available in open-source programming languages (will also be able to find similar things in Python), where new packages are developed and made available constantly. As key insight, explore, probably what you need is already out there for you to use!
+This is an example of the great amount of resources available in open-source programming languages, where new packages are developed and made available constantly. As key insight, explore, probably what you need is already out there for you to use!
 
 ------------------------------------------------------------------------
 
@@ -61,7 +61,7 @@ Now we are going to produce the correlation matrix, where in a go, you get insig
 data <- mtcars[, c("mpg", "disp", "hp", "wt")]
 ```
 
-Can you calculate the correlation between them? Try out at least a pair.Remember there are different ways in which to calculate correlation <https://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r> and you can specify the type in your code `cor(x, y, method = c("pearson", "kendall", "spearman"))`
+Can you calculate the correlation between them? Try out at least a pair of functions/packages. Remember there are different ways in which to calculate correlation <https://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r> and you can specify the type in your code `cor(x, y, method = c("pearson", "kendall", "spearman"))`
 
 ```{r}
 
@@ -200,17 +200,6 @@ same table.
    correlations, up for pairs that share a missingness pattern and down for
    pairs that do not — and nothing in the output marks which is which.
 :::
-
-::: {.callout-note appearance="simple"}
-## `NA` is not a worse answer than a number
-Students often resist this step because the dataset "gets smaller". It does not
-get smaller; it stops lying. A mean over 363 measured insulins is an estimate of
-something. A mean over 768 values of which 405 are a clerical convention is an
-estimate of nothing, and it will not announce itself as one.
-:::
-
-Which is why the second half of this practical is about seeing the holes.
-
 ------------------------------------------------------------------------
 
 ## Missing pipelines
@@ -227,7 +216,7 @@ library(ggplot2)
 library(mice)
 ```
 
-Here I will be using the `airquality` dataset (available as default in all R) but everything would be ready for you to introduce your own dataset in a future.
+Here I will be using the `airquality` dataset (available as default in all R) but can rerun using your own dataset in a future.
 
 ```{r}
 summary(airquality)
@@ -312,91 +301,7 @@ missing_pattern(YourDataset)
 Final, very clear overview of patterns per variable. Spend a moment trying to understand these values. This function works great with big datasets too, although sometimes it gets a bit busy with lots of numbers.
 
 
-Open up your three newly created pdfs!
-
-::: {.callout-tip appearance="simple"}
-The two `pdf()` blocks are set not to run when the booklet is built, so that it
-does not litter the repository. Run them yourself — that is the point of them.
-:::
-
-### Naming what you are looking at
-
-The three plots above describe a *pattern*. The word for why the pattern exists
-is a *mechanism*, and there are three:
-
-- **MCAR**, missing completely at random: the holes are unrelated to anything,
-  observed or not. Dropping incomplete rows is safe and only costs you power.
-- **MAR**, missing at random: the holes depend on things you *did* record — a
-  test ordered only for patients over 60. Imputation from the other columns is
-  reasonable, because the information needed is present.
-- **MNAR**, missing not at random: the holes depend on the unrecorded value
-  itself — a weight absent because the patient could not stand. No amount of
-  imputation recovers this, and nothing in the data will tell you it is
-  happening.
-
-You cannot test which one you have. The diagnosis comes from knowing how the
-data was collected, which is why "ask whoever collected it" is a methods step
-and not an excuse.
-
-Two things worth noticing in what you have just plotted:
-
-1. In `airquality`, `Ozone` is missing far more often than `Solar.R`, and the
-   two are sometimes missing together — a bundle, the signature of a process
-   that skips several measurements at once.
-2. In the diabetes file in the first half, every missing `triceps` was also a
-   missing `insulin`. That nesting is what a real process looks like: tests are
-   ordered in bundles, bundles are skipped together, and the patients they are
-   skipped for are not a random sample. **No clinic produces missingness
-   completely at random.**
-
-### Filling the holes, and measuring what you changed
-
-Describing the pattern comes first, because the pattern decides whether filling
-the holes is reasonable at all. The simplest fill is the median of the observed
-values; the honest habit is to measure what it did to the spread.
-
-```{r}
-#| message: false
-aq <- airquality
-
-aq_median <- aq |>
-  mutate(across(everything(), ~ ifelse(is.na(.x), median(.x, na.rm = TRUE), .x)))
-
-c(observed_sd = sd(aq$Ozone, na.rm = TRUE),
-  median_imputed_sd = sd(aq_median$Ozone))
-```
-
-The standard deviation falls, because every filled value sits exactly at the
-centre. You have not recovered 37 ozone readings; you have added 37 copies of
-the median and told the model they are measurements.
-
-`mice` (multivariate imputation by chained equations) fills each gap by
-predicting it from the other columns, and does the whole thing several times so
-that downstream estimates can carry the uncertainty. One complete frame from it
-is still a guess, but it is a guess that respects the relationships between
-columns rather than flattening them.
-
-```{r}
-#| message: false
-imp <- mice(aq, m = 5, printFlag = FALSE, seed = 1)
-ozone_imp <- complete(imp, 1)$Ozone
-
-c(observed_sd = sd(aq$Ozone, na.rm = TRUE),
-  median_imputed_sd = sd(aq_median$Ozone),
-  mice_sd = sd(ozone_imp))
-```
-
-Use the version of this you can defend. On a file with 10% missing and a
-single-value imputation, say so in the methods; on anything important, use
-multiple imputation and say that.
-
-::: {.callout-warning}
-## The one rule that outranks the method
-Whatever you fill with, compute it on the training rows only. A median taken
-over the whole file before splitting has already carried information from the
-test rows into the training ones, and the score you report afterwards is
-flattered by it. That is the subject of @sec-leakage.
-:::
+Open up your three newly created pdfs! (remember to uncomment the pdf() lines)
 
 ------------------------------------------------------------------------
 ## The same steps in Python
@@ -479,31 +384,3 @@ pattern = (heart.isna()
 print(pattern)
 ```
 
-Median imputation, and what it did to the spread:
-
-```{python}
-from sklearn.impute import SimpleImputer
-
-num = heart.select_dtypes("number")
-filled = pd.DataFrame(SimpleImputer(strategy="median").fit_transform(num),
-                      columns=num.columns)
-
-print(num["chol"].std(), filled["chol"].std())
-```
-
-`IterativeImputer` is the closest thing to `mice`: it predicts each column from
-the others in turn. It is still experimental, so it has to be switched on.
-
-```{python}
-from sklearn.experimental import enable_iterative_imputer  # noqa: F401
-from sklearn.impute import IterativeImputer
-
-iter_filled = pd.DataFrame(
-    IterativeImputer(random_state=1, max_iter=10).fit_transform(num),
-    columns=num.columns)
-
-print(num["chol"].std(), filled["chol"].std(), iter_filled["chol"].std())
-```
-
-The same rule applies: fit the imputer on the training rows and `transform` the
-test rows with it, never `fit_transform` on the whole file.
