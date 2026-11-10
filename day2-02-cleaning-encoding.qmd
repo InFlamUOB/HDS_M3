@@ -1,0 +1,734 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 2.3 — Cleaning and encoding {#sec-cleaning}
+
+## Objectives
+
+By the end of this exercise you will be able to:
+
+- read a file and notice that two of its numeric columns arrived as text, and
+  say why;
+- convert inconsistent missing-value codes into real missing values;
+- recognise one category recorded under three different spellings, and merge
+  them;
+- group a rare category into `Other`, and say what breaks if you do not;
+- one-hot encode a categorical variable, count the columns it produces, and
+  compare it with frequency encoding;
+- state what happens when a category appears at prediction time that was never
+  in the training data.
+
+## Why this, here
+
+Exercises 2.1 and 2.2 looked at distributions and at missingness in data that
+was already numeric and already tidy. Real extracts are not. They arrive with
+free-text categories typed by different people, with missing values recorded
+three different ways in three different columns, and with columns that look
+numeric until you try to take a mean.
+
+This exercise and the three that follow all use **one small file**, so that
+each exercise inherits the previous one's output. Nothing here uses a pipeline
+or a recipe: every step is a plain function call, applied in the obvious order,
+so that you can see what each one does. Exercise 2.6 then rebuilds the whole
+sequence as a pipeline, and the comparison is the point.
+
+## The extract
+
+`clinic_extract.csv` is 150 rows, one per patient, with a binary `outcome`. It
+is small deliberately — small enough that you can print the whole thing and
+find the problems by eye before writing any code to find them.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+import pandas as pd
+import numpy as np
+
+clinic = pd.read_csv(
+    "data/clinic_extract.csv"
+)
+clinic.shape
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+#| message: false
+#| warning: false
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+
+clinic <- read_csv(
+  "data/clinic_extract.csv",
+  show_col_types = FALSE
+)
+dim(clinic)
+```
+:::
+::::::
+
+### 1) Look at the column types first
+
+Before any statistics, ask what type each column came in as. This is the step
+that is almost always skipped.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+clinic.dtypes
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+sapply(clinic, class)
+```
+:::
+::::::
+
+`age` and `bmi` are **text**, not numbers. `bp_systolic` is a number. All three
+have missing values — the difference is only in how the missingness was
+written down. An empty cell is understood by both languages as missing; the
+strings `unknown` and `?` are not, so the whole column becomes text to
+accommodate them.
+
+Try to take a mean of it, and the two languages fail in different ways. Run
+both — the difference matters more than either message.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+#| error: true
+clinic["bmi"].mean()
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+mean(clinic$bmi)
+```
+:::
+::::::
+
+Python **raises** and stops. R **warns** and hands back `NA`, which a script
+will happily carry into the next calculation and the one after that. The loud
+failure is the safer one. If you work in R, this is the argument for reading
+warnings rather than scrolling past them.
+
+### 2) Find out how missingness was recorded
+
+Count the distinct non-numeric values in each suspect column rather than
+assuming you know which codes are in use.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+for col in ["age", "bmi", "bp_systolic"]:
+    v = pd.to_numeric(
+        clinic[col], errors="coerce"
+    )
+    bad = clinic[col][v.isna()]
+    print(col, dict(
+        bad.fillna("<empty>")
+           .value_counts()
+    ))
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+for (col in c("age", "bmi", "bp_systolic")) {
+  v <- suppressWarnings(
+    as.numeric(clinic[[col]])
+  )
+  bad <- clinic[[col]][is.na(v)]
+  bad[is.na(bad)] <- "<empty>"
+  cat(col, ":", "\n")
+  print(table(bad))
+}
+```
+:::
+::::::
+
+Three columns, three conventions: `unknown`, `?`, and an empty cell. That is
+not unusual — it usually means three people, or three systems, contributed to
+the same table.
+
+### 3) Convert the codes into real missing values
+
+`to_numeric(errors="coerce")` and `as.numeric()` both turn anything they cannot
+parse into a proper missing value. That is exactly what you want here, but only
+because you have just checked what the unparseable values are. Coercing
+blindly would silently destroy a column recorded in, say, `12,5` decimal-comma
+format.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+num_cols = ["age", "bmi", "bp_systolic"]
+for c in num_cols:
+    clinic[c] = pd.to_numeric(
+        clinic[c], errors="coerce"
+    )
+clinic[num_cols].isna().sum()
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+num_cols <- c("age", "bmi", "bp_systolic")
+clinic <- clinic |>
+  mutate(across(
+    all_of(num_cols),
+    ~ suppressWarnings(as.numeric(.x))
+  ))
+colSums(is.na(clinic[num_cols]))
+```
+:::
+::::::
+
+Now a mean works, and `bmi` can be plotted. Keep that count of missing values
+in mind — Exercise 2.4 is about what to do with them.
+
+### 4) One category, three spellings
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+clinic["referral_source"].value_counts()
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+table(clinic$referral_source)
+```
+:::
+::::::
+
+Five categories are reported. There are really three: `GP`, `gp` and
+`General Practitioner` are one referral source typed by three different people.
+Left alone, one-hot encoding would spend three columns on it and split its
+effect three ways, so each fragment looks weaker than the source really is.
+
+The repair is a lookup from the messy value to the intended one. Write it
+explicitly rather than lower-casing and hoping — lower-casing fixes `gp` but
+not `General Practitioner`.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+ref_map = {
+    "GP": "GP",
+    "gp": "GP",
+    "General Practitioner": "GP",
+    "A&E": "A&E",
+    "Self-referral": "Self-referral",
+}
+clinic["referral_source"] = (
+    clinic["referral_source"].map(ref_map)
+)
+clinic["referral_source"].value_counts()
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+clinic <- clinic |>
+  mutate(referral_source = recode(
+    referral_source,
+    "gp" = "GP",
+    "General Practitioner" = "GP"
+  ))
+table(clinic$referral_source)
+```
+:::
+::::::
+
+### 5) A rare category
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+clinic["hospital_site"].value_counts()
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+sort(table(clinic$hospital_site),
+     decreasing = TRUE)
+```
+:::
+::::::
+
+One site has only a handful of patients. Keep it as its own category and you
+get a column that is almost all zeros, estimated from those few rows — and if
+an 80/20 split happens to put all of them on one side, the column is constant
+in training and meaningless in test.
+
+Grouping it into `Other` is the usual repair. Note what the threshold is doing:
+it is a judgement about how many rows you need before you are willing to
+estimate an effect, not a fact about the data.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+counts = clinic["hospital_site"].value_counts()
+rare = counts[counts < 10].index
+clinic["hospital_site"] = (
+    clinic["hospital_site"]
+    .where(~clinic["hospital_site"].isin(rare),
+           "Other")
+)
+clinic["hospital_site"].value_counts()
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+counts <- table(clinic$hospital_site)
+rare <- names(counts[counts < 10])
+clinic <- clinic |>
+  mutate(hospital_site = if_else(
+    hospital_site %in% rare,
+    "Other", hospital_site
+  ))
+sort(table(clinic$hospital_site),
+     decreasing = TRUE)
+```
+:::
+::::::
+
+### 6) A column that says almost nothing
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+print(clinic["consented"].value_counts())
+print(
+    clinic["consented"]
+    .eq("Y").astype(float).var()
+)
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+print(table(clinic$consented))
+var(as.numeric(clinic$consented == "Y"))
+```
+:::
+::::::
+
+Nearly every row takes the same value, so its variance is close to zero. A
+near-constant column cannot help a model separate one patient from another:
+there is almost nothing to separate them by.
+
+Note the word *almost*. Low variance is not the same as unimportance — a flag
+that is rare but decisive, such as a positive result on a confirmatory test,
+has low variance and high value. The right question is whether the handful of
+rows that differ are rows you care about, not whether the variance clears a
+threshold.
+
+------------------------------------------------------------------------
+
+## Task 1 — Clean the categories
+
+Starting from the raw file again, repair both categorical columns in one pass.
+
+::: {.panel-tabset}
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+raw = pd.read_csv("data/clinic_extract.csv")
+
+raw["referral_source"] = raw["referral_source"].______(ref_map)
+
+counts = raw["hospital_site"].______()
+rare = counts[counts < ______].index
+raw["hospital_site"] = raw["hospital_site"].where(
+    ~raw["hospital_site"].isin(rare), "______"
+)
+
+print(raw["referral_source"].nunique())   # expect 3
+print(raw["hospital_site"].nunique())     # expect 6
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The first blank is the method that replaces each value using a dictionary. The
+second returns the frequency of each category. The threshold is the one used
+above, and the last blank is the label everything rare is folded into.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+raw = pd.read_csv("data/clinic_extract.csv")
+
+raw["referral_source"] = raw["referral_source"].map(ref_map)
+
+counts = raw["hospital_site"].value_counts()
+rare = counts[counts < 10].index
+raw["hospital_site"] = raw["hospital_site"].where(
+    ~raw["hospital_site"].isin(rare), "Other"
+)
+
+print(raw["referral_source"].nunique())
+print(raw["hospital_site"].nunique())
+```
+:::
+:::
+
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+raw <- read_csv("data/clinic_extract.csv", show_col_types = FALSE)
+
+raw <- raw |>
+  mutate(referral_source = recode(referral_source,
+                                  "gp" = "______",
+                                  "General Practitioner" = "______"))
+
+counts <- table(raw$hospital_site)
+rare <- names(counts[counts < ______])
+raw <- raw |>
+  mutate(hospital_site = if_else(hospital_site %in% rare, "______", hospital_site))
+
+n_distinct(raw$referral_source)   # expect 3
+n_distinct(raw$hospital_site)     # expect 6
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`recode()` maps old value to new, so both of the first two blanks are the value
+you want them to become. The threshold and the fold-everything-else-into label
+are the same two used above.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+raw <- read_csv("data/clinic_extract.csv", show_col_types = FALSE)
+
+raw <- raw |>
+  mutate(referral_source = recode(referral_source,
+                                  "gp" = "GP",
+                                  "General Practitioner" = "GP"))
+
+counts <- table(raw$hospital_site)
+rare <- names(counts[counts < 10])
+raw <- raw |>
+  mutate(hospital_site = if_else(hospital_site %in% rare, "Other", hospital_site))
+
+n_distinct(raw$referral_source)
+n_distinct(raw$hospital_site)
+```
+:::
+:::
+:::
+
+------------------------------------------------------------------------
+
+## Encoding: turning categories into columns
+
+A model takes numbers. `GP` is not a number, and encoding it as 1, `A&E` as 2
+and `Self-referral` as 3 would assert that `Self-referral` is three times
+whatever `GP` is, and that `A&E` sits exactly between them. One-hot encoding
+avoids that by giving each category its own 0/1 column.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+enc = pd.get_dummies(
+    clinic[["referral_source",
+            "hospital_site"]],
+    dtype=int
+)
+print(enc.shape)
+enc.head(3)
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+enc <- model.matrix(
+  ~ referral_source + hospital_site - 1,
+  data = clinic
+)
+print(dim(enc))
+head(enc, 3)
+```
+:::
+::::::
+
+Two columns became several. Count them: that is the cost of one-hot encoding,
+and it grows with the number of categories, not with the number of rows.
+
+### Frequency encoding, for comparison
+
+When a variable has many categories, one column each becomes unwieldy.
+Frequency encoding replaces each category with how often it occurs — one
+column instead of many.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+freq = clinic["hospital_site"].map(
+    clinic["hospital_site"]
+    .value_counts(normalize=True)
+)
+freq.head(5)
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+p <- prop.table(table(clinic$hospital_site))
+freq <- unname(p[clinic$hospital_site])
+head(freq, 5)
+```
+:::
+::::::
+
+It is compact, and it throws information away: two sites of equal size become
+the same number, indistinguishable from each other. Use it when cardinality
+makes one-hot impractical, and know what you traded.
+
+### The category you have never seen
+
+Encoders learn their categories from the data they are fitted to. A site that
+appears for the first time after the model is deployed is not in that list, and
+the encoder has no column for it. Depending on the setting it will error, or
+quietly produce a row of zeros — a patient who appears to be at no site at all.
+
+This is the first hint of the problem Exercise 2.6 is about: **the encoder is
+fitted**. It has learnt something from the data, which means it matters
+enormously *which* data it learnt from.
+
+------------------------------------------------------------------------
+
+## Task 2 — Encode, and count the cost
+
+::: {.panel-tabset}
+## Python
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+before = clinic[["referral_source", "hospital_site"]].shape[1]
+after = pd.get_dummies(
+    clinic[["referral_source", "hospital_site"]], dtype=______
+).shape[1]
+
+print(before, "->", after)
+print(clinic["referral_source"].nunique()
+      + clinic["hospital_site"].______())   # should equal `after`
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The first blank makes the 0/1 columns integers rather than booleans. The second
+is the method counting distinct categories — one column per category, so the
+totals must agree.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+before = clinic[["referral_source", "hospital_site"]].shape[1]
+after = pd.get_dummies(
+    clinic[["referral_source", "hospital_site"]], dtype=int
+).shape[1]
+
+print(before, "->", after)
+print(clinic["referral_source"].nunique()
+      + clinic["hospital_site"].nunique())
+```
+
+Two columns become nine, one per category across the two variables. Nothing is
+lost and nothing is implied about ordering; the cost is paid in width.
+:::
+:::
+
+## R
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+before <- 2
+after <- ncol(model.matrix(~ referral_source + hospital_site - ______,
+                           data = clinic))
+
+cat(before, "->", after, "\n")
+cat(n_distinct(clinic$referral_source) + n_distinct(clinic$______), "\n")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The `- 1` in the formula is what suppresses the intercept and so gives one
+column per category rather than one fewer. The last blank is the other
+categorical column.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+before <- 2
+after <- ncol(model.matrix(~ referral_source + hospital_site - 1,
+                           data = clinic))
+
+cat(before, "->", after, "\n")
+cat(n_distinct(clinic$referral_source) + n_distinct(clinic$hospital_site), "\n")
+```
+
+Two columns become nine, one per category across the two variables. Drop the
+`- 1` and you get eight: with an intercept in the model, one category per
+variable is absorbed into it as the reference level.
+:::
+:::
+:::
+
+------------------------------------------------------------------------
+
+## Reflection
+
+1. `age` and `bmi` arrived as text and `bp_systolic` did not, although all
+   three had missing values. What would you add to your own loading code to
+   catch this on a file you have never seen?
+2. Merging three spellings of `GP` raised its count. Which direction does that
+   move a coefficient estimated on it, and why?
+3. You set the rare-category threshold at 10. On what grounds would you argue
+   for 5, or for 25? What is the threshold really a statement about?
+4. Frequency encoding gave one column where one-hot gave six. Name a question
+   you could answer with the one-hot version and not with the frequency
+   version.
+
+## Stretch
+
+### Stretch 1 — Find the defects without being told
+Reload the raw file and, without looking back at this chapter, write the
+shortest piece of code you can that flags every column needing attention:
+columns typed as text that should be numeric, categories differing only by case
+or spacing, and columns whose most common value covers more than 95% of rows.
+
+### Stretch 2 — The unseen category, for real
+Split the cleaned data 80/20. Fit `get_dummies` or `model.matrix` on the
+training rows only, then try to apply the same encoding to the test rows.
+Engineer the failure: arrange a split where a category present in test is
+absent from training, and record exactly what each language does about it.
+
+## What you can and cannot now claim
+
+You can say the extract has been cleaned: the missing-value codes are real
+missing values, one referral source is recorded once rather than three times,
+the rare site is grouped, and the categorical columns are encoded as numbers a
+model can take.
+
+You cannot yet say anything about the missing values themselves. They are
+still missing — 33 of the 150 rows have at least one gap, and every step you
+have taken so far has left them exactly as they were. That is
+@sec-imputation.
+
+You also cannot claim any of this was done safely. Every repair above used the
+whole dataset: the rare-category threshold, the frequency encoding and the list
+of known categories were all computed from all 150 rows, including the rows you
+will later hold out to test on. That is the subject of @sec-pipeline-steps.
