@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>4&nbsp; Exercise 2.2 — Correlation and missingness – Statistical Machine Learning &amp; Data Analytics</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./day2-03-transforming.html" rel="next">
+<link href="./day2-00-histograms-boxplots.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-68d006cd884444a66203cf37d1af94b0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+</head>
+
+<body class="nav-sidebar docked quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./day2-00-histograms-boxplots.html">Day 2 — EDA and Data Wrangling</a></li><li class="breadcrumb-item"><a href="./day2-01-correlation-missingness.html"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Exercise 2.2 — Correlation and missingness</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation docked overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Statistical Machine Learning &amp; Data Analytics</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">How to use this booklet</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Day 1 — Introduction</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day1-01a-PythonvsR.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Exercise 1.1 — Python vs R</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day1-02-first-pipeline.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Exercise 1.2 — Your first ML pipeline</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Day 2 — EDA and Data Wrangling</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day2-00-histograms-boxplots.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Exercise 2.1 — Histograms and boxplots</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day2-01-correlation-missingness.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Exercise 2.2 — Correlation and missingness</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day2-03-transforming.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Exercise 2.3 — Transforming</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day2-04-leakage.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Exercise 2.4 — Leakage</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day2-05-resampling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Exercise 2.5 — One split is not an estimate</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#correlation" id="toc-correlation" class="nav-link active" data-scroll-target="#correlation"><span class="header-section-number">4.1</span> Correlation</a>
+  <ul class="collapse">
+  <li><a href="#corrplot-correlation-matrix" id="toc-corrplot-correlation-matrix" class="nav-link" data-scroll-target="#corrplot-correlation-matrix">—–corrplot Correlation Matrix —–</a></li>
+  <li><a href="#corrplot-correlation-matrix-1" id="toc-corrplot-correlation-matrix-1" class="nav-link" data-scroll-target="#corrplot-correlation-matrix-1">—–corrplot Correlation Matrix —–</a></li>
+  <li><a href="#performanceanalytics-pairwise-correlation-plot" id="toc-performanceanalytics-pairwise-correlation-plot" class="nav-link" data-scroll-target="#performanceanalytics-pairwise-correlation-plot">—–PerformanceAnalytics Pairwise Correlation Plot —–</a></li>
+  </ul></li>
+  <li><a href="#what-a-correlation-does-with-values-that-are-not-real" id="toc-what-a-correlation-does-with-values-that-are-not-real" class="nav-link" data-scroll-target="#what-a-correlation-does-with-values-that-are-not-real"><span class="header-section-number">4.2</span> What a correlation does with values that are not real</a></li>
+  <li><a href="#missing-pipelines" id="toc-missing-pipelines" class="nav-link" data-scroll-target="#missing-pipelines"><span class="header-section-number">4.3</span> Missing pipelines</a>
+  <ul class="collapse">
+  <li><a href="#plot-1" id="toc-plot-1" class="nav-link" data-scroll-target="#plot-1">Plot 1</a></li>
+  <li><a href="#plot-2" id="toc-plot-2" class="nav-link" data-scroll-target="#plot-2">Plot 2</a></li>
+  <li><a href="#plot-3" id="toc-plot-3" class="nav-link" data-scroll-target="#plot-3">Plot 3</a></li>
+  <li><a href="#naming-what-you-are-looking-at" id="toc-naming-what-you-are-looking-at" class="nav-link" data-scroll-target="#naming-what-you-are-looking-at">Naming what you are looking at</a></li>
+  <li><a href="#filling-the-holes-and-measuring-what-you-changed" id="toc-filling-the-holes-and-measuring-what-you-changed" class="nav-link" data-scroll-target="#filling-the-holes-and-measuring-what-you-changed">Filling the holes, and measuring what you changed</a></li>
+  </ul></li>
+  <li><a href="#the-same-steps-in-python" id="toc-the-same-steps-in-python" class="nav-link" data-scroll-target="#the-same-steps-in-python"><span class="header-section-number">4.4</span> The same steps in Python</a>
+  <ul class="collapse">
+  <li><a href="#correlation-1" id="toc-correlation-1" class="nav-link" data-scroll-target="#correlation-1">Correlation</a></li>
+  <li><a href="#missingness" id="toc-missingness" class="nav-link" data-scroll-target="#missingness">Missingness</a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./day2-00-histograms-boxplots.html">Day 2 — EDA and Data Wrangling</a></li><li class="breadcrumb-item"><a href="./day2-01-correlation-missingness.html"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Exercise 2.2 — Correlation and missingness</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span id="sec-correlation-missing" class="quarto-section-identifier"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Exercise 2.2 — Correlation and missingness</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>Again, this practical is also in R. This is an example of the great amount of resources available in open-source programming languages (will also be able to find similar things in Python), where new packages are developed and made available constantly. As key insight, explore, probably what you need is already out there for you to use!</p>
+<hr>
+<section id="correlation" class="level2" data-number="4.1">
+<h2 data-number="4.1" class="anchored" data-anchor-id="correlation"><span class="header-section-number">4.1</span> Correlation</h2>
+<p>For you to see the breadth of possibilities out there, here is an example of different ways in which to describe and learn about the correlation matrix of your dataset.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Install required libraries (if not already installed)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">#install.packages(c("ggplot2", "corrplot", "ggcorrplot", </span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">#"PerformanceAnalytics", "GGally", "psych", "corrr"))</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Load necessary libraries</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(corrplot)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggcorrplot)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(PerformanceAnalytics)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(GGally)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(psych)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(corrr)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>To assess the association between two variables, you can produce a scatter plot like below:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(<span class="dv">100</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>y <span class="ot">&lt;-</span> x <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">100</span>, <span class="at">sd =</span> <span class="fl">0.5</span>)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="at">data =</span> <span class="fu">data.frame</span>(x, y), <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> y)) <span class="sc">+</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">color =</span> <span class="st">"blue"</span>, <span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">se =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Correlation Plot with ggplot2"</span>,</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"X values"</span>, <span class="at">y =</span> <span class="st">"Y values"</span>) <span class="sc">+</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-3-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Now we are going to produce the correlation matrix, where in a go, you get insight of all the association happening in your dataset.For this we are going to use the mtcars data (A built-in dataset that contains measurements on 11 different attributes for 32 different cars). More specifically, the chosen variables are:</p>
+<ul>
+<li><p>mpg (Miles per Gallon): Represents the fuel efficiency of the car. Higher values, better efficiency.</p></li>
+<li><p>disp (Displacement): Represents the engine displacement, which is the total volume of all the cylinders in the engine.</p></li>
+<li><p>hp (Horsepower): Represents the power output of the car’s engine.</p></li>
+<li><p>wt (Weight): Represents the weight of the car.</p></li>
+</ul>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> mtcars[, <span class="fu">c</span>(<span class="st">"mpg"</span>, <span class="st">"disp"</span>, <span class="st">"hp"</span>, <span class="st">"wt"</span>)]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Can you calculate the correlation between them? Try out at least a pair.Remember there are different ways in which to calculate correlation <a href="https://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r" class="uri">https://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r</a> and you can specify the type in your code <code>cor(x, y, method = c("pearson", "kendall", "spearman"))</code></p>
+<p>Now that you know what to expect, lets proceed with the correlation matrices (same thing as above, but all in a go!):</p>
+<section id="corrplot-correlation-matrix" class="level3">
+<h3 class="anchored" data-anchor-id="corrplot-correlation-matrix">—–corrplot Correlation Matrix —–</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>cor_matrix <span class="ot">&lt;-</span> <span class="fu">cor</span>(data)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">corrplot</span>(cor_matrix, <span class="at">method =</span> <span class="st">"circle"</span>, <span class="at">type =</span> <span class="st">"upper"</span>, </span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">title =</span> <span class="st">"Correlation Matrix"</span>, <span class="at">addCoef.col =</span> <span class="st">"black"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="corrplot-correlation-matrix-1" class="level3">
+<h3 class="anchored" data-anchor-id="corrplot-correlation-matrix-1">—–corrplot Correlation Matrix —–</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggcorrplot</span>(cor_matrix, </span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>           <span class="at">method =</span> <span class="st">"square"</span>, </span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>           <span class="at">type =</span> <span class="st">"lower"</span>, </span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>           <span class="at">lab =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>           <span class="at">title =</span> <span class="st">"mtcars"</span>, </span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>           <span class="at">lab_size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="performanceanalytics-pairwise-correlation-plot" class="level3">
+<h3 class="anchored" data-anchor-id="performanceanalytics-pairwise-correlation-plot">—–PerformanceAnalytics Pairwise Correlation Plot —–</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">chart.Correlation</span>(data, <span class="at">histogram =</span> <span class="cn">TRUE</span>, <span class="at">pch =</span> <span class="dv">19</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>###—–GGally Pairwise Correlation Plot —–</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggpairs</span>(data, </span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>        <span class="at">title =</span> <span class="st">"Pairwise Correlation Plot with GGally"</span>,</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>        <span class="at">lower =</span> <span class="fu">list</span>(<span class="at">continuous =</span> <span class="fu">wrap</span>(<span class="st">"smooth"</span>, <span class="at">method =</span> <span class="st">"lm"</span>)),</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>        <span class="at">upper =</span> <span class="fu">list</span>(<span class="at">continuous =</span> <span class="fu">wrap</span>(<span class="st">"cor"</span>, <span class="at">size =</span> <span class="dv">3</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>###—– psych Enhanced Pairwise Correlation Plot —–</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">pairs.panels</span>(data, </span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>             <span class="at">method =</span> <span class="st">"pearson"</span>, </span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>             <span class="at">hist.col =</span> <span class="st">"lightblue"</span>, </span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>             <span class="at">density =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>             <span class="at">ellipses =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>###—– Base R Heatmap —–</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ----- 8. Base R Heatmap -----</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">heatmap</span>(cor_matrix, <span class="at">symm =</span> <span class="cn">TRUE</span>, </span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>        <span class="at">main =</span> <span class="st">"Correlation Heatmap"</span>, </span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>        <span class="at">col =</span> <span class="fu">colorRampPalette</span>(<span class="fu">c</span>(<span class="st">"red"</span>, <span class="st">"white"</span>, <span class="st">"blue"</span>))(<span class="dv">20</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ----- 10. corrr Tidy Correlation -----</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>cor_matrix_tidy <span class="ot">&lt;-</span> <span class="fu">correlate</span>(data)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>cor_matrix_tidy <span class="sc">%&gt;%</span> </span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fashion</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;   term  mpg disp   hp   wt
+#&gt; 1  mpg      -.85 -.78 -.87
+#&gt; 2 disp -.85       .79  .89
+#&gt; 3   hp -.78  .79       .66
+#&gt; 4   wt -.87  .89  .66</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Network-style correlation plot</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>cor_matrix_tidy <span class="sc">%&gt;%</span> </span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">network_plot</span>(<span class="at">min_cor =</span> <span class="fl">0.3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>What are your insights? Do they make sense? Remember:</p>
+<ul>
+<li><p>mpg (Miles per Gallon): Represents the fuel efficiency of the car. Higher values, better efficiency.</p></li>
+<li><p>disp (Displacement): Represents the engine displacement, which is the total volume of all the cylinders in the engine.</p></li>
+<li><p>hp (Horsepower): Represents the power output of the car’s engine.</p></li>
+<li><p>wt (Weight): Represents the weight of the car.</p></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="what-a-correlation-does-with-values-that-are-not-real" class="level2" data-number="4.2">
+<h2 data-number="4.2" class="anchored" data-anchor-id="what-a-correlation-does-with-values-that-are-not-real"><span class="header-section-number">4.2</span> What a correlation does with values that are not real</h2>
+<p><code>mtcars</code> is clean. Clinical files are not, and the usual way they are not clean is that somebody recorded an absent measurement as a number. Before trusting any of the matrices above, look at <code>data/diabetes.csv</code>: 768 adults, eight measurements and an outcome.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(readr)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>diabetes <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/diabetes.csv"</span>)</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>diabetes <span class="sc">|&gt;</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.numeric), <span class="sc">~</span> <span class="fu">sum</span>(.x <span class="sc">==</span> <span class="dv">0</span>))) <span class="sc">|&gt;</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">t</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;          [,1]
+#&gt; pregnant   80
+#&gt; glucose     5
+#&gt; pressure   35
+#&gt; triceps   251
+#&gt; insulin   405
+#&gt; mass       13
+#&gt; pedigree    0
+#&gt; age         0</code></pre>
+</div>
+</div>
+<p>A plasma glucose of zero is not a low reading, and a body mass index of zero is not a thin patient. Both are impossible, so the zero is standing in for “not measured”. Replace the impossible ones with <code>NA</code> and compare the two matrices:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>cols <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"glucose"</span>, <span class="st">"pressure"</span>, <span class="st">"triceps"</span>, <span class="st">"insulin"</span>, <span class="st">"mass"</span>)</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>dia_na <span class="ot">&lt;-</span> diabetes <span class="sc">|&gt;</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">all_of</span>(cols), <span class="sc">~</span> <span class="fu">na_if</span>(.x, <span class="dv">0</span>)))</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">cor</span>(diabetes[cols]), <span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;          glucose pressure triceps insulin mass
+#&gt; glucose     1.00     0.05    0.03    0.31 0.18
+#&gt; pressure    0.05     1.00    0.21    0.16 0.38
+#&gt; triceps     0.03     0.21    1.00    0.47 0.38
+#&gt; insulin     0.31     0.16    0.47    1.00 0.22
+#&gt; mass        0.18     0.38    0.38    0.22 1.00</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">cor</span>(dia_na[cols], <span class="at">use =</span> <span class="st">"pairwise.complete.obs"</span>), <span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;          glucose pressure triceps insulin mass
+#&gt; glucose     1.00     0.09    0.16    0.52 0.19
+#&gt; pressure    0.09     1.00    0.11    0.13 0.24
+#&gt; triceps     0.16     0.11    1.00    0.17 0.61
+#&gt; insulin     0.52     0.13    0.17    1.00 0.20
+#&gt; mass        0.19     0.24    0.61    0.20 1.00</code></pre>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>The result that should bother you
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The strongest association in the raw matrix is mostly an artefact of the zeros, and one of the real associations was hidden by them. Both directions, in the same table.</p>
+<ol type="1">
+<li><strong><code>insulin</code> with <code>triceps</code> falls from about 0.47 to about 0.17</strong> once the zeros are treated as missing. Every one of the 251 rows with a zero skin-fold also has a zero insulin, so a quarter of the file sits exactly at the origin of that scatter plot. Points at the origin, far below the real values, pull a regression line through themselves. The association was between the two recording failures, not between the two hormonal quantities.</li>
+<li><strong><code>triceps</code> with <code>mass</code> rises from about 0.38 to about 0.61.</strong> Skin-fold thickness and body mass index measure overlapping things and should agree; the zeros were diluting that agreement towards the middle.</li>
+<li>So the zeros did not add noise. Noise attenuates everything. They <em>moved</em> correlations, up for pairs that share a missingness pattern and down for pairs that do not — and nothing in the output marks which is which.</li>
+</ol>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span><code>NA</code> is not a worse answer than a number
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Students often resist this step because the dataset “gets smaller”. It does not get smaller; it stops lying. A mean over 363 measured insulins is an estimate of something. A mean over 768 values of which 405 are a clerical convention is an estimate of nothing, and it will not announce itself as one.</p>
+</div>
+</div>
+<p>Which is why the second half of this practical is about seeing the holes.</p>
+<hr>
+</section>
+<section id="missing-pipelines" class="level2" data-number="4.3">
+<h2 data-number="4.3" class="anchored" data-anchor-id="missing-pipelines"><span class="header-section-number">4.3</span> Missing pipelines</h2>
+<p>As with the correlation matrices before, there are really good packages to help you understand the missingness structure of your data. This is my recommendation:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Remember, if you do not have these packages installed, install them first with (install.packages())</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(naniar)</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(finalfit)</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(mice)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Here I will be using the <code>airquality</code> dataset (available as default in all R) but everything would be ready for you to introduce your own dataset in a future.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(airquality)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;      Ozone           Solar.R           Wind             Temp      
+#&gt;  Min.   :  1.00   Min.   :  7.0   Min.   : 1.700   Min.   :56.00  
+#&gt;  1st Qu.: 18.00   1st Qu.:115.8   1st Qu.: 7.400   1st Qu.:72.00  
+#&gt;  Median : 31.50   Median :205.0   Median : 9.700   Median :79.00  
+#&gt;  Mean   : 42.13   Mean   :185.9   Mean   : 9.958   Mean   :77.88  
+#&gt;  3rd Qu.: 63.25   3rd Qu.:258.8   3rd Qu.:11.500   3rd Qu.:85.00  
+#&gt;  Max.   :168.00   Max.   :334.0   Max.   :20.700   Max.   :97.00  
+#&gt;  NA's   :37       NA's   :7                                       
+#&gt;      Month            Day      
+#&gt;  Min.   :5.000   Min.   : 1.0  
+#&gt;  1st Qu.:6.000   1st Qu.: 8.0  
+#&gt;  Median :7.000   Median :16.0  
+#&gt;  Mean   :6.993   Mean   :15.8  
+#&gt;  3rd Qu.:8.000   3rd Qu.:23.0  
+#&gt;  Max.   :9.000   Max.   :31.0  
+#&gt; </code></pre>
+</div>
+</div>
+<p>We can already see with a simple summary, the ammount of missings we have per column. But what is their underlying structure?</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>YourDataset <span class="ot">&lt;-</span> airquality</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<section id="plot-1" class="level3">
+<h3 class="anchored" data-anchor-id="plot-1">Plot 1</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>ll <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="fu">is.na</span>(YourDataset))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Open up this ll object. What are you seeing here? <code>is.na()</code> detects all values coded as <code>NA</code> and gives a logical output, <code>TRUE</code> if truly a missing value and <code>FALSE</code> if not</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="fu">View</span>(ll)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>cols <span class="ot">&lt;-</span> <span class="fu">sapply</span>(ll, is.logical)</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>ll[, cols] <span class="ot">&lt;-</span> <span class="fu">lapply</span>(ll[, cols], as.numeric)</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>Miss1 <span class="ot">&lt;-</span> UpSetR<span class="sc">::</span><span class="fu">upset</span>(ll,</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>                       <span class="at">nsets =</span> <span class="dv">20</span>, <span class="at">number.angles =</span> <span class="dv">10</span>, <span class="at">point.size =</span> <span class="fl">3.5</span>, <span class="at">line.size =</span> <span class="dv">2</span>,</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>                       <span class="at">mainbar.y.label =</span> <span class="st">"Missing Values"</span>, <span class="at">sets.x.label =</span> <span class="st">"Total Number Missing Values"</span>,</span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>                       <span class="at">text.scale =</span> <span class="fu">c</span>(<span class="fl">2.3</span>, <span class="fl">2.3</span>, <span class="dv">2</span>, <span class="dv">2</span>, <span class="dv">2</span>, <span class="fl">1.75</span>), <span class="at">order.by =</span> <span class="st">"freq"</span>, <span class="at">sets.bar.color =</span> <span class="st">"red3"</span></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>Miss1</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-20-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Here we can see common patterns! If missing values were to happen at the same time in different variables, we would see it clearly. Lets store this figure into our own directories so we can then use it for our final research output!</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="fu">pdf</span>(<span class="st">"MissingVal1.pdf"</span>, <span class="dv">10</span>, <span class="dv">20</span>)</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(Miss1)</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="fu">dev.off</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="plot-2" class="level3">
+<h3 class="anchored" data-anchor-id="plot-2">Plot 2</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">vis_miss</span>(YourDataset, <span class="at">warn_large_data =</span> <span class="cn">FALSE</span>) <span class="sc">+</span> </span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>        <span class="fu">theme</span>(<span class="at">axis.text.x =</span>  <span class="fu">element_text</span>(<span class="at">angle =</span> <span class="dv">90</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-22-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># uncomment to have your pdf created</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="co">#pdf("Missing2.pdf", 20, 10)</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="co">#print(vis_miss(YourDataset, warn_large_data = FALSE) + </span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="co">#        theme(axis.text.x =  element_text(angle = 90)))</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="co">#dev.off()</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Very clear outline of missingness in the whole dataset. But be careful in big datasets!</p>
+</section>
+<section id="plot-3" class="level3">
+<h3 class="anchored" data-anchor-id="plot-3">Plot 3</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="fu">missing_pattern</span>(YourDataset)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-23-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;     Wind Temp Month Day Solar.R Ozone   
+#&gt; 111    1    1     1   1       1     1  0
+#&gt; 35     1    1     1   1       1     0  1
+#&gt; 5      1    1     1   1       0     1  1
+#&gt; 2      1    1     1   1       0     0  2
+#&gt;        0    0     0   0       7    37 44</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># uncomment to have your pdf created</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a><span class="co">#pdf("PlotMissing3.pdf", 4,11)</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a><span class="co">#print(missing_pattern(YourDataset))</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a><span class="co">#dev.off()</span></span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Final, very clear overview of patterns per variable. Spend a moment trying to understand these values. This function works great with big datasets too, although sometimes it gets a bit busy with lots of numbers.</p>
+<p>Open up your three newly created pdfs!</p>
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p>The two <code>pdf()</code> blocks are set not to run when the booklet is built, so that it does not litter the repository. Run them yourself — that is the point of them.</p>
+</div>
+</div>
+</div>
+</section>
+<section id="naming-what-you-are-looking-at" class="level3">
+<h3 class="anchored" data-anchor-id="naming-what-you-are-looking-at">Naming what you are looking at</h3>
+<p>The three plots above describe a <em>pattern</em>. The word for why the pattern exists is a <em>mechanism</em>, and there are three:</p>
+<ul>
+<li><strong>MCAR</strong>, missing completely at random: the holes are unrelated to anything, observed or not. Dropping incomplete rows is safe and only costs you power.</li>
+<li><strong>MAR</strong>, missing at random: the holes depend on things you <em>did</em> record — a test ordered only for patients over 60. Imputation from the other columns is reasonable, because the information needed is present.</li>
+<li><strong>MNAR</strong>, missing not at random: the holes depend on the unrecorded value itself — a weight absent because the patient could not stand. No amount of imputation recovers this, and nothing in the data will tell you it is happening.</li>
+</ul>
+<p>You cannot test which one you have. The diagnosis comes from knowing how the data was collected, which is why “ask whoever collected it” is a methods step and not an excuse.</p>
+<p>Two things worth noticing in what you have just plotted:</p>
+<ol type="1">
+<li>In <code>airquality</code>, <code>Ozone</code> is missing far more often than <code>Solar.R</code>, and the two are sometimes missing together — a bundle, the signature of a process that skips several measurements at once.</li>
+<li>In the diabetes file in the first half, every missing <code>triceps</code> was also a missing <code>insulin</code>. That nesting is what a real process looks like: tests are ordered in bundles, bundles are skipped together, and the patients they are skipped for are not a random sample. <strong>No clinic produces missingness completely at random.</strong></li>
+</ol>
+</section>
+<section id="filling-the-holes-and-measuring-what-you-changed" class="level3">
+<h3 class="anchored" data-anchor-id="filling-the-holes-and-measuring-what-you-changed">Filling the holes, and measuring what you changed</h3>
+<p>Describing the pattern comes first, because the pattern decides whether filling the holes is reasonable at all. The simplest fill is the median of the observed values; the honest habit is to measure what it did to the spread.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>aq <span class="ot">&lt;-</span> airquality</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>aq_median <span class="ot">&lt;-</span> aq <span class="sc">|&gt;</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">everything</span>(), <span class="sc">~</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(.x), <span class="fu">median</span>(.x, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), .x)))</span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">observed_sd =</span> <span class="fu">sd</span>(aq<span class="sc">$</span>Ozone, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">median_imputed_sd =</span> <span class="fu">sd</span>(aq_median<span class="sc">$</span>Ozone))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;       observed_sd median_imputed_sd 
+#&gt;          32.98788          29.05445</code></pre>
+</div>
+</div>
+<p>The standard deviation falls, because every filled value sits exactly at the centre. You have not recovered 37 ozone readings; you have added 37 copies of the median and told the model they are measurements.</p>
+<p><code>mice</code> (multivariate imputation by chained equations) fills each gap by predicting it from the other columns, and does the whole thing several times so that downstream estimates can carry the uncertainty. One complete frame from it is still a guess, but it is a guess that respects the relationships between columns rather than flattening them.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>imp <span class="ot">&lt;-</span> <span class="fu">mice</span>(aq, <span class="at">m =</span> <span class="dv">5</span>, <span class="at">printFlag =</span> <span class="cn">FALSE</span>, <span class="at">seed =</span> <span class="dv">1</span>)</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>ozone_imp <span class="ot">&lt;-</span> <span class="fu">complete</span>(imp, <span class="dv">1</span>)<span class="sc">$</span>Ozone</span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">observed_sd =</span> <span class="fu">sd</span>(aq<span class="sc">$</span>Ozone, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">median_imputed_sd =</span> <span class="fu">sd</span>(aq_median<span class="sc">$</span>Ozone),</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">mice_sd =</span> <span class="fu">sd</span>(ozone_imp))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;       observed_sd median_imputed_sd           mice_sd 
+#&gt;          32.98788          29.05445          31.42195</code></pre>
+</div>
+</div>
+<p>Use the version of this you can defend. On a file with 10% missing and a single-value imputation, say so in the methods; on anything important, use multiple imputation and say that.</p>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>The one rule that outranks the method
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Whatever you fill with, compute it on the training rows only. A median taken over the whole file before splitting has already carried information from the test rows into the training ones, and the score you report afterwards is flattered by it. That is the subject of <a href="day2-04-leakage.html" class="quarto-xref"><span>Chapter 6</span></a>.</p>
+</div>
+</div>
+<hr>
+</section>
+</section>
+<section id="the-same-steps-in-python" class="level2" data-number="4.4">
+<h2 data-number="4.4" class="anchored" data-anchor-id="the-same-steps-in-python"><span class="header-section-number">4.4</span> The same steps in Python</h2>
+<p>The same two ideas, without the commentary. <code>mtcars</code> and <code>airquality</code> are built into R; in Python the equivalents come from the data folder you downloaded.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> seaborn <span class="im">as</span> sns</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes.csv"</span>)</span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>heart <span class="op">=</span> pd.read_csv(<span class="st">"data/longisland_heart.csv"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<section id="correlation-1" class="level3">
+<h3 class="anchored" data-anchor-id="correlation-1">Correlation</h3>
+<p><code>pandas</code> computes the matrix; <code>seaborn</code> draws it. These two are the equivalent of <code>corrplot</code> and <code>ggcorrplot</code>.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>cols <span class="op">=</span> [<span class="st">"glucose"</span>, <span class="st">"pressure"</span>, <span class="st">"triceps"</span>, <span class="st">"insulin"</span>, <span class="st">"mass"</span>]</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>cor <span class="op">=</span> diabetes[cols].corr()</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="fl">5.5</span>, <span class="fl">4.5</span>))</span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a>sns.heatmap(cor, annot<span class="op">=</span><span class="va">True</span>, fmt<span class="op">=</span><span class="st">".2f"</span>, cmap<span class="op">=</span><span class="st">"RdBu_r"</span>, vmin<span class="op">=-</span><span class="dv">1</span>, vmax<span class="op">=</span><span class="dv">1</span>, ax<span class="op">=</span>ax)</span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-27-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="528"></p>
+</figure>
+</div>
+</div>
+</div>
+<p><code>pairplot</code> is the equivalent of <code>ggpairs()</code> and <code>pairs.panels()</code>:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>sns.pairplot(diabetes[[<span class="st">"glucose"</span>, <span class="st">"insulin"</span>, <span class="st">"mass"</span>]],</span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>             plot_kws<span class="op">=</span><span class="bu">dict</span>(alpha<span class="op">=</span><span class="fl">0.3</span>, s<span class="op">=</span><span class="dv">12</span>), height<span class="op">=</span><span class="fl">1.9</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-28-3.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="180"></p>
+</figure>
+</div>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-28-4.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="547"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>And the same comparison as above — the matrix before and after the impossible zeros become missing. <code>.corr()</code> drops missing pairs by default, which is what <code>use = "pairwise.complete.obs"</code> does in R.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>dia_na <span class="op">=</span> diabetes.copy()</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>dia_na[cols] <span class="op">=</span> dia_na[cols].replace(<span class="dv">0</span>, np.nan)</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(diabetes[cols].corr().<span class="bu">round</span>(<span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;           glucose  pressure  triceps  insulin  mass
+#&gt; glucose      1.00      0.05     0.03     0.31  0.18
+#&gt; pressure     0.05      1.00     0.21     0.16  0.38
+#&gt; triceps      0.03      0.21     1.00     0.47  0.38
+#&gt; insulin      0.31      0.16     0.47     1.00  0.22
+#&gt; mass         0.18      0.38     0.38     0.22  1.00</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(dia_na[cols].corr().<span class="bu">round</span>(<span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;           glucose  pressure  triceps  insulin  mass
+#&gt; glucose      1.00      0.09     0.16     0.52  0.19
+#&gt; pressure     0.09      1.00     0.11     0.13  0.24
+#&gt; triceps      0.16      0.11     1.00     0.17  0.61
+#&gt; insulin      0.52      0.13     0.17     1.00  0.20
+#&gt; mass         0.19      0.24     0.61     0.20  1.00</code></pre>
+</div>
+</div>
+</section>
+<section id="missingness" class="level3">
+<h3 class="anchored" data-anchor-id="missingness">Missingness</h3>
+<p>Counts per column, then the whole file as an image — the equivalent of <code>vis_miss()</code>:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(heart.isna().<span class="bu">sum</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; age                           20
+#&gt; sex                           20
+#&gt; cp                            20
+#&gt; trestbps                      20
+#&gt; chol                          20
+#&gt; fbs                           20
+#&gt; restecg                       20
+#&gt; thalach                       20
+#&gt; exang                         20
+#&gt; oldpeak                       20
+#&gt; slope                         20
+#&gt; ca                            20
+#&gt; thal                          20
+#&gt; diagnosis of heart disease     0
+#&gt; dtype: int64</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">9</span>, <span class="fl">3.5</span>))</span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a>ax.imshow(heart.isna().T, aspect<span class="op">=</span><span class="st">"auto"</span>, interpolation<span class="op">=</span><span class="st">"nearest"</span>,</span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a>          cmap<span class="op">=</span><span class="st">"viridis"</span>)</span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>ax.set_yticks(<span class="bu">range</span>(heart.shape[<span class="dv">1</span>]))</span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a>ax.set_yticklabels(heart.columns, fontsize<span class="op">=</span><span class="dv">7</span>)</span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Patient (row order)"</span>)</span>
+<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Missing values (yellow)"</span>)</span>
+<span id="cb46-8"><a href="#cb46-8" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-01-correlation-missingness_files/figure-html/unnamed-chunk-30-7.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="864"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Which columns go missing <em>together</em> — the question the UpSet plot answers:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>pattern <span class="op">=</span> (heart.isna()</span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>           .groupby(<span class="bu">list</span>(heart.columns[heart.isna().<span class="bu">any</span>()]))</span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>           .size()</span>
+<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a>           .sort_values(ascending<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a>           .head(<span class="dv">8</span>))</span>
+<span id="cb47-6"><a href="#cb47-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(pattern)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; age    sex    cp     trestbps  chol   fbs    restecg  thalach  exang  oldpeak  slope  ca     thal 
+#&gt; False  False  False  False     False  False  False    False    False  False    False  False  False    50
+#&gt;                                                                       True     False  False  False     8
+#&gt; True   False  False  False     False  False  False    False    False  False    False  False  False     6
+#&gt; False  False  False  False     False  True   False    False    False  False    False  False  False     6
+#&gt;                                       False  False    True     False  False    False  False  False     6
+#&gt;                      True      False  False  False    False    False  False    False  False  False     6
+#&gt;                      False     False  False  True     False    False  False    False  False  False     6
+#&gt;        True   False  False     False  False  False    False    False  False    False  False  False     6
+#&gt; dtype: int64</code></pre>
+</div>
+</div>
+<p>Median imputation, and what it did to the spread:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.impute <span class="im">import</span> SimpleImputer</span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>num <span class="op">=</span> heart.select_dtypes(<span class="st">"number"</span>)</span>
+<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a>filled <span class="op">=</span> pd.DataFrame(SimpleImputer(strategy<span class="op">=</span><span class="st">"median"</span>).fit_transform(num),</span>
+<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a>                      columns<span class="op">=</span>num.columns)</span>
+<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(num[<span class="st">"chol"</span>].std(), filled[<span class="st">"chol"</span>].std())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 29.90515682482817 28.449655348478938</code></pre>
+</div>
+</div>
+<p><code>IterativeImputer</code> is the closest thing to <code>mice</code>: it predicts each column from the others in turn. It is still experimental, so it has to be switched on.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.experimental <span class="im">import</span> enable_iterative_imputer  <span class="co"># noqa: F401</span></span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.impute <span class="im">import</span> IterativeImputer</span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a>iter_filled <span class="op">=</span> pd.DataFrame(</span>
+<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a>    IterativeImputer(random_state<span class="op">=</span><span class="dv">1</span>, max_iter<span class="op">=</span><span class="dv">10</span>).fit_transform(num),</span>
+<span id="cb51-6"><a href="#cb51-6" aria-hidden="true" tabindex="-1"></a>    columns<span class="op">=</span>num.columns)</span>
+<span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(num[<span class="st">"chol"</span>].std(), filled[<span class="st">"chol"</span>].std(), iter_filled[<span class="st">"chol"</span>].std())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 29.90515682482817 28.449655348478938 28.37216172667803</code></pre>
+</div>
+</div>
+<p>The same rule applies: fit the imputer on the training rows and <code>transform</code> the test rows with it, never <code>fit_transform</code> on the whole file.</p>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./day2-00-histograms-boxplots.html" class="pagination-link" aria-label="Exercise 2.1 — Histograms and boxplots">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Exercise 2.1 — Histograms and boxplots</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./day2-03-transforming.html" class="pagination-link" aria-label="Exercise 2.3 — Transforming">
+        <span class="nav-page-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Exercise 2.3 — Transforming</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-left">
+<p>HDS MSc · Module 3</p>
+</div>   
+    <div class="nav-footer-center">
+      &nbsp;
+    </div>
+    <div class="nav-footer-right">
+<p>Code to read, copy and run yourself</p>
+</div>
+  </div>
+</footer>
+
+
+
+
+</body></html>
