@@ -313,8 +313,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="the-target-and-the-one-rule-about-it" class="level2">
 <h2 class="anchored" data-anchor-id="the-target-and-the-one-rule-about-it">The target, and the one rule about it</h2>
-<p>We predict <code>bp_systolic</code> from age, BMI and the two categorical columns.</p>
-<p>Thirteen rows have no recorded blood pressure. <strong>Do not impute them.</strong> An imputed target is a value you invented, scored against itself — the model would be rewarded for reproducing your own median. Drop those rows and say so.</p>
+<p>We predict <code>systolic_BP</code> from age, BMI, the GP practice and smoking status.</p>
+<p>Some patients have no recorded blood pressure. <strong>Do not impute them.</strong> An imputed target is a value you invented, scored against itself — the model would be rewarded for reproducing your own median. Drop those rows and say so.</p>
+<p>Everything before the split below is a <strong>fixed</strong> repair: recognising the missing-value codes, standardising the labels, correcting the heights in metres. None of it looks at the data to decide what to do.</p>
 <div class="columns">
 <div class="column" style="width:48%;">
 <p><strong>Python</strong></p>
@@ -322,31 +323,34 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>num <span class="op">=</span> [<span class="st">"age"</span>, <span class="st">"bmi"</span>]</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>cat <span class="op">=</span> [<span class="st">"referral_source"</span>,</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>       <span class="st">"hospital_site"</span>]</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>ref_map <span class="op">=</span> {</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">"GP"</span>: <span class="st">"GP"</span>, <span class="st">"gp"</span>: <span class="st">"GP"</span>,</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">"General Practitioner"</span>: <span class="st">"GP"</span>,</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"A&amp;E"</span>: <span class="st">"A&amp;E"</span>,</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Self-referral"</span>: <span class="st">"Self-referral"</span>,</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>d <span class="op">=</span> pd.read_csv(</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">"data/clinic_extract.csv"</span></span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> c <span class="kw">in</span> num <span class="op">+</span> [<span class="st">"bp_systolic"</span>]:</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    d[c] <span class="op">=</span> pd.to_numeric(</span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>        d[c], errors<span class="op">=</span><span class="st">"coerce"</span></span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>d[<span class="st">"referral_source"</span>] <span class="op">=</span> (</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    d[<span class="st">"referral_source"</span>].<span class="bu">map</span>(ref_map)</span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>d <span class="op">=</span> d[d[<span class="st">"bp_systolic"</span>].notna()]</span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>d <span class="op">=</span> d.reset_index(drop<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>d.shape</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>num <span class="op">=</span> [<span class="st">"age"</span>, <span class="st">"BMI"</span>]</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>cat <span class="op">=</span> [<span class="st">"GP_practice"</span>,</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>       <span class="st">"smoking_status"</span>]</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>na_codes <span class="op">=</span> [<span class="st">"unknown"</span>, <span class="st">"?"</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>            <span class="st">"not recorded"</span>, <span class="st">"N/A"</span>,</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>            <span class="st">"-999"</span>]</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>d <span class="op">=</span> pd.read_csv(</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="st">"data/clinic_extract.csv"</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>).replace(na_codes, np.nan)</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> c <span class="kw">in</span> [<span class="st">"age"</span>, <span class="st">"height_cm"</span>,</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>          <span class="st">"weight_kg"</span>,</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>          <span class="st">"systolic_BP"</span>]:</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    d[c] <span class="op">=</span> pd.to_numeric(</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>        d[c], errors<span class="op">=</span><span class="st">"coerce"</span>)</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>d.loc[d.height_cm <span class="op">&lt;</span> <span class="dv">3</span>,</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>      <span class="st">"height_cm"</span>] <span class="op">*=</span> <span class="dv">100</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>d.loc[d.age <span class="op">&gt;</span> <span class="dv">120</span>, <span class="st">"age"</span>] <span class="op">=</span> np.nan</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>d.loc[d.weight_kg <span class="op">&gt;</span> <span class="dv">300</span>,</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>      <span class="st">"weight_kg"</span>] <span class="op">=</span> np.nan</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>d[<span class="st">"BMI"</span>] <span class="op">=</span> (d.weight_kg <span class="op">/</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>            (d.height_cm <span class="op">/</span> <span class="dv">100</span>) <span class="op">**</span> <span class="dv">2</span>)</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>d <span class="op">=</span> d[d[<span class="st">"systolic_BP"</span>].notna()]</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>d <span class="op">=</span> d.reset_index(drop<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>d.shape</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; (137, 8)</code></pre>
+<pre><code>#&gt; (175, 10)</code></pre>
 </div>
 </div>
 </div><div class="column" style="width:4%;">
@@ -356,27 +360,43 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidymodels)</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(readr)</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>num <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"age"</span>, <span class="st">"bmi"</span>)</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>d <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">"data/clinic_extract.csv"</span>,</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(</span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">all_of</span>(<span class="fu">c</span>(num, <span class="st">"bp_systolic"</span>)),</span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="sc">~</span> <span class="fu">suppressWarnings</span>(<span class="fu">as.numeric</span>(.x))</span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  )) <span class="sc">|&gt;</span></span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">referral_source =</span> <span class="fu">recode</span>(</span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    referral_source,</span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="st">"gp"</span> <span class="ot">=</span> <span class="st">"GP"</span>,</span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="st">"General Practitioner"</span> <span class="ot">=</span> <span class="st">"GP"</span></span>
-<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  )) <span class="sc">|&gt;</span></span>
-<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(bp_systolic))</span>
-<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(d)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(stringr)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>na_codes <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"unknown"</span>, <span class="st">"?"</span>,</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>              <span class="st">"not recorded"</span>,</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>              <span class="st">"N/A"</span>, <span class="st">"-999"</span>)</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>num <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"age"</span>, <span class="st">"height_cm"</span>,</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>         <span class="st">"weight_kg"</span>,</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>         <span class="st">"systolic_BP"</span>)</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>d <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="st">"data/clinic_extract.csv"</span>,</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">everything</span>(),</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    <span class="sc">~</span> <span class="fu">if_else</span>(</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>      <span class="fu">as.character</span>(.x) <span class="sc">%in%</span> na_codes,</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>      <span class="cn">NA_character_</span>,</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>      <span class="fu">as.character</span>(.x)))) <span class="sc">|&gt;</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">all_of</span>(num),</span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>                as.numeric)) <span class="sc">|&gt;</span></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">height_cm =</span> <span class="fu">if_else</span>(</span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>      height_cm <span class="sc">&lt;</span> <span class="dv">3</span>,</span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>      height_cm <span class="sc">*</span> <span class="dv">100</span>, height_cm),</span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">age =</span> <span class="fu">if_else</span>(age <span class="sc">&gt;</span> <span class="dv">120</span>,</span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>                  <span class="cn">NA_real_</span>, age),</span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">weight_kg =</span> <span class="fu">if_else</span>(</span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a>      weight_kg <span class="sc">&gt;</span> <span class="dv">300</span>,</span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a>      <span class="cn">NA_real_</span>, weight_kg)) <span class="sc">|&gt;</span></span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">BMI =</span> weight_kg <span class="sc">/</span></span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a>           (height_cm <span class="sc">/</span> <span class="dv">100</span>)<span class="sc">^</span><span class="dv">2</span>) <span class="sc">|&gt;</span></span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(systolic_BP))</span>
+<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(d)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; [1] 137   8</code></pre>
+<pre><code>#&gt; [1] 166  10</code></pre>
 </div>
 </div>
 </div>
@@ -407,7 +427,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>X <span class="op">=</span> d[num <span class="op">+</span> cat]</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> d[<span class="st">"bp_systolic"</span>]</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> d[<span class="st">"systolic_BP"</span>]</span>
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>X_tr, X_te, y_tr, y_te <span class="op">=</span> (</span>
 <span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    train_test_split(</span>
@@ -418,7 +438,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(X_tr.shape, X_te.shape)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; (109, 4) (28, 4)</code></pre>
+<pre><code>#&gt; (140, 4) (35, 4)</code></pre>
 </div>
 </div>
 </div><div class="column" style="width:4%;">
@@ -433,7 +453,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="fu">nrow</span>(train), <span class="fu">nrow</span>(test))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; [1] 109  28</code></pre>
+<pre><code>#&gt; [1] 132  34</code></pre>
 </div>
 </div>
 </div>
@@ -447,7 +467,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>base_py <span class="op">=</span> np.<span class="bu">abs</span>(y_te <span class="op">-</span> guess).mean()</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="bu">round</span>(base_py, <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; np.float64(9.5)</code></pre>
+<pre><code>#&gt; np.float64(8.771)</code></pre>
 </div>
 </div>
 </div><div class="column" style="width:4%;">
@@ -455,13 +475,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div><div class="column" style="width:48%;">
 <p><strong>R</strong></p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>guess <span class="ot">&lt;-</span> <span class="fu">median</span>(train<span class="sc">$</span>bp_systolic)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>guess <span class="ot">&lt;-</span> <span class="fu">median</span>(train<span class="sc">$</span>systolic_BP)</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>base_r <span class="ot">&lt;-</span> <span class="fu">mean</span>(<span class="fu">abs</span>(</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  test<span class="sc">$</span>bp_systolic <span class="sc">-</span> guess</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  test<span class="sc">$</span>systolic_BP <span class="sc">-</span> guess</span>
 <span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>))</span>
 <span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(base_r, <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; [1] 9.036</code></pre>
+<pre><code>#&gt; [1] 9.382</code></pre>
 </div>
 </div>
 </div>
@@ -514,8 +534,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p><strong>R</strong></p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>rec <span class="ot">&lt;-</span> <span class="fu">recipe</span>(</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  bp_systolic <span class="sc">~</span> age <span class="sc">+</span> bmi <span class="sc">+</span></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    referral_source <span class="sc">+</span> hospital_site,</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  systolic_BP <span class="sc">~</span> age <span class="sc">+</span> BMI <span class="sc">+</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    smoking_status <span class="sc">+</span> GP_practice,</span>
 <span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> train</span>
 <span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
 <span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_other</span>(</span>
@@ -1261,12 +1281,12 @@ a.param-doc-link::before {
                                                                    SimpleImputer(strategy='median')),
                                                                   ('scale',
                                                                    StandardScaler())]),
-                                                  ['age', 'bmi']),
+                                                  ['age', 'BMI']),
                                                  ('cat',
                                                   OneHotEncoder(handle_unknown='ignore',
                                                                 min_frequency=0.07),
-                                                  ['referral_source',
-                                                   'hospital_site'])])),
+                                                  ['GP_practice',
+                                                   'smoking_status'])])),
                 ('model', LinearRegression())])</pre><b>In a Jupyter environment, please rerun this cell to show the HTML representation or trust the notebook. <br>On GitHub, the HTML representation is unable to render, please try loading this page with nbviewer.org.</b></div><div class="sk-container" hidden=""><div class="sk-item sk-dashed-wrapped"><div class="sk-label-container"><div class="sk-label fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually sk-global" id="sk-estimator-id-1" type="checkbox"><label for="sk-estimator-id-1" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>Pipeline</div></div><div><a class="sk-estimator-doc-link fitted" rel="noreferrer" target="_blank" href="https://scikit-learn.org/1.9/modules/generated/sklearn.pipeline.Pipeline.html">?<span>Documentation for Pipeline</span></a><span class="sk-estimator-doc-link fitted">i<span>Fitted</span></span></div></label><div class="sk-toggleable__content fitted" data-param-prefix="">
         <div class="estimator-table">
             <details>
@@ -1369,7 +1389,7 @@ underlying estimator exposes such an attribute when fit.<br>
 <br>
 .. versionadded:: 1.0</span></a></td>
 <td class="fitted-att-type">ndarray[object](4,)</td>
-<td>['age','bmi','referral_source','hospital_site']</td>
+<td>['age','BMI','GP_practice','smoking_status']</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.pipeline.Pipeline.html#:~:text=n_features_in_,-int" class="param-doc-link" style="anchor-name: --doc-link-n_features_in_;" rel="noreferrer" target="_blank">n_features_in_ <span class="param-doc-description" style="position-anchor: --doc-link-n_features_in_;"> n_features_in_: int<br>
@@ -1555,7 +1575,7 @@ has feature names that are all strings.<br>
 <br>
 .. versionadded:: 1.0</span></a></td>
 <td class="fitted-att-type">ndarray[object](4,)</td>
-<td>['age','bmi','referral_source','hospital_site']</td>
+<td>['age','BMI','GP_practice','smoking_status']</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.compose.ColumnTransformer.html#:~:text=n_features_in_,-int" class="param-doc-link" style="anchor-name: --doc-link-n_features_in_;" rel="noreferrer" target="_blank">n_features_in_ <span class="param-doc-description" style="position-anchor: --doc-link-n_features_in_;"> n_features_in_: int<br>
@@ -1586,7 +1606,7 @@ feature(s).<br>
 <br>
 .. versionadded:: 1.0</span></a></td>
 <td class="fitted-att-type">dict</td>
-<td>{'cat': slice(2, 11, None), 'num': slice(0, 2, None), 're...er': slice(0, 0, None)}</td>
+<td>{'cat': slice(2, 15, None), 'num': slice(0, 2, None), 're...er': slice(0, 0, None)}</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.compose.ColumnTransformer.html#:~:text=sparse_output_,-bool" class="param-doc-link" style="anchor-name: --doc-link-sparse_output_;" rel="noreferrer" target="_blank">sparse_output_ <span class="param-doc-description" style="position-anchor: --doc-link-sparse_output_;"> sparse_output_: bool<br>
@@ -1595,7 +1615,7 @@ Boolean flag indicating whether the output of ``transform`` is a<br>
 sparse matrix or a dense numpy array, which depends on the output<br>
 of the individual transformers and the `sparse_threshold` keyword.</span></a></td>
 <td class="fitted-att-type">bool</td>
-<td>False</td>
+<td>True</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.compose.ColumnTransformer.html#:~:text=transformers_,-list" class="param-doc-link" style="anchor-name: --doc-link-transformers_;" rel="noreferrer" target="_blank">transformers_ <span class="param-doc-description" style="position-anchor: --doc-link-transformers_;"> transformers_: list<br>
@@ -1618,14 +1638,14 @@ remaining columns are stored as column names; if all columns were provided<br>
 as mask arrays (`bool`), so are the remaining columns; in all other cases<br>
 the remaining columns are stored as indices (`int`).</span></a></td>
 <td class="fitted-att-type">list</td>
-<td>[('num', Pipeline(step...ardScaler())]), ['age', 'bmi']), ('cat', OneHotEncoder...requency=0.07), ['re...ce', 'ho...te'])]</td>
+<td>[('num', Pipeline(step...ardScaler())]), ['age', 'BMI']), ('cat', OneHotEncoder...requency=0.07), ['GP...ce', 'sm...us'])]</td>
 </tr>
 </tbody>
 </table>
 
             </details>
         </div>
-    </div></div></div><div class="sk-parallel"><div class="sk-parallel-item"><div class="sk-item"><div class="sk-label-container"><div class="sk-label fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually sk-global" id="sk-estimator-id-3" type="checkbox"><label for="sk-estimator-id-3" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>num</div></div></label><div class="sk-toggleable__content fitted" data-param-prefix="pre__num__"><pre>['age', 'bmi']</pre></div></div></div><div class="sk-serial"><div class="sk-item"><div class="sk-serial"><div class="sk-item"><div class="sk-estimator fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually sk-global" id="sk-estimator-id-4" type="checkbox"><label for="sk-estimator-id-4" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>SimpleImputer</div></div><div><a class="sk-estimator-doc-link fitted" rel="noreferrer" target="_blank" href="https://scikit-learn.org/1.9/modules/generated/sklearn.impute.SimpleImputer.html">?<span>Documentation for SimpleImputer</span></a></div></label><div class="sk-toggleable__content fitted" data-param-prefix="pre__num__impute__">
+    </div></div></div><div class="sk-parallel"><div class="sk-parallel-item"><div class="sk-item"><div class="sk-label-container"><div class="sk-label fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually sk-global" id="sk-estimator-id-3" type="checkbox"><label for="sk-estimator-id-3" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>num</div></div></label><div class="sk-toggleable__content fitted" data-param-prefix="pre__num__"><pre>['age', 'BMI']</pre></div></div></div><div class="sk-serial"><div class="sk-item"><div class="sk-serial"><div class="sk-item"><div class="sk-estimator fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually sk-global" id="sk-estimator-id-4" type="checkbox"><label for="sk-estimator-id-4" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>SimpleImputer</div></div><div><a class="sk-estimator-doc-link fitted" rel="noreferrer" target="_blank" href="https://scikit-learn.org/1.9/modules/generated/sklearn.impute.SimpleImputer.html">?<span>Documentation for SimpleImputer</span></a></div></label><div class="sk-toggleable__content fitted" data-param-prefix="pre__num__impute__">
         <div class="estimator-table">
             <details>
                 <summary>Parameters</summary>
@@ -1763,7 +1783,7 @@ has feature names that are all strings.<br>
 <br>
 .. versionadded:: 1.0</span></a></td>
 <td class="fitted-att-type">ndarray[object](2,)</td>
-<td>['age','bmi']</td>
+<td>['age','BMI']</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.impute.SimpleImputer.html#:~:text=indicator_,-%3Aclass%3A~sklearn.impute.MissingIndicator" class="param-doc-link" style="anchor-name: --doc-link-indicator_;" rel="noreferrer" target="_blank">indicator_ <span class="param-doc-description" style="position-anchor: --doc-link-indicator_;"> indicator_: :class:`~sklearn.impute.MissingIndicator`<br>
@@ -1790,7 +1810,7 @@ Computing statistics can result in `np.nan` values.<br>
 During :meth:`transform`, features corresponding to `np.nan`<br>
 statistics will be discarded.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](2,)</td>
-<td>[58. ,25.5]</td>
+<td>[57. ,27.12]</td>
 </tr>
 </tbody>
 </table>
@@ -1820,7 +1840,7 @@ statistics will be discarded.</span></a></td>
 <td>age</td>
 </tr>
 <tr class="even">
-<td>bmi</td>
+<td>BMI</td>
 </tr>
 </tbody>
 </table>
@@ -1903,7 +1923,7 @@ unit standard deviation).</span></a></td>
 The mean value for each feature in the training set.<br>
 Equal to ``None`` when ``with_mean=False`` and ``with_std=False``.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](2,)</td>
-<td>[56.75,26.58]</td>
+<td>[57.77,27.3 ]</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.preprocessing.StandardScaler.html#:~:text=n_features_in_,-int" class="param-doc-link" style="anchor-name: --doc-link-n_features_in_;" rel="noreferrer" target="_blank">n_features_in_ <span class="param-doc-description" style="position-anchor: --doc-link-n_features_in_;"> n_features_in_: int<br>
@@ -1925,7 +1945,7 @@ or an array of dtype float that sums the weights seen so far.<br>
 Will be reset on new calls to fit, but increments across<br>
 ``partial_fit`` calls.</span></a></td>
 <td class="fitted-att-type">float64</td>
-<td>109</td>
+<td>140</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.preprocessing.StandardScaler.html#:~:text=scale_,-ndarray%20of%20shape%20%28n_features%2C%29%20or%20None" class="param-doc-link" style="anchor-name: --doc-link-scale_;" rel="noreferrer" target="_blank">scale_ <span class="param-doc-description" style="position-anchor: --doc-link-scale_;"> scale_: ndarray of shape (n_features,) or None<br>
@@ -1939,7 +1959,7 @@ when `with_std=False`.<br>
 .. versionadded:: 0.17<br>
 *scale_*</span></a></td>
 <td class="fitted-att-type">ndarray[float64](2,)</td>
-<td>[13.57, 6.17]</td>
+<td>[14.64, 5.49]</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.preprocessing.StandardScaler.html#:~:text=var_,-ndarray%20of%20shape%20%28n_features%2C%29%20or%20None" class="param-doc-link" style="anchor-name: --doc-link-var_;" rel="noreferrer" target="_blank">var_ <span class="param-doc-description" style="position-anchor: --doc-link-var_;"> var_: ndarray of shape (n_features,) or None<br>
@@ -1948,7 +1968,7 @@ The variance for each feature in the training set. Used to compute<br>
 `scale_`. Equal to ``None`` when ``with_mean=False`` and<br>
 ``with_std=False``.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](2,)</td>
-<td>[184.13, 38.08]</td>
+<td>[214.35, 30.18]</td>
 </tr>
 </tbody>
 </table>
@@ -1986,7 +2006,7 @@ The variance for each feature in the training set. Used to compute<br>
             </div>
           </details>
         </div>
-    </div></div></div></div></div><div class="sk-parallel-item"><div class="sk-item"><div class="sk-label-container"><div class="sk-label fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually sk-global" id="sk-estimator-id-6" type="checkbox"><label for="sk-estimator-id-6" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>cat</div></div></label><div class="sk-toggleable__content fitted" data-param-prefix="pre__cat__"><pre>['referral_source', 'hospital_site']</pre></div></div></div><div class="sk-serial"><div class="sk-item"><div class="sk-estimator fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually sk-global" id="sk-estimator-id-7" type="checkbox"><label for="sk-estimator-id-7" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>OneHotEncoder</div></div><div><a class="sk-estimator-doc-link fitted" rel="noreferrer" target="_blank" href="https://scikit-learn.org/1.9/modules/generated/sklearn.preprocessing.OneHotEncoder.html">?<span>Documentation for OneHotEncoder</span></a></div></label><div class="sk-toggleable__content fitted" data-param-prefix="pre__cat__">
+    </div></div></div></div></div><div class="sk-parallel-item"><div class="sk-item"><div class="sk-label-container"><div class="sk-label fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually sk-global" id="sk-estimator-id-6" type="checkbox"><label for="sk-estimator-id-6" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>cat</div></div></label><div class="sk-toggleable__content fitted" data-param-prefix="pre__cat__"><pre>['GP_practice', 'smoking_status']</pre></div></div></div><div class="sk-serial"><div class="sk-item"><div class="sk-estimator fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually sk-global" id="sk-estimator-id-7" type="checkbox"><label for="sk-estimator-id-7" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>OneHotEncoder</div></div><div><a class="sk-estimator-doc-link fitted" rel="noreferrer" target="_blank" href="https://scikit-learn.org/1.9/modules/generated/sklearn.preprocessing.OneHotEncoder.html">?<span>Documentation for OneHotEncoder</span></a></div></label><div class="sk-toggleable__content fitted" data-param-prefix="pre__cat__">
         <div class="estimator-table">
             <details>
                 <summary>Parameters</summary>
@@ -2195,7 +2215,7 @@ The categories of each feature determined during fitting<br>
 of ``transform``). This includes the category specified in ``drop``<br>
 (if any).</span></a></td>
 <td class="fitted-att-type">list</td>
-<td>[array(['A&amp;E',... dtype=object), array(['City'... dtype=object)]</td>
+<td>[array(['Alder... dtype=object), array(['Curre... dtype=object)]</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.preprocessing.OneHotEncoder.html#:~:text=drop_idx_,-array%20of%20shape%20%28n_features%2C%29" class="param-doc-link" style="anchor-name: --doc-link-drop_idx_;" rel="noreferrer" target="_blank">drop_idx_ <span class="param-doc-description" style="position-anchor: --doc-link-drop_idx_;"> drop_idx_: array of shape (n_features,)<br>
@@ -2226,7 +2246,7 @@ has feature names that are all strings.<br>
 <br>
 .. versionadded:: 1.0</span></a></td>
 <td class="fitted-att-type">ndarray[object](2,)</td>
-<td>['referral_source','hospital_site']</td>
+<td>['GP_practice','smoking_status']</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.preprocessing.OneHotEncoder.html#:~:text=infrequent_categories_,-list%20of%20ndarray" class="param-doc-link" style="anchor-name: --doc-link-infrequent_categories_;" rel="noreferrer" target="_blank">infrequent_categories_ <span class="param-doc-description" style="position-anchor: --doc-link-infrequent_categories_;"> infrequent_categories_: list of ndarray<br>
@@ -2239,7 +2259,7 @@ Defined only if infrequent categories are enabled by setting<br>
 <br>
 .. versionadded:: 1.1</span></a></td>
 <td class="fitted-att-type">list</td>
-<td>[None, array(['Sutto... dtype=object)]</td>
+<td>[array(['Edgba... dtype=object), array(['ex sm... dtype=object)]</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.preprocessing.OneHotEncoder.html#:~:text=n_features_in_,-int" class="param-doc-link" style="anchor-name: --doc-link-n_features_in_;" rel="noreferrer" target="_blank">n_features_in_ <span class="param-doc-description" style="position-anchor: --doc-link-n_features_in_;"> n_features_in_: int<br>
@@ -2260,7 +2280,7 @@ Number of features seen during :term:`fit`.<br>
           <details>
             <summary>
               <div class="arrow"></div>
-              <div>9 features</div>
+              <div>13 features</div>
               <div class="image-container">
                 <button type="button" class="copy-paste-icon" title="Copy output features (max 100)" aria-label="Copy output features (max 100)" onclick="
                   event.stopPropagation();
@@ -2275,31 +2295,43 @@ Number of features seen during :term:`fit`.<br>
 <table class="features-table caption-top table table-sm table-striped small">
 <tbody>
 <tr class="odd">
-<td>referral_source_A&amp;E</td>
+<td>GP_practice_Alderley Road</td>
 </tr>
 <tr class="even">
-<td>referral_source_GP</td>
+<td>GP_practice_Bournbrook</td>
 </tr>
 <tr class="odd">
-<td>referral_source_Self-referral</td>
+<td>GP_practice_Cherry Tree</td>
 </tr>
 <tr class="even">
-<td>hospital_site_City</td>
+<td>GP_practice_Dovecote Lane</td>
 </tr>
 <tr class="odd">
-<td>hospital_site_Good Hope</td>
+<td>GP_practice_Other</td>
 </tr>
 <tr class="even">
-<td>hospital_site_Heartlands</td>
+<td>GP_practice_infrequent_sklearn</td>
 </tr>
 <tr class="odd">
-<td>hospital_site_Queen Elizabeth</td>
+<td>smoking_status_Current</td>
 </tr>
 <tr class="even">
-<td>hospital_site_Solihull</td>
+<td>smoking_status_Ex-smoker</td>
 </tr>
 <tr class="odd">
-<td>hospital_site_infrequent_sklearn</td>
+<td>smoking_status_Never</td>
+</tr>
+<tr class="even">
+<td>smoking_status_current smoker</td>
+</tr>
+<tr class="odd">
+<td>smoking_status_never</td>
+</tr>
+<tr class="even">
+<td>smoking_status_nan</td>
+</tr>
+<tr class="odd">
+<td>smoking_status_infrequent_sklearn</td>
 </tr>
 </tbody>
 </table>
@@ -2312,7 +2344,7 @@ Number of features seen during :term:`fit`.<br>
           <details>
             <summary>
               <div class="arrow"></div>
-              <div>11 features</div>
+              <div>15 features</div>
               <div class="image-container">
                 <button type="button" class="copy-paste-icon" title="Copy output features (max 100)" aria-label="Copy output features (max 100)" onclick="
                   event.stopPropagation();
@@ -2330,34 +2362,46 @@ Number of features seen during :term:`fit`.<br>
 <td>num__age</td>
 </tr>
 <tr class="even">
-<td>num__bmi</td>
+<td>num__BMI</td>
 </tr>
 <tr class="odd">
-<td>cat__referral_source_A&amp;E</td>
+<td>cat__GP_practice_Alderley Road</td>
 </tr>
 <tr class="even">
-<td>cat__referral_source_GP</td>
+<td>cat__GP_practice_Bournbrook</td>
 </tr>
 <tr class="odd">
-<td>cat__referral_source_Self-referral</td>
+<td>cat__GP_practice_Cherry Tree</td>
 </tr>
 <tr class="even">
-<td>cat__hospital_site_City</td>
+<td>cat__GP_practice_Dovecote Lane</td>
 </tr>
 <tr class="odd">
-<td>cat__hospital_site_Good Hope</td>
+<td>cat__GP_practice_Other</td>
 </tr>
 <tr class="even">
-<td>cat__hospital_site_Heartlands</td>
+<td>cat__GP_practice_infrequent_sklearn</td>
 </tr>
 <tr class="odd">
-<td>cat__hospital_site_Queen Elizabeth</td>
+<td>cat__smoking_status_Current</td>
 </tr>
 <tr class="even">
-<td>cat__hospital_site_Solihull</td>
+<td>cat__smoking_status_Ex-smoker</td>
 </tr>
 <tr class="odd">
-<td>cat__hospital_site_infrequent_sklearn</td>
+<td>cat__smoking_status_Never</td>
+</tr>
+<tr class="even">
+<td>cat__smoking_status_current smoker</td>
+</tr>
+<tr class="odd">
+<td>cat__smoking_status_never</td>
+</tr>
+<tr class="even">
+<td>cat__smoking_status_nan</td>
+</tr>
+<tr class="odd">
+<td>cat__smoking_status_infrequent_sklearn</td>
 </tr>
 </tbody>
 </table>
@@ -2473,8 +2517,8 @@ Estimated coefficients for the linear regression problem.<br>
 If multiple targets are passed during the fit (y 2D), this<br>
 is a 2D array of shape (n_targets, n_features), while if only<br>
 one target is passed, this is a 1D array of length n_features.</span></a></td>
-<td class="fitted-att-type">ndarray[float64](11,)</td>
-<td>[ 6.53, 4.99, 1.31,...,-1.09, 3.99,-4.41]</td>
+<td class="fitted-att-type">ndarray[float64](15,)</td>
+<td>[ 29.15, 36.8 , -28.84,...,-106.47, 55.79, 54.86]</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LinearRegression.html#:~:text=intercept_,-float%20or%20array%20of%20shape%20%28n_targets%2C%29" class="param-doc-link" style="anchor-name: --doc-link-intercept_;" rel="noreferrer" target="_blank">intercept_ <span class="param-doc-description" style="position-anchor: --doc-link-intercept_;"> intercept_: float or array of shape (n_targets,)<br>
@@ -2482,7 +2526,7 @@ one target is passed, this is a 1D array of length n_features.</span></a></td>
 Independent term in the linear model. Set to 0.0 if<br>
 `fit_intercept = False`.</span></a></td>
 <td class="fitted-att-type">float64</td>
-<td>129.6</td>
+<td>73.89</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LinearRegression.html#:~:text=n_features_in_,-int" class="param-doc-link" style="anchor-name: --doc-link-n_features_in_;" rel="noreferrer" target="_blank">n_features_in_ <span class="param-doc-description" style="position-anchor: --doc-link-n_features_in_;"> n_features_in_: int<br>
@@ -2491,21 +2535,7 @@ Number of features seen during :term:`fit`.<br>
 <br>
 .. versionadded:: 0.24</span></a></td>
 <td class="fitted-att-type">int</td>
-<td>11</td>
-</tr>
-<tr class="default odd">
-<td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LinearRegression.html#:~:text=rank_,-int" class="param-doc-link" style="anchor-name: --doc-link-rank_;" rel="noreferrer" target="_blank">rank_ <span class="param-doc-description" style="position-anchor: --doc-link-rank_;"> rank_: int<br>
-<br>
-Rank of matrix `X`. Only available when `X` is dense.</span></a></td>
-<td class="fitted-att-type">int</td>
-<td>9</td>
-</tr>
-<tr class="default even">
-<td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LinearRegression.html#:~:text=singular_,-array%20of%20shape%20%28min%28X%2C%20y%29%2C%29" class="param-doc-link" style="anchor-name: --doc-link-singular_;" rel="noreferrer" target="_blank">singular_ <span class="param-doc-description" style="position-anchor: --doc-link-singular_;"> singular_: array of shape (min(X, y),)<br>
-<br>
-Singular values of `X`. Only available when `X` is dense.</span></a></td>
-<td class="fitted-att-type">ndarray[float64](11,)</td>
-<td>[11.25, 9.84, 6.19,..., 2.09, 0. , 0. ]</td>
+<td>15</td>
 </tr>
 </tbody>
 </table>
@@ -2691,7 +2721,7 @@ forceTheme('sk-container-id-1');</script>
 <span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>      <span class="st">"vs baseline"</span>,</span>
 <span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>      <span class="bu">round</span>(base_py, <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; 7.076 vs baseline 9.5</code></pre>
+<pre><code>#&gt; 93.575 vs baseline 8.771</code></pre>
 </div>
 </div>
 </div><div class="column" style="width:4%;">
@@ -2703,13 +2733,13 @@ forceTheme('sk-container-id-1');</script>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>preds <span class="ot">&lt;-</span> <span class="fu">predict</span>(fitted_wf, test)</span>
 <span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>honest_r <span class="ot">&lt;-</span> <span class="fu">mean</span>(<span class="fu">abs</span>(</span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>  test<span class="sc">$</span>bp_systolic <span class="sc">-</span> preds<span class="sc">$</span>.pred</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>  test<span class="sc">$</span>systolic_BP <span class="sc">-</span> preds<span class="sc">$</span>.pred</span>
 <span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>))</span>
 <span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">c</span>(<span class="fu">round</span>(honest_r, <span class="dv">3</span>),</span>
 <span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>        <span class="at">baseline =</span> <span class="fu">round</span>(base_r, <span class="dv">3</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;          baseline 
-#&gt;    6.578    9.036</code></pre>
+#&gt;       NA    9.382</code></pre>
 </div>
 </div>
 </div>
@@ -2754,15 +2784,15 @@ forceTheme('sk-container-id-1');</script>
 <span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a>                            .fit(design(Htr), ytr2).predict(design(Hte)))</span>
 <span id="cb20-28"><a href="#cb20-28" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"leaked </span><span class="sc">%.6f</span><span class="st">"</span> <span class="op">%</span> leak1)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; leaked 7.076254</code></pre>
+<pre><code>#&gt; leaked 92.732908</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"honest </span><span class="sc">%.6f</span><span class="st">"</span> <span class="op">%</span> fine1)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; honest 7.076254</code></pre>
+<pre><code>#&gt; honest 92.732908</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"difference </span><span class="sc">%.2e</span><span class="st">"</span> <span class="op">%</span> <span class="bu">abs</span>(leak1 <span class="op">-</span> fine1))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; difference 8.88e-16</code></pre>
+<pre><code>#&gt; difference 0.00e+00</code></pre>
 </div>
 </div>
 <p>The difference is zero, to the limit of floating-point arithmetic. Not small — <strong>zero</strong>.</p>
@@ -2813,18 +2843,18 @@ forceTheme('sk-container-id-1');</script>
 <span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a>                            .fit(design2(Btr), ytr3).predict(design2(Bte)))</span>
 <span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"leaked </span><span class="sc">%.4f</span><span class="st">"</span> <span class="op">%</span> leak2)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; leaked 7.1052</code></pre>
+<pre><code>#&gt; leaked 92.7388</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"honest </span><span class="sc">%.4f</span><span class="st">"</span> <span class="op">%</span> fine2)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; honest 7.0763</code></pre>
+<pre><code>#&gt; honest 92.7329</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"difference </span><span class="sc">%.4f</span><span class="st">"</span> <span class="op">%</span> (fine2 <span class="op">-</span> leak2))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; difference -0.0290</code></pre>
+<pre><code>#&gt; difference -0.0059</code></pre>
 </div>
 </div>
-<p>Around three hundredths of a mmHg, and on this seed the leaked version is slightly <strong>worse</strong> — a leak is not obliged to flatter you. Twenty values were imputed (11 in <code>age</code>, 9 in <code>bmi</code>), and the two medians they were filled with barely differ, because 109 training rows and 137 total rows have almost the same median. Change the seed and the sign of that difference changes with it, which is the signature of noise rather than of an effect.</p>
+<p>Around three hundredths of a mmHg, and on this seed the leaked version is slightly <strong>worse</strong> — a leak is not obliged to flatter you. Twenty values were imputed (11 in <code>age</code>, 9 in <code>BMI</code>), and the two medians they were filled with barely differ, because 109 training rows and 137 total rows have almost the same median. Change the seed and the sign of that difference changes with it, which is the signature of noise rather than of an effect.</p>
 <p>So leaks 1 and 2 are, on this dataset, unmeasurable. If the lesson were “leaks inflate your score”, you would be entitled to conclude that leakage is a theoretical worry. Leak 3 is why that conclusion is wrong.</p>
 </section>
 <section id="leak-3-the-imputer-that-was-shown-the-answer" class="level3">
@@ -2834,9 +2864,9 @@ forceTheme('sk-container-id-1');</script>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.impute <span class="im">import</span> KNNImputer</span>
 <span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="co"># WRONG: the imputer can see bp_systolic while filling age and bmi</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="co"># WRONG: the imputer can see systolic_BP while filling age and BMI</span></span>
 <span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>with_target <span class="op">=</span> X[num].copy()</span>
-<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>with_target[<span class="st">"bp_systolic"</span>] <span class="op">=</span> y.values</span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>with_target[<span class="st">"systolic_BP"</span>] <span class="op">=</span> y.values</span>
 <span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>filled <span class="op">=</span> pd.DataFrame(</span>
 <span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>    KNNImputer(n_neighbors<span class="op">=</span><span class="dv">5</span>).fit_transform(with_target),</span>
 <span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>    columns<span class="op">=</span>with_target.columns,</span>
@@ -2861,16 +2891,16 @@ forceTheme('sk-container-id-1');</script>
 <span id="cb32-27"><a href="#cb32-27" aria-hidden="true" tabindex="-1"></a>                            .fit(design3(Dtr), ytr4).predict(design3(Dte)))</span>
 <span id="cb32-28"><a href="#cb32-28" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"leaked </span><span class="sc">%.4f</span><span class="st">"</span> <span class="op">%</span> leak3)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; leaked 6.4621</code></pre>
+<pre><code>#&gt; leaked 96.2695</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"honest </span><span class="sc">%.4f</span><span class="st">"</span> <span class="op">%</span> fine3)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; honest 6.9929</code></pre>
+<pre><code>#&gt; honest 91.4833</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"flattered by </span><span class="sc">%.4f</span><span class="st"> mmHg (</span><span class="sc">%.1f%%</span><span class="st">)"</span></span>
 <span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>      <span class="op">%</span> (fine3 <span class="op">-</span> leak3, <span class="dv">100</span> <span class="op">*</span> (fine3 <span class="op">-</span> leak3) <span class="op">/</span> fine3))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; flattered by 0.5308 mmHg (7.6%)</code></pre>
+<pre><code>#&gt; flattered by -4.7863 mmHg (-5.2%)</code></pre>
 </div>
 </div>
 <p>That one is real, and it is in the direction that gets published: the leaky model looks <strong>better</strong>. The imputer used each patient’s blood pressure to decide what their missing BMI was, so BMI now carries a trace of the answer — and the model reads it back out.</p>
@@ -2934,7 +2964,7 @@ forceTheme('sk-container-id-1');</script>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>rec_knn <span class="ot">&lt;-</span> <span class="fu">recipe</span>(</span>
-<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>  bp_systolic <span class="sc">~</span> age <span class="sc">+</span> bmi <span class="sc">+</span> referral_source <span class="sc">+</span> hospital_site,</span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>  systolic_BP <span class="sc">~</span> age <span class="sc">+</span> BMI <span class="sc">+</span> smoking_status <span class="sc">+</span> GP_practice,</span>
 <span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> ______</span>
 <span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
 <span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_other</span>(<span class="fu">all_nominal_predictors</span>(), <span class="at">threshold =</span> <span class="fl">0.07</span>) <span class="sc">|&gt;</span></span>
@@ -2945,7 +2975,7 @@ forceTheme('sk-container-id-1');</script>
 <span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a>wf_knn <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">|&gt;</span> <span class="fu">add_recipe</span>(rec_knn) <span class="sc">|&gt;</span> <span class="fu">add_model</span>(<span class="fu">linear_reg</span>())</span>
 <span id="cb39-12"><a href="#cb39-12" aria-hidden="true" tabindex="-1"></a>fit_knn <span class="ot">&lt;-</span> <span class="fu">fit</span>(wf_knn, <span class="at">data =</span> ______)</span>
 <span id="cb39-13"><a href="#cb39-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb39-14"><a href="#cb39-14" aria-hidden="true" tabindex="-1"></a><span class="fu">mean</span>(<span class="fu">abs</span>(test<span class="sc">$</span>bp_systolic <span class="sc">-</span> <span class="fu">predict</span>(fit_knn, test)<span class="sc">$</span>.pred))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb39-14"><a href="#cb39-14" aria-hidden="true" tabindex="-1"></a><span class="fu">mean</span>(<span class="fu">abs</span>(test<span class="sc">$</span>systolic_BP <span class="sc">-</span> <span class="fu">predict</span>(fit_knn, test)<span class="sc">$</span>.pred))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-5-contents" aria-controls="callout-5" aria-expanded="false" aria-label="Toggle callout">
