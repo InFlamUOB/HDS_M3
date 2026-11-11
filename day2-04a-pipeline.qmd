@@ -4,56 +4,38 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 2.6 — The same steps in a pipeline {#sec-pipeline-steps}
+# Exercise 2.6 — Understanding preprocessing pipelines {#sec-pipeline-steps}
 
 ## Objectives
 
 By the end of this exercise you will be able to:
 
-- distinguish a repair that is **fixed** from a step that is **fitted**, and
-  say which of the two must wait until after the split;
-- assemble the cleaning, imputation, encoding and scaling of
-  @sec-cleaning–@sec-scaling into one object in both languages;
-- measure, rather than assert, what three different leaks do to a reported
-  error;
-- explain why one of those leaks changes nothing at all, and why that is not a
-  reason to commit it.
+- combine imputation, encoding, scaling and a model into one pipeline;
+- look inside a fitted pipeline and say what each step learned, and from which
+  patients;
+- say what happens when the fitted pipeline meets new patients;
+- give a reason for the order of the preprocessing steps.
 
-## Why this, here
+## The scenario
 
-Three exercises have each applied a sequence of plain functions to the whole
-table. Every one of them worked. Nothing errored, the output looked right, and
-at no point did anything warn you.
+We want to predict how long patients will stay in hospital, using information
+available at admission.
 
-That is the problem this exercise exists for. Look back at what those functions
-actually did:
+In @sec-cleaning, @sec-imputation and @sec-scaling we applied encoding,
+imputation and scaling separately. Now we combine them into a pipeline.
 
-| step | what it learned from the data |
-|---|---|
-| group rare sites into `Other` | which sites are rare |
-| median imputation | the median of each column |
-| one-hot encoding | the list of categories that exist |
-| standardising | each column's mean and standard deviation |
+But rather than treating a pipeline as a black box, we will look inside it to
+understand what is learned during training and what happens when it is applied
+to new patients.
 
-Each one is a quantity **estimated from the rows it was shown**. Estimate it
-from all 150 rows and then hold 30 of them back as a test set, and those 30
-rows were never held back at all — their values are inside the medians, the
-category list and the scaling constants that the model was trained with.
+## Task 1 — Build and fit a pipeline (8 minutes)
 
-A pipeline fixes this not by being tidier, but by making the fit/apply
-distinction impossible to get wrong.
+Load the hospital admissions data, add BMI as in @sec-scaling, and keep the
+outcome and the eight predictors.
 
-## The target, and the one rule about it
-
-We predict `systolic_BP` from age, BMI, the GP practice and smoking status.
-
-Some patients have no recorded blood pressure. **Do not impute them.** An
-imputed target is a value you invented, scored against itself — the model would
-be rewarded for reproducing your own median. Drop those rows and say so.
-
-Everything before the split below is a **fixed** repair: recognising the
-missing-value codes, standardising the labels, correcting the heights in
-metres. None of it looks at the data to decide what to do.
+This is the same file as in @sec-imputation and @sec-scaling. If you do not
+have it yet, [**download `hospital_admissions.csv`**](data/hospital_admissions.csv){download="hospital_admissions.csv"} into your `data`
+folder.
 
 :::::: columns
 ::: {.column width="48%"}
@@ -61,183 +43,9 @@ metres. None of it looks at the data to decide what to do.
 
 ```{python}
 import pandas as pd
-import numpy as np
-
-num = ["age", "BMI"]
-cat = ["GP_practice",
-       "smoking_status"]
-na_codes = ["unknown", "?",
-            "not recorded", "N/A",
-            "-999"]
-
-d = pd.read_csv(
-    "data/clinic_extract.csv"
-).replace(na_codes, np.nan)
-for c in ["age", "height_cm",
-          "weight_kg",
-          "systolic_BP"]:
-    d[c] = pd.to_numeric(
-        d[c], errors="coerce")
-d.loc[d.height_cm < 3,
-      "height_cm"] *= 100
-d.loc[d.age > 120, "age"] = np.nan
-d.loc[d.weight_kg > 300,
-      "weight_kg"] = np.nan
-d["BMI"] = (d.weight_kg /
-            (d.height_cm / 100) ** 2)
-
-d = d[d["systolic_BP"].notna()]
-d = d.reset_index(drop=True)
-d.shape
-```
-:::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-#| message: false
-#| warning: false
-library(tidymodels)
-library(readr)
-library(stringr)
-
-na_codes <- c("unknown", "?",
-              "not recorded",
-              "N/A", "-999")
-num <- c("age", "height_cm",
-         "weight_kg",
-         "systolic_BP")
-
-d <- read_csv(
-  "data/clinic_extract.csv",
-  show_col_types = FALSE
-) |>
-  mutate(across(
-    everything(),
-    ~ if_else(
-      as.character(.x) %in% na_codes,
-      NA_character_,
-      as.character(.x)))) |>
-  mutate(across(all_of(num),
-                as.numeric)) |>
-  mutate(
-    height_cm = if_else(
-      height_cm < 3,
-      height_cm * 100, height_cm),
-    age = if_else(age > 120,
-                  NA_real_, age),
-    weight_kg = if_else(
-      weight_kg > 300,
-      NA_real_, weight_kg)) |>
-  mutate(BMI = weight_kg /
-           (height_cm / 100)^2) |>
-  filter(!is.na(systolic_BP))
-
-dim(d)
-```
-:::
-::::::
-
-::: {.callout-important appearance="simple"}
-## Fixed repairs can happen before the split. Fitted steps cannot.
-Notice what we just did before splitting: mapped three spellings of `GP` onto
-one, and dropped rows with no target. Both are safe, because neither looks at
-the data to decide what to do. The lookup table was written from domain
-knowledge, not estimated, and it would be identical if the test rows did not
-exist.
-
-That is the test to apply to any step: **would this step produce a different
-answer if I ran it on a different sample?** If no, it can go anywhere. If yes,
-it has to be fitted on the training rows and merely applied to everything else.
-:::
-
-## Split first
-
-:::::: columns
-::: {.column width="48%"}
-**Python**
-
-```{python}
 from sklearn.model_selection import (
     train_test_split,
 )
-
-X = d[num + cat]
-y = d["systolic_BP"]
-
-X_tr, X_te, y_tr, y_te = (
-    train_test_split(
-        X, y,
-        test_size=0.2,
-        random_state=42,
-    )
-)
-print(X_tr.shape, X_te.shape)
-```
-:::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-set.seed(42)
-sp <- initial_split(d, prop = 0.8)
-train <- training(sp)
-test  <- testing(sp)
-
-c(nrow(train), nrow(test))
-```
-:::
-::::::
-
-A baseline, so every number below has something to be judged against. The
-simplest honest guess is the median of the training targets.
-
-:::::: columns
-::: {.column width="48%"}
-**Python**
-
-```{python}
-guess = y_tr.median()
-base_py = np.abs(y_te - guess).mean()
-round(base_py, 3)
-```
-:::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-guess <- median(train$systolic_BP)
-base_r <- mean(abs(
-  test$systolic_BP - guess
-))
-round(base_r, 3)
-```
-:::
-::::::
-
-## The same four steps, as one object
-
-Each line below is a step you already performed by hand. Read across: a
-`step_*` on the right is the same idea as an entry in the `ColumnTransformer`
-on the left.
-
-:::::: columns
-::: {.column width="48%"}
-**Python**
-
-```{python}
 from sklearn.pipeline import Pipeline
 from sklearn.compose import (
     ColumnTransformer,
@@ -251,26 +59,22 @@ from sklearn.linear_model import (
     LinearRegression,
 )
 
-numeric = Pipeline([
-    ("impute", SimpleImputer(
-        strategy="median")),
-    ("scale", StandardScaler()),
-])
-
-categorical = OneHotEncoder(
-    handle_unknown="ignore",
-    min_frequency=0.07,
+hospital = pd.read_csv(
+    "data/hospital_admissions.csv"
+)
+hospital["BMI"] = (
+    hospital["weight_kg"]
+    / (hospital["height_cm"] / 100) ** 2
 )
 
-pre = ColumnTransformer([
-    ("num", numeric, num),
-    ("cat", categorical, cat),
-])
+num = ["age", "BMI", "systolic_BP",
+       "heart_rate", "creatinine",
+       "CRP_mg_L"]
+cat = ["admission_type",
+       "smoking_status"]
 
-pipe = Pipeline([
-    ("pre", pre),
-    ("model", LinearRegression()),
-])
+X = hospital[num + cat]
+y = hospital["length_of_stay"]
 ```
 :::
 
@@ -281,58 +85,49 @@ pipe = Pipeline([
 **R**
 
 ```{r}
-rec <- recipe(
-  systolic_BP ~ age + BMI +
-    smoking_status + GP_practice,
-  data = train
-) |>
-  step_other(
-    all_nominal_predictors(),
-    threshold = 0.07
-  ) |>
-  step_impute_median(
-    all_numeric_predictors()
-  ) |>
-  step_dummy(
-    all_nominal_predictors()
-  ) |>
-  step_normalize(
-    all_numeric_predictors()
-  )
+#| message: false
+#| warning: false
+library(tidyverse)
+library(tidymodels)
 
-wf <- workflow() |>
-  add_recipe(rec) |>
-  add_model(linear_reg())
+hospital <- read_csv(
+  "data/hospital_admissions.csv",
+  show_col_types = FALSE
+) |>
+  mutate(
+    BMI = weight_kg / (height_cm / 100)^2,
+    across(
+      c(admission_type, smoking_status),
+      as.factor
+    )
+  ) |>
+  select(
+    length_of_stay,
+    age, BMI, systolic_BP,
+    heart_rate, creatinine,
+    CRP_mg_L,
+    admission_type, smoking_status
+  )
 ```
 :::
 ::::::
 
-Four steps, in the order you applied them by hand: group the rare category,
-fill the gaps, turn categories into columns, put the numbers on one scale.
-`handle_unknown="ignore"` and `step_other()` are the two halves of the
-unseen-category problem from @sec-cleaning — one tolerates a category it has
-never met, the other reduces the chance of meeting one.
-
-Now fit. This is the step where the distinction becomes mechanical: `fit` is
-given the training rows **only**, and nothing you do afterwards can
-accidentally show it the rest.
+Split into 80% training and 20% test patients.
 
 :::::: columns
 ::: {.column width="48%"}
 **Python**
 
 ```{python}
-from sklearn.metrics import (
-    mean_absolute_error,
+X_train, X_test, y_train, y_test = (
+    train_test_split(
+        X, y,
+        test_size=0.2,
+        random_state=42,
+    )
 )
 
-pipe.fit(X_tr, y_tr)
-honest_py = mean_absolute_error(
-    y_te, pipe.predict(X_te)
-)
-print(round(honest_py, 3),
-      "vs baseline",
-      round(base_py, 3))
+print(len(X_train), len(X_test))
 ```
 :::
 
@@ -343,442 +138,670 @@ print(round(honest_py, 3),
 **R**
 
 ```{r}
-fitted_wf <- fit(wf, data = train)
+set.seed(42)
+split <- initial_split(
+  hospital, prop = 0.8
+)
 
-preds <- predict(fitted_wf, test)
-honest_r <- mean(abs(
-  test$systolic_BP - preds$.pred
-))
-print(c(round(honest_r, 3),
-        baseline = round(base_r, 3)))
+train <- training(split)
+test <- testing(split)
+
+cat(nrow(train), nrow(test), "\n")
 ```
 :::
 ::::::
 
-The two languages give different numbers because they split differently — the
-same seed does not mean the same rows. Both are comparing a fitted model
-against a do-nothing baseline on rows neither model was trained on, and both
-should be clearly better than it.
-
-------------------------------------------------------------------------
-
-## Three leaks, measured
-
-Now break it, three ways, and measure each. The instructive part is that the
-three do not behave alike.
-
-### Leak 1 — Scaling before the split
-
-The textbook leak: standardise the whole table, then split.
-
-To isolate the scaling, the imputation is done correctly in **both** arms —
-training-row medians throughout — so the only thing that differs is where the
-mean and standard deviation came from.
-
-```{python}
-#| echo: true
-idx = np.arange(len(X))
-i_tr, i_te = train_test_split(idx, test_size=0.2, random_state=42)
-
-X_all = X.copy()
-X_all[num] = X_all[num].fillna(X.iloc[i_tr][num].median())
-
-# WRONG: mean and sd computed from every row
-mu, sd = X_all[num].mean(), X_all[num].std()
-leaked = X_all.copy()
-leaked[num] = (leaked[num] - mu) / sd
-
-# RIGHT: constants from the training rows only
-Ltr, Lte, ytr2, yte2 = train_test_split(leaked, y, test_size=0.2, random_state=42)
-Htr, Hte, _, _ = train_test_split(X_all, y, test_size=0.2, random_state=42)
-mu2, sd2 = Htr[num].mean(), Htr[num].std()
-Htr, Hte = Htr.copy(), Hte.copy()
-Htr[num] = (Htr[num] - mu2) / sd2
-Hte[num] = (Hte[num] - mu2) / sd2
-
-enc = OneHotEncoder(handle_unknown="ignore", sparse_output=False).fit(Htr[cat])
-def design(frame):
-    return np.hstack([frame[num].values, enc.transform(frame[cat])])
-
-leak1 = mean_absolute_error(yte2, LinearRegression()
-                            .fit(design(Ltr), ytr2).predict(design(Lte)))
-fine1 = mean_absolute_error(yte2, LinearRegression()
-                            .fit(design(Htr), ytr2).predict(design(Hte)))
-print("leaked %.6f" % leak1)
-print("honest %.6f" % fine1)
-print("difference %.2e" % abs(leak1 - fine1))
-```
-
-The difference is zero, to the limit of floating-point arithmetic. Not small —
-**zero**.
-
-This is worth understanding rather than memorising. Standardising subtracts a
-constant and divides by a constant. Ordinary least squares responds by
-multiplying each coefficient by exactly the reciprocal of that constant, so the
-fitted values are identical either way. The leak transferred information, and
-the model had no way to use it.
-
-::: {.callout-warning appearance="simple"}
-## Do not conclude that scaling leakage is harmless
-It was harmless *here*, for *this model*. Change one thing and it is not:
-
-- **Any regularised model** — ridge, lasso, elastic net — penalises
-  coefficients by size, so the scale genuinely changes which features survive.
-- **Anything distance-based** — k-nearest neighbours, k-means, SVMs with an RBF
-  kernel — is defined in terms of scaled distances.
-- **Min-Max instead of Standard**, where, as @sec-scaling measured, one extreme
-  test-set value can rescale the entire training column.
-
-The honest summary is that this particular leak is undetectable in this
-particular setting, and you will not generally know in advance which setting
-you are in. The cost of doing it correctly is one line.
-:::
-
-### Leak 2 — Imputation before the split
-
-Fill the gaps with a median computed from all 137 rows, then split.
-
-```{python}
-# WRONG: median over every row, including the test rows
-all_med = X[num].median()
-A = X.copy(); A[num] = A[num].fillna(all_med)
-
-# RIGHT: median over the training rows only
-Btr, Bte, ytr3, yte3 = train_test_split(X, y, test_size=0.2, random_state=42)
-tr_med = Btr[num].median()
-Btr, Bte = Btr.copy(), Bte.copy()
-Btr[num] = Btr[num].fillna(tr_med)
-Bte[num] = Bte[num].fillna(tr_med)
-
-Atr, Ate, _, _ = train_test_split(A, y, test_size=0.2, random_state=42)
-enc2 = OneHotEncoder(handle_unknown="ignore", sparse_output=False).fit(Btr[cat])
-def design2(frame):
-    return np.hstack([frame[num].values, enc2.transform(frame[cat])])
-
-leak2 = mean_absolute_error(yte3, LinearRegression()
-                            .fit(design2(Atr), ytr3).predict(design2(Ate)))
-fine2 = mean_absolute_error(yte3, LinearRegression()
-                            .fit(design2(Btr), ytr3).predict(design2(Bte)))
-print("leaked %.4f" % leak2)
-print("honest %.4f" % fine2)
-print("difference %.4f" % (fine2 - leak2))
-```
-
-Around three hundredths of a mmHg, and on this seed the leaked version is
-slightly **worse** — a leak is not obliged to flatter you. Twenty values were
-imputed (11 in `age`, 9 in `BMI`), and the two medians they were filled with
-barely differ, because 109 training rows and 137 total rows have almost the
-same median. Change the seed and the sign of that difference changes with it,
-which is the signature of noise rather than of an effect.
-
-So leaks 1 and 2 are, on this dataset, unmeasurable. If the lesson were "leaks
-inflate your score", you would be entitled to conclude that leakage is a
-theoretical worry. Leak 3 is why that conclusion is wrong.
-
-### Leak 3 — The imputer that was shown the answer
-
-Instead of a median, use a nearest-neighbour imputer — a sensible choice, in
-the spirit of @sec-imputation, since it uses a patient's other measurements.
-Fit it on a table that still has the target
-column in it.
-
-This is not a contrived mistake. It is what happens when you impute a dataframe
-before separating features from target, which is the natural order to work in.
-
-```{python}
-from sklearn.impute import KNNImputer
-
-# WRONG: the imputer can see systolic_BP while filling age and BMI
-with_target = X[num].copy()
-with_target["systolic_BP"] = y.values
-filled = pd.DataFrame(
-    KNNImputer(n_neighbors=5).fit_transform(with_target),
-    columns=with_target.columns,
-)
-C = X.copy(); C[num] = filled[num].values
-
-# RIGHT: the imputer is fitted on training features only, target withheld
-Dtr, Dte, ytr4, yte4 = train_test_split(X, y, test_size=0.2, random_state=42)
-ki = KNNImputer(n_neighbors=5).fit(Dtr[num])
-Dtr, Dte = Dtr.copy(), Dte.copy()
-Dtr[num] = ki.transform(Dtr[num])
-Dte[num] = ki.transform(Dte[num])
-
-Ctr, Cte, _, _ = train_test_split(C, y, test_size=0.2, random_state=42)
-enc3 = OneHotEncoder(handle_unknown="ignore", sparse_output=False).fit(Dtr[cat])
-def design3(frame):
-    return np.hstack([frame[num].values, enc3.transform(frame[cat])])
-
-leak3 = mean_absolute_error(yte4, LinearRegression()
-                            .fit(design3(Ctr), ytr4).predict(design3(Cte)))
-fine3 = mean_absolute_error(yte4, LinearRegression()
-                            .fit(design3(Dtr), ytr4).predict(design3(Dte)))
-print("leaked %.4f" % leak3)
-print("honest %.4f" % fine3)
-print("flattered by %.4f mmHg (%.1f%%)"
-      % (fine3 - leak3, 100 * (fine3 - leak3) / fine3))
-```
-
-That one is real, and it is in the direction that gets published: the leaky
-model looks **better**. The imputer used each patient's blood pressure to
-decide what their missing BMI was, so BMI now carries a trace of the answer —
-and the model reads it back out.
-
-Nothing errored. Nothing warned. The only symptom was a better number, which is
-the symptom nobody investigates.
-
 ::: {.callout-note appearance="simple"}
-## Why this is the leak that matters
-Compare the three. Leaks 1 and 2 moved a constant into the preprocessing;
-leak 3 moved **the target** into a feature. That is the distinction worth
-carrying: leakage is serious in proportion to how much it tells a feature about
-the thing you are trying to predict.
+## The two columns hold different patients
+Python and R shuffle with different random number generators, so
+`random_state=42` and `set.seed(42)` do not pick the same 50 test patients.
+Expect the numbers in the two columns to be close, not identical. The steps,
+and what they teach, are the same.
 :::
 
-------------------------------------------------------------------------
+Create a pipeline that imputes missing values, encodes categorical variables,
+standardises numerical variables and fits a linear regression model. Then fit
+it on the training patients.
 
-## Task 1 — Put leak 3 inside the pipeline, where it cannot happen
-
-::: {.panel-tabset}
-## Python
+:::::: columns
+::: {.column width="48%"}
+**Python**
 
 ```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-knn_numeric = Pipeline([
-    ("impute", KNNImputer(n_neighbors=5)),
+#| results: hide
+numeric = Pipeline([
+    ("impute", SimpleImputer(
+        strategy="median")),
     ("scale", StandardScaler()),
 ])
 
-pre_knn = ColumnTransformer([
-    ("num", knn_numeric, ______),
-    ("cat", OneHotEncoder(handle_unknown="ignore", min_frequency=0.07), cat),
+categorical = Pipeline([
+    ("impute", SimpleImputer(
+        strategy="most_frequent")),
+    ("encode", OneHotEncoder(
+        handle_unknown="ignore")),
 ])
-pipe_knn = Pipeline([("pre", pre_knn), ("model", LinearRegression())])
 
-pipe_knn.fit(X_tr, ______)
-print(round(mean_absolute_error(y_te, pipe_knn.predict(X_te)), 4))
+preprocessor = ColumnTransformer([
+    ("numeric", numeric, num),
+    ("categorical", categorical, cat),
+])
+
+model = Pipeline([
+    ("preprocess", preprocessor),
+    ("regression", LinearRegression()),
+])
+
+model.fit(X_train, y_train)
 ```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is the list of numeric column names; the second is the training
-target. Note what you are *not* able to pass: there is no argument that would
-let the imputer see `y_te`.
 :::
 
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-knn_numeric = Pipeline([
-    ("impute", KNNImputer(n_neighbors=5)),
-    ("scale", StandardScaler()),
-])
-
-pre_knn = ColumnTransformer([
-    ("num", knn_numeric, num),
-    ("cat", OneHotEncoder(handle_unknown="ignore", min_frequency=0.07), cat),
-])
-pipe_knn = Pipeline([("pre", pre_knn), ("model", LinearRegression())])
-
-pipe_knn.fit(X_tr, y_tr)
-print(round(mean_absolute_error(y_te, pipe_knn.predict(X_te)), 4))
-```
-
-This lands near the honest number from leak 3, not the flattering one. The
-pipeline did not detect the leak or warn about it — it made the leak
-unexpressible, because `fit` receives `X_tr` and `y_tr` as separate arguments
-and the imputer is only ever handed the first.
-:::
+::: {.column width="4%"}
 :::
 
-## R
+::: {.column width="48%"}
+**R**
 
 ```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-rec_knn <- recipe(
-  systolic_BP ~ age + BMI + smoking_status + GP_practice,
-  data = ______
-) |>
-  step_other(all_nominal_predictors(), threshold = 0.07) |>
-  step_impute_knn(all_numeric_predictors(), neighbors = 5) |>
-  step_dummy(all_nominal_predictors()) |>
-  step_normalize(all_numeric_predictors())
-
-wf_knn <- workflow() |> add_recipe(rec_knn) |> add_model(linear_reg())
-fit_knn <- fit(wf_knn, data = ______)
-
-mean(abs(test$systolic_BP - predict(fit_knn, test)$.pred))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-Both blanks are the same thing. A recipe is told which data defines its
-*structure*, and a workflow is told which data to *fit* on — and in a correct
-analysis those are the same rows.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-rec_knn <- recipe(
-  systolic_BP ~ age + BMI + smoking_status + GP_practice,
+# "." means every other column
+rec <- recipe(
+  length_of_stay ~ .,
   data = train
 ) |>
-  step_other(all_nominal_predictors(), threshold = 0.07) |>
-  step_impute_knn(all_numeric_predictors(), neighbors = 5) |>
-  step_dummy(all_nominal_predictors()) |>
-  step_normalize(all_numeric_predictors())
+  step_impute_median(
+    all_numeric_predictors()
+  ) |>
+  step_impute_mode(
+    all_nominal_predictors()
+  ) |>
+  step_dummy(
+    all_nominal_predictors()
+  ) |>
+  step_normalize(
+    all_numeric_predictors(),
+    -starts_with("admission_type_"),
+    -starts_with("smoking_status_")
+  )
 
-wf_knn <- workflow() |> add_recipe(rec_knn) |> add_model(linear_reg())
-fit_knn <- fit(wf_knn, data = train)
+model <- workflow() |>
+  add_recipe(rec) |>
+  add_model(
+    linear_reg() |> set_engine("lm")
+  )
 
-mean(abs(test$systolic_BP - predict(fit_knn, test)$.pred))
+fitted_model <- fit(model, data = train)
 ```
-
-The recipe names `systolic_BP` on the left of the formula, so every `step_*`
-knows it is the outcome and no step will use it as a predictor. That is the
-structural reason the leak cannot occur: the role of each column is declared
-once, and respected by everything downstream.
 :::
-:::
-:::
+::::::
 
-------------------------------------------------------------------------
+The same pipeline, read across the two columns:
 
-## Task 2 — The scoreboard
+| What it does | Python | R |
+|---|---|---|
+| fill numeric gaps | `SimpleImputer(strategy="median")` | `step_impute_median()` |
+| fill categorical gaps | `SimpleImputer(strategy="most_frequent")` | `step_impute_mode()` |
+| turn categories into columns | `OneHotEncoder()` | `step_dummy()` |
+| standardise | `StandardScaler()` | `step_normalize()` |
+| say which columns get which step | `ColumnTransformer` | selectors such as `all_numeric_predictors()` |
+| preprocessing and model as one object | `Pipeline` | `workflow()` |
+| learn from the training patients | `model.fit()` | `fit()` |
 
-Collect the day's numbers in one table and write the sentence you would put in
-a paper.
-
-::: {.panel-tabset}
-## Python
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-board = pd.DataFrame({
-    "approach": ["baseline (median)", "honest pipeline",
-                 "leak 1 (scale early)", "leak 2 (impute early)",
-                 "leak 3 (imputer saw target)"],
-    "MAE": [base_py, honest_py, leak1, leak2, ______],
-})
-board["pct_of_baseline"] = (100 * board["MAE"] / ______).round(1)
-board.sort_values("MAE")
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is the leaked MAE from the third demonstration. The second is
-the baseline, so each row is expressed as a percentage of doing nothing.
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Which steps need to learn something from the training data?
+2. Why do we use different pipelines for numerical and categorical variables?
+3. What does `fit()` actually do?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-```{python}
-board = pd.DataFrame({
-    "approach": ["baseline (median)", "honest pipeline",
-                 "leak 1 (scale early)", "leak 2 (impute early)",
-                 "leak 3 (imputer saw target)"],
-    "MAE": [base_py, honest_py, leak1, leak2, leak3],
-})
-board["pct_of_baseline"] = (100 * board["MAE"] / base_py).round(1)
-board.sort_values("MAE")
-```
+**All of them.** Median imputation learns one median per numeric column. Mode
+imputation learns the most common category. The encoder learns the list of
+categories. The scaler learns a mean and a standard deviation per numeric
+column. The regression learns its coefficients.
 
-The sentence to write is the honest pipeline's number, with the split and the
-baseline named: *predicting systolic pressure from age, BMI and referral
-details, a linear model achieved a mean absolute error of X mmHg on a held-out
-20%, against Y mmHg for predicting the training median.*
+**Because the operations only make sense for one kind of variable.** There is
+no median of "Emergency" and "Elective", and one-hot encoding age would create
+a column for every age. Python makes the division explicit with a
+`ColumnTransformer`. R does it inside one recipe, with selectors such as
+`all_numeric_predictors()`.
 
-The leaky row sits above it and is not reportable, however much better it
-looks.
-:::
-:::
-
-## R
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-board <- data.frame(
-  approach = c("baseline (median)", "honest pipeline"),
-  MAE = c(base_r, ______)
-)
-board$pct_of_baseline <- round(100 * board$MAE / base_r, 1)
-board
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The blank is the honest MAE computed from the fitted workflow earlier in this
-chapter.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-board <- data.frame(
-  approach = c("baseline (median)", "honest pipeline"),
-  MAE = c(base_r, honest_r)
-)
-board$pct_of_baseline <- round(100 * board$MAE / base_r, 1)
-board
-```
-:::
+**`fit()` runs the steps in order on the training patients.** Each step learns
+its numbers, transforms the training data and hands the result to the next
+step. The regression is fitted last, on the fully processed table. Everything
+learned is stored inside the fitted object. The test patients are not looked at.
 :::
 :::
 
 ------------------------------------------------------------------------
 
-## Reflection
+## Task 2 — Look inside the pipeline (10 minutes)
 
-1. Recoding three spellings of `GP` was done **before** the split and median
-   imputation **after**. State the rule that separates them in one sentence,
-   without using the words "pipeline" or "leak".
-2. Leak 1 produced a difference of zero. Write the reply you would give a
-   colleague who concludes from this that scaling before splitting is fine.
-3. Leak 3 made the model look better by around half a mmHg. If you had not run
-   the honest version alongside it, what would have told you something was
-   wrong?
-4. The pipeline did not warn you about anything. In what sense, then, did it
-   help — and what class of mistake does it still leave you free to make?
+Now we inspect what the pipeline learned, rather than simply trusting it.
 
-## Stretch
+### A. Where does the imputation median come from?
 
-### Stretch 1 — Make leak 1 bite
-Replace `LinearRegression` with `Ridge(alpha=10)` and run leak 1 again, then
-replace `StandardScaler` with `MinMaxScaler` and run it a third time. Report
-which combination produces a measurable difference and explain why, using the
-scaler comparison from @sec-scaling.
+Compare the training and test medians for creatinine, then ask the fitted
+pipeline which median it stored.
 
-### Stretch 2 — How much of this is just the split?
-Every number above rests on one 80/20 split. Re-run the honest pipeline with
-twenty different seeds, collect the MAEs, and report the range. Then look again
-at the size of leak 3 and say whether you would still call it detectable.
+:::::: columns
+::: {.column width="48%"}
+**Python**
 
-### Stretch 3 — Build a leak you cannot see
-Add a feature of your own that leaks — a group mean, a count, a ratio computed
-across the whole table — fit the pipeline, and see whether anyone looking only
-at your code review could spot it.
+```{python}
+print("Training median:",
+      X_train["creatinine"].median())
+print("Test median:",
+      X_test["creatinine"].median())
 
-## What you can and cannot now claim
+imputer = (
+    model.named_steps["preprocess"]
+    .named_transformers_["numeric"]
+    .named_steps["impute"]
+)
 
-You can say the whole sequence from raw file to fitted model is expressed as one
-object, that every fitted step inside it is fitted on the training rows only,
-and that the reported error is honest in the specific sense that no quantity
-used to produce it was computed from the rows it was measured on.
+print("Pipeline median:",
+      imputer.statistics_[
+          num.index("creatinine")])
+```
+:::
 
-You can also say something sharper than "leakage is bad": you have measured
-three leaks and found two of them undetectable and one of them worth half a
-mmHg of false credit, and you know which property distinguished them.
+::: {.column width="4%"}
+:::
 
-You cannot claim this error estimate is precise. It rests on one split of 137
-rows, 27 of which are in the test set. Stretch 2 asks you to find out how much
-that single number moves when only the seed changes — and the answer is likely
-to be larger than leak 3 was.
+::: {.column width="48%"}
+**R**
+
+```{r}
+median(train$creatinine, na.rm = TRUE)
+median(test$creatinine, na.rm = TRUE)
+
+# the recipe fitted inside the workflow
+trained_rec <- extract_recipe(
+  fitted_model, estimated = TRUE
+)
+
+# step 1 is the median imputation
+tidy(trained_rec, number = 1) |>
+  select(terms, value)
+```
+:::
+::::::
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Which median did the pipeline learn?
+2. Will it use that same median when transforming the test patients?
+3. Why shouldn't the test median be used to fill missing values in the test
+   set?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+**The training median**: 74.5 in the Python column and 76 in the R column. The
+test medians, 80 and 78, appear nowhere inside the pipeline.
+
+**Yes.** A test patient with no creatinine recorded receives the training
+median.
+
+**Because the test patients stand in for patients you have not met yet.** A
+future patient arrives alone, and one patient has no median. Filling test gaps
+with the test median also means the preprocessing has learned from the very
+patients it is being judged on, so the reported error is no longer an honest
+estimate.
+:::
+:::
+
+### B. Visualise the effect of imputation
+
+Compare the creatinine distribution before and after imputation.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+#| fig-width: 4.5
+#| fig-height: 3.6
+import matplotlib.pyplot as plt
+
+imputed_train = imputer.transform(
+    X_train[num]
+)
+
+plt.hist(
+    X_train["creatinine"].dropna(),
+    bins=25, alpha=0.5,
+    label="Original")
+plt.hist(
+    imputed_train[
+        :, num.index("creatinine")],
+    bins=25, alpha=0.5,
+    label="Imputed")
+plt.legend()
+plt.xlabel("Creatinine (µmol/L)")
+plt.show()
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+#| fig-width: 4.5
+#| fig-height: 3.6
+creatinine_median <- tidy(
+  trained_rec, number = 1
+) |>
+  filter(terms == "creatinine") |>
+  pull(value)
+
+bind_rows(
+  tibble(
+    creatinine = train$creatinine,
+    stage = "Original"
+  ),
+  tibble(
+    creatinine = replace_na(
+      train$creatinine,
+      creatinine_median
+    ),
+    stage = "Imputed"
+  )
+) |>
+  ggplot(aes(x = creatinine)) +
+  geom_histogram(
+    bins = 25, na.rm = TRUE
+  ) +
+  facet_wrap(
+    ~ fct_inorder(stage), ncol = 1
+  ) +
+  labs(x = "Creatinine (µmol/L)")
+```
+:::
+::::::
+
+::: {.callout-note appearance="simple"}
+## Why the R column fills the gaps by hand here
+`bake(trained_rec, new_data = train)` returns creatinine after *all* the steps,
+so it has already been standardised and is no longer in µmol/L. To see
+imputation on its own, the R code takes the median the recipe learned and fills
+the gaps with it. The Python imputer is a separate object, so it can be applied
+on its own.
+:::
+
+::: {.callout-important appearance="simple"}
+## Think about it
+What happens to the distribution when several patients receive exactly the
+same median value?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+**One bar shoots up.** About 30 of the 200 training patients had no creatinine
+recorded (32 in the Python split, 31 in the R split), and every one of them is
+now placed at exactly the same value. The rest of the histogram is untouched.
+
+The column looks more certain than it is: the spread has shrunk, and a block of
+patients now appear to have a perfectly typical creatinine that nobody
+measured. This is the same effect as in @sec-imputation, now happening inside
+the pipeline where it is easy to forget.
+:::
+:::
+
+### C. What happens to the number of columns?
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+processed = (
+    model.named_steps["preprocess"]
+    .transform(X_train)
+)
+
+print("Original features:",
+      X_train.shape[1])
+print("Processed features:",
+      processed.shape[1])
+
+names = (
+    model.named_steps["preprocess"]
+    .get_feature_names_out()
+)
+for name in names:
+    print(name)
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+processed_train <- bake(
+  trained_rec, new_data = train
+)
+
+# minus 1: the outcome is not a predictor
+cat("Original predictors:",
+    ncol(train) - 1, "\n")
+cat("Processed predictors:",
+    ncol(processed_train) - 1, "\n")
+
+names(processed_train)
+```
+:::
+::::::
+
+::: {.callout-note appearance="simple"}
+## 11 columns in Python, 9 in R
+Neither is a mistake. `OneHotEncoder()` makes one column for every category.
+`step_dummy()` leaves out the first category of each variable, because it is
+implied by the others: a patient who is not `Emergency` is `Elective`. Both
+tables hold the same information.
+:::
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Why did the number of columns increase?
+2. Which original variables were responsible?
+3. What would happen if we one-hot encoded age or CRP instead?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+**Because a model needs numbers, and a category is not a number.** Each
+categorical variable is replaced by a set of 0/1 columns.
+
+**`admission_type` and `smoking_status`.** The six numeric variables are still
+six columns. They were changed in value, not in number.
+
+**The table would explode.** There are more than 60 different ages among the
+200 training patients, and about 150 different CRP values. One-hot encoding CRP
+would give nearly one column per patient. The columns would also throw away
+what makes the variable useful: the model could no longer tell that a CRP of 40
+lies between 30 and 50. And a new patient with a value never seen in training
+would match no column at all.
+:::
+:::
+
+------------------------------------------------------------------------
+
+## Task 3 — Apply the pipeline to new patients (5 minutes)
+
+A fitted pipeline should apply the same learned transformations to new
+patients.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+predictions = model.predict(X_test)
+
+print("First five predictions:",
+      predictions[:5].round(2))
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+predictions <- predict(
+  fitted_model, test
+)
+
+head(predictions, 5)
+```
+:::
+::::::
+
+The predictions alone cannot show which medians were used to make them. To see
+what *would* change, fit a second copy of the pipeline on the test patients and
+compare what the two copies learned. This is only to look: a pipeline fitted on
+the test patients must never be used to judge a model.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+from sklearn.base import clone
+
+refit = clone(model).fit(
+    X_test, y_test
+)
+
+refit_imputer = (
+    refit.named_steps["preprocess"]
+    .named_transformers_["numeric"]
+    .named_steps["impute"]
+)
+
+pd.DataFrame({
+    "training": imputer.statistics_,
+    "test": refit_imputer.statistics_,
+}, index=num).round(1)
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+refit <- fit(model, data = test)
+
+refit_rec <- extract_recipe(
+  refit, estimated = TRUE
+)
+
+tidy(trained_rec, number = 1) |>
+  select(terms, training = value) |>
+  mutate(
+    test = tidy(
+      refit_rec, number = 1
+    )$value
+  )
+```
+:::
+::::::
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Is the imputation median recalculated for the test data?
+2. Does the scaler calculate a new mean and standard deviation?
+3. What would be different if we fitted a new pipeline on the test patients?
+4. Why is this important when deploying a model in a hospital?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+**No, and no.** Predicting only *applies* what was stored during `fit()`. The
+medians, the list of categories, the means and the standard deviations all come
+from the training patients.
+
+**Every learned number would be different**, as the table shows: the creatinine
+median alone moves from 74.5 to 80 in the Python column and from 76 to 78 in
+the R column. The scaler changes too. The same patient would be handed to the
+regression with different numbers and would receive a different prediction.
+The pipeline would also have been fitted on the patients it is being judged on.
+
+**Because in a hospital patients arrive one at a time.** One patient has no
+median and no standard deviation, so the pipeline must carry its numbers with
+it. It also means the same patient receives the same prediction whoever else
+happens to be admitted that day.
+:::
+:::
+
+------------------------------------------------------------------------
+
+## Final reflection — Preprocessing choices and order
+
+### 1. Imputation and scaling
+
+Should we impute missing numerical values before standardising them? What
+would happen if we reversed the order?
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Imputing first is the usual order, and it is what both pipelines above do.
+
+Reversing it does not fail. Both tools skip the gaps when they compute a mean
+and a standard deviation. The result is slightly different, though: scaled
+first and filled second, training creatinine ends with a standard deviation of
+0.92 instead of 1, because some 30 identical values were added after the
+spread was measured.
+
+With median imputation little is at stake. The order matters far more when the
+imputer uses distances between patients, as KNN does. Then scale first, or the
+variables with the largest numbers decide who counts as a neighbour.
+:::
+:::
+
+### 2. One-hot encoding continuous features
+
+If we accidentally one-hot encoded age, blood pressure and CRP, what would
+happen to the number of columns and the information they contain?
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Three columns would become roughly 270 to 280: more than 60 for age, about 60 for
+blood pressure and about 150 for CRP, for 200 training patients. Most of those
+columns would describe one or two patients each.
+
+The information that the values are ordered would be lost. To the model, a
+systolic pressure of 150 would be no closer to 151 than to 95.
+:::
+:::
+
+### 3. Scaling one-hot encoded features
+
+Would applying standard scaling to the resulting 0/1 categorical indicators be
+mathematically incorrect? Why might we prefer to leave them as 0 and 1?
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+It is not incorrect, and for a plain linear regression the predictions are the
+same either way.
+
+What is lost is the meaning. A 0/1 column says "emergency admission: no or
+yes", and its coefficient is the difference between the two groups. After
+standard scaling the same column holds about −1.1 and 0.9, and the coefficient
+is no longer that difference.
+
+The values also depend on how common the category is. A category held by 2% of
+patients would turn its 1 into 7, far outside the range of any standardised
+numeric variable. That matters for models that are sensitive to scale, which
+appear later in the module.
+
+This is why the R recipe excludes the indicator columns from
+`step_normalize()`, and why the Python pipeline never sends the categorical
+columns to the scaler.
+:::
+:::
+
+### 4. Training versus test data
+
+If the test-set creatinine median is very different from the training-set
+median, which should the pipeline use to impute test patients? Why?
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+The training median, always.
+
+A large difference is worth investigating: the split may have been unlucky, or
+the two groups of patients may really differ. But it is not a reason to learn
+from the test patients. Once the model is in use there is no test median to
+borrow.
+:::
+:::
+
+### 5. What does a pipeline protect us from?
+
+Which aspects of preprocessing become more consistent when we use a fitted
+pipeline? What decisions still require clinical and statistical judgement?
+
+One decision to start with: this pipeline fills a missing smoking status with
+the most common value. What did @sec-imputation suggest instead?
+
+:::::::: {.content-visible when-meta="show-solutions"}
+::::::: {.callout-note appearance="simple"}
+## Worked answer
+**More consistent:** every patient goes through the same steps, in the same
+order, with the same learned numbers, and comes out with the same columns.
+Nothing is learned from the test patients. The preprocessing and the model
+travel together as one object.
+
+**Still a judgement:** which variables to use; whether the median is a
+reasonable stand-in for a missing creatinine; whether CRP should be
+log-transformed first (@sec-scaling); whether an extreme value is an error or a
+very sick patient.
+
+The pipeline applies whatever you chose, faithfully. It cannot tell you whether
+the choice was right. Smoking status is the example: @sec-imputation argued
+that an `Unknown` category is more honest than the most common value. Changing
+the pipeline's mind takes one line.
+
+:::::: columns
+::: {.column width="48%"}
+**Python**
+
+```{python}
+#| eval: false
+SimpleImputer(
+    strategy="constant",
+    fill_value="Unknown")
+```
+:::
+
+::: {.column width="4%"}
+:::
+
+::: {.column width="48%"}
+**R**
+
+```{r}
+#| eval: false
+step_unknown(
+  smoking_status,
+  new_level = "Unknown"
+)
+```
+:::
+::::::
+:::::::
+::::::::
+
+::: {.callout-tip appearance="simple"}
+## Key takeaway
+A pipeline is not just a convenient way of organising code.
+
+It learns preprocessing parameters from the training data, stores those
+parameters, and applies the same transformations to new patients.
+
+Understanding what the pipeline learns — and where that information comes
+from — is essential for reproducible machine learning.
+:::
