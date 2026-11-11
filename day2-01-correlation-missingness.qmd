@@ -6,7 +6,9 @@ engine: knitr
 
 # Exercise 2.2 — Correlation and missingness {#sec-correlation-missing}
 
-This is an example of the great amount of resources available in open-source programming languages, where new packages are developed and made available constantly. As key insight, explore, probably what you need is already out there for you to use!
+## Overview
+
+This is a showcase of the great amount of resources available in open-source programming languages, where new packages are developed and made available constantly publically. As key insight, **EXPLORE**, probably what you need is already out there for you to use!
 
 ------------------------------------------------------------------------
 
@@ -16,7 +18,7 @@ This is an example of the great amount of resources available in open-source pro
 
 ### Correlation
 
-For you to see the breadth of possibilities out there, here is an example of different ways in which to describe and learn about the correlation matrix of your dataset.
+For you to see the breadth of possibilities out there, here is an example of different ways in which to describe and learn about the correlation matrix of your dataset.As you can see different packages have been developed for the same purpose but hold different functions and approaches. 
 
 ```{r, message=FALSE}
 
@@ -152,60 +154,6 @@ What are your insights? Do they make sense? Remember:
 
 ------------------------------------------------------------------------
 
-### What a correlation does with values that are not real
-
-`mtcars` is clean. Clinical files are not, and the usual way they are not clean
-is that somebody recorded an absent measurement as a number. Before trusting any
-of the matrices above, look at `data/diabetes.csv`: 768 adults, eight
-measurements and an outcome.
-
-```{r}
-#| message: false
-library(readr)
-library(dplyr)
-
-diabetes <- read_csv("data/diabetes.csv")
-
-diabetes |>
-  summarise(across(where(is.numeric), ~ sum(.x == 0))) |>
-  t()
-```
-
-A plasma glucose of zero is not a low reading, and a body mass index of zero is
-not a thin patient. Both are impossible, so the zero is standing in for "not
-measured". Replace the impossible ones with `NA` and compare the two matrices:
-
-```{r}
-cols <- c("glucose", "pressure", "triceps", "insulin", "mass")
-
-dia_na <- diabetes |>
-  mutate(across(all_of(cols), ~ na_if(.x, 0)))
-
-round(cor(diabetes[cols]), 2)
-round(cor(dia_na[cols], use = "pairwise.complete.obs"), 2)
-```
-
-::: {.callout-warning}
-### The result that should bother you
-The strongest association in the raw matrix is mostly an artefact of the zeros,
-and one of the real associations was hidden by them. Both directions, in the
-same table.
-
-1. **`insulin` with `triceps` falls from about 0.47 to about 0.17** once the
-   zeros are treated as missing. Every one of the 251 rows with a zero skin-fold
-   also has a zero insulin, so a quarter of the file sits exactly at the origin
-   of that scatter plot. Points at the origin, far below the real values, pull a
-   regression line through themselves. The association was between the two
-   recording failures, not between the two hormonal quantities.
-2. **`triceps` with `mass` rises from about 0.38 to about 0.61.** Skin-fold
-   thickness and body mass index measure overlapping things and should agree;
-   the zeros were diluting that agreement towards the middle.
-3. So the zeros did not add noise. Noise attenuates everything. They *moved*
-   correlations, up for pairs that share a missingness pattern and down for
-   pairs that do not — and nothing in the output marks which is which.
-:::
-------------------------------------------------------------------------
-
 ### Missing pipelines
 
 As with the correlation matrices before, there are really good packages to help you understand the missingness structure of your data. This is my recommendation:
@@ -310,7 +258,7 @@ Open up your three newly created pdfs! (remember to uncomment the pdf() lines)
 
 ## Python
 
-The same two ideas, without the commentary. `mtcars` and `airquality` are built
+The same two ideas but with python equivalent. `mtcars` and `airquality` are built
 into R; in Python the equivalents come from the data folder you downloaded.
 
 ```{python}
@@ -377,15 +325,5 @@ ax.set_title("Missing values (yellow)")
 plt.show()
 ```
 
-Which columns go missing *together* — the question the UpSet plot answers:
-
-```{python}
-pattern = (heart.isna()
-           .groupby(list(heart.columns[heart.isna().any()]))
-           .size()
-           .sort_values(ascending=False)
-           .head(8))
-print(pattern)
-```
 
 ::::

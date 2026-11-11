@@ -42,7 +42,7 @@ We use `data/los_data.csv` — [download it here](data/los_data.csv), or take th
     -   `Age` — patient age in years
     -   `Severity` — a severity score representing illness burden, 1 to 10
 
-We treat this as a purely *predictive* problem: given a patient's age and severity, can we forecast their length of stay? That is the question a bed manager asks every morning.
+We treat this as a purely *predictive* problem: given a patient's age and severity, can we forecast their length of stay? 
 
 ### Look at it before you model it
 
@@ -50,7 +50,7 @@ We treat this as a purely *predictive* problem: given a patient's age and severi
 ## R
 
 ```{r}
-library(readr); library(dplyr)
+library(tidyverse)
 los <- read_csv("data/los_data.csv")
 summary(los)
 ```
@@ -64,23 +64,10 @@ los.describe()
 ```
 :::
 
-Answer three questions before going on.
+Answer this questions before going on.
 
 1.  What is the oldest patient here, and is that plausible?
-2.  What is the median length of stay, and is *that* plausible for an admission?
-3.  If either answer is no — what will you do about it, and what would you need to know to decide?
 
-::: callout-warning
-## Do not skip this step
-
-Both oddities in this file are the kind you meet in real extracts: an implausible maximum nobody clipped, and an outcome whose typical value is wrong by an order of magnitude because of how it was defined upstream. Finding them takes one line of code. Finding them after you have presented the model takes a reputation.
-:::
-
-:::: {.content-visible when-profile="instructor"}
-::: instructor
-**Answers.** (1) The maximum age is just over 109, and 26 patients are 90 or older, because the generator truncates age below 18 but not above — the usual real-world cause is a default or mistyped date of birth. (2) The median LOS is about 66 **days**, wrong for acute medicine by a factor of ten or more; typical acute LOS is a few days, right-skewed. The honest response to both is to go back to whoever built the extract. Also, LOS is *symmetric*, so there is no long right tail at all, which is the most recognisable feature of real LOS data.
-:::
-::::
 
 ------------------------------------------------------------------------
 
@@ -119,8 +106,7 @@ import matplotlib.pyplot as plt
 #| message: false
 #| warning: false
 library(tidymodels)
-library(readr)
-library(ggplot2)
+
 ```
 :::
 ::::::
@@ -341,75 +327,12 @@ A perfect model would put every point on the diagonal. How far the cloud sits fr
 That is expected. What would be a problem is a difference large enough to change your conclusion. Both numbers are near 3.2 to 3.4 days, so both support the same statement. Cross-validation later replaces the single split, after which the two agree much more closely, because the score stops depending on one arbitrary partition.
 :::
 
-## Task 1 — What happens if a change the seed
+::: {.callout-note appearance="simple"}
+## What happens if a change the seed
 
 Change the seed value. Does the MAE change? Why? What is changing too?
 
-## Task 2 — Where is the model wrong?
-
-MAE averages over every patient, so it hides who is being badly served. Plot the residuals — actual minus predicted — against the prediction.
-
-::::::: panel-tabset
-## R
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-test_pred %>%
-  mutate(resid = ______) %>%
-  ggplot(aes(x = .pred, y = resid)) +
-  geom_point(alpha = 0.4) +
-  geom_hline(yintercept = 0) +
-  labs(x = "Predicted LOS (days)", y = "Residual (days)")
-```
-
-:::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-
-```{r}
-test_pred %>%
-  mutate(resid = LOS - .pred) %>%
-  ggplot(aes(x = .pred, y = resid)) +
-  geom_point(alpha = 0.4) +
-  geom_hline(yintercept = 0) +
-  labs(x = "Predicted LOS (days)", y = "Residual (days)")
-```
 :::
-::::
-
-## Python
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-resid = ______
-fig, ax = plt.subplots()
-ax.scatter(pred_test, resid, alpha=0.4)
-ax.axhline(0)
-ax.set_xlabel("Predicted LOS (days)")
-ax.set_ylabel("Residual (days)")
-plt.show()
-```
-
-:::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-
-```{python}
-resid = y_test - pred_test
-fig, ax = plt.subplots()
-ax.scatter(pred_test, resid, alpha=0.4)
-ax.axhline(0)
-ax.set_xlabel("Predicted LOS (days)")
-ax.set_ylabel("Residual (days)")
-plt.show()
-```
-:::
-::::
-:::::::
-
-Is the error the same size everywhere, or systematically worse for some patients? If a clinician asked "can I trust this for my oldest patients?", what would you say, and what in the plot supports it?
 
 ------------------------------------------------------------------------
 
