@@ -4,487 +4,351 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 2.5 — Scaling, transformation and features {#sec-scaling}
+# Exercise 2.5 — Scaling, transformations and feature engineering {#sec-scaling}
 
 ::: {.callout-note appearance="simple"}
-## In R or in Python
-Pick a tab and stay in it. The two tabs are the same exercise — the same
-sections, the same tasks, the same numbers — so complete either one.
+## 20-25 minutes, in R or in Python
+Pick a tab and stay in it. The two tabs are the same exercise — the same steps,
+the same questions and the same numbers.
 :::
 
 ## Objectives
 
 By the end of this exercise you will be able to:
 
-- put features measured on different scales onto a comparable one, three
-  different ways, and say what each one assumes;
-- predict which scaler an extreme value will damage, and check your prediction;
-- treat the log and the square root as one family rather than two tricks;
-- say what a squared term buys a linear model and why the model is still
-  linear;
-- count the columns a feature-engineering step adds, and say why the count
-  matters.
+- put variables measured in different units onto a comparable scale, three
+  different ways;
+- say what an extreme value does to each scaler, and to the other patients;
+- use a log transformation to change the shape of a skewed variable;
+- derive a clinically meaningful feature from columns you already have.
 
-## Why this, here
+## The scenario
 
-Once the gaps are filled, as in @sec-imputation, a table is complete. Here its
-three numeric columns are still measured in unrelated units: `age` in years, `BMI` in kg/m², `systolic_BP` in
-mmHg. Nothing is wrong with that — but several models behave as though the
-numbers were comparable, and will quietly let the column with the widest range
-dominate.
+We are preparing the hospital admissions data to predict length of stay. Its
+variables are measured in different units: age in years, blood pressure in
+mmHg and C-reactive protein (CRP) in mg/L.
 
-Everything in this exercise is still a plain function applied to a whole
-column. @sec-pipeline-steps then shows why every single step here is a step
-that has to be *fitted*, and what goes wrong when you fit it at the wrong
-moment.
-
-## Starting point
-
-This exercise uses the GP extract, `clinic_extract.csv`. The block below
-cleans it, fills the gaps with the median as in @sec-imputation so nothing is
-missing, and computes BMI from the filled inputs.
+CRP is a marker of inflammation. Most patients have relatively low values, but
+some have very high measurements. This exercise looks at how different scaling
+methods handle those values, how a transformation changes a distribution, and
+how to create a clinically useful feature.
 
 :::::: {.panel-tabset group="language"}
 
 ## R
 
+### 1. Scaling: three different approaches
+
+Compare Min-Max, Standard and Robust scaling for age, systolic blood pressure
+and CRP.
+
 ```{r}
 #| message: false
 #| warning: false
-library(dplyr)
-library(tidyr)
-library(readr)
-library(ggplot2)
-library(stringr)
-library(forcats)
+library(tidyverse)
 
-na_codes <- c("unknown", "?", "not recorded", "N/A", "-999")
-num_cols <- c("age", "height_cm", "weight_kg", "systolic_BP")
+hospital <- read_csv("data/hospital_admissions.csv", show_col_types = FALSE)
 
-gp <- read_csv("data/clinic_extract.csv", show_col_types = FALSE) |>
-  mutate(across(everything(), ~ if_else(as.character(.x) %in% na_codes,
-                                        NA_character_, as.character(.x)))) |>
-  mutate(across(all_of(num_cols), as.numeric)) |>
+scale_cols <- c("age", "systolic_BP", "CRP_mg_L")
+
+hospital_scaled <- hospital |>
   mutate(
-    height_cm = if_else(height_cm < 3, height_cm * 100, height_cm),
-    age       = if_else(age > 120, NA_real_, age),
-    weight_kg = if_else(weight_kg > 300, NA_real_, weight_kg)
-  ) |>
-  mutate(across(all_of(num_cols),
-                ~ if_else(is.na(.x), median(.x, na.rm = TRUE), .x))) |>
-  mutate(BMI = weight_kg / (height_cm / 100)^2)
-
-scale_cols <- c("age", "BMI", "systolic_BP")
-sapply(gp[scale_cols], range) |> round(1)
-```
-
-Three columns, three ranges, none of them comparable: `age` runs 19 to 91,
-`BMI` 15.8 to 44.4, `systolic_BP` 104 to 165. `systolic_BP` spans the widest
-numeric distance, and to a model that measures distances — anything using a
-Euclidean distance, and anything regularised — that width is indistinguishable
-from importance.
-
-------------------------------------------------------------------------
-
-### Three scalers
-
-#### Min-Max: squeeze into [0, 1]
-
-Subtract the minimum, divide by the range. Every value lands between 0 and 1,
-and the shape of the distribution is untouched.
-
-```{r}
-minmax <- function(x) {
-  (x - min(x)) / (max(x) - min(x))
-}
-
-X_mm <- gp |> mutate(across(all_of(scale_cols), minmax))
-
-sapply(X_mm[scale_cols], range)
-```
-
-#### Standard: centre and divide by the standard deviation
-
-Subtract the mean, divide by the standard deviation. Each column now has mean
-0 and standard deviation 1. Values are not bounded — an extreme observation
-stays extreme, which is usually what you want.
-
-```{r}
-X_ss <- gp |>
-  mutate(across(all_of(scale_cols), ~ as.numeric(scale(.x))))
-
-round(rbind(
-  mean = sapply(X_ss[scale_cols], mean),
-  sd   = sapply(X_ss[scale_cols], sd)
-), 3)
-```
-
-::: {.callout-note appearance="simple"}
-## One honest difference between the two tabs
-R's `scale()` divides by the **sample** standard deviation, with $n-1$ in the
-denominator; `scikit-learn`'s `StandardScaler` divides by the **population**
-standard deviation, with $n$. On 180 rows that is a difference of about 0.3%,
-which is why the standardised outlier below reads 3.03 in R and 3.04 in Python.
-Neither is wrong. It is worth knowing that a "standardised" column is not one
-single defined thing.
-:::
-
-#### Robust: use the median and the IQR
-
-Subtract the median, divide by the interquartile range. Both are quantities an
-extreme value barely moves, which is the whole idea.
-
-```{r}
-robust <- function(x) {
-  (x - median(x)) / IQR(x)
-}
-
-X_rs <- gp |> mutate(across(all_of(scale_cols), robust))
-
-round(rbind(
-  median = sapply(X_rs[scale_cols], median),
-  max    = sapply(X_rs[scale_cols], max)
-), 2)
-```
-
-### What the one bad value does to each
-
-`BMI` has a genuine high extreme — the heaviest patient in the cohort, not a
-typo. The starting block above has already removed the errors, in the way
-@sec-cleaning worked through; what is left is real. Watch what each scaler does
-with a value you must **not** throw away.
-
-```{r}
-i <- which.max(gp$BMI)
-
-data.frame(
-  scaler  = c("Min-Max", "Standard", "Robust"),
-  outlier = c(X_mm$BMI[i], X_ss$BMI[i], X_rs$BMI[i]),
-  median_row = c(median(X_mm$BMI), median(X_ss$BMI), median(X_rs$BMI)),
-  bulk_max_excl_outlier = c(max(X_mm$BMI[-i]), max(X_ss$BMI[-i]),
-                            max(X_rs$BMI[-i]))
-) |>
-  mutate(across(where(is.numeric), ~ round(.x, 2)))
-```
-
-Read the last column against the second, and be precise about what you see.
-
-Under **Min-Max** the extreme is pinned at 1 by definition, and because it sets
-the maximum, every other value is divided by a range it stretched. The rest of
-the cohort now spans 0 to about 0.88, so a single patient has claimed roughly
-an eighth of the available scale. Under **Standard** and **Robust** nothing is
-pinned: the extreme sits out at about 3.0 standard deviations and 2.4
-interquartile ranges respectively, which is an honest description of a value
-that far from the centre rather than an arbitrary ceiling.
-
-So the three are not as different here as the usual advice implies, because
-this extreme is only moderately extreme — it is the heaviest patient, not a
-typo. The difference appears when it gets worse. Suppose one weight had been
-recorded with a digit in front of it and had slipped past @sec-cleaning:
-
-```{r}
-worse <- gp$BMI
-worse[i] <- gp$BMI[i] * 3
-
-rbind(
-  `bulk max, Min-Max`  = c(now   = max(minmax(gp$BMI)[-i]),
-                           worse = max(minmax(worse)[-i])),
-  `bulk max, Standard` = c(max(as.numeric(scale(gp$BMI))[-i]),
-                           max(as.numeric(scale(worse))[-i])),
-  `bulk max, Robust`   = c(max(robust(gp$BMI)[-i]),
-                           max(robust(worse)[-i]))
-) |> round(2)
-```
-
-**Min-Max** collapses: the bulk maximum falls from 0.88 to 0.21, because the
-range it divides by is now set entirely by the bad row, so the real data is
-squeezed towards zero. **Standard** shrinks too, from 2.40 to about 1.34, since
-the standard deviation is inflated by the squared distance of that one point.
-**Robust** does not move at all — 1.91 before and 1.91 after — because the
-median and the interquartile range cannot be shifted by a single extreme value,
-which is the entire reason it exists.
-
-That is the rule worth keeping: Min-Max is the most fragile, Standard is
-affected but less so, and Robust is indifferent.
-
-::: {.callout-note appearance="simple"}
-## The choice is about the column, not the algorithm
-Robust scaling is not uniformly better. If a column has no extreme values,
-Min-Max and Standard give you a bounded or a familiar scale and nothing is
-lost. Reach for Robust when you have looked at the distribution and seen a tail
-— which is why @sec-histograms came first.
-:::
-
-------------------------------------------------------------------------
-
-### Task 1 — Scale, and measure the damage
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-i <- which.max(gp$BMI)
-
-for (nm in c("minmax", "standard", "robust")) {
-  z <- switch(nm,
-    minmax   = minmax(gp$BMI),
-    standard = as.numeric(scale(gp$BMI)),
-    robust   = ______(gp$BMI)
+    across(all_of(scale_cols),
+           ~ (.x - min(.x)) / (max(.x) - min(.x)),
+           .names = "{.col}_minmax"),
+    across(all_of(scale_cols),
+           ~ as.numeric(scale(.x)),
+           .names = "{.col}_standard"),
+    across(all_of(scale_cols),
+           ~ (.x - median(.x)) / IQR(.x),
+           .names = "{.col}_robust")
   )
-  cat(nm, "outlier", round(z[i], 2),
-      " bulk max", round(max(z[______]), 2), "\n")
-}
 ```
 
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is the helper defined earlier in this chapter. The second
-excludes one position from a vector — a minus sign does it.
+Compare the range of values:
+
+```{r}
+hospital_scaled |>
+  select(starts_with("CRP")) |>
+  summary()
+
+sd(hospital_scaled$CRP_mg_L_standard)
+```
+
+Visualise CRP before and after scaling:
+
+```{r}
+#| fig-height: 4
+hospital_scaled |>
+  select(CRP_mg_L, starts_with("CRP_mg_L_")) |>
+  pivot_longer(everything()) |>
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(~name, scales = "free_x")
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. What happens to the range after Min-Max scaling?
+2. What happens to the mean and standard deviation after Standard scaling?
+3. How does Robust scaling differ?
+4. Does any scaling method eliminate CRP's skewness?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-```{r}
-i <- which.max(gp$BMI)
+**Min-Max** puts every value between 0 and 1: the lowest CRP, 0.8, becomes 0
+and the highest, 264.6, becomes 1. Look at where the typical patient lands,
+though — the median is 0.037. Most of the cohort is crammed into the bottom
+tenth of the scale.
 
-for (nm in c("minmax", "standard", "robust")) {
-  z <- switch(nm,
-    minmax   = minmax(gp$BMI),
-    standard = as.numeric(scale(gp$BMI)),
-    robust   = robust(gp$BMI)
-  )
-  cat(nm, "outlier", round(z[i], 2),
-      " bulk max", round(max(z[-i]), 2), "\n")
-}
+**Standard** gives a mean of 0 and a standard deviation of 1. It is not
+bounded: the highest CRP sits about 8.4 standard deviations above the mean.
+
+**Robust** centres on the median instead of the mean, so the median becomes 0,
+and divides by the interquartile range instead of the standard deviation. The
+highest patient is 13.7 interquartile ranges out.
+
+**No.** Measure it rather than judging the histograms by eye:
+
+```{r}
+skewness <- function(x) mean((x - mean(x))^3) / mean((x - mean(x))^2)^1.5
+
+hospital_scaled |>
+  summarise(across(starts_with("CRP"), skewness)) |>
+  round(2)
 ```
 
-The gap between the outlier and the bulk maximum is the diagnostic: 1.00
-against 0.88 under Min-Max, 3.03 against 2.40 under Standard, 2.41 against 1.91
-under Robust.
+4.43 in all four columns. Subtracting a constant and dividing by a constant
+cannot change a shape. The four histograms are the same picture with different
+numbers on the axis.
 :::
+:::
+
+::: {.callout-tip appearance="simple"}
+## Key observation
+All three methods change the numerical scale, but preserve the underlying shape
+of the distribution.
 :::
 
 ------------------------------------------------------------------------
 
-### Transformation: changing the shape, not the scale
+### 2. Outliers: what happens to the other patients?
 
-Scaling moves a distribution and stretches it. It does not change its shape: a
-skewed column scaled three ways is still skewed three ways. Changing the shape
-takes a non-linear function.
+Imagine a patient has an exceptionally high CRP. How does that influence the
+scaling of everyone else's measurements?
 
-Base R has no `skewness()`, so define it once — the third moment over the
-standard deviation cubed:
+Compare the largest CRP values before and after Min-Max scaling:
 
 ```{r}
-skewness <- function(x) {
-  x <- x[!is.na(x)]
-  mean((x - mean(x))^3) / mean((x - mean(x))^2)^1.5
-}
+sort(hospital_scaled$CRP_mg_L, decreasing = TRUE)[1:5]
 
-cat("BMI skew, as recorded:", round(skewness(gp$BMI), 2), "\n")
-cat("after square root    :", round(skewness(sqrt(gp$BMI)), 2), "\n")
-cat("after log            :", round(skewness(log(gp$BMI)), 2), "\n")
+round(sort(hospital_scaled$CRP_mg_L_minmax, decreasing = TRUE)[1:5], 3)
 ```
 
-0.47 as recorded, 0.21 after the square root, −0.04 after the log. Scaling, for
-contrast, leaves skewness **exactly** where it was — subtracting a constant and
-dividing by a constant cannot change a shape:
+Now make the maximum CRP three times larger, change nothing else, and scale
+again:
 
 ```{r}
-cat("min-max scaled :", round(skewness(minmax(gp$BMI)), 2), "\n")
-cat("standardised   :", round(skewness(as.numeric(scale(gp$BMI))), 2), "\n")
+crp_extreme <- hospital$CRP_mg_L
+crp_extreme[which.max(crp_extreme)] <- max(crp_extreme) * 3
+
+minmax <- function(x) (x - min(x)) / (max(x) - min(x))
+
+round(sort(minmax(crp_extreme), decreasing = TRUE)[1:5], 3)
 ```
 
-Both still 0.47.
+::: {.callout-important appearance="simple"}
+## Think about it
+1. What happened to the scaled values of the other patients?
+2. Which scaling method would be least affected by an extreme CRP measurement?
+3. Should a clinically plausible extreme value automatically be removed?
+:::
 
-#### Log and square root are the same idea at different strengths
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+**They all moved, though none of them changed.** The patient with the
+second-highest CRP, 197.7, was at 0.746 and is now at 0.248. Their measurement
+is exactly what it was. Min-Max divides by the range, the range is set by the
+single largest value, and so one patient decides where everybody else sits.
 
-It is tempting to learn these as separate recipes. They are one family. Raising
-a column to a power $\lambda$ covers all of them: $\lambda = 1$ leaves the data
-alone, $\lambda = 0.5$ is the square root, $\lambda = 0$ is the log, and
-$\lambda = 2$ squares it. Smaller $\lambda$ pulls a long right tail in harder.
+**Robust**, and you can check it:
 
 ```{r}
-#| fig-height: 2.6
-powers <- c("square (2)" = 2, "none (1)" = 1, "sqrt (0.5)" = 0.5, "log (0)" = 0)
+robust <- function(x) (x - median(x)) / IQR(x)
 
-purrr::imap_dfr(powers, function(lam, nm) {
-  v <- if (lam == 0) log(gp$BMI) else gp$BMI^lam
-  data.frame(label = nm, value = as.numeric(scale(v)))
-}) |>
-  mutate(label = factor(label, levels = names(powers))) |>
-  ggplot(aes(x = value)) +
-  geom_histogram(bins = 25) +
-  facet_wrap(~ label, nrow = 1, scales = "free_x") +
-  labs(x = NULL, y = NULL)
+round(sort(robust(hospital$CRP_mg_L), decreasing = TRUE)[1:5], 2)
+round(sort(robust(crp_extreme), decreasing = TRUE)[1:5], 2)
 ```
 
-Each panel is standardised, so only the shape differs. Read left to right and
-you are turning one dial. Choosing between log and square root is choosing how
-far to turn it — not choosing between two unrelated techniques.
+Only the first number is different. The second-highest patient is at 10.12
+before and 10.12 after, because the median and the interquartile range are not
+moved by one extreme value. Standard scaling falls in between: the same patient
+drops from 6.1 to 3.2, since the standard deviation is inflated by the outlier.
 
-One constraint comes with the family: the log of zero is undefined and the log
-of a negative number does not exist. `BMI` is strictly positive so it is safe
-here, but a column containing zeros — a count of previous admissions, say —
-needs `log1p`, or a transformation built to tolerate zeros.
+**No.** A CRP of 265 is not an error; in a real patient it would mean a severe
+infection, and probably the patient a model most needs to get right. Removing a value
+because it is inconvenient for a scaler throws away the cases that matter. Pick
+a scaler, or a transformation, that copes with them instead.
+:::
+:::
+
+::: {.callout-tip appearance="simple"}
+## Key observation
+Min-Max scaling is sensitive to extreme values. Robust scaling uses the median
+and interquartile range, which are far less sensitive to them.
+:::
 
 ------------------------------------------------------------------------
 
-### Feature engineering: why would $x^2$ work?
+### 3. Transformation: can we reduce skewness?
 
-A linear model fits
-
-$$\hat{y} = \beta_0 + \beta_1 x$$
-
-which is a straight line in $x$. If the real relationship bends, a straight
-line cannot follow it. Add a squared column and you fit
-
-$$\hat{y} = \beta_0 + \beta_1 x + \beta_2 x^2$$
-
-which is a curve in $x$ — and still a **linear model**, because "linear" refers
-to the parameters, not the features. $\beta_1$ and $\beta_2$ still enter as
-plain multipliers, so the fitting is the same arithmetic it always was. You
-changed the data, not the algorithm.
-
-Here is the thing it buys, on a relationship that genuinely bends:
+Scaling does not change the shape of a distribution. A nonlinear transformation
+can. Compare the original CRP distribution with its log transformation:
 
 ```{r}
 #| fig-height: 2.8
-set.seed(7)
-d <- data.frame(x = runif(120, -3, 3))
-d$y <- 2 + 0.5 * d$x + 1.2 * d$x^2 + rnorm(120, 0, 1.5)
+hospital <- hospital |>
+  mutate(log_CRP = log1p(CRP_mg_L))
 
-straight <- lm(y ~ x, data = d)
-curved   <- lm(y ~ x + I(x^2), data = d)
-
-cat("straight line, residual SD:", round(sigma(straight), 2), "\n")
-cat("with x squared,            ", round(sigma(curved), 2), "\n")
-
-d |>
-  mutate(straight = fitted(straight), curved = fitted(curved)) |>
-  pivot_longer(c(straight, curved), names_to = "model", values_to = "fit") |>
-  ggplot(aes(x = x)) +
-  geom_point(aes(y = y), alpha = 0.4, size = 1) +
-  geom_line(aes(y = fit, colour = model), linewidth = 0.9) +
-  labs(x = "x", y = "y", colour = NULL)
+hospital |>
+  select(CRP_mg_L, log_CRP) |>
+  pivot_longer(everything()) |>
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(~name, scales = "free_x")
 ```
 
-A residual spread of about 3.4 for the straight line against 1.4 with the
-squared term. The straight line is not wrong so much as unable. It has no
-parameter capable of representing curvature, so it averages the bend away and
-leaves it in the residuals.
+::: {.callout-important appearance="simple"}
+## Think about it
+1. How does the shape change?
+2. What happens to the distance between low and high CRP measurements?
+3. Why use `log1p()` rather than `log()`?
 
-(This is the one place where the two tabs cannot print the same numbers: the
-data is simulated, and R and Python draw from different random number
-generators, so the Python tab's figures are close but not identical. Everything
-computed from `clinic_extract.csv` matches exactly.)
-
-#### What it costs
-
-```{r}
-form <- ~ (age + BMI + systolic_BP)^2 +
-  I(age^2) + I(BMI^2) + I(systolic_BP^2)
-
-wide <- model.matrix(form, data = gp)[, -1, drop = FALSE]
-
-cat("columns:", length(scale_cols), "->", ncol(wide), "\n")
-colnames(wide)
-```
-
-Three columns became nine: each original, each square, and each pairwise
-product. At degree 2 that is manageable. The growth is quadratic in the number
-of features, so the same step on 30 columns gives 495, most of them nearly
-duplicates of each other — and every one is a column that can be fitted on the
-wrong rows.
-
-------------------------------------------------------------------------
-
-### Task 2 — Add a term and check it earns its place
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-m1 <- lm(systolic_BP ~ age, data = gp)
-m2 <- lm(systolic_BP ~ age + I(age^______), data = gp)
-
-cat("residual SD, straight:", round(sigma(m1), 3), "\n")
-cat("residual SD, squared :", round(sigma(______), 3), "\n")
-cat("p-value on the squared term:",
-    round(summary(m2)$coefficients["I(age^2)", "Pr(>|t|)"], 3), "\n")
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is the power. The second is the model you just fitted. `I()`
-is what stops the formula interpreting `^` as an interaction.
+**Optional.** Repeat with `length_of_stay`, the eventual prediction target.
+Does its distribution also benefit from a log transformation?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-```{r}
-m1 <- lm(systolic_BP ~ age, data = gp)
-m2 <- lm(systolic_BP ~ age + I(age^2), data = gp)
+**The long right tail is pulled in** and the distribution becomes close to
+symmetric:
 
-cat("residual SD, straight:", round(sigma(m1), 3), "\n")
-cat("residual SD, squared :", round(sigma(m2), 3), "\n")
-cat("p-value on the squared term:",
-    round(summary(m2)$coefficients["I(age^2)", "Pr(>|t|)"], 3), "\n")
+```{r}
+c(CRP = skewness(hospital$CRP_mg_L),
+  log_CRP = skewness(hospital$log_CRP),
+  length_of_stay = skewness(hospital$length_of_stay),
+  log_length_of_stay = skewness(log1p(hospital$length_of_stay))) |>
+  round(2)
+
+round(log1p(c(5, 10, 100, 200)), 2)
 ```
 
-This is the useful negative result. The residual spread moves from 10.005 to
-10.003 — three thousandths of a mmHg — and the p-value on the squared term is
-0.297, nowhere near significant, because this data was simulated with a
-straight-line relationship between age and blood pressure. Adding $x^2$ does
-not create curvature; it only lets you fit curvature that is there. Compare
-with the simulated bending example above, where it was.
+CRP's skewness falls from 4.43 to 0.38. Length of stay, the optional part,
+goes from 1.63 to 0.31 — it benefits too.
+
+**Distances stop being about units and start being about ratios.** On the
+original scale, going from 5 to 10 mg/L is a step of 5, and going from 100 to
+200 is a step of 100. After the transformation those two doublings are almost
+the same size: about 0.61 and 0.69. That matches how CRP is read clinically —
+a doubling means something whether it starts low or high — and it stops the
+handful of very high values from dominating everything measured in distance.
+
+**Because the log of zero is minus infinity.** `log1p(x)` computes
+$\log(1 + x)$, so a value of 0 becomes 0 instead of breaking the column. In
+this file the lowest CRP is 0.8, so a plain `log()` would have run — but a
+laboratory can report a result below its detection limit as 0, and `log1p()`
+is the habit that survives that.
 :::
 :::
 
 ------------------------------------------------------------------------
 
-### Reflection
+### 4. Feature engineering: calculate BMI
 
-1. Min-Max compressed the whole `BMI` column because one value set the maximum.
-   Which of the three scalers would you choose for a variable where the extreme
-   values are real and clinically important, and why?
-2. Standardising a column makes its mean 0 and its standard deviation 1. Does
-   it make the column normally distributed? Justify your answer using the
-   skewness numbers above.
-3. The squared term helped on simulated curved data and not on `age`. What does
-   that tell you about adding polynomial terms as a routine step?
-4. Degree-2 polynomial features took 3 columns to 9. At what point does that
-   stop being a feature-engineering step and start being a problem, and what
-   would you look at to decide?
+The dataset includes height and weight, but not BMI. Create it and look at its
+distribution:
 
-### Stretch
+```{r}
+#| fig-height: 2.8
+hospital <- hospital |>
+  mutate(BMI = weight_kg / (height_cm / 100)^2)
 
-#### Stretch 1 — Find the turning power yourself
-Write a loop over $\lambda$ from $-1$ to $2$ in steps of $0.25$, compute the
-skewness of `BMI` raised to each power (using the log at $\lambda = 0$), and
-plot skewness against $\lambda$. Read the value that brings it closest to zero
-off your own plot. You have just performed a Box-Cox transformation by hand.
+ggplot(hospital, aes(x = BMI)) +
+  geom_histogram(bins = 25)
+```
 
-#### Stretch 2 — Scaling where it changes an answer
-Fit a k-nearest-neighbours classifier for `diabetes` on the three numeric
-columns, once unscaled and once standardised, and compare. Then explain the
-difference in terms of what a Euclidean distance does when one column is
-measured in hundreds and another in tens.
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Why might BMI be more informative than weight alone?
+2. Is BMI adding new measurements, or combining existing information?
+3. What other clinically meaningful features could you derive from the
+   variables you already have?
+:::
 
-### What you can and cannot now claim
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+**Because weight means nothing without height.** Two patients from this file:
 
-You can say the features are on comparable scales, that you chose the scaler
-having looked at the distribution rather than by habit, that you know what the
-one bad `BMI` value does to each option, and that you can add a polynomial term
-and test whether it earned its place.
+```{r}
+hospital |>
+  filter(patient_id %in% c("H134", "H184")) |>
+  select(patient_id, height_cm, weight_kg, BMI) |>
+  mutate(BMI = round(BMI, 1))
+```
 
-You cannot claim any of these numbers would survive contact with new data. Every
-minimum, maximum, mean, standard deviation, median and IQR above was computed
-from all 180 rows — including the rows you are about to hold out and call a
-test set. Each one is a quantity *learned from data*, and learning it from the
-wrong rows is the subject of @sec-pipeline-steps.
+Both weigh about 79 kg. One is 142 cm tall and has a BMI of 39.0; the other is
+201 cm and has a BMI of 19.6. On weight alone a model sees two identical
+patients. On BMI it sees one who is obese and one at the lean end of normal.
+
+**Combining.** No new measurement was taken; BMI is arithmetic on two columns
+that were already there. What it adds is the *relationship* between them, in
+the form a clinician would use. A model handed height and weight separately
+would have to discover that ratio for itself, and a linear model cannot.
+
+**Others from this table:** the shock index, heart rate divided by systolic
+blood pressure, which is used at the bedside to flag circulatory compromise; a
+flag for tachycardia (heart rate over 100) or hypotension (systolic below 90);
+age bands; the log of CRP you have just made. The test is the same each time:
+does the new column say something clinically meaningful that the raw columns
+only imply?
+:::
+:::
+
+------------------------------------------------------------------------
+
+### What to take from this
+
+- **Scaling changes the numerical range of a variable, not its shape.** CRP was
+  as skewed after all three scalers as before.
+- **Robust scaling is less sensitive to extreme values.** One inflated
+  measurement moved every other patient under Min-Max and none under Robust.
+- **Transformation can reduce skewness and changes the relationships between
+  values.** A log turned steps of units into steps of ratios.
+- **Feature engineering creates new variables from existing information.** BMI
+  added no measurement and still separated two patients that weight could not.
+
+::: {.callout-warning appearance="simple"}
+## Remember
+Every minimum, maximum, mean, standard deviation, median and interquartile
+range in this exercise was computed from all 250 patients. When you build a
+predictive model, anything learned from the data — including a scaler — must be
+fitted on the training set only, not the full dataset.
+:::
+
+Next: @sec-pipeline-steps combines imputation, categorical encoding, scaling
+and feature engineering into one preprocessing pipeline.
 
 ## Python
+
+### 1. Scaling: three different approaches
+
+Compare Min-Max, Standard and Robust scaling for age, systolic blood pressure
+and CRP.
 
 ```{python}
 #| message: false
@@ -492,458 +356,302 @@ wrong rows is the subject of @sec-pipeline-steps.
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 
-na_codes = ["unknown", "?", "not recorded", "N/A", "-999"]
-num_cols = ["age", "height_cm", "weight_kg", "systolic_BP"]
+hospital = pd.read_csv("data/hospital_admissions.csv")
 
-gp_py = pd.read_csv("data/clinic_extract.csv",
-                    keep_default_na=False, na_values=[""])
-gp_py = gp_py.replace(na_codes, np.nan).replace(-999, np.nan)
-for c in num_cols:
-    gp_py[c] = pd.to_numeric(gp_py[c], errors="coerce")
+scale_cols = ["age", "systolic_BP", "CRP_mg_L"]
 
-gp_py.loc[gp_py.height_cm < 3, "height_cm"] *= 100
-gp_py.loc[gp_py.age > 120, "age"] = np.nan
-gp_py.loc[gp_py.weight_kg > 300, "weight_kg"] = np.nan
-
-gp_py[num_cols] = gp_py[num_cols].fillna(gp_py[num_cols].median())
-gp_py["BMI"] = gp_py.weight_kg / (gp_py.height_cm / 100) ** 2
-
-scale_cols = ["age", "BMI", "systolic_BP"]
-print(gp_py[scale_cols].agg(["min", "max"]).round(1))
+for name, scaler in [
+    ("minmax", MinMaxScaler()),
+    ("standard", StandardScaler()),
+    ("robust", RobustScaler())
+]:
+    hospital[[f"{c}_{name}" for c in scale_cols]] = (
+        scaler.fit_transform(hospital[scale_cols])
+    )
 ```
 
-Three columns, three ranges, none of them comparable: `age` runs 19 to 91,
-`BMI` 15.8 to 44.4, `systolic_BP` 104 to 165. `systolic_BP` spans the widest
-numeric distance, and to a model that measures distances — anything using a
-Euclidean distance, and anything regularised — that width is indistinguishable
-from importance.
-
-------------------------------------------------------------------------
-
-### Three scalers
-
-#### Min-Max: squeeze into [0, 1]
-
-Subtract the minimum, divide by the range. Every value lands between 0 and 1,
-and the shape of the distribution is untouched.
+Compare the range of values:
 
 ```{python}
-from sklearn.preprocessing import (MinMaxScaler, StandardScaler,
-                                   RobustScaler)
-
-mm = MinMaxScaler()
-X_mm = mm.fit_transform(gp_py[scale_cols])
-
-print(pd.DataFrame(X_mm, columns=scale_cols).agg(["min", "max"]))
-```
-
-#### Standard: centre and divide by the standard deviation
-
-Subtract the mean, divide by the standard deviation. Each column now has mean
-0 and standard deviation 1. Values are not bounded — an extreme observation
-stays extreme, which is usually what you want.
-
-```{python}
-ss = StandardScaler()
-X_ss = ss.fit_transform(gp_py[scale_cols])
-
-print(pd.DataFrame(X_ss, columns=scale_cols)
-        .agg(["mean", "std"]).round(3))
+print(hospital.filter(like="CRP").describe().round(3))
 ```
 
 ::: {.callout-note appearance="simple"}
-## One honest difference between the two tabs
-R's `scale()` divides by the **sample** standard deviation, with $n-1$ in the
-denominator; `scikit-learn`'s `StandardScaler` divides by the **population**
-standard deviation, with $n$. On 180 rows that is a difference of about 0.3%,
-which is why the standardised outlier below reads 3.03 in R and 3.04 in Python.
-Neither is wrong. It is worth knowing that a "standardised" column is not one
-single defined thing.
+## Why the standard deviation reads 1.002, not 1
+`StandardScaler` divides by the standard deviation computed with $n$ in the
+denominator; `describe()` reports it with $n - 1$. On 250 patients the two
+differ by 0.2%. R's `scale()` uses $n - 1$ throughout, so the R tab reports a
+standard deviation of exactly 1 and a maximum of 8.3977 rather than 8.415.
+Neither is wrong.
 :::
 
-#### Robust: use the median and the IQR
-
-Subtract the median, divide by the interquartile range. Both are quantities an
-extreme value barely moves, which is the whole idea.
+Visualise CRP before and after scaling:
 
 ```{python}
-rs = RobustScaler()
-X_rs = rs.fit_transform(gp_py[scale_cols])
+#| fig-height: 4
+cols = ["CRP_mg_L", "CRP_mg_L_minmax",
+        "CRP_mg_L_standard", "CRP_mg_L_robust"]
 
-print(pd.DataFrame(X_rs, columns=scale_cols)
-        .describe().loc[["50%", "max"]].round(2))
+hospital[cols].hist(bins=30, figsize=(9, 6))
+plt.tight_layout()
+plt.show()
 ```
 
-### What the one bad value does to each
-
-`BMI` has a genuine high extreme — the heaviest patient in the cohort, not a
-typo. The starting block above has already removed the errors, in the way
-@sec-cleaning worked through; what is left is real. Watch what each scaler does
-with a value you must **not** throw away.
-
-```{python}
-i = int(gp_py["BMI"].argmax())
-
-rows = []
-for name, z in [("Min-Max", X_mm[:, 1]), ("Standard", X_ss[:, 1]),
-                ("Robust", X_rs[:, 1])]:
-    rows.append({"scaler": name,
-                 "outlier": z[i],
-                 "median_row": np.median(z),
-                 "bulk_max_excl_outlier": np.delete(z, i).max()})
-
-print(pd.DataFrame(rows).round(2).to_string(index=False))
-```
-
-Read the last column against the second, and be precise about what you see.
-
-Under **Min-Max** the extreme is pinned at 1 by definition, and because it sets
-the maximum, every other value is divided by a range it stretched. The rest of
-the cohort now spans 0 to about 0.88, so a single patient has claimed roughly
-an eighth of the available scale. Under **Standard** and **Robust** nothing is
-pinned: the extreme sits out at about 3.0 standard deviations and 2.4
-interquartile ranges respectively, which is an honest description of a value
-that far from the centre rather than an arbitrary ceiling.
-
-So the three are not as different here as the usual advice implies, because
-this extreme is only moderately extreme — it is the heaviest patient, not a
-typo. The difference appears when it gets worse. Suppose one weight had been
-recorded with a digit in front of it and had slipped past @sec-cleaning:
-
-```{python}
-worse = gp_py["BMI"].to_numpy().copy()
-worse[i] = gp_py["BMI"][i] * 3
-
-out = {}
-for name, scaler in [("Min-Max", MinMaxScaler()), ("Standard", StandardScaler()),
-                     ("Robust", RobustScaler())]:
-    now_z   = scaler.fit_transform(gp_py[["BMI"]]).ravel()
-    worse_z = scaler.fit_transform(worse.reshape(-1, 1)).ravel()
-    out["bulk max, " + name] = {"now":   np.delete(now_z, i).max(),
-                                "worse": np.delete(worse_z, i).max()}
-
-print(pd.DataFrame(out).T.round(2))
-```
-
-**Min-Max** collapses: the bulk maximum falls from 0.88 to 0.21, because the
-range it divides by is now set entirely by the bad row, so the real data is
-squeezed towards zero. **Standard** shrinks too, from 2.40 to about 1.34, since
-the standard deviation is inflated by the squared distance of that one point.
-**Robust** does not move at all — 1.91 before and 1.91 after — because the
-median and the interquartile range cannot be shifted by a single extreme value,
-which is the entire reason it exists.
-
-That is the rule worth keeping: Min-Max is the most fragile, Standard is
-affected but less so, and Robust is indifferent.
-
-::: {.callout-note appearance="simple"}
-## The choice is about the column, not the algorithm
-Robust scaling is not uniformly better. If a column has no extreme values,
-Min-Max and Standard give you a bounded or a familiar scale and nothing is
-lost. Reach for Robust when you have looked at the distribution and seen a tail
-— which is why @sec-histograms came first.
-:::
-
-------------------------------------------------------------------------
-
-### Task 1 — Scale, and measure the damage
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-i = gp_py["BMI"].______()           # position of the largest BMI
-
-for name, scaler in [("minmax", MinMaxScaler()),
-                     ("standard", StandardScaler()),
-                     ("robust", ______())]:
-    z = scaler.fit_transform(gp_py[["BMI"]]).ravel()
-    bulk = np.delete(z, i)
-    print(name, "outlier %.2f  bulk max %.2f" % (z[i], bulk.______()))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank returns the index of the maximum. The second is the scaler that
-uses the median and IQR. The third is the largest value of the remaining rows.
+::: {.callout-important appearance="simple"}
+## Think about it
+1. What happens to the range after Min-Max scaling?
+2. What happens to the mean and standard deviation after Standard scaling?
+3. How does Robust scaling differ?
+4. Does any scaling method eliminate CRP's skewness?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-```{python}
-i = gp_py["BMI"].argmax()
+**Min-Max** puts every value between 0 and 1: the lowest CRP, 0.8, becomes 0
+and the highest, 264.6, becomes 1. Look at where the typical patient lands,
+though — the median is 0.037. Most of the cohort is crammed into the bottom
+tenth of the scale.
 
-for name, scaler in [("minmax", MinMaxScaler()),
-                     ("standard", StandardScaler()),
-                     ("robust", RobustScaler())]:
-    z = scaler.fit_transform(gp_py[["BMI"]]).ravel()
-    bulk = np.delete(z, i)
-    print(name, "outlier %.2f  bulk max %.2f" % (z[i], bulk.max()))
+**Standard** gives a mean of 0 and a standard deviation of 1. It is not
+bounded: the highest CRP sits about 8.4 standard deviations above the mean.
+
+**Robust** centres on the median instead of the mean, so the median becomes 0,
+and divides by the interquartile range instead of the standard deviation. The
+highest patient is 13.7 interquartile ranges out.
+
+**No.** Measure it rather than judging the histograms by eye:
+
+```{python}
+from scipy.stats import skew
+
+print(hospital.filter(like="CRP").apply(skew).round(2))
 ```
 
-The gap between the outlier and the bulk maximum is the diagnostic: 1.00
-against 0.88 under Min-Max, 3.04 against 2.40 under Standard, 2.41 against 1.91
-under Robust.
+4.43 in all four columns. Subtracting a constant and dividing by a constant
+cannot change a shape. The four histograms are the same picture with different
+numbers on the axis.
 :::
+:::
+
+::: {.callout-tip appearance="simple"}
+## Key observation
+All three methods change the numerical scale, but preserve the underlying shape
+of the distribution.
 :::
 
 ------------------------------------------------------------------------
 
-### Transformation: changing the shape, not the scale
+### 2. Outliers: what happens to the other patients?
 
-Scaling moves a distribution and stretches it. It does not change its shape: a
-skewed column scaled three ways is still skewed three ways. Changing the shape
-takes a non-linear function.
+Imagine a patient has an exceptionally high CRP. How does that influence the
+scaling of everyone else's measurements?
 
-Neither `pandas` nor `numpy` offers the plain moment-based skewness on its own
-(`pandas` applies a sample-size correction), so define it once — the third
-moment over the standard deviation cubed, exactly as the R tab does:
+Compare the largest CRP values before and after Min-Max scaling:
 
 ```{python}
-def skewness(x):
-    x = np.asarray(x, dtype=float)
-    x = x[~np.isnan(x)]
-    return np.mean((x - x.mean()) ** 3) / np.mean((x - x.mean()) ** 2) ** 1.5
+print(hospital["CRP_mg_L"].nlargest(5).tolist())
 
-print("BMI skew, as recorded:", round(skewness(gp_py["BMI"]), 2))
-print("after square root    :", round(skewness(np.sqrt(gp_py["BMI"])), 2))
-print("after log            :", round(skewness(np.log(gp_py["BMI"])), 2))
+print(hospital["CRP_mg_L_minmax"].nlargest(5).round(3).tolist())
 ```
 
-0.47 as recorded, 0.21 after the square root, −0.04 after the log. Scaling, for
-contrast, leaves skewness **exactly** where it was — subtracting a constant and
-dividing by a constant cannot change a shape:
+Now make the maximum CRP three times larger, change nothing else, and scale
+again:
 
 ```{python}
-print("min-max scaled :",
-      round(skewness(MinMaxScaler().fit_transform(gp_py[["BMI"]]).ravel()), 2))
-print("standardised   :",
-      round(skewness(StandardScaler().fit_transform(gp_py[["BMI"]]).ravel()), 2))
+crp_extreme = hospital["CRP_mg_L"].copy()
+crp_extreme.loc[crp_extreme.idxmax()] *= 3
+
+scaled_extreme = MinMaxScaler().fit_transform(
+    crp_extreme.to_frame()
+).ravel()
+
+print(np.round(sorted(scaled_extreme, reverse=True)[:5], 3).tolist())
 ```
 
-Both still 0.47.
+::: {.callout-important appearance="simple"}
+## Think about it
+1. What happened to the scaled values of the other patients?
+2. Which scaling method would be least affected by an extreme CRP measurement?
+3. Should a clinically plausible extreme value automatically be removed?
+:::
 
-#### Log and square root are the same idea at different strengths
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+**They all moved, though none of them changed.** The patient with the
+second-highest CRP, 197.7, was at 0.746 and is now at 0.248. Their measurement
+is exactly what it was. Min-Max divides by the range, the range is set by the
+single largest value, and so one patient decides where everybody else sits.
 
-It is tempting to learn these as separate recipes. They are one family. Raising
-a column to a power $\lambda$ covers all of them: $\lambda = 1$ leaves the data
-alone, $\lambda = 0.5$ is the square root, $\lambda = 0$ is the log, and
-$\lambda = 2$ squares it. Smaller $\lambda$ pulls a long right tail in harder.
+**Robust**, and you can check it:
 
 ```{python}
-#| fig-height: 2.6
-powers = {"square (2)": 2, "none (1)": 1, "sqrt (0.5)": 0.5, "log (0)": 0}
-
-fig, axes = plt.subplots(1, 4, figsize=(8, 2.6))
-for ax, (label, lam) in zip(axes, powers.items()):
-    v = np.log(gp_py["BMI"]) if lam == 0 else gp_py["BMI"] ** lam
-    z = StandardScaler().fit_transform(v.to_numpy().reshape(-1, 1)).ravel()
-    ax.hist(z, bins=25, color="grey")
-    ax.set_title(label, fontsize=9)
-    ax.set_yticks([])
-fig.tight_layout()
-plt.show()
+for values in [hospital["CRP_mg_L"], crp_extreme]:
+    z = RobustScaler().fit_transform(values.to_frame()).ravel()
+    print(np.round(sorted(z, reverse=True)[:5], 2).tolist())
 ```
 
-Each panel is standardised, so only the shape differs. Read left to right and
-you are turning one dial. Choosing between log and square root is choosing how
-far to turn it — not choosing between two unrelated techniques.
+Only the first number is different. The second-highest patient is at 10.12
+before and 10.12 after, because the median and the interquartile range are not
+moved by one extreme value. Standard scaling falls in between: the same patient
+drops from 6.1 to 3.2, since the standard deviation is inflated by the outlier.
 
-One constraint comes with the family: the log of zero is undefined and the log
-of a negative number does not exist. `BMI` is strictly positive so it is safe
-here, but a column containing zeros — a count of previous admissions, say —
-needs `log1p`, or a transformation built to tolerate zeros.
+**No.** A CRP of 265 is not an error; in a real patient it would mean a severe
+infection, and probably the patient a model most needs to get right. Removing a value
+because it is inconvenient for a scaler throws away the cases that matter. Pick
+a scaler, or a transformation, that copes with them instead.
+:::
+:::
+
+::: {.callout-tip appearance="simple"}
+## Key observation
+Min-Max scaling is sensitive to extreme values. Robust scaling uses the median
+and interquartile range, which are far less sensitive to them.
+:::
 
 ------------------------------------------------------------------------
 
-### Feature engineering: why would $x^2$ work?
+### 3. Transformation: can we reduce skewness?
 
-A linear model fits
-
-$$\hat{y} = \beta_0 + \beta_1 x$$
-
-which is a straight line in $x$. If the real relationship bends, a straight
-line cannot follow it. Add a squared column and you fit
-
-$$\hat{y} = \beta_0 + \beta_1 x + \beta_2 x^2$$
-
-which is a curve in $x$ — and still a **linear model**, because "linear" refers
-to the parameters, not the features. $\beta_1$ and $\beta_2$ still enter as
-plain multipliers, so the fitting is the same arithmetic it always was. You
-changed the data, not the algorithm.
-
-Here is the thing it buys, on a relationship that genuinely bends:
+Scaling does not change the shape of a distribution. A nonlinear transformation
+can. Compare the original CRP distribution with its log transformation:
 
 ```{python}
 #| fig-height: 2.8
-from sklearn.linear_model import LinearRegression
+hospital["log_CRP"] = np.log1p(hospital["CRP_mg_L"])
 
-rng = np.random.default_rng(7)
-x = rng.uniform(-3, 3, 120)
-y = 2 + 0.5 * x + 1.2 * x ** 2 + rng.normal(0, 1.5, 120)
-
-order = np.argsort(x)
-fig, ax = plt.subplots(figsize=(7, 2.8))
-ax.scatter(x, y, alpha=0.4, s=8, color="black")
-
-for name, X in [("straight", x.reshape(-1, 1)),
-                ("curved", np.column_stack([x, x ** 2]))]:
-    fit = LinearRegression().fit(X, y)
-    pred = fit.predict(X)
-    resid_sd = np.sqrt(((y - pred) ** 2).sum() / (len(y) - X.shape[1] - 1))
-    print(name, "residual SD:", round(resid_sd, 2))
-    ax.plot(x[order], pred[order], linewidth=1.5, label=name)
-
-ax.set_xlabel("x"); ax.set_ylabel("y"); ax.legend(frameon=False)
+hospital[["CRP_mg_L", "log_CRP"]].hist(
+    bins=30, figsize=(8, 3)
+)
+plt.tight_layout()
 plt.show()
 ```
 
-A residual spread of about 3.8 for the straight line against 1.4 with the
-squared term. The straight line is not wrong so much as unable. It has no
-parameter capable of representing curvature, so it averages the bend away and
-leaves it in the residuals.
+::: {.callout-important appearance="simple"}
+## Think about it
+1. How does the shape change?
+2. What happens to the distance between low and high CRP measurements?
+3. Why use `log1p()` rather than `log()`?
 
-(This is the one place where the two tabs cannot print the same numbers: the
-data is simulated, and R and Python draw from different random number
-generators, so the R tab's figures are close but not identical. Everything
-computed from `clinic_extract.csv` matches exactly.)
-
-#### What it costs
-
-```{python}
-from sklearn.preprocessing import PolynomialFeatures
-
-pf = PolynomialFeatures(degree=2, include_bias=False)
-wide = pf.fit_transform(gp_py[scale_cols])
-
-print("columns:", len(scale_cols), "->", wide.shape[1])
-print(pf.get_feature_names_out(scale_cols))
-```
-
-Three columns became nine: each original, each square, and each pairwise
-product. At degree 2 that is manageable. The growth is quadratic in the number
-of features, so the same step on 30 columns gives 495, most of them nearly
-duplicates of each other — and every one is a column that can be fitted on the
-wrong rows.
-
-------------------------------------------------------------------------
-
-### Task 2 — Add a term and check it earns its place
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-from scipy import stats
-
-def ols(X, y):
-    """Least squares with the residual SD and p-values R reports."""
-    X = np.column_stack([np.ones(len(y)), X])
-    beta = np.linalg.lstsq(X, y, rcond=None)[0]
-    resid = y - X @ beta
-    dof = len(y) - X.shape[1]
-    s2 = resid @ resid / dof
-    se = np.sqrt(np.diag(s2 * np.linalg.inv(X.T @ X)))
-    p = 2 * stats.t.sf(np.abs(beta / se), dof)
-    return np.sqrt(s2), p
-
-y = gp_py["systolic_BP"].values
-sd1, _  = ols(gp_py[["age"]].values, y)
-sd2, p2 = ols(np.column_stack([gp_py["age"], gp_py["age"] ** ______]), y)
-
-print("residual SD, straight:", round(sd1, 3))
-print("residual SD, squared :", round(______, 3))
-print("p-value on the squared term:", round(p2[2], 3))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is the power. The second is the residual SD you just computed
-for the second model. `scipy` arrives with `scikit-learn`, so there is nothing
-extra to install.
+**Optional.** Repeat with `length_of_stay`, the eventual prediction target.
+Does its distribution also benefit from a log transformation?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
+**The long right tail is pulled in** and the distribution becomes close to
+symmetric:
+
 ```{python}
-from scipy import stats
+print({"CRP": round(skew(hospital["CRP_mg_L"]), 2),
+       "log_CRP": round(skew(hospital["log_CRP"]), 2),
+       "length_of_stay": round(skew(hospital["length_of_stay"]), 2),
+       "log_length_of_stay": round(skew(np.log1p(hospital["length_of_stay"])), 2)})
 
-def ols(X, y):
-    """Least squares with the residual SD and p-values R reports."""
-    X = np.column_stack([np.ones(len(y)), X])
-    beta = np.linalg.lstsq(X, y, rcond=None)[0]
-    resid = y - X @ beta
-    dof = len(y) - X.shape[1]
-    s2 = resid @ resid / dof
-    se = np.sqrt(np.diag(s2 * np.linalg.inv(X.T @ X)))
-    p = 2 * stats.t.sf(np.abs(beta / se), dof)
-    return np.sqrt(s2), p
-
-y = gp_py["systolic_BP"].values
-sd1, _  = ols(gp_py[["age"]].values, y)
-sd2, p2 = ols(np.column_stack([gp_py["age"], gp_py["age"] ** 2]), y)
-
-print("residual SD, straight:", round(sd1, 3))
-print("residual SD, squared :", round(sd2, 3))
-print("p-value on the squared term:", round(p2[2], 3))
+print(np.round(np.log1p([5, 10, 100, 200]), 2).tolist())
 ```
 
-This is the useful negative result. The residual spread moves from 10.005 to
-10.003 — three thousandths of a mmHg — and the p-value on the squared term is
-0.297, nowhere near significant, because this data was simulated with a
-straight-line relationship between age and blood pressure. Adding $x^2$ does
-not create curvature; it only lets you fit curvature that is there. Compare
-with the simulated bending example above, where it was.
+CRP's skewness falls from 4.43 to 0.38. Length of stay, the optional part,
+goes from 1.63 to 0.31 — it benefits too.
 
-Note also what this does *not* do: both numbers measure fit on the same rows
-the model was fitted to, so the squared version cannot score worse — an extra
-parameter never increases training error. That is why the p-value is the more
-informative line, and why @sec-pipeline-steps insists on a held-out split.
+**Distances stop being about units and start being about ratios.** On the
+original scale, going from 5 to 10 mg/L is a step of 5, and going from 100 to
+200 is a step of 100. After the transformation those two doublings are almost
+the same size: about 0.61 and 0.69. That matches how CRP is read clinically —
+a doubling means something whether it starts low or high — and it stops the
+handful of very high values from dominating everything measured in distance.
+
+**Because the log of zero is minus infinity.** `log1p(x)` computes
+$\log(1 + x)$, so a value of 0 becomes 0 instead of breaking the column. In
+this file the lowest CRP is 0.8, so a plain `log()` would have run — but a
+laboratory can report a result below its detection limit as 0, and `log1p()`
+is the habit that survives that.
 :::
 :::
 
 ------------------------------------------------------------------------
 
-### Reflection
+### 4. Feature engineering: calculate BMI
 
-1. Min-Max compressed the whole `BMI` column because one value set the maximum.
-   Which of the three scalers would you choose for a variable where the extreme
-   values are real and clinically important, and why?
-2. Standardising a column makes its mean 0 and its standard deviation 1. Does
-   it make the column normally distributed? Justify your answer using the
-   skewness numbers above.
-3. The squared term helped on simulated curved data and not on `age`. What does
-   that tell you about adding polynomial terms as a routine step?
-4. Degree-2 polynomial features took 3 columns to 9. At what point does that
-   stop being a feature-engineering step and start being a problem, and what
-   would you look at to decide?
+The dataset includes height and weight, but not BMI. Create it and look at its
+distribution:
 
-### Stretch
+```{python}
+#| fig-height: 2.8
+hospital["BMI"] = (
+    hospital["weight_kg"] /
+    (hospital["height_cm"] / 100) ** 2
+)
 
-#### Stretch 1 — Find the turning power yourself
-Write a loop over $\lambda$ from $-1$ to $2$ in steps of $0.25$, compute the
-skewness of `BMI` raised to each power (using the log at $\lambda = 0$), and
-plot skewness against $\lambda$. Read the value that brings it closest to zero
-off your own plot. You have just performed a Box-Cox transformation by hand.
+hospital["BMI"].hist(bins=25, figsize=(7, 2.8))
+plt.xlabel("BMI (kg/m²)")
+plt.tight_layout()
+plt.show()
+```
 
-#### Stretch 2 — Scaling where it changes an answer
-Fit a k-nearest-neighbours classifier for `diabetes` on the three numeric
-columns, once unscaled and once standardised, and compare. Then explain the
-difference in terms of what a Euclidean distance does when one column is
-measured in hundreds and another in tens.
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Why might BMI be more informative than weight alone?
+2. Is BMI adding new measurements, or combining existing information?
+3. What other clinically meaningful features could you derive from the
+   variables you already have?
+:::
 
-### What you can and cannot now claim
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+**Because weight means nothing without height.** Two patients from this file:
 
-You can say the features are on comparable scales, that you chose the scaler
-having looked at the distribution rather than by habit, that you know what the
-one bad `BMI` value does to each option, and that you can add a polynomial term
-and test whether it earned its place.
+```{python}
+print(hospital.loc[hospital["patient_id"].isin(["H134", "H184"]),
+                   ["patient_id", "height_cm", "weight_kg", "BMI"]]
+      .round(1).to_string(index=False))
+```
 
-You cannot claim any of these numbers would survive contact with new data. Every
-minimum, maximum, mean, standard deviation, median and IQR above was computed
-from all 180 rows — including the rows you are about to hold out and call a
-test set. Each one is a quantity *learned from data*, and learning it from the
-wrong rows is the subject of @sec-pipeline-steps.
+Both weigh about 79 kg. One is 142 cm tall and has a BMI of 39.0; the other is
+201 cm and has a BMI of 19.6. On weight alone a model sees two identical
+patients. On BMI it sees one who is obese and one at the lean end of normal.
+
+**Combining.** No new measurement was taken; BMI is arithmetic on two columns
+that were already there. What it adds is the *relationship* between them, in
+the form a clinician would use. A model handed height and weight separately
+would have to discover that ratio for itself, and a linear model cannot.
+
+**Others from this table:** the shock index, heart rate divided by systolic
+blood pressure, which is used at the bedside to flag circulatory compromise; a
+flag for tachycardia (heart rate over 100) or hypotension (systolic below 90);
+age bands; the log of CRP you have just made. The test is the same each time:
+does the new column say something clinically meaningful that the raw columns
+only imply?
+:::
+:::
+
+------------------------------------------------------------------------
+
+### What to take from this
+
+- **Scaling changes the numerical range of a variable, not its shape.** CRP was
+  as skewed after all three scalers as before.
+- **Robust scaling is less sensitive to extreme values.** One inflated
+  measurement moved every other patient under Min-Max and none under Robust.
+- **Transformation can reduce skewness and changes the relationships between
+  values.** A log turned steps of units into steps of ratios.
+- **Feature engineering creates new variables from existing information.** BMI
+  added no measurement and still separated two patients that weight could not.
+
+::: {.callout-warning appearance="simple"}
+## Remember
+Every minimum, maximum, mean, standard deviation, median and interquartile
+range in this exercise was computed from all 250 patients. When you build a
+predictive model, anything learned from the data — including a scaler — must be
+fitted on the training set only, not the full dataset.
+:::
+
+Next: @sec-pipeline-steps combines imputation, categorical encoding, scaling
+and feature engineering into one preprocessing pipeline.
 
 ::::::
