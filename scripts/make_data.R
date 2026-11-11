@@ -295,3 +295,57 @@ clinic$smoking_status[pick(5)] <- "N/A"
 
 readr::write_csv(clinic, "data/clinic_extract.csv", na = "")
 message("wrote clinic_extract.csv: ", nrow(clinic), " rows")
+
+# ---------------------------------------------------------------------------
+# messy_gp_patients.csv - Exercise 2.3
+#
+# Thirty patients, written out literally rather than simulated: every problem
+# in this file is placed deliberately so the exercise's questions have exact
+# answers. No RNG is used, so this block can sit at the end without disturbing
+# any seed above.
+#
+#   height_cm  one "unknown" (P022) and one height in metres (P011, 1.72)
+#   age        one impossible value (P014, 250)
+#   practices  eight, three of them with a single patient, plus a pre-existing
+#              "Other" with two - so grouping at min = 3 gives five levels and
+#              merges into the Other that already exists rather than making a
+#              second one
+#   smoking    ten spellings of three categories, plus "N/A" and "unknown"
+# ---------------------------------------------------------------------------
+
+messy_gp <- tibble::tribble(
+  ~patient_id, ~GP_practice,     ~age, ~height_cm, ~smoking_status,
+  "P001", "Bournbrook",      66L, "178", "Never",
+  "P002", "Bournbrook",      81L, "165", "Current",
+  "P003", "Bournbrook",      52L, "182", "Ex-smoker",
+  "P004", "Bournbrook",      45L, "171", "never",
+  "P005", "Bournbrook",      37L, "160", "Former",
+  "P006", "Bournbrook",      72L, "174", "Current smoker",
+  "P007", "Bournbrook",      59L, "169", "Never",
+  "P008", "Bournbrook",      63L, "155", "N/A",
+  "P009", "Bournbrook",      28L, "180", "never",
+  "P010", "Cherry Tree",     54L, "167", "Ex-smoker",
+  "P011", "Cherry Tree",     71L, "1.72", "Current",
+  "P012", "Cherry Tree",     48L, "163", "Never",
+  "P013", "Cherry Tree",     39L, "176", "former",
+  "P014", "Cherry Tree",    250L, "158", "Never",
+  "P015", "Cherry Tree",     61L, "170", "Current smoker",
+  "P016", "Cherry Tree",     75L, "181", "Ex-smoker",
+  "P017", "Dovecote Lane",   42L, "166", "unknown",
+  "P018", "Dovecote Lane",   33L, "173", "Never",
+  "P019", "Dovecote Lane",   68L, "159", "Current",
+  "P020", "Dovecote Lane",   57L, "177", "never",
+  "P021", "Dovecote Lane",   49L, "168", "Former",
+  "P022", "Dovecote Lane",   83L, "unknown", "Never",
+  "P023", "Selly Oak",       36L, "164", "N/A",
+  "P024", "Selly Oak",       55L, "175", "Current smoker",
+  "P025", "Selly Oak",       64L, "162", "Ex-smoker",
+  "P026", "Other",           46L, "179", "Never",
+  "P027", "Other",           70L, "157", "current",
+  "P028", "Harborne",        29L, "183", "Never",
+  "P029", "Edgbaston",       58L, "161", "Former",
+  "P030", "Kings Heath",     51L, "172", "never"
+)
+
+readr::write_csv(messy_gp, "data/messy_gp_patients.csv", na = "")
+message("wrote messy_gp_patients.csv: ", nrow(messy_gp), " rows")

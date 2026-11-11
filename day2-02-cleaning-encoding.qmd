@@ -4,576 +4,369 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 2.3 — Cleaning and encoding {#sec-cleaning}
+# Exercise 2.3 — Exploring and cleaning messy patient data {#sec-cleaning}
+
+::: {.callout-note appearance="simple"}
+## 25-30 minutes, in R or in Python
+Pick a tab and stay in it. The two tabs are the same exercise — the same steps,
+the same questions, the same numbers — so work through either one.
+:::
 
 ## Objectives
 
-You have been exposed to similar ideas in Module 1, so put in practice your EDA and data cleaning skills as well as implement key preprocessing steps for machine learning algorithms such as one-hot encoding.
+By the end of this exercise you will be able to:
 
-## The extract
+- read a messy extract and say, from its types and summaries alone, what is
+  wrong with it;
+- correct a value that can be recovered and admit one that cannot;
+- group rare categories, and say what that costs;
+- standardise inconsistent labels, and say what happens if you do not;
+- one-hot encode a categorical variable, count the columns it adds, and decide
+  whether it was worth doing.
 
-`clinic_extract.csv` is 180 patients from a group of GP practices, with a
-binary `diabetes` outcome. Open the dataset and clean it so it is ready for downstream analysis. The data is messy, and the exercise is to find and fix the problems. 
+## The data
 
-::::: {.panel-tabset group="language"}
+`messy_gp_patients.csv` holds 30 patients from a handful of GP practices, with
+their age, height and smoking status. It is small enough to read end to end,
+and it has the problems a real extract has.
+
+:::::: {.panel-tabset group="language"}
 
 ## R
+
+### 1. First look at the data
+
+Load it and look before you touch anything.
 
 ```{r}
 #| message: false
 #| warning: false
-
 library(tidyverse)
 library(fastDummies)
 
-gp <- read_csv("data/clinic_extract.csv", show_col_types = FALSE)
+gp <- read_csv("data/messy_gp_patients.csv", show_col_types = FALSE)
+
+dim(gp)
 glimpse(gp)
 summary(gp)
-#View(gp) #open it and see, the dataset is not very big so should be able to scroll
 ```
 
-### Task 1 — Should we one-hot encode everything? {#sec-encode-everything}
+::: {.callout-note appearance="simple"}
+## Why `show_col_types = FALSE`
+`read_csv()` normally prints the type it guessed for every column. That is
+useful, and here it would fill the page, so it is switched off — but the guessed
+types are exactly what the first question is about, which is why `glimpse()`
+comes next.
+:::
 
-Check types of columns available, you have character and double. Do they all make sense? Which ones do not? 
+::: {.callout-important appearance="simple"}
+## Think about it
+1. How many patients and how many variables are there?
+2. Which columns came in as numbers and which as text?
+3. Does anything look wrong with `height_cm` or `age`?
+:::
 
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Thirty patients, five variables.
 
+`age` arrived as a number and `height_cm` as **text**, which is the first
+finding. A column of heights should be numeric; it is not, so something in it is
+not a number. One text value anywhere in a column is enough to make the whole
+column text.
 
-A model needs numbers, so categorical variables have to become numbers
+`summary()` then shows an age of 250, which no patient has.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### 2. Cleaning the numerical variables
+
+#### Height
+
+Look at what is actually in the column:
+
+```{r}
+unique(gp$height_cm)
+```
+
+Two values are not ordinary heights in centimetres: `unknown`, and `1.72` —
+a height recorded in metres. They need different treatment, because one of them
+is recoverable and the other is not.
+
+```{r}
+gp <- gp |>
+  mutate(
+    height_cm = na_if(height_cm, "unknown"),
+    height_cm = as.numeric(height_cm),
+    height_cm = if_else(!is.na(height_cm) & height_cm < 3,
+                        height_cm * 100,
+                        height_cm)
+  )
+
+summary(gp$height_cm)
+```
+
+Heights now run from 155 to 183 cm, with one missing.
+
+#### Age
+
+Find the implausible ones rather than assuming you know where they are:
+
+```{r}
+gp |> filter(age < 0 | age > 110)
+```
+
+```{r}
+gp <- gp |>
+  mutate(age = if_else(age < 0 | age > 110, NA_real_, as.numeric(age)))
+
+sum(is.na(gp$age))
+```
+
+One patient, P014, recorded at 250.
+
+::: {.callout-important appearance="simple"}
+## Think about it
+Why is replacing an impossible age with missing better than replacing it with
+zero — or than leaving it at 250?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Because 0 is a number a model will believe. It would be treated as a newborn,
+pulling the mean age down and the age–outcome relationship with it. Leaving 250
+is worse again, for the same reason in the other direction.
+
+Missing is the only one of the three that is *true*. We know the recorded value
+is wrong and we do not know what it should have been — it could have been 25, or
+50, or a mistyped date of birth. Missing says exactly that, and every later step
+can then decide what to do about it. Note the contrast with the height in
+metres: `1.72` could only have meant `172`, so that one is corrected rather than
+discarded. Correcting a value you can infer is cleaning; inventing one you
+cannot is something else.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### 3. Exploring and collapsing the GP practices
+
+How many patients are registered at each practice?
+
+```{r}
+gp |> count(GP_practice, sort = TRUE)
+```
+
+```{r}
+#| fig-height: 2.6
+gp |>
+  ggplot(aes(x = fct_infreq(GP_practice))) +
+  geom_bar(fill = "steelblue") +
+  coord_flip() +
+  labs(x = "GP practice", y = "Number of patients")
+```
+
+Three practices have a single patient. Combine anything with fewer than three
+into an `Other` category:
+
+```{r}
+gp <- gp |>
+  mutate(GP_practice = fct_lump_min(factor(GP_practice),
+                                    min = 3,
+                                    other_level = "Other"))
+
+gp |> count(GP_practice, sort = TRUE)
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. How many practices were there to begin with, and how many are left?
+2. Where did the three single-patient practices go — and look carefully, because
+   the answer is not "into a new category".
+3. What information did you just lose?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Eight practices become five: Bournbrook 9, Cherry Tree 7, Dovecote Lane 6,
+Selly Oak 3, and `Other` 5.
+
+The extract **already had** an `Other` category with two patients, and
+Harborne, Edgbaston and Kings Heath were merged into it rather than into a
+second one. Two plus three is the five you see. That is worth checking every
+time you group rare levels, because an `Other` that already exists and an
+`Other` you create mean different things and will be silently combined.
+
+What you lose is the identity of those three practices. If one of them had an
+unusual case mix — a practice serving a care home, say — that signal is now
+averaged into a category whose only shared property is being small. What you
+gain is five columns instead of eight when you encode, each supported by at
+least three patients.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### 4. Cleaning and visualising smoking status
+
+Count the categories as recorded:
+
+```{r}
+gp |> count(smoking_status, sort = TRUE)
+```
+
+```{r}
+#| fig-height: 2.6
+gp |>
+  ggplot(aes(x = fct_infreq(smoking_status))) +
+  geom_bar(fill = "steelblue") +
+  coord_flip() +
+  labs(x = "Smoking status", y = "Patients")
+```
+
+Ten different spellings for what are really three categories, plus two codes
+that mean "not recorded". Standardise the labels and turn the codes into
+missing values:
+
+```{r}
+gp <- gp |>
+  mutate(
+    smoking_status = str_to_lower(str_trim(smoking_status)),
+    smoking_status = case_when(
+      smoking_status %in% c("never", "non-smoker", "non smoker") ~ "Never",
+      smoking_status %in% c("former", "ex-smoker", "ex smoker")  ~ "Former",
+      smoking_status %in% c("current", "current smoker", "smoker") ~ "Current",
+      smoking_status %in% c("unknown", "n/a", "", "?") ~ NA_character_,
+      TRUE ~ smoking_status
+    ),
+    smoking_status = factor(smoking_status)
+  )
+
+gp |> count(smoking_status, sort = TRUE)
+```
+
+Never 12, Former 8, Current 7, and 3 genuinely missing.
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Why standardise the labels *before* encoding or analysing them?
+2. `Never` and `never` differed by one capital letter. What would a model have
+   done with them?
+3. The recipe above lower-cases and trims **before** matching. Why is that order
+   necessary rather than tidy?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Because a category is only a category if it is spelled one way. Left alone,
+`Never` and `never` are two different values: a frequency table reports 8 and 4
+instead of 12, a bar chart shows two bars, and one-hot encoding produces two
+columns — each with a smaller count than the real category, so each looks rarer
+and weaker than it is. The model never learns they are the same thing; it
+cannot, because nothing in the data says so.
+
+Lower-casing and trimming first turns `Never`, `never` and a stray
+` never ` into one string before any matching happens. Match first and you would
+need an entry for every spelling, and you would miss the one you did not think
+of. Cleaning the form of a value and then matching on meaning is the order that
+scales.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### 5. What happens when you one-hot encode?
+
+Most algorithms need numbers, so a categorical variable has to become numeric
 somehow. One-hot encoding gives each category its own 0/1 column.
 
-Take the **first 10 patients** and encode two categorical columns:
-`patient_id` and `GP_practice`. Then count what you got.
-
 ```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-first10 <- gp |> slice_head(n = ______)
+gp_encoded <- dummy_cols(gp,
+                         select_columns = "GP_practice",
+                         remove_selected_columns = TRUE)
 
-encoded <- dummy_cols(
-  first10,
-  select_columns = c("patient_id", "______"),
-  remove_selected_columns = TRUE
-)
+ncol(gp)
+ncol(gp_encoded)
 
-sum(str_detect(names(encoded), "^patient_id_"))    # how many?
-sum(str_detect(names(encoded), "^GP_practice_"))   # and how many?
+gp_encoded |>
+  select(patient_id, starts_with("GP_practice_")) |>
+  head(10)
 ```
 
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is the number of rows asked for. The second is the other column
-you are encoding.
-:::
+Five columns became nine: the practice column is gone and five indicator
+columns have taken its place.
 
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
+Now try the same thing on the patient identifier:
+
 ```{r}
-first10 <- gp |> slice_head(n = 10)
+gp_ids_encoded <- dummy_cols(gp,
+                             select_columns = "patient_id",
+                             remove_selected_columns = TRUE)
 
-encoded <- dummy_cols(
-  first10,
-  select_columns = c("patient_id", "GP_practice"),
-  remove_selected_columns = TRUE
-)
-
-sum(str_detect(names(encoded), "^patient_id_"))
-sum(str_detect(names(encoded), "^GP_practice_"))
+c(original = ncol(gp),
+  practice_encoded = ncol(gp_encoded),
+  id_encoded = ncol(gp_ids_encoded))
 ```
-
-Ten patients, ten columns from `patient_id` — one per person. Each column is 1
-for exactly one patient and 0 for everyone else, so it can only ever identify
-that individual. On the full 180 rows it would produce 180 columns, each one
-useless to a model that has to generalise to patient 181.
-
-`GP_practice` produced a handful, and each of those columns describes something
-several patients share.
-:::
-:::
-
-#### Think about it
-
-- Why does encoding `patient_id` give one column per patient?
-- Those columns are perfectly valid numbers. What can a model do with them?
-- Should an identifier ever be a predictor?
 
 ::: {.callout-important appearance="simple"}
-## The point
-Being categorical does not make a variable worth encoding. An identifier is
-categorical and carries no information that transfers to a new patient —
-encoding it buys 180 columns of nothing. Decide what a variable *means* before
-deciding what to do with it.
-:::
-
-------------------------------------------------------------------------
-
-### Task 2 — Rare categories
-
-Now look at `GP_practice` across all 180 patients. Count the practices, plot
-them, and see what encoding costs before and after you group the rare ones.
-
-```{r}
-#| eval: false
-#| fig-height: 2.6
-# Replace every ______ below, then run this cell.
-gp |> ______(GP_practice, sort = TRUE)
-
-gp |>
-  count(GP_practice) |>
-  ggplot(aes(x = fct_reorder(GP_practice, n), y = n)) +
-  geom_col() +
-  coord_flip() +
-  labs(x = NULL, y = "patients")
-
-before <- ncol(dummy_cols(gp, select_columns = "GP_practice",
-                          remove_selected_columns = TRUE))
-
-gp <- gp |>
-  mutate(GP_practice = fct_lump_min(factor(GP_practice),
-                                    min = ______,
-                                    other_level = "Other"))
-
-after <- ncol(dummy_cols(gp, select_columns = "GP_practice",
-                         remove_selected_columns = TRUE))
-c(before = before, after = after)
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is the dplyr verb that tabulates a column. The second is the
-threshold — practices with fewer than this many patients get grouped.
+## Think about it
+1. How many columns did each encoding add?
+2. What do the 0 and the 1 actually mean?
+3. Why was collapsing the rare practices worth doing *before* encoding?
+4. Would the patient-identifier columns help predict anything about a patient
+   who is not in this table?
+5. So: should every categorical variable be one-hot encoded?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-```{r}
-#| fig-height: 2.6
-gp |> count(GP_practice, sort = TRUE)
+Encoding the practice took 5 columns to 9 — one column out, five in. Encoding
+the identifier took 5 to 34: one column out, thirty in, one per patient.
 
-gp |>
-  count(GP_practice) |>
-  ggplot(aes(x = fct_reorder(GP_practice, n), y = n)) +
-  geom_col() +
-  coord_flip() +
-  labs(x = NULL, y = "patients")
+A 1 means "this patient is at this practice" and a 0 means "is not". For the
+identifier, each column is 1 for exactly one person and 0 for the other
+twenty-nine, so it can only ever identify that individual. On a real extract of
+50,000 patients it would produce 50,000 columns, and not one of them would
+apply to patient 50,001 — the only patient you actually care about predicting.
 
-before <- ncol(dummy_cols(gp, select_columns = "GP_practice",
-                          remove_selected_columns = TRUE))
+Collapsing first is what kept the practice encoding at five columns rather than
+eight, with every column backed by at least three patients. A column with one
+patient in it cannot support an estimate of anything; it can only be memorised.
 
-gp <- gp |>
-  mutate(GP_practice = fct_lump_min(factor(GP_practice),
-                                    min = 10,
-                                    other_level = "Other"))
-
-after <- ncol(dummy_cols(gp, select_columns = "GP_practice",
-                         remove_selected_columns = TRUE))
-c(before = before, after = after)
-
-levels(gp$GP_practice)
-sum(gp$GP_practice == "Other")
-```
-
-Three practices had fewer than 10 patients. Note where they went: the extract
-*already had* an `Other` category, and `fct_lump_min()` merged them into it
-rather than inventing a second one. Check the level list — there is one `Other`,
-not two.
-:::
-:::
-
-#### Think about it
-
-- The threshold was 10. What is that number a statement about — the data, or
-  your willingness to estimate an effect from a handful of rows?
-- What did you lose by grouping?
-- If an 80/20 split put all 5 patients from one practice in the test set, what
-  would that column be worth in training?
-
-------------------------------------------------------------------------
-
-### Task 3 — Find and fix the messy data
-
-This is the investigation. Nobody is going to tell you what is wrong with this
-extract; find out.
-
-#### Part A — Missing values that are not missing
-
-Start by asking what type each column came in as, and what the unparseable
-values actually are.
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-sapply(gp, class)
-sum(is.na(gp))               # how much is missing, apparently?
-
-# Look at what is actually in the suspect columns
-for (col in c("height_cm", "weight_kg", "systolic_BP", "smoking_status")) {
-  cat("\n", col, ":\n")
-  print(head(sort(table(gp[[col]], useNA = "ifany"), decreasing = TRUE), ______))
-}
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The blank just limits how many of the commonest values you print — 8 is plenty.
-Read the output before going on.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-sapply(gp, class)
-sum(is.na(gp))
-
-for (col in c("height_cm", "weight_kg", "systolic_BP", "smoking_status")) {
-  cat("\n", col, ":\n")
-  print(head(sort(table(gp[[col]], useNA = "ifany"), decreasing = TRUE), 8))
-}
-```
-
-Five conventions are in use: `unknown`, `?`, `not recorded`, `N/A`, `-999`, and
-genuinely empty cells. `is.na()` sees only the empty ones.
-:::
-:::
-
-Now convert them. `na_if()` replaces one value with `NA`; `across()` applies it
-to several columns at once.
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-na_codes <- c("unknown", "?", "not recorded", "______", "-999")
-
-gp <- gp |>
-  mutate(across(everything(), ~ if_else(as.character(.x) %in% na_codes,
-                                        NA_character_, as.character(.x)))) |>
-  mutate(across(c(age, height_cm, weight_kg, systolic_BP), ______))
-
-sum(is.na(gp))        # compare with the count you got before
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is the fourth code in the list you just printed. The second is
-the function that turns a character column into a numeric one.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-na_codes <- c("unknown", "?", "not recorded", "N/A", "-999")
-
-gp <- gp |>
-  mutate(across(everything(), ~ if_else(as.character(.x) %in% na_codes,
-                                        NA_character_, as.character(.x)))) |>
-  mutate(across(c(age, height_cm, weight_kg, systolic_BP), as.numeric)) |>
-  mutate(diabetes = as.integer(diabetes))
-
-sum(is.na(gp))
-colSums(is.na(gp))
-```
-
-The missing count jumps once the codes are recognised. Everything that was
-hiding as text is now a real `NA`, and the four measurement columns are numeric.
-:::
-:::
-
-::: {.callout-warning appearance="simple"}
-## `-999` is the dangerous one
-The text codes are rude but honest: they force the column to character, so R
-warns and Python raises the moment you try to average it. You find out.
-
-`-999` is a number. `systolic_BP` loads as a perfectly ordinary numeric column
-and its mean comes out at **73.6 mmHg** instead of 131.7 — a figure that would
-mean your average patient was in shock. No error. No warning. Nothing but a
-wrong answer, and you only catch it by knowing what blood pressure looks like.
-
-Sentinel values like `-999`, `0` for a missing date, or `99` for "not asked" are
-the most dangerous convention in clinical data for exactly this reason.
-:::
-
-#### Part B — Inconsistent labels
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-table(gp$sex)
-table(gp$smoking_status, useNA = "ifany")
-
-gp <- gp |>
-  mutate(
-    sex = case_when(
-      str_to_lower(str_trim(sex)) %in% c("male", "m")   ~ "Male",
-      str_to_lower(str_trim(sex)) %in% c("female", "______") ~ "Female"
-    ),
-    smoking_status = str_to_sentence(str_trim(
-      str_replace(smoking_status, "ex smoker", "ex-smoker")))
-  ) |>
-  mutate(smoking_status = str_remove(smoking_status, " smoker$"))
-
-table(gp$sex)
-table(gp$smoking_status, useNA = "ifany")
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The blank is the one-letter abbreviation for the second category. Lower-casing
-alone would fix `male` but not `M`, which is why `case_when()` lists both forms.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-table(gp$sex)
-table(gp$smoking_status, useNA = "ifany")
-
-gp <- gp |>
-  mutate(
-    sex = case_when(
-      str_to_lower(str_trim(sex)) %in% c("male", "m")   ~ "Male",
-      str_to_lower(str_trim(sex)) %in% c("female", "f") ~ "Female"
-    ),
-    smoking_status = str_to_sentence(str_trim(
-      str_replace(smoking_status, "ex smoker", "ex-smoker")))
-  ) |>
-  mutate(smoking_status = str_remove(smoking_status, " smoker$"))
-
-table(gp$sex)
-table(gp$smoking_status, useNA = "ifany")
-```
-
-Six spellings of sex become two; four spellings of smoking status become three.
-Nothing was dropped — the counts still add to 180 minus the genuinely missing.
-:::
-:::
-
-#### Part C — Errors and extremes
-
-Plot first. An implausible value is easier to see than to define.
-
-```{r}
-#| eval: false
-#| fig-height: 2.4
-# Replace every ______ below, then run this cell.
-gp |>
-  select(age, height_cm, weight_kg, systolic_BP) |>
-  pivot_longer(everything()) |>
-  ggplot(aes(x = "", y = value)) +
-  geom_boxplot() +
-  facet_wrap(~ name, scales = "______") +
-  labs(x = NULL, y = NULL)
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The columns are on wildly different scales, so each panel needs its own axis.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-#| fig-height: 2.4
-gp |>
-  select(age, height_cm, weight_kg, systolic_BP) |>
-  pivot_longer(everything()) |>
-  ggplot(aes(x = "", y = value)) +
-  geom_boxplot() +
-  facet_wrap(~ name, scales = "free") +
-  labs(x = NULL, y = NULL)
-```
-
-Three things should stand out: an age far beyond any human lifespan, a weight
-no patient has, and a cluster of heights near zero.
-:::
-:::
-
-Now decide what to do about each one. **The decisions are not the same.**
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-gp |> filter(age > 120 | weight_kg > 300 | height_cm < 3) |>
-  select(patient_id, age, height_cm, weight_kg)
-
-gp <- gp |>
-  mutate(
-    # Recoverable: a height in metres is unambiguous, so fix it
-    height_cm = if_else(height_cm < 3, height_cm * ______, height_cm),
-    # Not recoverable: we cannot know the intended value, so admit it
-    age       = if_else(age > 120, NA_real_, age),
-    weight_kg = if_else(weight_kg > 300, ______, weight_kg)
-  )
-
-summary(gp$height_cm)
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank converts metres to centimetres. The second is what you set a
-value to when you know it is wrong but cannot know what it should be.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-gp |> filter(age > 120 | weight_kg > 300 | height_cm < 3) |>
-  select(patient_id, age, height_cm, weight_kg)
-
-gp <- gp |>
-  mutate(
-    height_cm = if_else(height_cm < 3, height_cm * 100, height_cm),
-    age       = if_else(age > 120, NA_real_, age),
-    weight_kg = if_else(weight_kg > 300, NA_real_, weight_kg)
-  )
-
-summary(gp$height_cm)
-```
-
-Three different treatments for three problems:
-
-- **The heights in metres are corrected**, because `1.61` can only have meant
-  `161`. Nothing is guessed.
-- **The age of 250 becomes `NA`**, because it could have been 25, 50, or a
-  mistyped date of birth. Inventing a value would be worse than admitting
-  ignorance.
-- **The 800 kg becomes `NA`** for the same reason.
-
-What we did *not* do is remove every point outside 1.5×IQR. Look at the
-boxplots again: plenty of genuinely heavy and genuinely light patients sit out
-there, and they are real. A statistical outlier is a claim about a
-distribution; a data-entry error is a claim about a keyboard.
+So no. Being categorical does not make a variable worth encoding. Decide what a
+variable *means* — identifier, group, measurement — before deciding what to do
+with it.
 :::
 :::
 
 ------------------------------------------------------------------------
 
-### Task 4 — Feature engineering: BMI
+### What to take from this
 
-Height and weight are now clean. BMI is more clinically useful than either on
-its own, and it is one line to compute.
-
-```{r}
-#| eval: false
-#| fig-height: 2.4
-# Replace every ______ below, then run this cell.
-gp <- gp |>
-  mutate(BMI = weight_kg / (height_cm / ______)^2)
-
-summary(gp$BMI)
-
-ggplot(gp, aes(x = BMI)) +
-  geom_histogram(bins = 30) +
-  labs(y = NULL)
-
-sum(is.na(gp$______))   # how many patients have no BMI, and why?
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-BMI is kg/m², and height is in centimetres. The last blank is the column you
-just made.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-#| fig-height: 2.4
-gp <- gp |>
-  mutate(BMI = weight_kg / (height_cm / 100)^2)
-
-summary(gp$BMI)
-
-ggplot(gp, aes(x = BMI)) +
-  geom_histogram(bins = 30) +
-  labs(y = NULL)
-
-sum(is.na(gp$BMI))
-```
-
-A plausible distribution, and a number of patients with no BMI at all. BMI is
-missing whenever *either* height or weight is missing, so the gaps in the two
-inputs combine — more patients lack a BMI than lack either measurement on its
-own.
-:::
-:::
-
-::: {.callout-important appearance="simple"}
-## What would have happened if you had skipped Part C
-Suppose you had computed BMI *before* fixing the heights. A patient recorded as
-`1.61` metres instead of `161` centimetres gives
-
-$$\frac{84.3}{(1.61/100)^2} \approx 325{,}000$$
-
-against a plausible range of roughly 16 to 44. One keystroke in an input column
-became a value five thousand times too large in a derived one — and if you had
-gone straight to a model, nothing would have stopped you.
-
-Errors propagate into derived features, and they get harder to recognise the
-further they travel from the thing that was mistyped.
-:::
-
-------------------------------------------------------------------------
-
-### Reflection
-
-1. Encoding `patient_id` produced one column per patient. Name another variable
-   in a clinical extract that is categorical and should not be encoded.
-2. Grouping rare practices cut the encoded columns from 16 to 13. What would
-   you say to a colleague who proposes grouping anything under 50?
-3. The text codes caused a loud failure and `-999` a silent one. Which would you
-   rather inherit, and what would you add to your loading code to catch the
-   silent kind?
-4. You corrected the heights but set the impossible age to `NA`. Write the rule
-   that separates those two decisions in one sentence.
-
-### Stretch
-
-#### Stretch 1 — A reusable audit
-Write a function that takes any data frame and reports, for each column: its
-type, the number of genuine `NA`s, any values matching common sentinel
-conventions (`-999`, `-99`, `9999`), and the number of distinct values that
-differ only by case or surrounding whitespace. Run it on the raw file and see
-whether it finds everything you found by hand.
-
-#### Stretch 2 — Which error mattered?
-Compute the mean BMI three ways: with the metre-heights left uncorrected, with
-those rows dropped, and with them corrected as you did above. The three answers
-are very different. Which of the three would a careless analysis most likely
-report, and why is it the worst of the three?
-
-------------------------------------------------------------------------
-
-### Where this leaves you
-
-Save your cleaned data — @sec-imputation picks it up exactly here.
-
-```{r}
-#| eval: false
-write_csv(gp, "gp_patients_cleaned.csv")
-```
-
-The extract is now internally consistent: one spelling per category, rare
-practices grouped, impossible values either corrected or admitted as missing,
-and BMI derived from measurements you have checked.
-
-What it is **not** is complete. Height, weight, blood pressure and smoking
-status all still have gaps, and this exercise deliberately did not fill a single
-one — correcting a value you can infer is cleaning, but inventing a value you
-cannot is a different decision with different consequences.
-
-> **Our data are cleaner, but some measurements are still missing. What should
-> we do with them?**
-
-That is @sec-imputation.
+1. **Explore before cleaning.** The column types, the frequency tables and the
+   summaries are what told you something was wrong — a height column stored as
+   text, an age of 250, ten spellings of three categories. None of it announced
+   itself.
+2. **Cleaning is a sequence of decisions, not a checklist.** You corrected one
+   impossible value and admitted another as missing, and the difference was
+   whether the intended value could be known. You grouped three practices and
+   lost their identity to gain columns that can support an estimate.
+3. **Encoding is not automatically useful.** The same operation that turned a
+   practice into five usable columns turned an identifier into thirty useless
+   ones.
 
 ## Python
+
+### 1. First look at the data
+
+Load it and look before you touch anything.
 
 ```{python}
 #| message: false
@@ -582,526 +375,319 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-gp_py = pd.read_csv("data/clinic_extract.csv",
+gp_py = pd.read_csv("data/messy_gp_patients.csv",
                     keep_default_na=False, na_values=[""])
+
 print(gp_py.shape)
+print(gp_py.dtypes)
+print(gp_py.describe(include="all"))
 ```
 
 ::: {.callout-note appearance="simple"}
 ## Why those two arguments
 `pandas` treats `N/A`, `NA`, `null` and `NaN` as missing the moment it reads a
-file. That is usually convenient and here it is not: it would quietly convert
-five of this file's missing-value codes before you ever saw them, and finding
-them is the exercise. `keep_default_na=False` switches that off, and
-`na_values=[""]` keeps genuinely empty cells missing — which is exactly what
-`readr::read_csv()` does in the R tab, so both tabs start from the same 9
-apparent gaps.
+file. Here that would quietly convert one of the smoking-status codes before you
+ever saw it, and spotting those codes is part of the exercise.
+`keep_default_na=False` switches that off; `na_values=[""]` keeps genuinely
+empty cells missing.
 :::
-
-### Task 1 — Should we one-hot encode everything?
-
-A model needs numbers, so categorical variables have to become numbers
-somehow. One-hot encoding gives each category its own 0/1 column.
-
-Take the **first 10 patients** and encode two categorical columns:
-`patient_id` and `GP_practice`. Then count what you got.
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-from sklearn.preprocessing import OneHotEncoder
-
-first10 = gp_py.head(______)
-enc = OneHotEncoder(sparse_output=False)
-out = enc.fit_transform(first10[["patient_id", "______"]])
-
-names = enc.get_feature_names_out(["patient_id", "GP_practice"])
-print(sum(n.startswith("patient_id") for n in names))
-print(sum(n.startswith("GP_practice") for n in names))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-Same two blanks as the R version: the row count, and the other column.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-from sklearn.preprocessing import OneHotEncoder
-
-first10 = gp_py.head(10)
-enc = OneHotEncoder(sparse_output=False)
-out = enc.fit_transform(first10[["patient_id", "GP_practice"]])
-
-names = enc.get_feature_names_out(["patient_id", "GP_practice"])
-print(sum(n.startswith("patient_id") for n in names))
-print(sum(n.startswith("GP_practice") for n in names))
-```
-:::
-:::
-
-#### Think about it
-
-- Why does encoding `patient_id` give one column per patient?
-- Those columns are perfectly valid numbers. What can a model do with them?
-- Should an identifier ever be a predictor?
 
 ::: {.callout-important appearance="simple"}
-## The point
-Being categorical does not make a variable worth encoding. An identifier is
-categorical and carries no information that transfers to a new patient —
-encoding it buys 180 columns of nothing. Decide what a variable *means* before
-deciding what to do with it.
+## Think about it
+1. How many patients and how many variables are there?
+2. Which columns came in as numbers and which as text?
+3. Does anything look wrong with `height_cm` or `age`?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Thirty patients, five variables.
+
+`age` arrived as `int64` and `height_cm` as `object` — `pandas` for text —
+which is the first finding. A column of heights should be numeric; it is not, so
+something in it is not a number. One text value anywhere in a column is enough
+to make the whole column text.
+
+`describe()` then shows an age of 250, which no patient has.
+:::
 :::
 
 ------------------------------------------------------------------------
 
-### Task 2 — Rare categories
+### 2. Cleaning the numerical variables
 
-Now look at `GP_practice` across all 180 patients. Count the practices, plot
-them, and see what encoding costs before and after you group the rare ones.
+#### Height
+
+Look at what is actually in the column:
 
 ```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-print(gp_py["GP_practice"].value_counts())
-
-counts = gp_py["GP_practice"].value_counts()
-rare = counts[counts < ______].index
-gp_py["GP_practice"] = gp_py["GP_practice"].where(
-    ~gp_py["GP_practice"].isin(rare), "______"
-)
-print(gp_py["GP_practice"].value_counts())
+print(gp_py["height_cm"].unique())
 ```
 
-::: {.callout-tip collapse="true"}
-## Stuck?
-The threshold is the same as the R version. The second blank is the label
-everything rare is folded into — and it already exists in the data, so use it
-exactly as spelled.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-print(gp_py["GP_practice"].value_counts())
-
-counts = gp_py["GP_practice"].value_counts()
-rare = counts[counts < 10].index
-gp_py["GP_practice"] = gp_py["GP_practice"].where(
-    ~gp_py["GP_practice"].isin(rare), "Other"
-)
-print(gp_py["GP_practice"].value_counts())
-```
-:::
-:::
-
-#### Think about it
-
-- The threshold was 10. What is that number a statement about — the data, or
-  your willingness to estimate an effect from a handful of rows?
-- What did you lose by grouping?
-- If an 80/20 split put all 5 patients from one practice in the test set, what
-  would that column be worth in training?
-
-------------------------------------------------------------------------
-
-### Task 3 — Find and fix the messy data
-
-This is the investigation. Nobody is going to tell you what is wrong with this
-extract; find out.
-
-#### Part A — Missing values that are not missing
-
-Start by asking what type each column came in as, and what the unparseable
-values actually are.
+Two values are not ordinary heights in centimetres: `unknown`, and `1.72` —
+a height recorded in metres. They need different treatment, because one of them
+is recoverable and the other is not.
 
 ```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-print(gp_py.dtypes)
-print(gp_py.isna().sum().sum())      # how much is missing, apparently?
-
-# Look at what is actually in the suspect columns
-for col in ["height_cm", "weight_kg", "systolic_BP", "smoking_status"]:
-    print("\n", col, ":")
-    print(gp_py[col].value_counts(dropna=False).head(______))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The blank just limits how many of the commonest values you print — 8 is plenty.
-Read the output before going on.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-print(gp_py.dtypes)
-print(gp_py.isna().sum().sum())
-
-for col in ["height_cm", "weight_kg", "systolic_BP", "smoking_status"]:
-    print("\n", col, ":")
-    print(gp_py[col].value_counts(dropna=False).head(8))
-```
-
-Five conventions are in use: `unknown`, `?`, `not recorded`, `N/A`, `-999`, and
-genuinely empty cells. `isna()` sees only the empty ones — 9 of the 44 gaps that
-are really there.
-
-Look at the dtypes too. `height_cm` and `weight_kg` came in as `object`, because
-one text code anywhere in a column is enough to make the whole column text.
-`systolic_BP` came in as a perfectly ordinary float, which is the problem.
-:::
-:::
-
-Now convert them. `replace()` swaps one set of values for `NaN`, and `apply()`
-sends a function down several columns at once.
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-na_codes = ["unknown", "?", "not recorded", "______", "-999"]
-
-gp_py = gp_py.replace(na_codes, np.nan)   # the text codes
-gp_py = gp_py.replace(-999, np.nan)       # and the one that is already a number
-
-num_cols = ["age", "height_cm", "weight_kg", "systolic_BP"]
-gp_py[num_cols] = gp_py[num_cols].apply(______, errors="coerce")
-
-print(gp_py.isna().sum().sum())      # compare with the count you got before
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is the fourth code in the list you just printed. The second is
-the function that turns a text column into a numeric one.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-na_codes = ["unknown", "?", "not recorded", "N/A", "-999"]
-
-gp_py = gp_py.replace(na_codes, np.nan)
-gp_py = gp_py.replace(-999, np.nan)
-
-num_cols = ["age", "height_cm", "weight_kg", "systolic_BP"]
-gp_py[num_cols] = gp_py[num_cols].apply(pd.to_numeric, errors="coerce")
-
-print(gp_py.isna().sum().sum())
-print(gp_py.isna().sum())
-```
-
-The missing count jumps from 9 to 44 once the codes are recognised. Everything
-that was hiding as text is now a real `NaN`, and the four measurement columns
-are numeric.
-
-Note the two passes. The text codes are strings, so one `replace()` catches
-them; `-999` is stored as a number, so it needs its own. Replacing the string
-`"-999"` would not have touched it.
-:::
-:::
-
-::: {.callout-warning appearance="simple"}
-## `-999` is the dangerous one
-The text codes are rude but honest: they force the column to character, so R
-warns and Python raises the moment you try to average it. You find out.
-
-`-999` is a number. `systolic_BP` loads as a perfectly ordinary numeric column
-and its mean comes out at **73.6 mmHg** instead of 131.7 — a figure that would
-mean your average patient was in shock. No error. No warning. Nothing but a
-wrong answer, and you only catch it by knowing what blood pressure looks like.
-
-Sentinel values like `-999`, `0` for a missing date, or `99` for "not asked" are
-the most dangerous convention in clinical data for exactly this reason.
-:::
-
-#### Part B — Inconsistent labels
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-print(gp_py["sex"].value_counts(dropna=False))
-print(gp_py["smoking_status"].value_counts(dropna=False))
-
-spelling = gp_py["sex"].str.strip().str.lower()
-sex_clean = pd.Series(np.nan, index=gp_py.index, dtype="object")
-sex_clean[spelling.isin(["male", "m"])]     = "Male"
-sex_clean[spelling.isin(["female", "______"])] = "Female"
-gp_py["sex"] = sex_clean
-
-gp_py["smoking_status"] = (gp_py["smoking_status"].str.strip()
-    .str.replace("ex smoker", "ex-smoker", regex=False)
-    .str.capitalize()
-    .str.replace(r" smoker$", "", regex=True))
-
-print(gp_py["sex"].value_counts(dropna=False))
-print(gp_py["smoking_status"].value_counts(dropna=False))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The blank is the one-letter abbreviation for the second category. Lower-casing
-alone would fix `male` but not `M`, which is why both forms are listed.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-print(gp_py["sex"].value_counts(dropna=False))
-print(gp_py["smoking_status"].value_counts(dropna=False))
-
-spelling = gp_py["sex"].str.strip().str.lower()
-sex_clean = pd.Series(np.nan, index=gp_py.index, dtype="object")
-sex_clean[spelling.isin(["male", "m"])]   = "Male"
-sex_clean[spelling.isin(["female", "f"])] = "Female"
-gp_py["sex"] = sex_clean
-
-gp_py["smoking_status"] = (gp_py["smoking_status"].str.strip()
-    .str.replace("ex smoker", "ex-smoker", regex=False)
-    .str.capitalize()
-    .str.replace(r" smoker$", "", regex=True))
-
-print(gp_py["sex"].value_counts(dropna=False))
-print(gp_py["smoking_status"].value_counts(dropna=False))
-```
-
-Six spellings of sex become two — 100 female and 80 male. Four spellings of
-smoking status become three: 65 never, 59 current, 45 ex-smoker, and 11 still
-missing. Nothing was dropped; the counts add to 180.
-:::
-:::
-
-#### Part C — Errors and extremes
-
-Plot first. An implausible value is easier to see than to define.
-
-```{python}
-#| eval: false
-#| fig-height: 2.4
-# Replace every ______ below, then run this cell.
-cols = ["age", "height_cm", "weight_kg", "systolic_BP"]
-
-fig, axes = plt.subplots(1, 4, figsize=(7, 2.4), sharey=______)
-for ax, col in zip(axes, cols):
-    ax.boxplot(gp_py[col].dropna())
-    ax.set_title(col, fontsize=9)
-    ax.set_xticks([])
-fig.tight_layout()
-plt.show()
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The columns are on wildly different scales, so each panel needs its own axis.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-#| fig-height: 2.4
-cols = ["age", "height_cm", "weight_kg", "systolic_BP"]
-
-fig, axes = plt.subplots(1, 4, figsize=(7, 2.4), sharey=False)
-for ax, col in zip(axes, cols):
-    ax.boxplot(gp_py[col].dropna())
-    ax.set_title(col, fontsize=9)
-    ax.set_xticks([])
-fig.tight_layout()
-plt.show()
-```
-
-Three things should stand out: an age far beyond any human lifespan, a weight
-no patient has, and a cluster of heights near zero.
-:::
-:::
-
-Now decide what to do about each one. **The decisions are not the same.**
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-flagged = gp_py[(gp_py["age"] > 120) |
-                (gp_py["weight_kg"] > 300) |
-                (gp_py["height_cm"] < 3)]
-print(flagged[["patient_id", "age", "height_cm", "weight_kg"]])
-
-# Recoverable: a height in metres is unambiguous, so fix it
-gp_py.loc[gp_py["height_cm"] < 3, "height_cm"] *= ______
-# Not recoverable: we cannot know the intended value, so admit it
-gp_py.loc[gp_py["age"] > 120, "age"] = np.nan
-gp_py.loc[gp_py["weight_kg"] > 300, "weight_kg"] = ______
-
-print(gp_py["height_cm"].describe().round(2))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank converts metres to centimetres. The second is what you set a
-value to when you know it is wrong but cannot know what it should be.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-flagged = gp_py[(gp_py["age"] > 120) |
-                (gp_py["weight_kg"] > 300) |
-                (gp_py["height_cm"] < 3)]
-print(flagged[["patient_id", "age", "height_cm", "weight_kg"]])
+gp_py["height_cm"] = pd.to_numeric(
+    gp_py["height_cm"].replace("unknown", np.nan), errors="coerce")
 
 gp_py.loc[gp_py["height_cm"] < 3, "height_cm"] *= 100
-gp_py.loc[gp_py["age"] > 120, "age"] = np.nan
-gp_py.loc[gp_py["weight_kg"] > 300, "weight_kg"] = np.nan
 
-print(gp_py["height_cm"].describe().round(2))
+print(gp_py["height_cm"].describe().round(1))
 ```
 
-Five rows are flagged: P013 with an age of 250, P047 at 800 kg, and P022, P096
-and P141 with heights of 1.61, 1.63 and 1.80. Three different treatments for
-three problems:
+Heights now run from 155 to 183 cm, with one missing.
 
-- **The heights in metres are corrected**, because `1.61` can only have meant
-  `161`. Nothing is guessed.
-- **The age of 250 becomes `NaN`**, because it could have been 25, 50, or a
-  mistyped date of birth. Inventing a value would be worse than admitting
-  ignorance.
-- **The 800 kg becomes `NaN`** for the same reason.
+#### Age
 
-What we did *not* do is remove every point outside 1.5×IQR. Look at the
-boxplots again: plenty of genuinely heavy and genuinely light patients sit out
-there, and they are real. A statistical outlier is a claim about a
-distribution; a data-entry error is a claim about a keyboard.
-:::
-:::
-
-------------------------------------------------------------------------
-
-### Task 4 — Feature engineering: BMI
-
-Height and weight are now clean. BMI is more clinically useful than either on
-its own, and it is one line to compute.
+Find the implausible ones rather than assuming you know where they are:
 
 ```{python}
-#| eval: false
-#| fig-height: 2.4
-# Replace every ______ below, then run this cell.
-gp_py["BMI"] = gp_py["weight_kg"] / (gp_py["height_cm"] / ______) ** 2
-
-print(gp_py["BMI"].describe().round(2))
-
-fig, ax = plt.subplots(figsize=(6, 2.4))
-ax.hist(gp_py["BMI"].dropna(), bins=30)
-ax.set_xlabel("BMI")
-plt.show()
-
-print(gp_py["______"].isna().sum())   # how many patients have no BMI, and why?
+print(gp_py[(gp_py["age"] < 0) | (gp_py["age"] > 110)])
 ```
 
-::: {.callout-tip collapse="true"}
-## Stuck?
-BMI is kg/m², and height is in centimetres. The last blank is the column you
-just made.
+```{python}
+gp_py["age"] = gp_py["age"].where((gp_py["age"] >= 0) & (gp_py["age"] <= 110))
+
+print(int(gp_py["age"].isna().sum()))
+```
+
+One patient, P014, recorded at 250.
+
+::: {.callout-important appearance="simple"}
+## Think about it
+Why is replacing an impossible age with missing better than replacing it with
+zero — or than leaving it at 250?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
+Because 0 is a number a model will believe. It would be treated as a newborn,
+pulling the mean age down and the age–outcome relationship with it. Leaving 250
+is worse again, for the same reason in the other direction.
+
+Missing is the only one of the three that is *true*. We know the recorded value
+is wrong and we do not know what it should have been — it could have been 25, or
+50, or a mistyped date of birth. Missing says exactly that, and every later step
+can then decide what to do about it. Note the contrast with the height in
+metres: `1.72` could only have meant `172`, so that one is corrected rather than
+discarded. Correcting a value you can infer is cleaning; inventing one you
+cannot is something else.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### 3. Exploring and collapsing the GP practices
+
+How many patients are registered at each practice?
+
 ```{python}
-#| fig-height: 2.4
-gp_py["BMI"] = gp_py["weight_kg"] / (gp_py["height_cm"] / 100) ** 2
-
-print(gp_py["BMI"].describe().round(2))
-
-fig, ax = plt.subplots(figsize=(6, 2.4))
-ax.hist(gp_py["BMI"].dropna(), bins=30)
-ax.set_xlabel("BMI")
-plt.show()
-
-print(gp_py["BMI"].isna().sum())
+print(gp_py["GP_practice"].value_counts())
 ```
 
-A plausible distribution, and 20 patients with no BMI at all. BMI is missing
-whenever *either* height or weight is missing, so the gaps in the two inputs
-combine — more patients lack a BMI than lack either measurement on its own.
-:::
-:::
+```{python}
+#| fig-height: 2.6
+counts = gp_py["GP_practice"].value_counts()
+
+fig, ax = plt.subplots(figsize=(7, 2.6))
+ax.barh(counts.index[::-1], counts.values[::-1], color="steelblue")
+ax.set_xlabel("Number of patients")
+ax.set_ylabel("GP practice")
+fig.tight_layout()
+plt.show()
+```
+
+Three practices have a single patient. Combine anything with fewer than three
+into an `Other` category:
+
+```{python}
+counts = gp_py["GP_practice"].value_counts()
+rare = counts[counts < 3].index
+
+gp_py["GP_practice"] = gp_py["GP_practice"].where(
+    ~gp_py["GP_practice"].isin(rare), "Other")
+
+print(gp_py["GP_practice"].value_counts())
+```
 
 ::: {.callout-important appearance="simple"}
-## What would have happened if you had skipped Part C
-Suppose you had computed BMI *before* fixing the heights. A patient recorded as
-`1.61` metres instead of `161` centimetres gives
+## Think about it
+1. How many practices were there to begin with, and how many are left?
+2. Where did the three single-patient practices go — and look carefully, because
+   the answer is not "into a new category".
+3. What information did you just lose?
+:::
 
-$$\frac{84.3}{(1.61/100)^2} \approx 325{,}000$$
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Eight practices become five: Bournbrook 9, Cherry Tree 7, Dovecote Lane 6,
+Selly Oak 3, and `Other` 5.
 
-against a plausible range of roughly 16 to 44. One keystroke in an input column
-became a value five thousand times too large in a derived one — and if you had
-gone straight to a model, nothing would have stopped you.
+The extract **already had** an `Other` category with two patients, and
+Harborne, Edgbaston and Kings Heath were merged into it rather than into a
+second one. Two plus three is the five you see. That is worth checking every
+time you group rare levels, because an `Other` that already exists and an
+`Other` you create mean different things and will be silently combined.
 
-Errors propagate into derived features, and they get harder to recognise the
-further they travel from the thing that was mistyped.
+What you lose is the identity of those three practices. If one of them had an
+unusual case mix — a practice serving a care home, say — that signal is now
+averaged into a category whose only shared property is being small. What you
+gain is five columns instead of eight when you encode, each supported by at
+least three patients.
+:::
 :::
 
 ------------------------------------------------------------------------
 
-### Reflection
+### 4. Cleaning and visualising smoking status
 
-1. Encoding `patient_id` produced one column per patient. Name another variable
-   in a clinical extract that is categorical and should not be encoded.
-2. Grouping rare practices cut the encoded columns from 16 to 13. What would
-   you say to a colleague who proposes grouping anything under 50?
-3. The text codes caused a loud failure and `-999` a silent one. Which would you
-   rather inherit, and what would you add to your loading code to catch the
-   silent kind?
-4. You corrected the heights but set the impossible age to `NA`. Write the rule
-   that separates those two decisions in one sentence.
+Count the categories as recorded:
 
-### Stretch
+```{python}
+print(gp_py["smoking_status"].value_counts(dropna=False))
+```
 
-#### Stretch 1 — A reusable audit
-Write a function that takes any data frame and reports, for each column: its
-type, the number of genuine `NA`s, any values matching common sentinel
-conventions (`-999`, `-99`, `9999`), and the number of distinct values that
-differ only by case or surrounding whitespace. Run it on the raw file and see
-whether it finds everything you found by hand.
+```{python}
+#| fig-height: 2.6
+counts = gp_py["smoking_status"].value_counts(dropna=False)
 
-#### Stretch 2 — Which error mattered?
-Compute the mean BMI three ways: with the metre-heights left uncorrected, with
-those rows dropped, and with them corrected as you did above. The three answers
-are very different. Which of the three would a careless analysis most likely
-report, and why is it the worst of the three?
+fig, ax = plt.subplots(figsize=(7, 2.6))
+ax.barh([str(i) for i in counts.index][::-1], counts.values[::-1],
+        color="steelblue")
+ax.set_xlabel("Patients")
+ax.set_ylabel("Smoking status")
+fig.tight_layout()
+plt.show()
+```
+
+Ten different spellings for what are really three categories, plus two codes
+that mean "not recorded". Standardise the labels and turn the codes into
+missing values:
+
+```{python}
+spelling = gp_py["smoking_status"].str.strip().str.lower()
+
+labels = {**{k: "Never"   for k in ["never", "non-smoker", "non smoker"]},
+          **{k: "Former"  for k in ["former", "ex-smoker", "ex smoker"]},
+          **{k: "Current" for k in ["current", "current smoker", "smoker"]},
+          **{k: np.nan    for k in ["unknown", "n/a", "", "?"]}}
+
+gp_py["smoking_status"] = spelling.map(labels)
+
+print(gp_py["smoking_status"].value_counts(dropna=False))
+```
+
+Never 12, Former 8, Current 7, and 3 genuinely missing.
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Why standardise the labels *before* encoding or analysing them?
+2. `Never` and `never` differed by one capital letter. What would a model have
+   done with them?
+3. The recipe above lower-cases and trims **before** matching. Why is that order
+   necessary rather than tidy?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Because a category is only a category if it is spelled one way. Left alone,
+`Never` and `never` are two different values: a frequency table reports 8 and 4
+instead of 12, a bar chart shows two bars, and one-hot encoding produces two
+columns — each with a smaller count than the real category, so each looks rarer
+and weaker than it is. The model never learns they are the same thing; it
+cannot, because nothing in the data says so.
+
+Lower-casing and trimming first turns `Never`, `never` and a stray
+` never ` into one string before any matching happens. Match first and you would
+need an entry for every spelling, and you would miss the one you did not think
+of. Cleaning the form of a value and then matching on meaning is the order that
+scales.
+:::
+:::
 
 ------------------------------------------------------------------------
 
-### Where this leaves you
+### 5. What happens when you one-hot encode?
 
-Save your cleaned data — @sec-imputation picks it up exactly here.
+Most algorithms need numbers, so a categorical variable has to become numeric
+somehow. One-hot encoding gives each category its own 0/1 column.
 
 ```{python}
-#| eval: false
-gp_py.to_csv("gp_patients_cleaned.csv", index=False)
+gp_encoded = pd.get_dummies(gp_py, columns=["GP_practice"], dtype=int)
+
+print(gp_py.shape[1])
+print(gp_encoded.shape[1])
+
+cols = ["patient_id"] + [c for c in gp_encoded.columns
+                         if c.startswith("GP_practice_")]
+print(gp_encoded[cols].head(10))
 ```
 
-The extract is now internally consistent: one spelling per category, rare
-practices grouped, impossible values either corrected or admitted as missing,
-and BMI derived from measurements you have checked.
+Five columns became nine: the practice column is gone and five indicator
+columns have taken its place.
 
-What it is **not** is complete. Height, weight, blood pressure and smoking
-status all still have gaps, and this exercise deliberately did not fill a single
-one — correcting a value you can infer is cleaning, but inventing a value you
-cannot is a different decision with different consequences.
+Now try the same thing on the patient identifier:
 
-> **Our data are cleaner, but some measurements are still missing. What should
-> we do with them?**
+```{python}
+gp_ids_encoded = pd.get_dummies(gp_py, columns=["patient_id"], dtype=int)
 
-That is @sec-imputation.
+print({"original": gp_py.shape[1],
+       "practice_encoded": gp_encoded.shape[1],
+       "id_encoded": gp_ids_encoded.shape[1]})
+```
 
-:::::
+::: {.callout-important appearance="simple"}
+## Think about it
+1. How many columns did each encoding add?
+2. What do the 0 and the 1 actually mean?
+3. Why was collapsing the rare practices worth doing *before* encoding?
+4. Would the patient-identifier columns help predict anything about a patient
+   who is not in this table?
+5. So: should every categorical variable be one-hot encoded?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Encoding the practice took 5 columns to 9 — one column out, five in. Encoding
+the identifier took 5 to 34: one column out, thirty in, one per patient.
+
+A 1 means "this patient is at this practice" and a 0 means "is not". For the
+identifier, each column is 1 for exactly one person and 0 for the other
+twenty-nine, so it can only ever identify that individual. On a real extract of
+50,000 patients it would produce 50,000 columns, and not one of them would
+apply to patient 50,001 — the only patient you actually care about predicting.
+
+Collapsing first is what kept the practice encoding at five columns rather than
+eight, with every column backed by at least three patients. A column with one
+patient in it cannot support an estimate of anything; it can only be memorised.
+
+So no. Being categorical does not make a variable worth encoding. Decide what a
+variable *means* — identifier, group, measurement — before deciding what to do
+with it.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### What to take from this
+
+1. **Explore before cleaning.** The column types, the frequency tables and the
+   summaries are what told you something was wrong — a height column stored as
+   text, an age of 250, ten spellings of three categories. None of it announced
+   itself.
+2. **Cleaning is a sequence of decisions, not a checklist.** You corrected one
+   impossible value and admitted another as missing, and the difference was
+   whether the intended value could be known. You grouped three practices and
+   lost their identity to gain columns that can support an estimate.
+3. **Encoding is not automatically useful.** The same operation that turned a
+   practice into five usable columns turned an identifier into thirty useless
+   ones.
+
+::::::
