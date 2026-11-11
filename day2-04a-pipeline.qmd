@@ -6,15 +6,11 @@ engine: knitr
 
 # Exercise 2.6 — Understanding preprocessing pipelines {#sec-pipeline-steps}
 
-## Objectives
+## Overview
 
-By the end of this exercise you will be able to:
+Data preprocessing is a critical part of any data analysis workflow, as the choices we make when handling missing values, encoding variables, scaling features and transforming data can substantially influence downstream analyses and model performance.
 
-- combine imputation, encoding, scaling and a model into one pipeline;
-- look inside a fitted pipeline and say what each step learned, and from which
-  patients;
-- say what happens when the fitted pipeline meets new patients;
-- give a reason for the order of the preprocessing steps.
+In the next exercise, you will explore how to bring these steps together using preprocessing pipelines. Frameworks such as `tidymodels` in R and `scikit-learn` in Python allow us to integrate preprocessing directly into the modelling workflow, making our analyses more reproducible, consistent and less prone to errors such as data leakage.
 
 ## The scenario
 
@@ -28,7 +24,7 @@ But rather than treating a pipeline as a black box, we will look inside it to
 understand what is learned during training and what happens when it is applied
 to new patients.
 
-## Task 1 — Build and fit a pipeline (8 minutes)
+## Task 1 — Build and fit a pipeline 
 
 Load the hospital admissions data, add BMI as in @sec-scaling, and keep the
 outcome and the eight predictors.
@@ -276,9 +272,7 @@ learned is stored inside the fitted object. The test patients are not looked at.
 
 ------------------------------------------------------------------------
 
-## Task 2 — Look inside the pipeline (10 minutes)
-
-Now we inspect what the pipeline learned, rather than simply trusting it.
+## Task 2 — Look inside the pipeline 
 
 ### A. Where does the imputation median come from?
 
@@ -538,7 +532,7 @@ would match no column at all.
 
 ------------------------------------------------------------------------
 
-## Task 3 — Apply the pipeline to new patients (5 minutes)
+## Task 3 — Apply the pipeline to new patients 
 
 A fitted pipeline should apply the same learned transformations to new
 patients.
@@ -571,88 +565,11 @@ head(predictions, 5)
 :::
 ::::::
 
-The predictions alone cannot show which medians were used to make them. To see
-what *would* change, fit a second copy of the pipeline on the test patients and
-compare what the two copies learned. This is only to look: a pipeline fitted on
-the test patients must never be used to judge a model.
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
+As you have seen, a key advantage of pipelines is that all preprocessing parameters, such as imputation medians, scaling means and standard deviations, and encoding categories, are learned from the training data only. These same parameters are then applied to the test data without being recalculated. This is essential to prevent data leakage, ensuring that information from the test set does not influence model training and that performance is evaluated on genuinely unseen data.
 
-```{python}
-from sklearn.base import clone
 
-refit = clone(model).fit(
-    X_test, y_test
-)
-
-refit_imputer = (
-    refit.named_steps["preprocess"]
-    .named_transformers_["numeric"]
-    .named_steps["impute"]
-)
-
-pd.DataFrame({
-    "training": imputer.statistics_,
-    "test": refit_imputer.statistics_,
-}, index=num).round(1)
-```
-:::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-refit <- fit(model, data = test)
-
-refit_rec <- extract_recipe(
-  refit, estimated = TRUE
-)
-
-tidy(trained_rec, number = 1) |>
-  select(terms, training = value) |>
-  mutate(
-    test = tidy(
-      refit_rec, number = 1
-    )$value
-  )
-```
-:::
-::::::
-
-::: {.callout-important appearance="simple"}
-## Think about it
-1. Is the imputation median recalculated for the test data?
-2. Does the scaler calculate a new mean and standard deviation?
-3. What would be different if we fitted a new pipeline on the test patients?
-4. Why is this important when deploying a model in a hospital?
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-**No, and no.** Predicting only *applies* what was stored during `fit()`. The
-medians, the list of categories, the means and the standard deviations all come
-from the training patients.
-
-**Every learned number would be different**, as the table shows: the creatinine
-median alone moves from 74.5 to 80 in the Python column and from 76 to 78 in
-the R column. The scaler changes too. The same patient would be handed to the
-regression with different numbers and would receive a different prediction.
-The pipeline would also have been fitted on the patients it is being judged on.
-
-**Because in a hospital patients arrive one at a time.** One patient has no
-median and no standard deviation, so the pipeline must carry its numbers with
-it. It also means the same patient receives the same prediction whoever else
-happens to be admitted that day.
-:::
-:::
-
-------------------------------------------------------------------------
+---------------
 
 ## Final reflection — Preprocessing choices and order
 
@@ -703,18 +620,11 @@ mathematically incorrect? Why might we prefer to leave them as 0 and 1?
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-It is not incorrect, and for a plain linear regression the predictions are the
-same either way.
 
-What is lost is the meaning. A 0/1 column says "emergency admission: no or
+The meaning is lost!  A 0/1 column says "emergency admission: no or
 yes", and its coefficient is the difference between the two groups. After
 standard scaling the same column holds about −1.1 and 0.9, and the coefficient
 is no longer that difference.
-
-The values also depend on how common the category is. A category held by 2% of
-patients would turn its 1 into 7, far outside the range of any standardised
-numeric variable. That matters for models that are sensitive to scale, which
-appear later in the module.
 
 This is why the R recipe excludes the indicator columns from
 `step_normalize()`, and why the Python pipeline never sends the categorical
@@ -795,13 +705,3 @@ step_unknown(
 :::::::
 ::::::::
 
-::: {.callout-tip appearance="simple"}
-## Key takeaway
-A pipeline is not just a convenient way of organising code.
-
-It learns preprocessing parameters from the training data, stores those
-parameters, and applies the same transformations to new patients.
-
-Understanding what the pipeline learns — and where that information comes
-from — is essential for reproducible machine learning.
-:::

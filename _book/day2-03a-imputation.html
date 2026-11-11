@@ -2,16 +2,13 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.9.38">
+<meta name="generator" content="quarto-1.8.27">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
 <title>Exercise 2.4 — Missing data and imputation – Statistical Machine Learning &amp; Data Analytics</title>
 <style>
-/* Default styles provided by pandoc.
-** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
-*/
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
 div.columns{display: flex; gap: min(4vw, 1.5em);}
@@ -72,14 +69,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="./day2-02-cleaning-encoding.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-68d006cd884444a66203cf37d1af94b0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-858c91a982f22841b60e7d9947849be3.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
@@ -223,7 +221,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#objectives" id="toc-objectives" class="nav-link active" data-scroll-target="#objectives">Objectives</a></li>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
   <li><a href="#the-scenario" id="toc-the-scenario" class="nav-link" data-scroll-target="#the-scenario">The scenario</a></li>
   </ul>
 </nav>
@@ -250,16 +248,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="objectives" class="level2">
-<h2 class="anchored" data-anchor-id="objectives">Objectives</h2>
-<p>By the end of this exercise you will be able to:</p>
-<ul>
-<li>describe who is missing, not just how much;</li>
-<li>fill a missing number with a mean or median, and a missing category with its mode, and say what each does to the distribution;</li>
-<li>argue for keeping “Unknown” as a category;</li>
-<li>impute a value from a patient’s other measurements;</li>
-<li>measure how wrong an imputation was, and say why it could not have been right.</li>
-</ul>
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>Lets understand what imputation is about, the difefrent ways in which we can apply it and the limitations it has.</p>
 </section>
 <section id="the-scenario" class="level2">
 <h2 class="anchored" data-anchor-id="the-scenario">The scenario</h2>
@@ -271,7 +262,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div id="tabset-1-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-1-1-tab">
 <section id="explore-the-missingness" class="level3">
 <h3 class="anchored" data-anchor-id="explore-the-missingness">1. Explore the missingness</h3>
-<p>Load the data and count what is missing.</p>
+<p>Load the data and see what is missing.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(finalfit)</span>
@@ -305,7 +296,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 #&gt;              0</code></pre>
 </div>
 </div>
-<p>Creatinine is missing for 42 of the 250 patients and smoking status for 32. Before deciding what to do about that, ask <em>who</em> is missing. Compare the patients with and without a creatinine result:</p>
+<p>Creatinine is missing for 42 of the 250 patients and smoking status for 32. Before deciding what to do about that, think about the possible reasons behind it. Can we ask teh dataset curator about what happened to these missing values? If not, lets try and at least understand what we can do about them. First of all, lets ask <em>who</em> is missing. Compare the patients with and without a creatinine result (for this we are taking advanatge of the <code>finalfit</code> package functions, but you could also use functions from other packages such as for example <a href="https://cran.r-project.org/web/packages/table1/vignettes/table1-examples.html">Table 1</a>):</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>hospital <span class="ot">&lt;-</span> hospital <span class="sc">|&gt;</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">creatinine_missing =</span> <span class="fu">factor</span>(</span>
@@ -475,8 +466,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="using-the-other-variables" class="level3">
 <h3 class="anchored" data-anchor-id="using-the-other-variables">3. Using the other variables</h3>
-<p>Mean and median imputation give every patient the same number, whatever else is known about them. But an 85-year-old emergency admission and a 30-year-old elective one are unlikely to have the same creatinine. Can age, blood pressure and heart rate do better?</p>
-<p><code>mice</code> fits a regression of creatinine on the other three columns, using the patients where it was measured, and predicts it where it was not. It is installed along with <code>finalfit</code>, so there is nothing extra to set up.</p>
+<p>Mean and median imputation replace missing values with the same number for every patient, regardless of what else we know about them. However, an 85-year-old emergency admission and a 30-year-old elective patient may have very different creatinine levels. Can we use information from other variables to make more personalised estimates?</p>
+<p>More advanced model-based imputation methods use relationships between variables to estimate missing values. For example, <code>mice</code> can fit a regression model using patients with observed creatinine, learning how creatinine relates to age, blood pressure and heart rate. It then uses these relationships to predict missing creatinine values. Other methods, such as <code>KNN</code> (K-Nearest Neighbour) imputation, instead identify patients with similar characteristics to estimate the missing values.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>imp <span class="ot">&lt;-</span> hospital <span class="sc">|&gt;</span></span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(age, systolic_BP, heart_rate, creatinine) <span class="sc">|&gt;</span></span>
@@ -495,12 +486,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>What the three arguments mean
+<span class="screen-reader-only">Note</span>How does mice() work here?
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p><code>m = 1</code> asks for one filled-in dataset. <code>maxit = 1</code> is one pass, which is all that is needed here because only creatinine has gaps among these four columns. <code>method = "norm.predict"</code> fills each gap with the regression’s best guess.</p>
-<p>The Python tab does the same job with scikit-learn’s <code>IterativeImputer</code>. The two are the same idea, so their answers land very close together but are not identical.</p>
+<p>m = 1 generates one completed dataset. Normally, mice is used for multiple imputation, generating several plausible datasets to account for uncertainty in missing values. You can read more about multiple imputation here.</p>
+<p>maxit = 1 runs one iteration. Since creatinine is the only variable with missing values in our selected columns, we only need to fit one regression model rather than repeatedly update several variables.</p>
+<p>method = “norm.predict” uses linear regression to estimate missing creatinine values from age, blood pressure and heart rate. Each missing value is replaced with its predicted value.</p>
+<p>In this example, we are using mice for single regression-based imputation, rather than full multiple imputation. The resulting estimates are predictions.</p>
 </div>
 </div>
 <div class="callout callout-style-simple callout-important callout-titled">
@@ -514,70 +507,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="callout-body-container callout-body">
 <p>Two patients of the same age, with the same blood pressure and heart rate, will be given the same imputed creatinine. Why might their real values be very different?</p>
-</div>
-</div>
-<hr>
-</section>
-<section id="the-reveal-how-close-were-we" class="level3">
-<h3 class="anchored" data-anchor-id="the-reveal-how-close-were-we">4. The reveal: how close were we?</h3>
-<p>For 18 of the patients with no creatinine, the real measurement was kept back. Here it is: <a href="data/creatinine_truth.csv" download="creatinine_truth.csv"><strong>download <code>creatinine_truth.csv</code></strong></a> into your <code>data</code> folder.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>creatinine_truth <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/creatinine_truth.csv"</span>,</span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>                             <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>comparison <span class="ot">&lt;-</span> hospital <span class="sc">|&gt;</span></span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(creatinine_truth, <span class="at">by =</span> <span class="st">"patient_id"</span>)</span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>comparison <span class="sc">|&gt;</span></span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(patient_id, true_creatinine,</span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>         creatinine_mean, creatinine_median, creatinine_advanced) <span class="sc">|&gt;</span></span>
-<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.numeric), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">1</span>))) <span class="sc">|&gt;</span></span>
-<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">6</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; # A tibble: 6 × 5
-#&gt;   patient_id true_creatinine creatinine_mean creatinine_median
-#&gt;   &lt;chr&gt;                &lt;dbl&gt;           &lt;dbl&gt;             &lt;dbl&gt;
-#&gt; 1 H020                    78            78.9                76
-#&gt; 2 H053                    97            78.9                76
-#&gt; 3 H062                    85            78.9                76
-#&gt; 4 H076                    83            78.9                76
-#&gt; 5 H086                    75            78.9                76
-#&gt; 6 H092                    80            78.9                76
-#&gt; # ℹ 1 more variable: creatinine_advanced &lt;dbl&gt;</code></pre>
-</div>
-</div>
-<p>Read across each row. The mean and median columns are one number repeated. The last column moves with the patient — and still does not match the truth for any of them.</p>
-<p>Now the average size of the miss, across all 18:</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>comparison <span class="sc">|&gt;</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">Mean     =</span> <span class="fu">mean</span>(<span class="fu">abs</span>(true_creatinine <span class="sc">-</span> creatinine_mean)),</span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">Median   =</span> <span class="fu">mean</span>(<span class="fu">abs</span>(true_creatinine <span class="sc">-</span> creatinine_median)),</span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">Advanced =</span> <span class="fu">mean</span>(<span class="fu">abs</span>(true_creatinine <span class="sc">-</span> creatinine_advanced))</span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">round</span>(<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; # A tibble: 1 × 3
-#&gt;    Mean Median Advanced
-#&gt;   &lt;dbl&gt;  &lt;dbl&gt;    &lt;dbl&gt;
-#&gt; 1  11.4   11.3     8.45</code></pre>
-</div>
-</div>
-<div class="callout callout-style-simple callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Think about it
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ol type="1">
-<li>Which method came closest?</li>
-<li>Did the advanced method get any single patient exactly right?</li>
-<li>What clinical information, missing from this table, would have helped?</li>
-</ol>
 </div>
 </div>
 <hr>
@@ -600,14 +529,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ol type="1">
 <li><strong>Look at who is missing before deciding what to do.</strong> Here the gaps tracked emergency admission, so dropping them would have quietly changed the cohort.</li>
 <li><strong>Simple methods distort.</strong> The mean put 42 patients on one value and shrank the spread; the mode turned 43% never-smokers into 56%.</li>
-<li><strong>Better methods are better, not right.</strong> Using three other variables cut the error by about a quarter and still missed one patient by more than 20.</li>
-<li><strong>Sometimes the honest answer is a category called Unknown.</strong></li>
+<li><strong>Better methods are better, not right.</strong> Using three other variables can help you make a more informed guess, but it is a guess after all.</li>
 </ol>
 </section>
 <section id="optional-multiple-imputation" class="level3">
 <h3 class="anchored" data-anchor-id="optional-multiple-imputation">Optional: multiple imputation</h3>
-<p>The <code>mice</code> package is built for something more than the single fill used above. Its default method does not give each gap one best guess; it draws a <em>plausible</em> value, and it is meant to be run several times, so that the spread between the filled-in datasets shows how uncertain each value was. That is multiple imputation, and it is the honest way to carry imputation uncertainty through to a final result. Read more at <a href="https://amices.org/mice/">amices.org/mice</a>.</p>
-<p>Next: <a href="day2-03b-scaling.html" class="quarto-xref"><span>Exercise 2.5 — Scaling, transformations and feature engineering</span></a>.</p>
+<p>The <code>mice</code> package is built for something more than the single fill used above. Its default method does not give each gap one best guess; it draws a <em>plausible</em> value, and it is meant to be run several times, so that the spread between the filled-in datasets shows how uncertain each value was. That is multiple imputation, and it is the honest way to carry imputation uncertainty through to a final result. Read more at <a href="https://amices.org/mice/">amices.org/mice</a>.This amounts to doing a sensitivity analysis, where you can see how much your results change depending on the imputed values.</p>
 </section>
 </div>
 <div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
@@ -615,17 +542,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 class="anchored" data-anchor-id="explore-the-missingness-1">1. Explore the missingness</h3>
 <p>Load the data and count what is missing.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
-<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> scipy <span class="im">import</span> stats</span>
-<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>hospital <span class="op">=</span> pd.read_csv(<span class="st">"data/hospital_admissions.csv"</span>)</span>
-<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital.dtypes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> scipy <span class="im">import</span> stats</span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>hospital <span class="op">=</span> pd.read_csv(<span class="st">"data/hospital_admissions.csv"</span>)</span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital.dtypes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; patient_id         object
-#&gt; admission_type     object
+<pre><code>#&gt; patient_id            str
+#&gt; admission_type        str
 #&gt; age                 int64
 #&gt; height_cm           int64
 #&gt; weight_kg         float64
@@ -633,11 +560,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 #&gt; heart_rate          int64
 #&gt; creatinine        float64
 #&gt; CRP_mg_L          float64
-#&gt; smoking_status     object
+#&gt; smoking_status        str
 #&gt; length_of_stay    float64
 #&gt; dtype: object</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital.isna().<span class="bu">sum</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital.isna().<span class="bu">sum</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; patient_id         0
 #&gt; admission_type     0
@@ -655,27 +582,27 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <p>Creatinine is missing for 42 of the 250 patients and smoking status for 32. Before deciding what to do about that, ask <em>who</em> is missing. Compare the patients with and without a creatinine result:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"creatinine_missing"</span>] <span class="op">=</span> np.where(</span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>    hospital[<span class="st">"creatinine"</span>].isna(), <span class="st">"Missing"</span>, <span class="st">"Observed"</span>)</span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>table <span class="op">=</span> pd.crosstab(hospital[<span class="st">"admission_type"</span>], hospital[<span class="st">"creatinine_missing"</span>])</span>
-<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>((<span class="dv">100</span> <span class="op">*</span> table <span class="op">/</span> table.<span class="bu">sum</span>()).<span class="bu">round</span>(<span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"creatinine_missing"</span>] <span class="op">=</span> np.where(</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>    hospital[<span class="st">"creatinine"</span>].isna(), <span class="st">"Missing"</span>, <span class="st">"Observed"</span>)</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>table <span class="op">=</span> pd.crosstab(hospital[<span class="st">"admission_type"</span>], hospital[<span class="st">"creatinine_missing"</span>])</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>((<span class="dv">100</span> <span class="op">*</span> table <span class="op">/</span> table.<span class="bu">sum</span>()).<span class="bu">round</span>(<span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; creatinine_missing  Missing  Observed
 #&gt; admission_type                       
 #&gt; Elective               28.6      50.0
 #&gt; Emergency              71.4      50.0</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"p ="</span>, <span class="bu">round</span>(stats.chi2_contingency(table)[<span class="dv">1</span>], <span class="dv">3</span>), <span class="st">"</span><span class="ch">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"p ="</span>, <span class="bu">round</span>(stats.chi2_contingency(table)[<span class="dv">1</span>], <span class="dv">3</span>), <span class="st">"</span><span class="ch">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; p = 0.018</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> col <span class="kw">in</span> [<span class="st">"age"</span>, <span class="st">"systolic_BP"</span>, <span class="st">"heart_rate"</span>]:</span>
-<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>    missing  <span class="op">=</span> hospital.loc[hospital[<span class="st">"creatinine_missing"</span>] <span class="op">==</span> <span class="st">"Missing"</span>, col]</span>
-<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>    observed <span class="op">=</span> hospital.loc[hospital[<span class="st">"creatinine_missing"</span>] <span class="op">==</span> <span class="st">"Observed"</span>, col]</span>
-<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span>col<span class="sc">:12s}</span><span class="ss"> </span><span class="sc">{</span>missing<span class="sc">.</span>mean()<span class="sc">:6.1f}</span><span class="ss"> (</span><span class="sc">{</span>missing<span class="sc">.</span>std()<span class="sc">:.1f}</span><span class="ss">)   "</span></span>
-<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>          <span class="ss">f"</span><span class="sc">{</span>observed<span class="sc">.</span>mean()<span class="sc">:6.1f}</span><span class="ss"> (</span><span class="sc">{</span>observed<span class="sc">.</span>std()<span class="sc">:.1f}</span><span class="ss">)   "</span></span>
-<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>          <span class="ss">f"p = </span><span class="sc">{</span>stats<span class="sc">.</span>ttest_ind(missing, observed)<span class="sc">.</span>pvalue<span class="sc">:.3f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> col <span class="kw">in</span> [<span class="st">"age"</span>, <span class="st">"systolic_BP"</span>, <span class="st">"heart_rate"</span>]:</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>    missing  <span class="op">=</span> hospital.loc[hospital[<span class="st">"creatinine_missing"</span>] <span class="op">==</span> <span class="st">"Missing"</span>, col]</span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>    observed <span class="op">=</span> hospital.loc[hospital[<span class="st">"creatinine_missing"</span>] <span class="op">==</span> <span class="st">"Observed"</span>, col]</span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span>col<span class="sc">:12s}</span><span class="ss"> </span><span class="sc">{</span>missing<span class="sc">.</span>mean()<span class="sc">:6.1f}</span><span class="ss"> (</span><span class="sc">{</span>missing<span class="sc">.</span>std()<span class="sc">:.1f}</span><span class="ss">)   "</span></span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>          <span class="ss">f"</span><span class="sc">{</span>observed<span class="sc">.</span>mean()<span class="sc">:6.1f}</span><span class="ss"> (</span><span class="sc">{</span>observed<span class="sc">.</span>std()<span class="sc">:.1f}</span><span class="ss">)   "</span></span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>          <span class="ss">f"p = </span><span class="sc">{</span>stats<span class="sc">.</span>ttest_ind(missing, observed)<span class="sc">.</span>pvalue<span class="sc">:.3f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; age            63.1 (14.6)     61.7 (16.7)   p = 0.607
 #&gt; systolic_BP   123.1 (12.6)    126.7 (14.1)   p = 0.124
@@ -706,44 +633,44 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h4 class="anchored" data-anchor-id="a-number-mean-and-median-1">A number: mean and median</h4>
 <p>The simplest thing to do with a missing number is to put the column’s own average in its place.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"creatinine_mean"</span>] <span class="op">=</span> hospital[<span class="st">"creatinine"</span>].fillna(</span>
-<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>    hospital[<span class="st">"creatinine"</span>].mean())</span>
-<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"creatinine_median"</span>] <span class="op">=</span> hospital[<span class="st">"creatinine"</span>].fillna(</span>
-<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>    hospital[<span class="st">"creatinine"</span>].median())</span>
-<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">round</span>(hospital[<span class="st">"creatinine"</span>].mean(), <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"creatinine_mean"</span>] <span class="op">=</span> hospital[<span class="st">"creatinine"</span>].fillna(</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>    hospital[<span class="st">"creatinine"</span>].mean())</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"creatinine_median"</span>] <span class="op">=</span> hospital[<span class="st">"creatinine"</span>].fillna(</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>    hospital[<span class="st">"creatinine"</span>].median())</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">round</span>(hospital[<span class="st">"creatinine"</span>].mean(), <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; 78.9</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital[<span class="st">"creatinine"</span>].median())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital[<span class="st">"creatinine"</span>].median())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; 76.0</code></pre>
 </div>
 </div>
 <p>Now look at what that did to the distribution:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">8</span>, <span class="fl">2.8</span>), sharey<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].hist(hospital[<span class="st">"creatinine_mean"</span>], bins<span class="op">=</span><span class="dv">30</span>, color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
-<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">"mean imputed"</span>)</span>
-<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].hist(hospital[<span class="st">"creatinine"</span>].dropna(), bins<span class="op">=</span><span class="dv">30</span>, color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
-<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_title(<span class="st">"observed"</span>)</span>
-<span id="cb44-6"><a href="#cb44-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> ax <span class="kw">in</span> axes:</span>
-<span id="cb44-7"><a href="#cb44-7" aria-hidden="true" tabindex="-1"></a>    ax.set_xlabel(<span class="st">"Creatinine (µmol/L)"</span>)</span>
-<span id="cb44-8"><a href="#cb44-8" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_ylabel(<span class="st">"Patients"</span>)</span>
-<span id="cb44-9"><a href="#cb44-9" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
-<span id="cb44-10"><a href="#cb44-10" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">8</span>, <span class="fl">2.8</span>), sharey<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].hist(hospital[<span class="st">"creatinine_mean"</span>], bins<span class="op">=</span><span class="dv">30</span>, color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">"mean imputed"</span>)</span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].hist(hospital[<span class="st">"creatinine"</span>].dropna(), bins<span class="op">=</span><span class="dv">30</span>, color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_title(<span class="st">"observed"</span>)</span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> ax <span class="kw">in</span> axes:</span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>    ax.set_xlabel(<span class="st">"Creatinine (µmol/L)"</span>)</span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_ylabel(<span class="st">"Patients"</span>)</span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day2-03a-imputation_files/figure-html/unnamed-chunk-16-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="768"></p>
+<p><img src="day2-03a-imputation_files/figure-html/unnamed-chunk-14-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="768"></p>
 </figure>
 </div>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">round</span>(hospital[<span class="st">"creatinine"</span>].std(), <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">round</span>(hospital[<span class="st">"creatinine"</span>].std(), <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; 24.4</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">round</span>(hospital[<span class="st">"creatinine_mean"</span>].std(), <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">round</span>(hospital[<span class="st">"creatinine_mean"</span>].std(), <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; 22.2</code></pre>
 </div>
@@ -753,12 +680,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h4 class="anchored" data-anchor-id="a-category-the-most-common-value-or-an-honest-unknown-1">A category: the most common value, or an honest “Unknown”</h4>
 <p>Smoking status has three categories — Never, Former and Current — so there is no mean to take. The usual substitute is the most frequent category. The alternative is to say what you actually know.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>mode_smoking <span class="op">=</span> hospital[<span class="st">"smoking_status"</span>].value_counts().index[<span class="dv">0</span>]</span>
-<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"smoking_imputed"</span>] <span class="op">=</span> hospital[<span class="st">"smoking_status"</span>].fillna(mode_smoking)</span>
-<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"smoking_unknown"</span>] <span class="op">=</span> hospital[<span class="st">"smoking_status"</span>].fillna(<span class="st">"Unknown"</span>)</span>
-<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital[<span class="st">"smoking_status"</span>].value_counts(dropna<span class="op">=</span><span class="va">False</span>).sort_index())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>mode_smoking <span class="op">=</span> hospital[<span class="st">"smoking_status"</span>].value_counts().index[<span class="dv">0</span>]</span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"smoking_imputed"</span>] <span class="op">=</span> hospital[<span class="st">"smoking_status"</span>].fillna(mode_smoking)</span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"smoking_unknown"</span>] <span class="op">=</span> hospital[<span class="st">"smoking_status"</span>].fillna(<span class="st">"Unknown"</span>)</span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital[<span class="st">"smoking_status"</span>].value_counts(dropna<span class="op">=</span><span class="va">False</span>).sort_index())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; smoking_status
 #&gt; Current     47
@@ -767,7 +694,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 #&gt; NaN         32
 #&gt; Name: count, dtype: int64</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital[<span class="st">"smoking_imputed"</span>].value_counts().sort_index())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital[<span class="st">"smoking_imputed"</span>].value_counts().sort_index())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; smoking_imputed
 #&gt; Current     47
@@ -775,7 +702,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 #&gt; Never      139
 #&gt; Name: count, dtype: int64</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital[<span class="st">"smoking_unknown"</span>].value_counts().sort_index())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital[<span class="st">"smoking_unknown"</span>].value_counts().sort_index())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; smoking_unknown
 #&gt; Current     47
@@ -787,10 +714,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <p>Before choosing between them, look at who the unknowns are:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital.groupby(<span class="st">"smoking_unknown"</span>).agg(</span>
-<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>    patients<span class="op">=</span>(<span class="st">"patient_id"</span>, <span class="st">"size"</span>),</span>
-<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>    pct_emergency<span class="op">=</span>(<span class="st">"admission_type"</span>,</span>
-<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a>                   <span class="kw">lambda</span> s: <span class="bu">round</span>(<span class="dv">100</span> <span class="op">*</span> (s <span class="op">==</span> <span class="st">"Emergency"</span>).mean()))))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital.groupby(<span class="st">"smoking_unknown"</span>).agg(</span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>    patients<span class="op">=</span>(<span class="st">"patient_id"</span>, <span class="st">"size"</span>),</span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a>    pct_emergency<span class="op">=</span>(<span class="st">"admission_type"</span>,</span>
+<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a>                   <span class="kw">lambda</span> s: <span class="bu">round</span>(<span class="dv">100</span> <span class="op">*</span> (s <span class="op">==</span> <span class="st">"Emergency"</span>).mean()))))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;                  patients  pct_emergency
 #&gt; smoking_unknown                         
@@ -825,16 +752,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Mean and median imputation give every patient the same number, whatever else is known about them. But an 85-year-old emergency admission and a 30-year-old elective one are unlikely to have the same creatinine. Can age, blood pressure and heart rate do better?</p>
 <p><code>IterativeImputer</code> fits a regression of creatinine on the other three columns, using the patients where it was measured, and predicts it where it was not. It is still marked experimental in scikit-learn, so it has to be switched on.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb57"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.experimental <span class="im">import</span> enable_iterative_imputer  <span class="co"># noqa: F401</span></span>
-<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.impute <span class="im">import</span> IterativeImputer</span>
-<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a>features <span class="op">=</span> [<span class="st">"age"</span>, <span class="st">"systolic_BP"</span>, <span class="st">"heart_rate"</span>, <span class="st">"creatinine"</span>]</span>
-<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb57-6"><a href="#cb57-6" aria-hidden="true" tabindex="-1"></a>imputer <span class="op">=</span> IterativeImputer(random_state<span class="op">=</span><span class="dv">42</span>)</span>
-<span id="cb57-7"><a href="#cb57-7" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"creatinine_advanced"</span>] <span class="op">=</span> (</span>
-<span id="cb57-8"><a href="#cb57-8" aria-hidden="true" tabindex="-1"></a>    imputer.fit_transform(hospital[features])[:, <span class="op">-</span><span class="dv">1</span>])</span>
-<span id="cb57-9"><a href="#cb57-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb57-10"><a href="#cb57-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">int</span>(hospital[<span class="st">"creatinine_advanced"</span>].isna().<span class="bu">sum</span>()))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.experimental <span class="im">import</span> enable_iterative_imputer  <span class="co"># noqa: F401</span></span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.impute <span class="im">import</span> IterativeImputer</span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a>features <span class="op">=</span> [<span class="st">"age"</span>, <span class="st">"systolic_BP"</span>, <span class="st">"heart_rate"</span>, <span class="st">"creatinine"</span>]</span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a>imputer <span class="op">=</span> IterativeImputer(random_state<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb53-7"><a href="#cb53-7" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"creatinine_advanced"</span>] <span class="op">=</span> (</span>
+<span id="cb53-8"><a href="#cb53-8" aria-hidden="true" tabindex="-1"></a>    imputer.fit_transform(hospital[features])[:, <span class="op">-</span><span class="dv">1</span>])</span>
+<span id="cb53-9"><a href="#cb53-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-10"><a href="#cb53-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">int</span>(hospital[<span class="st">"creatinine_advanced"</span>].isna().<span class="bu">sum</span>()))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; 0</code></pre>
 </div>
@@ -867,58 +794,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <hr>
 </section>
-<section id="the-reveal-how-close-were-we-1" class="level3">
-<h3 class="anchored" data-anchor-id="the-reveal-how-close-were-we-1">4. The reveal: how close were we?</h3>
-<p>For 18 of the patients with no creatinine, the real measurement was kept back. Here it is: <a href="data/creatinine_truth.csv" download="creatinine_truth.csv"><strong>download <code>creatinine_truth.csv</code></strong></a> into your <code>data</code> folder.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb59"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a>creatinine_truth <span class="op">=</span> pd.read_csv(<span class="st">"data/creatinine_truth.csv"</span>)</span>
-<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>comparison <span class="op">=</span> hospital.merge(creatinine_truth, on<span class="op">=</span><span class="st">"patient_id"</span>)</span>
-<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(comparison[[<span class="st">"patient_id"</span>, <span class="st">"true_creatinine"</span>, <span class="st">"creatinine_mean"</span>,</span>
-<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a>                  <span class="st">"creatinine_median"</span>, <span class="st">"creatinine_advanced"</span>]]</span>
-<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a>      .<span class="bu">round</span>(<span class="dv">1</span>).head(<span class="dv">6</span>).to_string(index<span class="op">=</span><span class="va">False</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; patient_id  true_creatinine  creatinine_mean  creatinine_median  creatinine_advanced
-#&gt;       H020               78             78.9               76.0                 79.4
-#&gt;       H053               97             78.9               76.0                 88.0
-#&gt;       H062               85             78.9               76.0                 92.4
-#&gt;       H076               83             78.9               76.0                 94.6
-#&gt;       H086               75             78.9               76.0                 78.0
-#&gt;       H092               80             78.9               76.0                 81.2</code></pre>
-</div>
-</div>
-<p>Read across each row. The mean and median columns are one number repeated. The last column moves with the patient — and still does not match the truth for any of them.</p>
-<p>Now the average size of the miss, across all 18:</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb61"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>({name: <span class="bu">round</span>(<span class="bu">float</span>((comparison[<span class="st">"true_creatinine"</span>] <span class="op">-</span> comparison[col])</span>
-<span id="cb61-2"><a href="#cb61-2" aria-hidden="true" tabindex="-1"></a>                         .<span class="bu">abs</span>().mean()), <span class="dv">2</span>)</span>
-<span id="cb61-3"><a href="#cb61-3" aria-hidden="true" tabindex="-1"></a>       <span class="cf">for</span> name, col <span class="kw">in</span> [(<span class="st">"Mean"</span>, <span class="st">"creatinine_mean"</span>),</span>
-<span id="cb61-4"><a href="#cb61-4" aria-hidden="true" tabindex="-1"></a>                         (<span class="st">"Median"</span>, <span class="st">"creatinine_median"</span>),</span>
-<span id="cb61-5"><a href="#cb61-5" aria-hidden="true" tabindex="-1"></a>                         (<span class="st">"Advanced"</span>, <span class="st">"creatinine_advanced"</span>)]})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; {'Mean': 11.44, 'Median': 11.33, 'Advanced': 8.35}</code></pre>
-</div>
-</div>
-<div class="callout callout-style-simple callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Think about it
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ol type="1">
-<li>Which method came closest?</li>
-<li>Did the advanced method get any single patient exactly right?</li>
-<li>What clinical information, missing from this table, would have helped?</li>
-</ol>
-</div>
-</div>
-<hr>
-</section>
 <section id="what-to-take-from-this-1" class="level3">
 <h3 class="anchored" data-anchor-id="what-to-take-from-this-1">What to take from this</h3>
 <div class="callout callout-style-simple callout-warning callout-titled">
@@ -937,8 +812,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ol type="1">
 <li><strong>Look at who is missing before deciding what to do.</strong> Here the gaps tracked emergency admission, so dropping them would have quietly changed the cohort.</li>
 <li><strong>Simple methods distort.</strong> The mean put 42 patients on one value and shrank the spread; the mode turned 43% never-smokers into 56%.</li>
-<li><strong>Better methods are better, not right.</strong> Using three other variables cut the error by about a quarter and still missed one patient by more than 20.</li>
-<li><strong>Sometimes the honest answer is a category called Unknown.</strong></li>
 </ol>
 </section>
 <section id="optional-multiple-imputation-1" class="level3">

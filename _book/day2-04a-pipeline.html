@@ -2,16 +2,13 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.9.38">
+<meta name="generator" content="quarto-1.8.27">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
 <title>Exercise 2.6 — Understanding preprocessing pipelines – Statistical Machine Learning &amp; Data Analytics</title>
 <style>
-/* Default styles provided by pandoc.
-** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
-*/
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
 div.columns{display: flex; gap: min(4vw, 1.5em);}
@@ -71,14 +68,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="./day2-03b-scaling.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-68d006cd884444a66203cf37d1af94b0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-858c91a982f22841b60e7d9947849be3.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
@@ -222,16 +220,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#objectives" id="toc-objectives" class="nav-link active" data-scroll-target="#objectives">Objectives</a></li>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
   <li><a href="#the-scenario" id="toc-the-scenario" class="nav-link" data-scroll-target="#the-scenario">The scenario</a></li>
-  <li><a href="#task-1-build-and-fit-a-pipeline-8-minutes" id="toc-task-1-build-and-fit-a-pipeline-8-minutes" class="nav-link" data-scroll-target="#task-1-build-and-fit-a-pipeline-8-minutes">Task 1 — Build and fit a pipeline (8 minutes)</a></li>
-  <li><a href="#task-2-look-inside-the-pipeline-10-minutes" id="toc-task-2-look-inside-the-pipeline-10-minutes" class="nav-link" data-scroll-target="#task-2-look-inside-the-pipeline-10-minutes">Task 2 — Look inside the pipeline (10 minutes)</a>
+  <li><a href="#task-1-build-and-fit-a-pipeline" id="toc-task-1-build-and-fit-a-pipeline" class="nav-link" data-scroll-target="#task-1-build-and-fit-a-pipeline">Task 1 — Build and fit a pipeline</a></li>
+  <li><a href="#task-2-look-inside-the-pipeline" id="toc-task-2-look-inside-the-pipeline" class="nav-link" data-scroll-target="#task-2-look-inside-the-pipeline">Task 2 — Look inside the pipeline</a>
   <ul class="collapse">
   <li><a href="#a.-where-does-the-imputation-median-come-from" id="toc-a.-where-does-the-imputation-median-come-from" class="nav-link" data-scroll-target="#a.-where-does-the-imputation-median-come-from">A. Where does the imputation median come from?</a></li>
   <li><a href="#b.-visualise-the-effect-of-imputation" id="toc-b.-visualise-the-effect-of-imputation" class="nav-link" data-scroll-target="#b.-visualise-the-effect-of-imputation">B. Visualise the effect of imputation</a></li>
   <li><a href="#c.-what-happens-to-the-number-of-columns" id="toc-c.-what-happens-to-the-number-of-columns" class="nav-link" data-scroll-target="#c.-what-happens-to-the-number-of-columns">C. What happens to the number of columns?</a></li>
   </ul></li>
-  <li><a href="#task-3-apply-the-pipeline-to-new-patients-5-minutes" id="toc-task-3-apply-the-pipeline-to-new-patients-5-minutes" class="nav-link" data-scroll-target="#task-3-apply-the-pipeline-to-new-patients-5-minutes">Task 3 — Apply the pipeline to new patients (5 minutes)</a></li>
+  <li><a href="#task-3-apply-the-pipeline-to-new-patients" id="toc-task-3-apply-the-pipeline-to-new-patients" class="nav-link" data-scroll-target="#task-3-apply-the-pipeline-to-new-patients">Task 3 — Apply the pipeline to new patients</a></li>
   <li><a href="#final-reflection-preprocessing-choices-and-order" id="toc-final-reflection-preprocessing-choices-and-order" class="nav-link" data-scroll-target="#final-reflection-preprocessing-choices-and-order">Final reflection — Preprocessing choices and order</a>
   <ul class="collapse">
   <li><a href="#imputation-and-scaling" id="toc-imputation-and-scaling" class="nav-link" data-scroll-target="#imputation-and-scaling">1. Imputation and scaling</a></li>
@@ -265,15 +263,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="objectives" class="level2">
-<h2 class="anchored" data-anchor-id="objectives">Objectives</h2>
-<p>By the end of this exercise you will be able to:</p>
-<ul>
-<li>combine imputation, encoding, scaling and a model into one pipeline;</li>
-<li>look inside a fitted pipeline and say what each step learned, and from which patients;</li>
-<li>say what happens when the fitted pipeline meets new patients;</li>
-<li>give a reason for the order of the preprocessing steps.</li>
-</ul>
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>Data preprocessing is a critical part of any data analysis workflow, as the choices we make when handling missing values, encoding variables, scaling features and transforming data can substantially influence downstream analyses and model performance.</p>
+<p>In the next exercise, you will explore how to bring these steps together using preprocessing pipelines. Frameworks such as <code>tidymodels</code> in R and <code>scikit-learn</code> in Python allow us to integrate preprocessing directly into the modelling workflow, making our analyses more reproducible, consistent and less prone to errors such as data leakage.</p>
 </section>
 <section id="the-scenario" class="level2">
 <h2 class="anchored" data-anchor-id="the-scenario">The scenario</h2>
@@ -281,8 +274,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>In <a href="day2-02-cleaning-encoding.html" class="quarto-xref"><span>Exercise 2.3 — Exploring and cleaning messy patient data</span></a>, <a href="day2-03a-imputation.html" class="quarto-xref"><span>Exercise 2.4 — Missing data and imputation</span></a> and <a href="day2-03b-scaling.html" class="quarto-xref"><span>Exercise 2.5 — Scaling, transformations and feature engineering</span></a> we applied encoding, imputation and scaling separately. Now we combine them into a pipeline.</p>
 <p>But rather than treating a pipeline as a black box, we will look inside it to understand what is learned during training and what happens when it is applied to new patients.</p>
 </section>
-<section id="task-1-build-and-fit-a-pipeline-8-minutes" class="level2">
-<h2 class="anchored" data-anchor-id="task-1-build-and-fit-a-pipeline-8-minutes">Task 1 — Build and fit a pipeline (8 minutes)</h2>
+<section id="task-1-build-and-fit-a-pipeline" class="level2">
+<h2 class="anchored" data-anchor-id="task-1-build-and-fit-a-pipeline">Task 1 — Build and fit a pipeline</h2>
 <p>Load the hospital admissions data, add BMI as in <a href="day2-03b-scaling.html" class="quarto-xref"><span>Exercise 2.5 — Scaling, transformations and feature engineering</span></a>, and keep the outcome and the eight predictors.</p>
 <p>This is the same file as in <a href="day2-03a-imputation.html" class="quarto-xref"><span>Exercise 2.4 — Missing data and imputation</span></a> and <a href="day2-03b-scaling.html" class="quarto-xref"><span>Exercise 2.5 — Scaling, transformations and feature engineering</span></a>. If you do not have it yet, <a href="data/hospital_admissions.csv" download="hospital_admissions.csv"><strong>download <code>hospital_admissions.csv</code></strong></a> into your <code>data</code> folder.</p>
 <div class="columns">
@@ -2576,8 +2569,8 @@ Number of features seen during :term:`fit`.<br>
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LinearRegression.html#:~:text=rank_,-int" class="param-doc-link" style="anchor-name: --doc-link-rank_;" rel="noreferrer" target="_blank">rank_ <span class="param-doc-description" style="position-anchor: --doc-link-rank_;"> rank_: int<br>
 <br>
 Rank of matrix `X`. Only available when `X` is dense.</span></a></td>
-<td class="fitted-att-type">int</td>
-<td>9</td>
+<td class="fitted-att-type">int64</td>
+<td>np.int64(9)</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LinearRegression.html#:~:text=singular_,-array%20of%20shape%20%28min%28X%2C%20y%29%2C%29" class="param-doc-link" style="anchor-name: --doc-link-singular_;" rel="noreferrer" target="_blank">singular_ <span class="param-doc-description" style="position-anchor: --doc-link-singular_;"> singular_: array of shape (min(X, y),)<br>
@@ -2870,9 +2863,8 @@ forceTheme('sk-container-id-1');</script>
 </div>
 <hr>
 </section>
-<section id="task-2-look-inside-the-pipeline-10-minutes" class="level2">
-<h2 class="anchored" data-anchor-id="task-2-look-inside-the-pipeline-10-minutes">Task 2 — Look inside the pipeline (10 minutes)</h2>
-<p>Now we inspect what the pipeline learned, rather than simply trusting it.</p>
+<section id="task-2-look-inside-the-pipeline" class="level2">
+<h2 class="anchored" data-anchor-id="task-2-look-inside-the-pipeline">Task 2 — Look inside the pipeline</h2>
 <section id="a.-where-does-the-imputation-median-come-from" class="level3">
 <h3 class="anchored" data-anchor-id="a.-where-does-the-imputation-median-come-from">A. Where does the imputation median come from?</h3>
 <p>Compare the training and test medians for creatinine, then ask the fitted pipeline which median it stored.</p>
@@ -3163,8 +3155,8 @@ forceTheme('sk-container-id-1');</script>
 <hr>
 </section>
 </section>
-<section id="task-3-apply-the-pipeline-to-new-patients-5-minutes" class="level2">
-<h2 class="anchored" data-anchor-id="task-3-apply-the-pipeline-to-new-patients-5-minutes">Task 3 — Apply the pipeline to new patients (5 minutes)</h2>
+<section id="task-3-apply-the-pipeline-to-new-patients" class="level2">
+<h2 class="anchored" data-anchor-id="task-3-apply-the-pipeline-to-new-patients">Task 3 — Apply the pipeline to new patients</h2>
 <p>A fitted pipeline should apply the same learned transformations to new patients.</p>
 <div class="columns">
 <div class="column" style="width:48%;">
@@ -3201,87 +3193,7 @@ forceTheme('sk-container-id-1');</script>
 </div>
 </div>
 </div>
-<p>The predictions alone cannot show which medians were used to make them. To see what <em>would</em> change, fit a second copy of the pipeline on the test patients and compare what the two copies learned. This is only to look: a pipeline fitted on the test patients must never be used to judge a model.</p>
-<div class="columns">
-<div class="column" style="width:48%;">
-<p><strong>Python</strong></p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.base <span class="im">import</span> clone</span>
-<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>refit <span class="op">=</span> clone(model).fit(</span>
-<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a>    X_test, y_test</span>
-<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a>refit_imputer <span class="op">=</span> (</span>
-<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a>    refit.named_steps[<span class="st">"preprocess"</span>]</span>
-<span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a>    .named_transformers_[<span class="st">"numeric"</span>]</span>
-<span id="cb39-10"><a href="#cb39-10" aria-hidden="true" tabindex="-1"></a>    .named_steps[<span class="st">"impute"</span>]</span>
-<span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb39-12"><a href="#cb39-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb39-13"><a href="#cb39-13" aria-hidden="true" tabindex="-1"></a>pd.DataFrame({</span>
-<span id="cb39-14"><a href="#cb39-14" aria-hidden="true" tabindex="-1"></a>    <span class="st">"training"</span>: imputer.statistics_,</span>
-<span id="cb39-15"><a href="#cb39-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">"test"</span>: refit_imputer.statistics_,</span>
-<span id="cb39-16"><a href="#cb39-16" aria-hidden="true" tabindex="-1"></a>}, index<span class="op">=</span>num).<span class="bu">round</span>(<span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt;              training   test
-#&gt; age              63.0   65.5
-#&gt; BMI              27.3   26.6
-#&gt; systolic_BP     127.0  129.5
-#&gt; heart_rate       80.0   76.5
-#&gt; creatinine       74.5   80.0
-#&gt; CRP_mg_L         10.4   10.8</code></pre>
-</div>
-</div>
-</div><div class="column" style="width:4%;">
-
-</div><div class="column" style="width:48%;">
-<p><strong>R</strong></p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>refit <span class="ot">&lt;-</span> <span class="fu">fit</span>(model, <span class="at">data =</span> test)</span>
-<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>refit_rec <span class="ot">&lt;-</span> <span class="fu">extract_recipe</span>(</span>
-<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>  refit, <span class="at">estimated =</span> <span class="cn">TRUE</span></span>
-<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a><span class="fu">tidy</span>(trained_rec, <span class="at">number =</span> <span class="dv">1</span>) <span class="sc">|&gt;</span></span>
-<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(terms, <span class="at">training =</span> value) <span class="sc">|&gt;</span></span>
-<span id="cb41-9"><a href="#cb41-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb41-10"><a href="#cb41-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">test =</span> <span class="fu">tidy</span>(</span>
-<span id="cb41-11"><a href="#cb41-11" aria-hidden="true" tabindex="-1"></a>      refit_rec, <span class="at">number =</span> <span class="dv">1</span></span>
-<span id="cb41-12"><a href="#cb41-12" aria-hidden="true" tabindex="-1"></a>    )<span class="sc">$</span>value</span>
-<span id="cb41-13"><a href="#cb41-13" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; # A tibble: 6 × 3
-#&gt;   terms       training  test
-#&gt;   &lt;chr&gt;          &lt;dbl&gt; &lt;dbl&gt;
-#&gt; 1 age             64    65  
-#&gt; 2 BMI             27.7  26.7
-#&gt; 3 systolic_BP    128   126. 
-#&gt; 4 heart_rate      80    80.5
-#&gt; 5 creatinine      76    78  
-#&gt; 6 CRP_mg_L        10.6  10.8</code></pre>
-</div>
-</div>
-</div>
-</div>
-<div class="callout callout-style-simple callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Think about it
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ol type="1">
-<li>Is the imputation median recalculated for the test data?</li>
-<li>Does the scaler calculate a new mean and standard deviation?</li>
-<li>What would be different if we fitted a new pipeline on the test patients?</li>
-<li>Why is this important when deploying a model in a hospital?</li>
-</ol>
-</div>
-</div>
+<p>As you have seen, a key advantage of pipelines is that all preprocessing parameters, such as imputation medians, scaling means and standard deviations, and encoding categories, are learned from the training data only. These same parameters are then applied to the test data without being recalculated. This is essential to prevent data leakage, ensuring that information from the test set does not influence model training and that performance is evaluated on genuinely unseen data.</p>
 <hr>
 </section>
 <section id="final-reflection-preprocessing-choices-and-order" class="level2">
@@ -3306,21 +3218,6 @@ forceTheme('sk-container-id-1');</script>
 <h3 class="anchored" data-anchor-id="what-does-a-pipeline-protect-us-from">5. What does a pipeline protect us from?</h3>
 <p>Which aspects of preprocessing become more consistent when we use a fitted pipeline? What decisions still require clinical and statistical judgement?</p>
 <p>One decision to start with: this pipeline fills a missing smoking status with the most common value. What did <a href="day2-03a-imputation.html" class="quarto-xref"><span>Exercise 2.4 — Missing data and imputation</span></a> suggest instead?</p>
-<div class="callout callout-style-simple callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Tip</span>Key takeaway
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>A pipeline is not just a convenient way of organising code.</p>
-<p>It learns preprocessing parameters from the training data, stores those parameters, and applies the same transformations to new patients.</p>
-<p>Understanding what the pipeline learns — and where that information comes from — is essential for reproducible machine learning.</p>
-</div>
-</div>
 
 
 </section>

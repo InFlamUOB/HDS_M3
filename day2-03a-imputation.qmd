@@ -6,17 +6,9 @@ engine: knitr
 
 # Exercise 2.4 — Missing data and imputation {#sec-imputation}
 
-## Objectives
+## Overview
 
-By the end of this exercise you will be able to:
-
-- describe who is missing, not just how much;
-- fill a missing number with a mean or median, and a missing category with its
-  mode, and say what each does to the distribution;
-- argue for keeping "Unknown" as a category;
-- impute a value from a patient's other measurements;
-- measure how wrong an imputation was, and say why it could not have been
-  right.
+Lets understand what imputation is about, the difefrent ways in which we can apply it and the limitations it has. 
 
 ## The scenario
 
@@ -35,7 +27,7 @@ or take every file at once from the zip on the [introduction page](index.qmd). T
 
 ### 1. Explore the missingness
 
-Load the data and count what is missing.
+Load the data and see what is missing.
 
 ```{r}
 #| message: false
@@ -51,8 +43,8 @@ colSums(is.na(hospital))
 ```
 
 Creatinine is missing for 42 of the 250 patients and smoking status for 32.
-Before deciding what to do about that, ask *who* is missing. Compare the
-patients with and without a creatinine result:
+Before deciding what to do about that, think about the possible reasons behind it.  Can we ask teh dataset curator about what happened to these missing values? If not, lets try and at least understand what we can do about them. First of all, lets ask *who* is missing. Compare the
+patients with and without a creatinine result (for this we are taking advanatge of the `finalfit` package functions, but you could also use  functions from other packages such as for example [Table 1](https://cran.r-project.org/web/packages/table1/vignettes/table1-examples.html)): 
 
 ```{r}
 hospital <- hospital |>
@@ -98,7 +90,7 @@ Dropping incomplete rows keeps 182 of 250 — more than a quarter of the cohort
 gone — and the loss is not even. Emergency admissions fall from 53.6% of the
 data to 45.6%. A model fitted to what remains has been trained on a cohort that
 is more elective than the hospital really is, and nothing in the output would
-tell you.
+tell you. This would be valauble information that we are missing. 
 :::
 :::
 
@@ -213,14 +205,10 @@ are scattered at random. When *who is missing* carries meaning, say so.
 
 ### 3. Using the other variables
 
-Mean and median imputation give every patient the same number, whatever else is
-known about them. But an 85-year-old emergency admission and a 30-year-old
-elective one are unlikely to have the same creatinine. Can age, blood pressure
-and heart rate do better?
 
-`mice` fits a regression of creatinine on the other three columns, using the
-patients where it was measured, and predicts it where it was not. It is
-installed along with `finalfit`, so there is nothing extra to set up.
+Mean and median imputation replace missing values with the same number for every patient, regardless of what else we know about them. However, an 85-year-old emergency admission and a 30-year-old elective patient may have very different creatinine levels. Can we use information from other variables to make more personalised estimates?
+
+More advanced model-based imputation methods use relationships between variables to estimate missing values. For example, `mice` can fit a regression model using patients with observed creatinine, learning how creatinine relates to age, blood pressure and heart rate. It then uses these relationships to predict missing creatinine values. Other methods, such as `KNN` (K-Nearest Neighbour) imputation, instead identify patients with similar characteristics to estimate the missing values.
 
 ```{r}
 imp <- hospital |>
@@ -233,14 +221,16 @@ sum(is.na(hospital$creatinine_advanced))
 ```
 
 ::: {.callout-note appearance="simple"}
-## What the three arguments mean
-`m = 1` asks for one filled-in dataset. `maxit = 1` is one pass, which is all
-that is needed here because only creatinine has gaps among these four columns.
-`method = "norm.predict"` fills each gap with the regression's best guess.
+## How does mice() work here?
 
-The Python tab does the same job with scikit-learn's `IterativeImputer`. The
-two are the same idea, so their answers land very close together but are not
-identical.
+m = 1 generates one completed dataset. Normally, mice is used for multiple imputation, generating several plausible datasets to account for uncertainty in missing values. You can read more about multiple imputation here.
+
+maxit = 1 runs one iteration. Since creatinine is the only variable with missing values in our selected columns, we only need to fit one regression model rather than repeatedly update several variables.
+
+method = "norm.predict" uses linear regression to estimate missing creatinine values from age, blood pressure and heart rate. Each missing value is replaced with its predicted value.
+
+In this example, we are using mice for single regression-based imputation, rather than full multiple imputation. The resulting estimates are predictions. 
+
 :::
 
 ::: {.callout-important appearance="simple"}
@@ -265,66 +255,6 @@ resemble them on age, blood pressure and heart rate.
 
 ------------------------------------------------------------------------
 
-### 4. The reveal: how close were we?
-
-For 18 of the patients with no creatinine, the real measurement was kept back.
-Here it is: [**download `creatinine_truth.csv`**](data/creatinine_truth.csv){download="creatinine_truth.csv"} into your `data` folder.
-
-```{r}
-creatinine_truth <- read_csv("data/creatinine_truth.csv",
-                             show_col_types = FALSE)
-
-comparison <- hospital |>
-  inner_join(creatinine_truth, by = "patient_id")
-
-comparison |>
-  select(patient_id, true_creatinine,
-         creatinine_mean, creatinine_median, creatinine_advanced) |>
-  mutate(across(where(is.numeric), ~ round(.x, 1))) |>
-  head(6)
-```
-
-Read across each row. The mean and median columns are one number repeated. The
-last column moves with the patient — and still does not match the truth for
-any of them.
-
-Now the average size of the miss, across all 18:
-
-```{r}
-comparison |>
-  summarise(
-    Mean     = mean(abs(true_creatinine - creatinine_mean)),
-    Median   = mean(abs(true_creatinine - creatinine_median)),
-    Advanced = mean(abs(true_creatinine - creatinine_advanced))
-  ) |>
-  round(2)
-```
-
-::: {.callout-important appearance="simple"}
-## Think about it
-1. Which method came closest?
-2. Did the advanced method get any single patient exactly right?
-3. What clinical information, missing from this table, would have helped?
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-The advanced method, with an average miss of about 8.4 µmol/L against 11.4 for
-the mean and 11.3 for the median. (It reads 8.45 in the R tab and 8.35 in the
-Python tab, because the two packages fit the regression slightly differently.)
-
-It got **none** of the 18 exactly right. Only 6 were within 5 µmol/L. The worst
-was patient H151, imputed at about 113 against a real 92 — more than 20 out.
-
-So using the other variables helped, by about a quarter. It did not recover the
-truth, and it could not have: renal history, medication and muscle mass are the
-things that move creatinine, and none of them is in the table.
-:::
-:::
-
-------------------------------------------------------------------------
-
 ### What to take from this
 
 ::: {.callout-warning appearance="simple"}
@@ -338,9 +268,7 @@ a measurement.
    emergency admission, so dropping them would have quietly changed the cohort.
 2. **Simple methods distort.** The mean put 42 patients on one value and
    shrank the spread; the mode turned 43% never-smokers into 56%.
-3. **Better methods are better, not right.** Using three other variables cut
-   the error by about a quarter and still missed one patient by more than 20.
-4. **Sometimes the honest answer is a category called Unknown.**
+3. **Better methods are better, not right.** Using three other variables can help you make a more informed guess, but it is a guess after all. 
 
 ### Optional: multiple imputation
 
@@ -349,9 +277,9 @@ Its default method does not give each gap one best guess; it draws a *plausible*
 value, and it is meant to be run several times, so that the spread between the
 filled-in datasets shows how uncertain each value was. That is multiple
 imputation, and it is the honest way to carry imputation uncertainty through to
-a final result. Read more at [amices.org/mice](https://amices.org/mice/).
+a final result. Read more at [amices.org/mice](https://amices.org/mice/).This amounts to doing a sensitivity analysis, where you can see how much your results change depending on the imputed values.
 
-Next: @sec-scaling.
+
 
 ## Python
 
@@ -582,59 +510,6 @@ resemble them on age, blood pressure and heart rate.
 :::
 :::
 
-------------------------------------------------------------------------
-
-### 4. The reveal: how close were we?
-
-For 18 of the patients with no creatinine, the real measurement was kept back.
-Here it is: [**download `creatinine_truth.csv`**](data/creatinine_truth.csv){download="creatinine_truth.csv"} into your `data` folder.
-
-```{python}
-creatinine_truth = pd.read_csv("data/creatinine_truth.csv")
-
-comparison = hospital.merge(creatinine_truth, on="patient_id")
-
-print(comparison[["patient_id", "true_creatinine", "creatinine_mean",
-                  "creatinine_median", "creatinine_advanced"]]
-      .round(1).head(6).to_string(index=False))
-```
-
-Read across each row. The mean and median columns are one number repeated. The
-last column moves with the patient — and still does not match the truth for
-any of them.
-
-Now the average size of the miss, across all 18:
-
-```{python}
-print({name: round(float((comparison["true_creatinine"] - comparison[col])
-                         .abs().mean()), 2)
-       for name, col in [("Mean", "creatinine_mean"),
-                         ("Median", "creatinine_median"),
-                         ("Advanced", "creatinine_advanced")]})
-```
-
-::: {.callout-important appearance="simple"}
-## Think about it
-1. Which method came closest?
-2. Did the advanced method get any single patient exactly right?
-3. What clinical information, missing from this table, would have helped?
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-The advanced method, with an average miss of about 8.4 µmol/L against 11.4 for
-the mean and 11.3 for the median. (It reads 8.45 in the R tab and 8.35 in the
-Python tab, because the two packages fit the regression slightly differently.)
-
-It got **none** of the 18 exactly right. Only 6 were within 5 µmol/L. The worst
-was patient H151, imputed at about 113 against a real 92 — more than 20 out.
-
-So using the other variables helped, by about a quarter. It did not recover the
-truth, and it could not have: renal history, medication and muscle mass are the
-things that move creatinine, and none of them is in the table.
-:::
-:::
 
 ------------------------------------------------------------------------
 
@@ -651,9 +526,8 @@ a measurement.
    emergency admission, so dropping them would have quietly changed the cohort.
 2. **Simple methods distort.** The mean put 42 patients on one value and
    shrank the spread; the mode turned 43% never-smokers into 56%.
-3. **Better methods are better, not right.** Using three other variables cut
-   the error by about a quarter and still missed one patient by more than 20.
-4. **Sometimes the honest answer is a category called Unknown.**
+
+
 
 ### Optional: multiple imputation
 

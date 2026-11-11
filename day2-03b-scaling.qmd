@@ -6,19 +6,13 @@ engine: knitr
 
 # Exercise 2.5 — Scaling, transformations and feature engineering {#sec-scaling}
 
-## Objectives
+## Overview
 
-By the end of this exercise you will be able to:
-
-- put variables measured in different units onto a comparable scale, three
-  different ways;
-- say what an extreme value does to each scaler, and to the other patients;
-- use a log transformation to change the shape of a skewed variable;
-- derive a clinically meaningful feature from columns you already have.
+In this exercise, you will explore different scaling methods, apply transformations to numerical variables, and create new features through feature engineering—all essential steps in preparing data for downstream data analysis. 
 
 ## The scenario
 
-We are preparing the hospital admissions data to predict length of stay. Its
+We are continuing with the hospital admissions data to predict length of stay. Its
 variables are measured in different units: age in years, blood pressure in
 mmHg and C-reactive protein (CRP) in mg/L.
 
@@ -61,6 +55,53 @@ hospital_scaled <- hospital |>
            .names = "{.col}_robust")
   )
 ```
+
+::: {.callout-tip collapse="true"}
+## Data wrangling again
+
+Normally, we use `mutate()` to create a new variable. For example, to apply Min-Max scaling to age:
+
+```{r}
+hospital_scaled <- hospital |>
+  mutate(
+    age_minmax = (age - min(age)) /
+                 (max(age) - min(age))
+  )
+```
+
+If we wanted to scale blood pressure and CRP as well, we could repeat the same calculation for each variable:
+
+```{r}
+hospital_scaled <- hospital |>
+  mutate(
+    age_minmax = (age - min(age)) /
+                 (max(age) - min(age)),
+    systolic_BP_minmax = (systolic_BP - min(systolic_BP)) /
+                         (max(systolic_BP) - min(systolic_BP)),
+    CRP_mg_L_minmax = (CRP_mg_L - min(CRP_mg_L)) /
+                      (max(CRP_mg_L) - min(CRP_mg_L))
+  )
+```
+
+`across()` lets us apply the same operation to multiple columns without repeating the code.
+
+```{r}
+scale_cols <- c("age", "systolic_BP", "CRP_mg_L")
+
+hospital_scaled <- hospital |>
+  mutate(
+    across(
+      all_of(scale_cols),
+      ~ (.x - min(.x)) / (max(.x) - min(.x)),
+      .names = "{.col}_minmax"
+    )
+  )
+```
+
+:::
+
+
+
 
 Compare the range of values:
 
@@ -224,8 +265,7 @@ hospital |>
 2. What happens to the distance between low and high CRP measurements?
 3. Why use `log1p()` rather than `log()`?
 
-**Optional.** Repeat with `length_of_stay`, the eventual prediction target.
-Does its distribution also benefit from a log transformation?
+
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
@@ -236,9 +276,8 @@ symmetric:
 
 ```{r}
 c(CRP = skewness(hospital$CRP_mg_L),
-  log_CRP = skewness(hospital$log_CRP),
-  length_of_stay = skewness(hospital$length_of_stay),
-  log_length_of_stay = skewness(log1p(hospital$length_of_stay))) |>
+  log_CRP = skewness(hospital$log_CRP)
+) |>
   round(2)
 
 round(log1p(c(5, 10, 100, 200)), 2)
@@ -266,8 +305,9 @@ is the habit that survives that.
 
 ### 4. Feature engineering: calculate BMI
 
-The dataset includes height and weight, but not BMI. Create it and look at its
-distribution:
+Our dataset includes patients' height and weight, but not their Body Mass Index (BMI). BMI is widely used in clinical practice and medical research, as it provides a measure of body size relative to height and has been associated with a range of health outcomes. By combining height and weight into a single, clinically meaningful feature, we may capture information that helps our predictive model. This is an example of feature engineering, where existing variables are used to create potentially more informative predictors.
+
+Let's calculate BMI and explore its distribution.
 
 ```{r}
 #| fig-height: 2.8
@@ -329,16 +369,9 @@ only imply?
 - **Feature engineering creates new variables from existing information.** BMI
   added no measurement and still separated two patients that weight could not.
 
-::: {.callout-warning appearance="simple"}
-## Remember
-Every minimum, maximum, mean, standard deviation, median and interquartile
-range in this exercise was computed from all 250 patients. When you build a
-predictive model, anything learned from the data — including a scaler — must be
-fitted on the training set only, not the full dataset.
-:::
 
-Next: @sec-pipeline-steps combines imputation, categorical encoding, scaling
-and feature engineering into one preprocessing pipeline.
+
+
 
 ## Python
 
