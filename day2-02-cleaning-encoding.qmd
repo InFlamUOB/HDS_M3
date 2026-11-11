@@ -41,26 +41,8 @@ sequence as a pipeline, and the comparison is the point.
 is small deliberately — small enough that you can print the whole thing and
 find the problems by eye before writing any code to find them.
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
-
-```{python}
-import pandas as pd
-import numpy as np
-
-clinic = pd.read_csv(
-    "data/clinic_extract.csv"
-)
-clinic.shape
-```
-:::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
+::: {.panel-tabset}
+## R
 
 ```{r}
 #| message: false
@@ -76,34 +58,38 @@ clinic <- read_csv(
 )
 dim(clinic)
 ```
+
+## Python
+
+```{python}
+import pandas as pd
+import numpy as np
+
+clinic = pd.read_csv(
+    "data/clinic_extract.csv"
+)
+clinic.shape
+```
 :::
-::::::
 
 ### 1) Look at the column types first
 
 Before any statistics, ask what type each column came in as. This is the step
 that is almost always skipped.
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
+::: {.panel-tabset}
+## R
+
+```{r}
+sapply(clinic, class)
+```
+
+## Python
 
 ```{python}
 clinic.dtypes
 ```
 :::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-sapply(clinic, class)
-```
-:::
-::::::
 
 `age` and `bmi` are **text**, not numbers. `bp_systolic` is a number. All three
 have missing values — the difference is only in how the missingness was
@@ -114,27 +100,20 @@ accommodate them.
 Try to take a mean of it, and the two languages fail in different ways. Run
 both — the difference matters more than either message.
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
+::: {.panel-tabset}
+## R
+
+```{r}
+mean(clinic$bmi)
+```
+
+## Python
 
 ```{python}
 #| error: true
 clinic["bmi"].mean()
 ```
 :::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-mean(clinic$bmi)
-```
-:::
-::::::
 
 Python **raises** and stops. R **warns** and hands back `NA`, which a script
 will happily carry into the next calculation and the one after that. The loud
@@ -146,9 +125,22 @@ warnings rather than scrolling past them.
 Count the distinct non-numeric values in each suspect column rather than
 assuming you know which codes are in use.
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
+::: {.panel-tabset}
+## R
+
+```{r}
+for (col in c("age", "bmi", "bp_systolic")) {
+  v <- suppressWarnings(
+    as.numeric(clinic[[col]])
+  )
+  bad <- clinic[[col]][is.na(v)]
+  bad[is.na(bad)] <- "<empty>"
+  cat(col, ":", "\n")
+  print(table(bad))
+}
+```
+
+## Python
 
 ```{python}
 for col in ["age", "bmi", "bp_systolic"]:
@@ -163,26 +155,6 @@ for col in ["age", "bmi", "bp_systolic"]:
 ```
 :::
 
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-for (col in c("age", "bmi", "bp_systolic")) {
-  v <- suppressWarnings(
-    as.numeric(clinic[[col]])
-  )
-  bad <- clinic[[col]][is.na(v)]
-  bad[is.na(bad)] <- "<empty>"
-  cat(col, ":", "\n")
-  print(table(bad))
-}
-```
-:::
-::::::
-
 Three columns, three conventions: `unknown`, `?`, and an empty cell. That is
 not unusual — it usually means three people, or three systems, contributed to
 the same table.
@@ -195,9 +167,20 @@ because you have just checked what the unparseable values are. Coercing
 blindly would silently destroy a column recorded in, say, `12,5` decimal-comma
 format.
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
+::: {.panel-tabset}
+## R
+
+```{r}
+num_cols <- c("age", "bmi", "bp_systolic")
+clinic <- clinic |>
+  mutate(across(
+    all_of(num_cols),
+    ~ suppressWarnings(as.numeric(.x))
+  ))
+colSums(is.na(clinic[num_cols]))
+```
+
+## Python
 
 ```{python}
 num_cols = ["age", "bmi", "bp_systolic"]
@@ -209,49 +192,24 @@ clinic[num_cols].isna().sum()
 ```
 :::
 
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-num_cols <- c("age", "bmi", "bp_systolic")
-clinic <- clinic |>
-  mutate(across(
-    all_of(num_cols),
-    ~ suppressWarnings(as.numeric(.x))
-  ))
-colSums(is.na(clinic[num_cols]))
-```
-:::
-::::::
-
 Now a mean works, and `bmi` can be plotted. Keep that count of missing values
 in mind — Exercise 2.4 is about what to do with them.
 
 ### 4) One category, three spellings
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
+::: {.panel-tabset}
+## R
+
+```{r}
+table(clinic$referral_source)
+```
+
+## Python
 
 ```{python}
 clinic["referral_source"].value_counts()
 ```
 :::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-table(clinic$referral_source)
-```
-:::
-::::::
 
 Five categories are reported. There are really three: `GP`, `gp` and
 `General Practitioner` are one referral source typed by three different people.
@@ -262,9 +220,20 @@ The repair is a lookup from the messy value to the intended one. Write it
 explicitly rather than lower-casing and hoping — lower-casing fixes `gp` but
 not `General Practitioner`.
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
+::: {.panel-tabset}
+## R
+
+```{r}
+clinic <- clinic |>
+  mutate(referral_source = recode(
+    referral_source,
+    "gp" = "GP",
+    "General Practitioner" = "GP"
+  ))
+table(clinic$referral_source)
+```
+
+## Python
 
 ```{python}
 ref_map = {
@@ -281,47 +250,22 @@ clinic["referral_source"].value_counts()
 ```
 :::
 
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-clinic <- clinic |>
-  mutate(referral_source = recode(
-    referral_source,
-    "gp" = "GP",
-    "General Practitioner" = "GP"
-  ))
-table(clinic$referral_source)
-```
-:::
-::::::
-
 ### 5) A rare category
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
-
-```{python}
-clinic["hospital_site"].value_counts()
-```
-:::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
+::: {.panel-tabset}
+## R
 
 ```{r}
 sort(table(clinic$hospital_site),
      decreasing = TRUE)
 ```
+
+## Python
+
+```{python}
+clinic["hospital_site"].value_counts()
+```
 :::
-::::::
 
 One site has only a handful of patients. Keep it as its own category and you
 get a column that is almost all zeros, estimated from those few rows — and if
@@ -332,9 +276,22 @@ Grouping it into `Other` is the usual repair. Note what the threshold is doing:
 it is a judgement about how many rows you need before you are willing to
 estimate an effect, not a fact about the data.
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
+::: {.panel-tabset}
+## R
+
+```{r}
+counts <- table(clinic$hospital_site)
+rare <- names(counts[counts < 10])
+clinic <- clinic |>
+  mutate(hospital_site = if_else(
+    hospital_site %in% rare,
+    "Other", hospital_site
+  ))
+sort(table(clinic$hospital_site),
+     decreasing = TRUE)
+```
+
+## Python
 
 ```{python}
 counts = clinic["hospital_site"].value_counts()
@@ -348,31 +305,17 @@ clinic["hospital_site"].value_counts()
 ```
 :::
 
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-counts <- table(clinic$hospital_site)
-rare <- names(counts[counts < 10])
-clinic <- clinic |>
-  mutate(hospital_site = if_else(
-    hospital_site %in% rare,
-    "Other", hospital_site
-  ))
-sort(table(clinic$hospital_site),
-     decreasing = TRUE)
-```
-:::
-::::::
-
 ### 6) A column that says almost nothing
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
+::: {.panel-tabset}
+## R
+
+```{r}
+print(table(clinic$consented))
+var(as.numeric(clinic$consented == "Y"))
+```
+
+## Python
 
 ```{python}
 print(clinic["consented"].value_counts())
@@ -382,19 +325,6 @@ print(
 )
 ```
 :::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-print(table(clinic$consented))
-var(as.numeric(clinic$consented == "Y"))
-```
-:::
-::::::
 
 Nearly every row takes the same value, so its variance is close to zero. A
 near-constant column cannot help a model separate one patient from another:
@@ -519,9 +449,19 @@ and `Self-referral` as 3 would assert that `Self-referral` is three times
 whatever `GP` is, and that `A&E` sits exactly between them. One-hot encoding
 avoids that by giving each category its own 0/1 column.
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
+::: {.panel-tabset}
+## R
+
+```{r}
+enc <- model.matrix(
+  ~ referral_source + hospital_site - 1,
+  data = clinic
+)
+print(dim(enc))
+head(enc, 3)
+```
+
+## Python
 
 ```{python}
 enc = pd.get_dummies(
@@ -534,23 +474,6 @@ enc.head(3)
 ```
 :::
 
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-enc <- model.matrix(
-  ~ referral_source + hospital_site - 1,
-  data = clinic
-)
-print(dim(enc))
-head(enc, 3)
-```
-:::
-::::::
-
 Two columns became several. Count them: that is the cost of one-hot encoding,
 and it grows with the number of categories, not with the number of rows.
 
@@ -560,9 +483,16 @@ When a variable has many categories, one column each becomes unwieldy.
 Frequency encoding replaces each category with how often it occurs — one
 column instead of many.
 
-:::::: columns
-::: {.column width="48%"}
-**Python**
+::: {.panel-tabset}
+## R
+
+```{r}
+p <- prop.table(table(clinic$hospital_site))
+freq <- unname(p[clinic$hospital_site])
+head(freq, 5)
+```
+
+## Python
 
 ```{python}
 freq = clinic["hospital_site"].map(
@@ -572,20 +502,6 @@ freq = clinic["hospital_site"].map(
 freq.head(5)
 ```
 :::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
-
-```{r}
-p <- prop.table(table(clinic$hospital_site))
-freq <- unname(p[clinic$hospital_site])
-head(freq, 5)
-```
-:::
-::::::
 
 It is compact, and it throws information away: two sites of equal size become
 the same number, indistinguishable from each other. Use it when cardinality
