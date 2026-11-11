@@ -363,7 +363,7 @@ message("wrote messy_gp_patients.csv: ", nrow(messy_gp), " rows")
 #   missingness     creatinine is missing more often for emergency admissions
 #                   (missing at random given admission type); smoking history
 #                   likewise, since there is no time to take one
-#   CRP             complete and strongly right-skewed, for scaling and logs
+#   CRP_mg_L        complete and strongly right-skewed, for scaling and logs
 #   length_of_stay  log-normal, the skewed target for later exercises
 #   the reveal      18 of the patients with missing creatinine have their true
 #                   value kept in creatinine_truth.csv
@@ -407,7 +407,7 @@ creatinine_truth <- tibble::tibble(
 # and log-transform exercises, higher in emergencies and in longer stays.
 crp <- round(exp(1.3 + 0.9 * (adm == "Emergency") + 0.45 * log(los) +
                  rnorm(n, 0, 0.95)), 1)
-hospital <- tibble::add_column(hospital, CRP = crp, .after = "creatinine")
+hospital <- tibble::add_column(hospital, CRP_mg_L = crp, .after = "creatinine")
 
 readr::write_csv(hospital, "data/hospital_admissions.csv", na = "")
 readr::write_csv(creatinine_truth, "data/creatinine_truth.csv")
