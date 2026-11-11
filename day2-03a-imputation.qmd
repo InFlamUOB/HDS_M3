@@ -6,6 +6,12 @@ engine: knitr
 
 # Exercise 2.4 — Imputation {#sec-imputation}
 
+::: {.callout-note appearance="simple"}
+## In R or in Python
+Pick a tab and stay in it. The two tabs are the same exercise — the same
+sections, the same tasks, the same numbers — so complete either one.
+:::
+
 ## Objectives
 
 By the end of this exercise you will be able to:
@@ -14,7 +20,8 @@ By the end of this exercise you will be able to:
 - fill missing values with a mean or a median, and measure what that does to
   the spread of the column;
 - say why the median is the safer default for a skewed variable;
-- explain what iterative imputation does differently, and what it assumes;
+- explain why imputing the inputs of a derived feature does not fill the
+  derived feature;
 - argue for leaving a value missing rather than inventing one.
 
 ## Why this, here
@@ -24,19 +31,16 @@ are now real missing values, which means they can finally be counted — and
 something has to be decided about them, because most models will not accept a
 missing value at all.
 
-This exercise is deliberately partial. It works two approaches through
-properly, in one language each, and leaves the rest for you to try. Mean and
-median imputation are shown in R; iterative imputation is shown in Python. The
-tasks ask you to produce the missing halves. That is the point: by now you have
-seen enough of both languages that translating a method you understand is a
-reasonable thing to ask.
-
 ## Starting point
 
-@sec-cleaning left the extract clean but incomplete. Each chapter stands alone,
-so the block below repeats that cleaning in one go — the codes recognised, the
-labels standardised, the two correctable heights fixed, the two impossible
-values admitted as missing, and BMI derived.
+Each chapter stands alone, so the block below repeats @sec-cleaning's cleaning
+in one go — the codes recognised, the labels standardised, the three
+correctable heights fixed, the two impossible values admitted as missing, and
+BMI derived.
+
+:::::: {.panel-tabset group="language"}
+
+## R
 
 ```{r}
 #| message: false
@@ -71,62 +75,28 @@ gp <- read_csv("data/clinic_extract.csv", show_col_types = FALSE) |>
 dim(gp)
 ```
 
-```{python}
-#| echo: false
-import pandas as pd, numpy as np
-na_codes = ["unknown", "?", "not recorded", "N/A", "-999"]
-num_cols = ["age", "height_cm", "weight_kg", "systolic_BP"]
-gp_py = pd.read_csv("data/clinic_extract.csv")
-gp_py = gp_py.replace(na_codes, np.nan)
-for c in num_cols:
-    gp_py[c] = pd.to_numeric(gp_py[c], errors="coerce")
-gp_py.loc[gp_py.height_cm < 3, "height_cm"] *= 100
-gp_py.loc[gp_py.age > 120, "age"] = np.nan
-gp_py.loc[gp_py.weight_kg > 300, "weight_kg"] = np.nan
-gp_py["BMI"] = gp_py.weight_kg / (gp_py.height_cm / 100) ** 2
-```
-
 Note that `BMI` is itself derived from two columns that have gaps, so it
 inherits both — one of the things this exercise has to deal with.
 
-### How much is missing, and where
-
-:::::: columns
-::: {.column width="48%"}
-**Python**
-
-```{python}
-print(gp_py[num_cols].isna().sum())
-print("complete rows:",
-      gp_py.dropna().shape[0],
-      "of", gp_py.shape[0])
-```
-:::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
+#### How much is missing, and where
 
 ```{r}
 print(colSums(is.na(gp[num_cols])))
-cat("complete rows:",
-    sum(complete.cases(gp)),
-    "of", nrow(gp), "\n")
+cat("BMI missing:", sum(is.na(gp$BMI)), "\n")
+cat("complete rows:", sum(complete.cases(gp)), "of", nrow(gp), "\n")
 ```
-:::
-::::::
 
-Note the arithmetic. The three columns are missing different numbers of values,
-but the count of complete rows is lower than any of them individually, because
-the gaps fall in different rows. This is the first argument against dropping
-incomplete rows: the loss compounds across columns, and it compounds faster the
-more columns you have.
+Note the arithmetic. The four numeric columns are missing 1, 12, 8 and 14
+values — 35 in total — and `BMI` is missing 20 of its own, inherited from
+height and weight. Yet 46 of the 180 rows are incomplete, leaving 134 whole.
+Forty-six is more than any single column's gap count, because the gaps fall in
+different rows. This is the first argument against dropping incomplete rows:
+the loss compounds across columns, and it compounds faster the more columns
+you have.
 
 ------------------------------------------------------------------------
 
-## Mean and median imputation, in R
+### Mean and median imputation
 
 The idea is the simplest one available: put the column's own average where a
 value is missing. It needs no model, no package, and one line.
@@ -144,11 +114,16 @@ cat("missing left, mean:  ", sum(is.na(imp_mean[num_cols])), "\n")
 cat("missing left, median:", sum(is.na(imp_median[num_cols])), "\n")
 ```
 
-### What it did to the spread
+`scikit-learn`'s `SimpleImputer` does the same job in the Python tab, and that
+is the form you will meet again in @sec-pipeline-steps, where the imputer has
+to be fitted on the training rows alone.
 
-Filling 9 values of `BMI` with one single number means nine rows now sit
-exactly on top of each other. The column's standard deviation must fall.
-Measure it rather than taking it on trust:
+#### What it did to the spread
+
+Thirty-five values across four columns have just been replaced by four
+repeated numbers, so those rows now sit exactly on top of each other in each
+column. The standard deviations must fall. Measure it rather than taking it on
+trust:
 
 ```{r}
 comparison <- data.frame(
@@ -162,27 +137,31 @@ comparison$pct_change_mean <- round(
 comparison
 ```
 
-Every standard deviation shrank. That matters because a standard deviation is
-what a confidence interval is built from: impute the mean into 10% of a column
-and every interval computed from it afterwards is narrower than the evidence
-justifies. You have not added information, but you have made the data look as
-though you had.
+Every standard deviation shrank — by 0.3% for `age`, which was missing one
+value, and by 4.0% for `systolic_BP`, which was missing fourteen. The size of
+the shrinkage tracks how much of the column you invented.
 
-### Why median, for this column
+That matters because a standard deviation is what a confidence interval is
+built from: impute the mean into 8% of a column and every interval computed
+from it afterwards is narrower than the evidence justifies. You have not added
+information, but you have made the data look as though you had.
 
-`BMI` is right-skewed and contains one implausible value of 61.2. The mean is
-pulled upward by it; the median is not.
+#### Why median, for this column
+
+`BMI` is right-skewed. The mean is pulled upward by the heavier tail; the
+median is not.
 
 ```{r}
 cat("BMI mean  :", round(mean(gp$BMI, na.rm = TRUE), 2), "\n")
 cat("BMI median:", round(median(gp$BMI, na.rm = TRUE), 2), "\n")
 ```
 
-Every imputed `BMI` inherits whichever of those you chose. With a skewed
-column, the mean puts nine patients at a value that more than half the cohort
-sits below.
+A gap of 0.35 of a BMI unit between the two. That is small here because the
+skew is mild, and it is the right habit anyway: whichever you choose, every
+filled-in value inherits it, so on a strongly skewed column the mean would put
+a block of patients at a value most of the cohort sits below.
 
-### A derived feature does not impute itself
+#### A derived feature does not impute itself
 
 Here is the trap. `BMI` was computed from height and weight **before** the
 imputation, so filling the gaps in those two columns does nothing to it — the
@@ -194,8 +173,9 @@ cat("BMI missing, after imputing height and weight:",
     sum(is.na(imp_median$BMI)), "\n")
 ```
 
-Unchanged. The fix is to recompute the derived column from the filled inputs,
-and the order matters: impute first, then derive.
+Twenty before, twenty after. Unchanged. The fix is to recompute the derived
+column from the filled inputs, and the order matters: impute first, then
+derive.
 
 ```{r}
 imp_median <- imp_median |>
@@ -204,9 +184,9 @@ imp_median <- imp_median |>
 cat("BMI missing, after recomputing:", sum(is.na(imp_median$BMI)), "\n")
 ```
 
-Note what those recomputed BMI values now are: a ratio of two numbers that were
-themselves invented. The uncertainty does not announce itself — it is buried one
-step further from the data than it was before.
+Zero. Note what those recomputed BMI values now are: a ratio of two numbers
+that were themselves invented. The uncertainty does not announce itself — it is
+buried one step further from the data than it was before.
 
 Now colour the imputed rows, because a value at the median does not announce
 itself in a histogram either — it lands inside the existing peak and disappears:
@@ -222,78 +202,353 @@ imp_median |>
   labs(x = "BMI", y = NULL, fill = NULL)
 ```
 
-That is the honest picture, and it is also the warning: had you not kept track
-of which rows you filled, nothing in the finished column would tell you. A
-column of imputed values looks exactly like a column of measurements. Record
-which is which — a `BMI_was_missing` indicator costs one column and keeps the
-distinction available to everything downstream.
+Twenty red rows, all of them inside the existing peak. That is the honest
+picture, and it is also the warning: had you not kept track of which rows you
+filled, nothing in the finished column would tell you. A column of imputed
+values looks exactly like a column of measurements. Record which is which — a
+`BMI_was_missing` indicator costs one column and keeps the distinction
+available to everything downstream.
 
 ------------------------------------------------------------------------
 
-## Iterative imputation, in Python
-
-Mean imputation ignores every other column. If a patient's `BMI` is missing but
-their `age` and `systolic_BP` are recorded, those two carry information about
-the likely `BMI`, and the mean throws it away.
-
-Iterative imputation uses it. It models each column with missing values as a
-function of the other columns, predicts the gaps, and repeats — each round
-using the previous round's filled-in values — until the estimates settle. In
-scikit-learn it is still marked experimental, so it has to be enabled
-explicitly.
-
-```{python}
-from sklearn.experimental import enable_iterative_imputer  # noqa: F401
-from sklearn.impute import IterativeImputer
-
-imp = IterativeImputer(random_state=42, max_iter=20)
-filled = imp.fit_transform(gp_py[num_cols])
-
-imp_iter = gp_py.copy()
-imp_iter[num_cols] = filled
-print("missing left:", int(imp_iter[num_cols].isna().sum().sum()))
-print("iterations run:", imp.n_iter_)
-```
-
-`max_iter` was 20 and it stopped well before that: with three columns and few
-gaps there is very little for the rounds to refine, so the estimates stop
-moving almost immediately. Read the number as a diagnostic — on a wide table it
-would be larger, and an imputer that runs to `max_iter` without settling is
-telling you something.
-
-Compare what the two approaches put in the same cells:
-
-```{python}
-gaps = gp_py["BMI"].isna()
-side_by_side = pd.DataFrame({
-    "age": gp_py.loc[gaps, "age"],
-    "bp": gp_py.loc[gaps, "systolic_BP"],
-    "mean_filled": gp_py["BMI"].mean(),
-    "iter_filled": imp_iter.loc[gaps, "BMI"].round(1),
-})
-side_by_side.head(9)
-```
-
-The mean column is one number repeated. The iterative column varies, because
-it is reading each patient's other measurements. Whether it varies *correctly*
-is a different question — it is a model, and it carries a model's assumptions:
-that the columns are related in a way the imputer can represent, and that the
-missingness does not itself depend on the value that is missing.
-
-For this dataset we happen to know the second assumption holds, because
-`data/PROVENANCE.txt` records that values were blanked out at random after the
-outcome was generated. On real data you would not know that, and you would have
-to argue for it.
-
-------------------------------------------------------------------------
-
-## Task 1 — The approach neither section used
+### Task 1 — What dropping costs
 
 Dropping every incomplete row is the default in a surprising amount of
 published analysis, usually silently. Quantify it.
 
-::: {.panel-tabset group="language"}
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+kept <- gp |> filter(______(gp))
+cat(nrow(kept), "of", nrow(gp), "\n")
+cat("lost:", round(100 * (1 - nrow(kept) / nrow(gp)), 1), "%\n")
+
+# Did dropping change who is in the data?
+cat(round(mean(gp$diabetes), 3), "\n")
+cat(round(mean(kept$______), 3), "\n")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The first blank is the function returning TRUE for rows with no missing value
+anywhere. The last is the `diabetes` column, so you can compare its rate before
+and after.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+kept <- gp |> filter(complete.cases(gp))
+cat(nrow(kept), "of", nrow(gp), "\n")
+cat("lost:", round(100 * (1 - nrow(kept) / nrow(gp)), 1), "%\n")
+
+cat(round(mean(gp$diabetes), 3), "\n")
+cat(round(mean(kept$diabetes), 3), "\n")
+```
+
+A quarter of the cohort goes — 134 rows kept of 180, 25.6% lost. The outcome
+rate barely moves, from 0.233 to 0.224, which is what you expect when values
+were blanked out at random — and is exactly what you cannot count on when they
+were not.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### Task 2 — The categorical analogue
+
+A mean is no use to a column of practice names. The usual substitute is the
+most frequent category. Find it, and see how big it already is.
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+mode_site <- names(sort(table(gp$GP_practice), decreasing = ______))[1]
+mode_site
+
+sum(gp$GP_practice == mode_site)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+You want the *largest* count first.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+mode_site <- names(sort(table(gp$GP_practice), decreasing = TRUE))[1]
+mode_site
+
+sum(gp$GP_practice == mode_site)
+```
+
+Bournbrook, with 49 of the 180 patients. Most-frequent-category imputation is
+the categorical analogue of the mean, and it has the same defect in a sharper
+form: it makes the commonest category commoner, which is precisely the
+direction that hides a minority group. Filling a missing practice with
+Bournbrook does not record ignorance, it records a guess that favours the
+majority.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### Reflection
+
+1. The four numeric columns were missing 1, 12, 8 and 14 values, yet 46 of the
+   180 rows were incomplete. Explain the arithmetic to someone who has not seen
+   the data, and say what it implies for a dataset with 50 columns.
+2. Mean imputation shrank every standard deviation. Name one statistic you
+   would report after imputing that would now be wrong, and say in which
+   direction.
+3. Imputing height and weight left `BMI` exactly as missing as before. Name
+   another derived quantity in a clinical dataset where the same trap would
+   apply.
+4. Under what circumstance is leaving a value missing — and telling the reader
+   it is missing — a better answer than any of the methods here?
+
+### Stretch
+
+#### Stretch 1 — Iterative imputation
+
+Mean imputation ignores every other column. If a patient's `BMI` is missing but
+their `age` and `systolic_BP` are recorded, those two carry information about
+the likely `BMI`, and the mean throws it away. Iterative imputation uses it: it
+models each column with missing values as a function of the other columns,
+predicts the gaps, and repeats — each round using the previous round's filled-in
+values — until the estimates settle.
+
+It is a model, and it carries a model's assumptions: that the columns are
+related in a way the imputer can represent, and that the missingness does not
+itself depend on the value that is missing. For this dataset we happen to know
+the second assumption holds, because `data/PROVENANCE.txt` records that values
+were blanked out at random after the outcome was generated. On real data you
+would not know that, and you would have to argue for it.
+
+R's implementation is the [`mice` package](https://amices.org/mice/), whose
+name is the method: Multivariate Imputation by Chained Equations. It is not
+used anywhere in this booklet, so treat this as reading rather than a cell to
+run. Two things are worth knowing before you reach for it. Its default method
+for a numeric column is predictive mean matching, which borrows a real observed
+value from a similar patient rather than predicting a new one. And it is built
+to produce *several* completed datasets rather than one, because the spread
+between them is the measure of how uncertain each filled-in value was —
+asking it for a single dataset throws away the thing it exists to give you.
+
+The Python tab shows the scikit-learn equivalent,
+[`IterativeImputer`](https://scikit-learn.org/stable/modules/generated/sklearn.impute.IterativeImputer.html),
+if you want to see one run.
+
+#### Stretch 2 — Make the imputation wrong on purpose
+The values in this file were blanked out at random. Blank out `BMI` instead
+for the patients with the highest `systolic_BP`, then impute with the mean and
+compare the imputed values against the ones you deleted. You know the truth,
+so you can measure the error — and see how an assumption of random missingness
+fails when it is not true.
+
+#### Stretch 3 — Does better imputation buy a better model?
+Fit the same classifier on the mean-imputed and the median-imputed data and
+compare the test-set accuracy. Form a view before you run it. Then consider how
+much of any difference you would be willing to attribute to the imputer, given
+that the comparison rests on one split.
+
+### What you can and cannot now claim
+
+You can say the extract is now complete: no model will refuse it, and you can
+state exactly which values were observed and which you supplied, and by what
+rule.
+
+You cannot say the imputed values are correct. They are estimates, and the mean
+and median versions are estimates that ignore every other column in the table.
+You also cannot claim your downstream uncertainty is honest — the shrinkage you
+measured is still there.
+
+And once again, none of this was done safely. Every mean and median above was
+computed from all 180 rows, including the rows you will later use to test. That
+is @sec-pipeline-steps.
+
 ## Python
+
+```{python}
+#| message: false
+#| warning: false
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+na_codes = ["unknown", "?", "not recorded", "N/A", "-999"]
+num_cols = ["age", "height_cm", "weight_kg", "systolic_BP"]
+
+gp_py = pd.read_csv("data/clinic_extract.csv",
+                    keep_default_na=False, na_values=[""])
+gp_py = gp_py.replace(na_codes, np.nan).replace(-999, np.nan)
+for c in num_cols:
+    gp_py[c] = pd.to_numeric(gp_py[c], errors="coerce")
+
+gp_py.loc[gp_py.height_cm < 3, "height_cm"] *= 100
+gp_py.loc[gp_py.age > 120, "age"] = np.nan
+gp_py.loc[gp_py.weight_kg > 300, "weight_kg"] = np.nan
+
+spelling = gp_py["sex"].str.strip().str.lower()
+sex_clean = pd.Series(np.nan, index=gp_py.index, dtype="object")
+sex_clean[spelling.isin(["male", "m"])]   = "Male"
+sex_clean[spelling.isin(["female", "f"])] = "Female"
+gp_py["sex"] = sex_clean
+
+counts = gp_py["GP_practice"].value_counts()
+rare = counts[counts < 10].index
+gp_py["GP_practice"] = gp_py["GP_practice"].where(
+    ~gp_py["GP_practice"].isin(rare), "Other")
+
+gp_py["BMI"] = gp_py.weight_kg / (gp_py.height_cm / 100) ** 2
+
+print(gp_py.shape)
+```
+
+Note that `BMI` is itself derived from two columns that have gaps, so it
+inherits both — one of the things this exercise has to deal with.
+
+#### How much is missing, and where
+
+```{python}
+print(gp_py[num_cols].isna().sum())
+print("BMI missing:", int(gp_py["BMI"].isna().sum()))
+print("complete rows:", gp_py.dropna().shape[0], "of", gp_py.shape[0])
+```
+
+Note the arithmetic. The four numeric columns are missing 1, 12, 8 and 14
+values — 35 in total — and `BMI` is missing 20 of its own, inherited from
+height and weight. Yet 46 of the 180 rows are incomplete, leaving 134 whole.
+Forty-six is more than any single column's gap count, because the gaps fall in
+different rows. This is the first argument against dropping incomplete rows:
+the loss compounds across columns, and it compounds faster the more columns
+you have.
+
+------------------------------------------------------------------------
+
+### Mean and median imputation
+
+The idea is the simplest one available: put the column's own average where a
+value is missing. It needs no model, no package, and one line.
+
+```{python}
+imp_mean = gp_py.copy()
+imp_mean[num_cols] = gp_py[num_cols].fillna(gp_py[num_cols].mean())
+
+imp_median = gp_py.copy()
+imp_median[num_cols] = gp_py[num_cols].fillna(gp_py[num_cols].median())
+
+print("missing left, mean:  ", int(imp_mean[num_cols].isna().sum().sum()))
+print("missing left, median:", int(imp_median[num_cols].isna().sum().sum()))
+```
+
+`SimpleImputer(strategy="mean")` does the same job through `scikit-learn`, and
+that is the form you will meet again in @sec-pipeline-steps, where the imputer
+has to be fitted on the training rows alone. `fillna` is used here because this
+chapter is about what imputation *does*, not yet about where it belongs.
+
+#### What it did to the spread
+
+Thirty-five values across four columns have just been replaced by four
+repeated numbers, so those rows now sit exactly on top of each other in each
+column. The standard deviations must fall. Measure it rather than taking it on
+trust:
+
+```{python}
+comparison = pd.DataFrame({
+    "sd_before": gp_py[num_cols].std(),
+    "sd_mean":   imp_mean[num_cols].std(),
+    "sd_median": imp_median[num_cols].std(),
+})
+comparison["pct_change_mean"] = (
+    100 * (comparison.sd_mean - comparison.sd_before) / comparison.sd_before
+).round(1)
+print(comparison.round(3))
+```
+
+Every standard deviation shrank — by 0.3% for `age`, which was missing one
+value, and by 4.0% for `systolic_BP`, which was missing fourteen. The size of
+the shrinkage tracks how much of the column you invented.
+
+That matters because a standard deviation is what a confidence interval is
+built from: impute the mean into 8% of a column and every interval computed
+from it afterwards is narrower than the evidence justifies. You have not added
+information, but you have made the data look as though you had.
+
+#### Why median, for this column
+
+`BMI` is right-skewed. The mean is pulled upward by the heavier tail; the
+median is not.
+
+```{python}
+print("BMI mean  :", round(gp_py["BMI"].mean(), 2))
+print("BMI median:", round(gp_py["BMI"].median(), 2))
+```
+
+A gap of 0.35 of a BMI unit between the two. That is small here because the
+skew is mild, and it is the right habit anyway: whichever you choose, every
+filled-in value inherits it, so on a strongly skewed column the mean would put
+a block of patients at a value most of the cohort sits below.
+
+#### A derived feature does not impute itself
+
+Here is the trap. `BMI` was computed from height and weight **before** the
+imputation, so filling the gaps in those two columns does nothing to it — the
+derived column still has every gap it started with.
+
+```{python}
+print("BMI missing, before imputing:", int(gp_py["BMI"].isna().sum()))
+print("BMI missing, after imputing height and weight:",
+      int(imp_median["BMI"].isna().sum()))
+```
+
+Twenty before, twenty after. Unchanged. The fix is to recompute the derived
+column from the filled inputs, and the order matters: impute first, then
+derive.
+
+```{python}
+imp_median["BMI"] = imp_median.weight_kg / (imp_median.height_cm / 100) ** 2
+
+print("BMI missing, after recomputing:", int(imp_median["BMI"].isna().sum()))
+```
+
+Zero. Note what those recomputed BMI values now are: a ratio of two numbers
+that were themselves invented. The uncertainty does not announce itself — it is
+buried one step further from the data than it was before.
+
+Now colour the imputed rows, because a value at the median does not announce
+itself in a histogram either — it lands inside the existing peak and disappears:
+
+```{python}
+#| fig-height: 2.6
+was_filled = gp_py["weight_kg"].isna() | gp_py["height_cm"].isna()
+
+fig, ax = plt.subplots(figsize=(7, 2.6))
+bins = np.histogram_bin_edges(imp_median["BMI"].dropna(), bins=30)
+ax.hist([imp_median.loc[~was_filled, "BMI"], imp_median.loc[was_filled, "BMI"]],
+        bins=bins, stacked=True, color=["grey", "#c0392b"],
+        label=["observed", "imputed"])
+ax.set_xlabel("BMI")
+ax.legend(frameon=False)
+plt.show()
+```
+
+Twenty red rows, all of them inside the existing peak. That is the honest
+picture, and it is also the warning: had you not kept track of which rows you
+filled, nothing in the finished column would tell you. A column of imputed
+values looks exactly like a column of measurements. Record which is which — a
+`BMI_was_missing` indicator costs one column and keeps the distinction
+available to everything downstream.
+
+------------------------------------------------------------------------
+
+### Task 1 — What dropping costs
+
+Dropping every incomplete row is the default in a surprising amount of
+published analysis, usually silently. Quantify it.
 
 ```{python}
 #| eval: false
@@ -303,8 +558,8 @@ print(kept.shape[0], "of", gp_py.shape[0])
 print("lost:", round(100 * (1 - kept.shape[0] / gp_py.shape[0]), 1), "%")
 
 # Did dropping change who is in the data?
-print(gp_py["diabetes"].mean().round(3))
-print(kept["______"].mean().round(3))
+print(round(gp_py["diabetes"].mean(), 3))
+print(round(kept["______"].mean(), 3))
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -321,175 +576,130 @@ kept = gp_py.dropna()
 print(kept.shape[0], "of", gp_py.shape[0])
 print("lost:", round(100 * (1 - kept.shape[0] / gp_py.shape[0]), 1), "%")
 
-print(gp_py["diabetes"].mean().round(3))
-print(kept["diabetes"].mean().round(3))
+print(round(gp_py["diabetes"].mean(), 3))
+print(round(kept["diabetes"].mean(), 3))
 ```
 
-Around a fifth of the cohort goes. The outcome rate barely moves here, which is
-what you expect when values were blanked out at random — and is exactly what
-you cannot count on when they were not.
-:::
-:::
-
-## R
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-kept <- gp |> filter(______(gp))
-cat(nrow(kept), "of", nrow(gp), "\n")
-cat("lost:", round(100 * (1 - nrow(kept) / nrow(gp)), 1), "%\n")
-
-# Most-frequent-category imputation, for a categorical column
-mode_site <- names(sort(table(gp$GP_practice), decreasing = ______))[1]
-mode_site
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is the function returning TRUE for rows with no missing value
-anywhere. For the second, you want the *largest* count first.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-kept <- gp |> filter(complete.cases(gp))
-cat(nrow(kept), "of", nrow(gp), "\n")
-cat("lost:", round(100 * (1 - nrow(kept) / nrow(gp)), 1), "%\n")
-
-mode_site <- names(sort(table(gp$GP_practice), decreasing = TRUE))[1]
-mode_site
-```
-
-Most-frequent-category imputation is the categorical analogue of the mean, and
-it has the same defect in a sharper form: it makes the commonest category
-commoner, which is precisely the direction that hides a minority group.
-:::
+A quarter of the cohort goes — 134 rows kept of 180, 25.6% lost. The outcome
+rate barely moves, from 0.233 to 0.224, which is what you expect when values
+were blanked out at random — and is exactly what you cannot count on when they
+were not.
 :::
 :::
 
 ------------------------------------------------------------------------
 
-## Task 2 — Translate the other half
+### Task 2 — The categorical analogue
 
-Each language above did only one thing. Produce the other.
-
-::: {.panel-tabset group="language"}
-## Python
-
-Write mean and median imputation in Python and reproduce the standard-deviation
-comparison from the R section.
+A mean is no use to a column of practice names. The usual substitute is the
+most frequent category. Find it, and see how big it already is.
 
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-imp_mean_py = gp_py.copy()
-imp_mean_py[num_cols] = gp_py[num_cols].fillna(
-    gp_py[num_cols].______()
-)
+mode_site = gp_py["GP_practice"].value_counts().index[______]
+print(mode_site)
 
-sd_before = gp_py[num_cols].std()
-sd_after = imp_mean_py[num_cols].______()
-print((100 * (sd_after - sd_before) / sd_before).round(1))
+print(int((gp_py["GP_practice"] == mode_site).sum()))
 ```
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-Both blanks are the same kind of thing: the first is the statistic you are
-filling with, the second is the one you are measuring. `fillna` accepts a
-Series of per-column values.
+`value_counts()` is already sorted largest first, so you want its first entry.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-imp_mean_py = gp_py.copy()
-imp_mean_py[num_cols] = gp_py[num_cols].fillna(gp_py[num_cols].mean())
+mode_site = gp_py["GP_practice"].value_counts().index[0]
+print(mode_site)
 
-sd_before = gp_py[num_cols].std()
-sd_after = imp_mean_py[num_cols].std()
-print((100 * (sd_after - sd_before) / sd_before).round(1))
+print(int((gp_py["GP_practice"] == mode_site).sum()))
 ```
 
-The same shrinkage, to the same degree, by a different route.
-:::
-:::
-
-## R
-
-Iterative imputation in R lives in the `mice` package, whose default method for
-a numeric column is predictive mean matching rather than a regression
-prediction. Run it if `mice` is installed; read the answer if not.
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-library(mice)
-fit <- mice(gp_py[______], m = 1, maxit = 10, printFlag = FALSE)
-imp_iter_r <- complete(fit)
-sum(is.na(imp_iter_r))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-Pass the same three numeric columns the Python side used. `mice` will not
-impute a patient identifier and should not be shown one.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-#| eval: false
-library(mice)
-fit <- mice(gp[num_cols], m = 1, maxit = 10, printFlag = FALSE)
-imp_iter_r <- complete(fit)
-sum(is.na(imp_iter_r))
-```
-
-One difference worth noticing: `mice` is built to produce *several* completed
-datasets, not one. `m = 1` above asks it to behave like scikit-learn's imputer,
-which is convenient here and throws away the thing `mice` exists to give you —
-a measure of how uncertain each filled-in value was.
-:::
+Bournbrook, with 49 of the 180 patients. Most-frequent-category imputation is
+the categorical analogue of the mean, and it has the same defect in a sharper
+form: it makes the commonest category commoner, which is precisely the
+direction that hides a minority group. Filling a missing practice with
+Bournbrook does not record ignorance, it records a guess that favours the
+majority.
 :::
 :::
 
 ------------------------------------------------------------------------
 
-## Reflection
+### Reflection
 
-1. Three columns were missing 11, 9 and 13 values, yet more than 11, 9 or 13
-   rows were incomplete. Explain the arithmetic to someone who has not seen the
-   data, and say what it implies for a dataset with 50 columns.
+1. The four numeric columns were missing 1, 12, 8 and 14 values, yet 46 of the
+   180 rows were incomplete. Explain the arithmetic to someone who has not seen
+   the data, and say what it implies for a dataset with 50 columns.
 2. Mean imputation shrank every standard deviation. Name one statistic you
    would report after imputing that would now be wrong, and say in which
    direction.
-3. The iterative imputer produced a different value for each patient. Give one
-   reason that is better than a single repeated number, and one reason it could
-   be worse.
+3. Imputing height and weight left `BMI` exactly as missing as before. Name
+   another derived quantity in a clinical dataset where the same trap would
+   apply.
 4. Under what circumstance is leaving a value missing — and telling the reader
    it is missing — a better answer than any of the methods here?
 
-## Stretch
+### Stretch
 
-### Stretch 1 — Make the imputation wrong on purpose
+#### Stretch 1 — Iterative imputation
+
+Mean imputation ignores every other column. If a patient's `BMI` is missing but
+their `age` and `systolic_BP` are recorded, those two carry information about
+the likely `BMI`, and the mean throws it away. Iterative imputation uses it: it
+models each column with missing values as a function of the other columns,
+predicts the gaps, and repeats — each round using the previous round's filled-in
+values — until the estimates settle.
+
+It is a model, and it carries a model's assumptions: that the columns are
+related in a way the imputer can represent, and that the missingness does not
+itself depend on the value that is missing. For this dataset we happen to know
+the second assumption holds, because `data/PROVENANCE.txt` records that values
+were blanked out at random after the outcome was generated. On real data you
+would not know that, and you would have to argue for it.
+
+`scikit-learn` ships this as
+[`IterativeImputer`](https://scikit-learn.org/stable/modules/generated/sklearn.impute.IterativeImputer.html),
+still marked experimental, so it has to be enabled explicitly:
+
+```{python}
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+from sklearn.impute import IterativeImputer
+
+imp = IterativeImputer(random_state=42, max_iter=20)
+imp_iter = gp_py.copy()
+imp_iter[num_cols] = imp.fit_transform(gp_py[num_cols])
+
+print("missing left:", int(imp_iter[num_cols].isna().sum().sum()))
+print("iterations run:", imp.n_iter_)
+```
+
+Read the iteration count as a diagnostic: with four columns and few gaps there
+is very little for the rounds to refine, so the estimates stop moving almost
+immediately. On a wide table it would be larger, and an imputer that runs to
+`max_iter` without settling is telling you something.
+
+R's equivalent is the [`mice` package](https://amices.org/mice/) — Multivariate
+Imputation by Chained Equations — which is not used in this booklet but is the
+standard tool there.
+
+#### Stretch 2 — Make the imputation wrong on purpose
 The values in this file were blanked out at random. Blank out `BMI` instead
 for the patients with the highest `systolic_BP`, then impute with the mean and
 compare the imputed values against the ones you deleted. You know the truth,
 so you can measure the error — and see how an assumption of random missingness
 fails when it is not true.
 
-### Stretch 2 — Does better imputation buy a better model?
-Fit the same classifier on the mean-imputed and the iteratively imputed data
-and compare the test-set accuracy. Form a view before you run it. Then consider
-how much of any difference you would be willing to attribute to the imputer,
-given that the comparison rests on one split.
+#### Stretch 3 — Does better imputation buy a better model?
+Fit the same classifier on the mean-imputed and the median-imputed data and
+compare the test-set accuracy. Form a view before you run it. Then consider how
+much of any difference you would be willing to attribute to the imputer, given
+that the comparison rests on one split.
 
-## What you can and cannot now claim
+### What you can and cannot now claim
 
 You can say the extract is now complete: no model will refuse it, and you can
 state exactly which values were observed and which you supplied, and by what
@@ -500,5 +710,8 @@ and median versions are estimates that ignore every other column in the table.
 You also cannot claim your downstream uncertainty is honest — the shrinkage you
 measured is still there.
 
-And once again, none of this was done safely. Every mean, median and iterative
-model above was fitted to all 150 rows. That is @sec-pipeline-steps.
+And once again, none of this was done safely. Every mean and median above was
+computed from all 180 rows, including the rows you will later use to test. That
+is @sec-pipeline-steps.
+
+::::::
