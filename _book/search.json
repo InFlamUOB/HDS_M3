@@ -412,5 +412,665 @@
       "Day 2 — EDA and Data Wrangling",
       "<span class='chapter-number'>8</span>  <span class='chapter-title'>Exercise 2.6 — Understanding preprocessing pipelines</span>"
     ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html",
+    "href": "day3-01-supervised-learning.html",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "",
+    "text": "Objectives",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#objectives",
+    "href": "day3-01-supervised-learning.html#objectives",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "",
+    "text": "Say what the learning algorithm, the fitted model and the dataset each contribute to a prediction, pointing at one line of code for each.\nFit the same model in both languages, read its two parameters, and predict a value both inside and outside the range of the data.\nSwap the learning algorithm for a decision tree without changing anything else, and describe how the shape of the prediction changes.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#why-this-here",
+    "href": "day3-01-supervised-learning.html#why-this-here",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "Why this, here",
+    "text": "Why this, here\nIn Exercise 1.2 — Your first ML pipeline you fitted a model with one call and read a score off the test set. The fitting itself was a black box: fit() went in, coefficients came out. Today we open it. This exercise sets up the pieces — data, algorithm, fitted parameters, prediction — so that Exercise 3.2 — Loss functions can ask what “best fit” means and Exercise 3.3 — Gradient descent can ask how the best fit is found.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#the-data-we-fit-to",
+    "href": "day3-01-supervised-learning.html#the-data-we-fit-to",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "The data we fit to",
+    "text": "The data we fit to\nToday’s outcome is a blood glucose measurement and the single predictor is age. The question behind it: does knowing a patient’s age tell you anything useful about their glucose? The answer today is more interesting than you might expect.\ndata/diabetes.csv is the module’s case study: 768 adults screened for type 2 diabetes, eight measurements from a single visit and a pos/neg outcome. It carries the defect you met on Day 2 — five rows record a glucose of 0, which is not a measurement — so we drop those rows and keep the first 80 of what is left, small enough to see every point on a scatter plot.\n\nRPython\n\n\n\nlibrary(readr); library(dplyr); library(ggplot2)\n\ndiab &lt;- read_csv(\"data/diabetes.csv\")\nglu  &lt;- diab |&gt; filter(glucose &gt; 0) |&gt; slice(1:80) |&gt; select(age, glucose)\n\nnrow(glu)\n\n#&gt; [1] 80\n\nhead(glu)\n\n#&gt; # A tibble: 6 × 2\n#&gt;     age glucose\n#&gt;   &lt;dbl&gt;   &lt;dbl&gt;\n#&gt; 1    28     194\n#&gt; 2    44     129\n#&gt; 3    26     132\n#&gt; 4    39     184\n#&gt; 5    22     108\n#&gt; 6    58     117\n\n\n\n\n\nimport pandas as pd\nimport numpy as np\n\ndiab = pd.read_csv(\"data/diabetes.csv\")\nglu = (diab.loc[diab[\"glucose\"] &gt; 0, [\"age\", \"glucose\"]]\n           .head(80)\n           .reset_index(drop=True))\n\nlen(glu), glu.head()\n\n#&gt; (80,    age  glucose\n#&gt; 0   28      194\n#&gt; 1   44      129\n#&gt; 2   26      132\n#&gt; 3   39      184\n#&gt; 4   22      108)\n\n\n\n\n\n\nRPython\n\n\n\nggplot(glu, aes(x = age, y = glucose)) +\n  geom_point(alpha = 0.7) +\n  labs(x = \"Age in years (the feature)\",\n       y = \"Glucose, mg/dL (the label)\")\n\n\n\n\n\n\n\n\n\n\n\nimport matplotlib.pyplot as plt\nfig, ax = plt.subplots()\nax.scatter(glu[\"age\"], glu[\"glucose\"], alpha=0.7)\nax.set_xlabel(\"Age in years (the feature)\")\nax.set_ylabel(\"Glucose, mg/dL (the label)\")\nplt.show()\n\n\n\n\n\n\n\n\n\n\n\nLook at the scatter before you fit anything, and write down what slope you expect. You will be asked for it again at the end.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#the-three-things-that-make-a-prediction",
+    "href": "day3-01-supervised-learning.html#the-three-things-that-make-a-prediction",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "The three things that make a prediction",
+    "text": "The three things that make a prediction\n\n\n\n\n\n\n\n\n\nWhat it is\nIn the code below\n\n\n\n\nThe learning algorithm\na procedure for turning data into parameters\nlinear_reg(), LinearRegression()\n\n\nThe fitted model\nthe parameters it produced, and nothing else\n\\(\\hat\\beta_0 = 110.30\\), \\(\\hat\\beta_1 = 0.289\\)\n\n\nThe dataset\nwhat the algorithm was allowed to see\nthe 80 rows in glu\n\n\n\nThe algorithm is chosen by you, the parameters are chosen by the data, and the prediction is a consequence of both. Students conflate the first two constantly: “linear regression predicted 123” is wrong, because linear regression predicts nothing until it has been shown a dataset.\nIn machine learning notation the model is written\n\\[y = \\beta_0 + \\beta_1 x_1\\]\nwhere \\(y\\) is the label (glucose), \\(x_1\\) the feature (age), \\(\\beta_0\\) the intercept — often called the bias — and \\(\\beta_1\\) the weight on the feature, which is the slope. Both are parameters: numbers the fitting procedure returns.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#fitting-in-both-languages",
+    "href": "day3-01-supervised-learning.html#fitting-in-both-languages",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "Fitting, in both languages",
+    "text": "Fitting, in both languages\n\nRPython\n\n\n\nlibrary(parsnip)\n\nlm_model &lt;- linear_reg() |&gt; set_engine(\"lm\") |&gt; set_mode(\"regression\")\nls_fit   &lt;- lm_model |&gt; fit(glucose ~ age, data = glu)\n\ncoef(extract_fit_engine(ls_fit))\n\n#&gt; (Intercept)         age \n#&gt; 110.2979509   0.2886749\n\n\n\n\n\nfrom sklearn.linear_model import LinearRegression\n\nX = glu[[\"age\"]]      # 2-D: a frame, not a series\ny = glu[\"glucose\"]    # 1-D\nlin_reg = LinearRegression().fit(X, y)\n\nlin_reg.intercept_, lin_reg.coef_[0]\n\n#&gt; (np.float64(110.2979509174209), np.float64(0.28867490665401285))\n\n\n\n\n\nThe two agree to every decimal worth printing, because both solve the same least-squares problem on the same 80 rows. Exercise 3.4 — Ordinary least squares, in closed form shows you the algebra they are solving and verifies it by hand.\n\n\n\n\n\n\nWarningcoef() does not work on a parsnip fit\n\n\n\ncoef(ls_fit) returns NULL — silently, with no error. A model_fit object wraps the engine’s fit rather than being one, so you have to reach inside with extract_fit_engine() first. Passing the NULL to geom_abline() then fails some distance from the line that caused it, which is the most annoying class of bug there is.\n\n\nSo the fitted model is\n\\[\\widehat{\\text{glucose}} = 110.30 + 0.289 \\times \\text{age}\\]\nand that is the entire deliverable of the fitting step. Two numbers.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#predicting-inside-and-outside-the-data",
+    "href": "day3-01-supervised-learning.html#predicting-inside-and-outside-the-data",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "Predicting, inside and outside the data",
+    "text": "Predicting, inside and outside the data\n\nRPython\n\n\n\nnew_patients &lt;- data.frame(age = c(45, 10))\npredict(ls_fit, new_data = new_patients)\n\n#&gt; # A tibble: 2 × 1\n#&gt;   .pred\n#&gt;   &lt;dbl&gt;\n#&gt; 1  123.\n#&gt; 2  113.\n\n\n\n\n\nlin_reg.predict(pd.DataFrame({\"age\": [45, 10]}))\n\n#&gt; array([123.28832172, 113.18469998])\n\n\n\n\n\nA 45-year-old gets a predicted glucose of about 123.3. So does a 10-year-old, at about 113.2 — even though the youngest patient in the data is 21, and these are adults with no children among them. The model is an infinite line. It will return a number for an age of 200, or of −40, and nothing in the code will object.\n\n\n\n\n\n\nNoteExtrapolation is a modelling decision, not a software error\n\n\n\nThe line is fitted on ages 21 to 81. Using it at 10 asserts that the same relationship holds in children, which nothing in these data supports. Every model will happily extrapolate; the restraint has to come from you. Note also what the model does not give you: any sense of how confident it is. That is a statistical question and this is a prediction course.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#task-1-predict-from-the-parameters-not-from-the-function",
+    "href": "day3-01-supervised-learning.html#task-1-predict-from-the-parameters-not-from-the-function",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "Task 1 — Predict from the parameters, not from the function",
+    "text": "Task 1 — Predict from the parameters, not from the function\npredict() is a convenience. Reproduce it with arithmetic: compute the predicted glucose for a 60-year-old from the two coefficients.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\nb &lt;- coef(extract_fit_engine(ls_fit))\npred_60 &lt;- ______ + ______ * 60\ncheck_metric_range(pred_60, 120, 135, \"predicted glucose at age 60\")\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\npred_60 = ______ + ______ * 60\ncheck_metric_range(pred_60, 120, 135, \"predicted glucose at age 60\")\n\n\n\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nThe two numbers you need are the ones the fitting step printed. In R they come out of coef() in the order intercept, then slope; in Python they are two separate attributes of the fitted object.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#task-2-make-the-line-earn-its-place",
+    "href": "day3-01-supervised-learning.html#task-2-make-the-line-earn-its-place",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "Task 2 — Make the line earn its place",
+    "text": "Task 2 — Make the line earn its place\nA fitted line is only worth having if it beats a predictor that does no learning. Compute the mean squared error of the line on these 80 rows, and the mean squared error of predicting the mean glucose for everybody.\nBoth numbers are computed on the rows the model was fitted to, which Exercise 1.2 — Your first ML pipeline told you is not evidence of anything. Today that is deliberate: this exercise is about what fitting does, not about how well it generalises. Read every number on this page as in-sample.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\npred_line &lt;- predict(ls_fit, new_data = glu)$.pred\nmse_line  &lt;- mean((glu$glucose - ______)^2)\nmse_mean  &lt;- mean((glu$glucose - ______)^2)\ncheck_beats_baseline(mse_line, mse_mean)\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\nmse_line = np.mean((y - ______)**2)\nmse_mean = np.mean((y - ______)**2)\ncheck_beats_baseline(mse_line, mse_mean)\n\n\n\n\nThe check prints the line’s error as a percentage of the baseline’s. Write the percentage down before you read the next section.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#the-result-that-should-bother-you",
+    "href": "day3-01-supervised-learning.html#the-result-that-should-bother-you",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "The result that should bother you",
+    "text": "The result that should bother you\nThe line’s in-sample mean squared error is 847.5. The mean squared error of ignoring age entirely and predicting 119.9 for everyone is 863.2. Fitting removed 1.8% of the squared error.\nNow destroy the relationship on purpose and fit again. Shuffling the age column breaks any link between a patient’s age and their glucose while leaving both distributions exactly as they were.\n\nRPython\n\n\n\nset.seed(42)\nglu_shuffled &lt;- glu |&gt; mutate(age = sample(age))\n\nfit_shuffled  &lt;- lm_model |&gt; fit(glucose ~ age, data = glu_shuffled)\npred_shuffled &lt;- predict(fit_shuffled, new_data = glu_shuffled)$.pred\n\ncoef(extract_fit_engine(fit_shuffled))\n\n#&gt; (Intercept)         age \n#&gt; 128.7674274  -0.2665893\n\nmean((glu_shuffled$glucose - pred_shuffled)^2)\n\n#&gt; [1] 849.8275\n\n\n\n\n\nrng = np.random.default_rng(42)\nglu_shuffled = glu.assign(age=rng.permutation(glu[\"age\"].values))\n\nfit_shuffled = LinearRegression().fit(glu_shuffled[[\"age\"]], glu_shuffled[\"glucose\"])\nmse_shuffled = np.mean((glu_shuffled[\"glucose\"]\n                        - fit_shuffled.predict(glu_shuffled[[\"age\"]]))**2)\n\nfit_shuffled.intercept_, fit_shuffled.coef_[0], mse_shuffled\n\n#&gt; (np.float64(116.54068704973494), np.float64(0.10099400075956591), np.float64(861.2722501680768))\n\n\n\n\n\nThree steps of reasoning.\n\nShuffled age cannot predict glucose. Any apparent fit is coincidence, and its error is what “no relationship at all” looks like in these units.\nThe shuffled fit’s error is around 850 in R and around 861 in Python — the two seeds shuffle differently — against 847.5 for the real age column and 863.2 for the baseline. The real predictor buys you almost nothing that a deliberately broken one does not.\nThe algebra in Exercise 3.4 — Ordinary least squares, in closed form is exact, the fit is genuinely the best straight line there is, and the model is still not worth deploying. A minimum is not the same thing as a small number.\n\nKeep this: the entire day is about finding the best line, and the best line here is nearly useless. Being able to hold both of those at once is the point.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#task-3-change-the-algorithm-keep-everything-else",
+    "href": "day3-01-supervised-learning.html#task-3-change-the-algorithm-keep-everything-else",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "Task 3 — Change the algorithm, keep everything else",
+    "text": "Task 3 — Change the algorithm, keep everything else\nA decision tree is a different learning algorithm applied to the identical dataset and the identical question. You meet trees properly in ?sec-decision-trees; for now, swap one line and look at the shape of what comes out.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nlibrary(rpart); library(rpart.plot)\n\ndt_model &lt;- decision_tree(mode = \"regression\") |&gt; set_engine(\"______\")\ndt_fit   &lt;- dt_model |&gt; fit(glucose ~ age, data = glu)\n\nrpart.plot(extract_fit_engine(dt_fit), roundint = FALSE)\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nThe engine is the package that does the work, exactly as \"lm\" was for linear_reg(). For trees in R it is the recursive-partitioning package, and the string is its name.\n\n\n\n\n\n\n# Replace every ______ below, then run this cell.\nfrom sklearn.tree import DecisionTreeRegressor, export_text\n\ntree_reg = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5).fit(______, ______)\nprint(export_text(tree_reg, feature_names=[\"age\"]))\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nThe tree takes the same two arguments the linear model took, in the same order.\n\n\n\n\n\n\nNow plot both models’ predictions over the data. The line is a line; the tree is a staircase, constant within each age band it chose.\n\nRPython\n\n\n\ndt_fit_shown &lt;- decision_tree(mode = \"regression\") |&gt; set_engine(\"rpart\") |&gt;\n  fit(glucose ~ age, data = glu)\n\nglu_pred &lt;- glu |&gt;\n  mutate(pred_tree = predict(dt_fit_shown, new_data = glu)$.pred,\n         pred_line = predict(ls_fit,       new_data = glu)$.pred)\n\nggplot(glu_pred, aes(x = age)) +\n  geom_point(aes(y = glucose), alpha = 0.5) +\n  geom_step(aes(y = pred_tree), colour = \"darkred\", linewidth = 1) +\n  geom_line(aes(y = pred_line), colour = \"steelblue\", linewidth = 1) +\n  labs(x = \"Age (years)\", y = \"Glucose (mg/dL)\")\n\n\n\n\n\n\n\n\n\n\n\nfrom sklearn.tree import DecisionTreeRegressor\ntree_shown = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5).fit(X, y)\n\ngrid = pd.DataFrame({\"age\": np.linspace(glu[\"age\"].min(), glu[\"age\"].max(), 400)})\nfig, ax = plt.subplots()\nax.scatter(glu[\"age\"], glu[\"glucose\"], alpha=0.5)\nax.plot(grid[\"age\"], tree_shown.predict(grid), color=\"darkred\")\nax.plot(grid[\"age\"], lin_reg.predict(grid), color=\"steelblue\")\nax.set_xlabel(\"Age (years)\"); ax.set_ylabel(\"Glucose (mg/dL)\")\nplt.show()\n\n\n\n\n\n\n\n\n\n\n\nThe tree’s in-sample mean squared error is lower than the line’s: 685.7 in R with rpart’s default pruning, 677.9 in Python with a depth of 3. Both are well below the line’s 847.5. The tree is not better. It has more parameters — one mean per leaf rather than two numbers for the whole dataset — and more parameters always fit the rows you fitted them to more closely. ?sec-decision-trees is where that argument gets settled.\n\n\n\n\n\n\nNoteThe two trees are not the same tree\n\n\n\nrpart and scikit-learn choose splits the same way but stop differently: rpart prunes using a complexity parameter and cross-validation, scikit-learn stops when you tell it to. Ours end up with six leaves and seven respectively. Unlike the linear coefficients, which agreed to the decimal, the trees are a genuine difference between the two libraries’ defaults, and you should expect to have to state tree-stopping rules explicitly whenever you report one.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#task-4-the-role-of-the-dataset",
+    "href": "day3-01-supervised-learning.html#task-4-the-role-of-the-dataset",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "Task 4 — The role of the dataset",
+    "text": "Task 4 — The role of the dataset\nRefit both models on the first 30 rows only, and predict glucose for a 25-year-old with each of the four fitted models.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nglu30 &lt;- glu |&gt; slice(______)\n\nls_fit30 &lt;- lm_model |&gt; fit(glucose ~ age, data = ______)\ndt_fit30 &lt;- decision_tree(mode = \"regression\") |&gt; set_engine(\"rpart\") |&gt;\n  fit(glucose ~ age, data = ______)\n\nat25 &lt;- data.frame(age = 25)\nc(line80 = predict(ls_fit,   at25)$.pred, line30 = predict(ls_fit30, at25)$.pred,\n  tree80 = predict(dt_fit_shown, at25)$.pred, tree30 = predict(dt_fit30, at25)$.pred)\n\n\n\n\n# Replace every ______ below, then run this cell.\nglu30 = glu.head(______)\nX30, y30 = glu30[[\"age\"]], glu30[\"glucose\"]\n\nlin30  = LinearRegression().fit(______, ______)\ntree30 = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5).fit(______, ______)\n\nat25 = pd.DataFrame({\"age\": [25]})\n{\"line80\": lin_reg.predict(at25)[0],   \"line30\": lin30.predict(at25)[0],\n \"tree80\": tree_shown.predict(at25)[0], \"tree30\": tree30.predict(at25)[0]}\n\n\n\n\nAnswer in writing, in one sentence each.\n\nWhich model’s prediction for a 25-year-old moved more when 50 rows were taken away, and by how much?\nThe learning algorithm did not change between the two fits. What did?\nOn 30 rows the rpart tree has two leaves rather than six. What has the algorithm concluded, and is it wrong to conclude it?",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#reflection",
+    "href": "day3-01-supervised-learning.html#reflection",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "Reflection",
+    "text": "Reflection\n\nA colleague says “the model says glucose rises by 0.29 mg/dL per year of age”. Rewrite that sentence so it is defensible, given everything on this page.\nYou chose linear regression before seeing the data and the tree after. Which of the two decisions is more dangerous, and why?",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#stretch",
+    "href": "day3-01-supervised-learning.html#stretch",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "Stretch",
+    "text": "Stretch\n\n\n\n\n\n\nNoteStretch 1 — A predictor that works\n\n\n\nRefit the line with mass (body mass index) as the predictor instead of age, on the same 80 rows, and compare the in-sample MSE with the baseline. Then ask the question this exercise cannot: is the comparison between the two predictors fair, given that you chose the second one after seeing the first one fail?\n\n\n\n\n\n\n\n\nNoteStretch 2 — All 763 rows\n\n\n\nRepeat the fit on every row with a non-zero glucose rather than the first 80. The slope roughly doubles, to about 0.52, and the scatter looks no more convincing. Which of the two slopes would you report, and what does your answer imply about reporting a coefficient from a subset at all?",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-01-supervised-learning.html#what-you-can-and-cannot-now-claim",
+    "href": "day3-01-supervised-learning.html#what-you-can-and-cannot-now-claim",
+    "title": "Exercise 3.1 — Supervised learning",
+    "section": "What you can and cannot now claim",
+    "text": "What you can and cannot now claim\nCan: that you can fit, read and apply a two-parameter model in both languages, swap the learning algorithm without touching anything else, and state what the dataset contributed to the result.\nCannot: that this line is the best one. We never defined “best” — we used whatever lm() optimises, which happens to be squared error. That choice does real work, and it is Exercise 3.2 — Loss functions.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Exercise 3.1 — Supervised learning</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html",
+    "href": "day3-02-loss-functions.html",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "",
+    "text": "Objectives",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#objectives",
+    "href": "day3-02-loss-functions.html#objectives",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "",
+    "text": "Compute a residual, a sum of squared residuals, a mean squared error and a mean absolute error from a set of predictions, in both languages, without looking up a formula.\nSay what squaring does to a large error that taking the absolute value does not, and show it with a number.\nEvaluate a loss at parameter values of your own choosing, and find the parameters that minimise it by searching a grid.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#why-this-here",
+    "href": "day3-02-loss-functions.html#why-this-here",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "Why this, here",
+    "text": "Why this, here\nExercise 3.1 — Supervised learning fitted a line and called it the best fit, without ever saying best at what. This exercise supplies the missing definition. A loss function scores a candidate line against the data; the fitting procedure returns the line with the lowest score. Change the score and you change the line — and then Exercise 3.3 — Gradient descent asks how the lowest score is found at all.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#the-same-80-rows",
+    "href": "day3-02-loss-functions.html#the-same-80-rows",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "The same 80 rows",
+    "text": "The same 80 rows\nEach chapter is a fresh session, so load the data again.\n\nRPython\n\n\n\nlibrary(readr); library(dplyr); library(ggplot2)\n\ndiab &lt;- read_csv(\"data/diabetes.csv\")\nglu  &lt;- diab |&gt; filter(glucose &gt; 0) |&gt; slice(1:80) |&gt; select(age, glucose)\n\n\n\n\nimport pandas as pd\nimport numpy as np\n\ndiab = pd.read_csv(\"data/diabetes.csv\")\nglu = (diab.loc[diab[\"glucose\"] &gt; 0, [\"age\", \"glucose\"]]\n           .head(80)\n           .reset_index(drop=True))",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#one-point-one-residual",
+    "href": "day3-02-loss-functions.html#one-point-one-residual",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "One point, one residual",
+    "text": "One point, one residual\nA residual is what the model got wrong for one patient:\n\\[r_i = y_i - \\hat{y}_i\\]\nTake a line nobody fitted — \\(\\widehat{\\text{glucose}} = 120 + 0.5 \\times\n\\text{age}\\), invented by hand — and find the patient it serves worst.\n\nRPython\n\n\n\nglu &lt;- glu |&gt; mutate(pred_guess = 120 + 0.5 * age,\n                     resid_guess = glucose - pred_guess)\n\nworst &lt;- glu |&gt; slice_max(abs(resid_guess), n = 1)\nworst\n\n#&gt; # A tibble: 1 × 4\n#&gt;     age glucose pred_guess resid_guess\n#&gt;   &lt;dbl&gt;   &lt;dbl&gt;      &lt;dbl&gt;       &lt;dbl&gt;\n#&gt; 1    58      72        149         -77\n\n\n\n\n\nglu[\"pred_guess\"] = 120 + 0.5 * glu[\"age\"]\nglu[\"resid_guess\"] = glu[\"glucose\"] - glu[\"pred_guess\"]\n\nworst = glu.loc[[glu[\"resid_guess\"].abs().idxmax()]]\nworst\n\n\n\n\n\n\n\n\nage\nglucose\npred_guess\nresid_guess\n\n\n\n\n41\n58\n72\n149.0\n-77.0\n\n\n\n\n\n\n\n\n\n\nThat patient is 58, their measured glucose is 72, the hand-drawn line predicts 149, and the residual is −77 mg/dL — an error larger than the measurement itself.\n\nRPython\n\n\n\nggplot(glu, aes(x = age, y = glucose)) +\n  geom_point(alpha = 0.6) +\n  geom_abline(intercept = 120, slope = 0.5, colour = \"darkorange\", linewidth = 1) +\n  geom_segment(aes(xend = age, yend = pred_guess), colour = \"red\", alpha = 0.3) +\n  labs(x = \"Age (years)\", y = \"Glucose (mg/dL)\")\n\n\n\n\n\n\n\n\n\n\n\nimport matplotlib.pyplot as plt\nfig, ax = plt.subplots()\nax.scatter(glu[\"age\"], glu[\"glucose\"], alpha=0.6)\nax.vlines(glu[\"age\"], glu[\"pred_guess\"], glu[\"glucose\"], color=\"red\", alpha=0.3)\nax.plot(glu[\"age\"], glu[\"pred_guess\"], color=\"darkorange\")\nax.set_xlabel(\"Age (years)\"); ax.set_ylabel(\"Glucose (mg/dL)\")\nplt.show()\n\n\n\n\n\n\n\n\n\n\n\nThe red segments are the residuals. A loss function is a rule for turning all 80 of them into one number.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#four-ways-to-add-up-80-mistakes",
+    "href": "day3-02-loss-functions.html#four-ways-to-add-up-80-mistakes",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "Four ways to add up 80 mistakes",
+    "text": "Four ways to add up 80 mistakes\nResiduals are positive and negative, so adding them cancels most of the error away. Two repairs are in common use, and they are not equivalent.\n\\[\\text{SSR} = \\sum_{i=1}^{m} r_i^2 \\qquad\n\\text{MSE} = \\frac{1}{m}\\sum_{i=1}^{m} r_i^2 \\qquad\n\\text{MAE} = \\frac{1}{m}\\sum_{i=1}^{m} \\left| r_i \\right|\\]\nSquaring is the L2 loss; taking the absolute value is the L1 loss. The mean squared error is the sum of squared residuals divided by the number of rows, so it does not grow simply because the dataset is larger. The root of the MSE — RMSE — is back in the outcome’s units and is easier to quote.\n\nRPython\n\n\n\nloss_table &lt;- function(residuals) {\n  m &lt;- length(residuals)              # the number of residuals passed in,\n  ssr &lt;- sum(residuals^2)             # not the size of some data frame\n  c(SSR = ssr, MSE = ssr / m, RMSE = sqrt(ssr / m),\n    MAE = mean(abs(residuals)))\n}\n\nround(loss_table(glu$resid_guess), 3)\n\n#&gt;       SSR       MSE      RMSE       MAE \n#&gt; 90868.250  1135.853    33.702    28.656\n\n\n\n\n\ndef loss_table(residuals):\n    residuals = np.asarray(residuals)\n    m = len(residuals)\n    ssr = np.sum(residuals**2)\n    return {\"SSR\": ssr, \"MSE\": ssr / m, \"RMSE\": np.sqrt(ssr / m),\n            \"MAE\": np.mean(np.abs(residuals))}\n\n{k: round(v, 3) for k, v in loss_table(glu[\"resid_guess\"]).items()}\n\n#&gt; {'SSR': np.float64(90868.25), 'MSE': np.float64(1135.853), 'RMSE': np.float64(33.702), 'MAE': np.float64(28.656)}\n\n\n\n\n\nThe hand-drawn line scores SSR 90868, MSE 1135.9, RMSE 33.7 and MAE 28.7. RMSE and MAE are both in mg/dL and the RMSE is the larger of the two, which is not an accident: squaring weights the worst patients more heavily, so any summary built from squares sits above the plain average error whenever the residuals are unequal.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#task-1-score-the-fitted-line-against-the-hand-drawn-one",
+    "href": "day3-02-loss-functions.html#task-1-score-the-fitted-line-against-the-hand-drawn-one",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "Task 1 — Score the fitted line against the hand-drawn one",
+    "text": "Task 1 — Score the fitted line against the hand-drawn one\nFit the least-squares line, compute its residuals, and put them through loss_table().\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\nfit_ols   &lt;- lm(glucose ~ age, data = glu)\nresid_ols &lt;- ______                     # the residuals of the fitted line\nlosses    &lt;- loss_table(resid_ols)\nround(losses, 3)\ncheck_metric_range(losses[[\"MAE\"]], 20, 25, \"MAE of the fitted line\")\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nlm() keeps the residuals for you; resid() is the accessor. Subtracting the predictions from the outcome by hand gives the same vector, and it is worth doing once to satisfy yourself of that.\n\n\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\nfrom sklearn.linear_model import LinearRegression\n\nX, y = glu[[\"age\"]], glu[\"glucose\"]\nfit_ols   = LinearRegression().fit(X, y)\nresid_ols = ______                      # the residuals of the fitted line\nlosses    = loss_table(resid_ols)\nprint({k: round(v, 3) for k, v in losses.items()})\ncheck_metric_range(losses[\"MAE\"], 20, 25, \"MAE of the fitted line\")\n\n\n\n\nThe fitted line scores MSE 847.5 against the hand-drawn line’s 1135.9, and MAE 22.3 against 28.7. It wins on both. That is reassuring but not guaranteed: the fitted line is the best line for squared error, and nothing in the procedure promises it also has the lowest absolute error. Hold that thought.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#task-2-contaminate-three-readings",
+    "href": "day3-02-loss-functions.html#task-2-contaminate-three-readings",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "Task 2 — Contaminate three readings",
+    "text": "Task 2 — Contaminate three readings\nThree glucose values are recorded three times too large — a plausible unit or transcription error. Multiply rows 1, 3 and 5 by three, refit, and compare.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nglu_bad &lt;- glu\nglu_bad$glucose[c(1, 3, 5)] &lt;- glu_bad$glucose[c(1, 3, 5)] * ______\n\nfit_bad &lt;- lm(glucose ~ age, data = ______)\nrbind(clean = coef(fit_ols), contaminated = coef(fit_bad))\n\n\n\n\n# Replace every ______ below, then run this cell.\nglu_bad = glu.copy()\nglu_bad.loc[[0, 2, 4], \"glucose\"] = glu_bad.loc[[0, 2, 4], \"glucose\"] * ______\n\nfit_bad = LinearRegression().fit(glu_bad[[\"age\"]], ______)\n{\"clean\": (fit_ols.intercept_, fit_ols.coef_[0]),\n \"contaminated\": (fit_bad.intercept_, fit_bad.coef_[0])}\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nR counts rows from 1 and pandas from 0, so rows 1, 3 and 5 are [0, 2, 4] in Python. This is the one indexing difference that silently changes a result rather than raising an error.\n\n\n\n\n\n\nThree rows out of eighty — under four per cent of the data — moved the intercept from 110.3 to 135.3 and turned the slope from +0.289 to −0.136. The fitted line now says glucose falls with age. Nothing warned you; the fit succeeded, as it always does.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#the-result-that-should-bother-you",
+    "href": "day3-02-loss-functions.html#the-result-that-should-bother-you",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "The result that should bother you",
+    "text": "The result that should bother you\nThe obvious reading is that outliers break regression. They do not. They break this loss.\nFit the same straight line by minimising mean absolute error instead of mean squared error. There is no closed form, so hand the loss to a general-purpose optimiser.\n\nRPython\n\n\n\nfit_lad &lt;- function(data) {\n  loss &lt;- function(p) mean(abs(data$glucose - (p[1] + p[2] * data$age)))\n  optim(c(mean(data$glucose), 0), loss, method = \"Nelder-Mead\",\n        control = list(maxit = 5000, reltol = 1e-12))$par\n}\n\nglu_bad &lt;- glu\nglu_bad$glucose[c(1, 3, 5)] &lt;- glu_bad$glucose[c(1, 3, 5)] * 3\n\nrbind(clean = fit_lad(glu), contaminated = fit_lad(glu_bad))\n\n#&gt;                 [,1]   [,2]\n#&gt; clean        101.875 0.4375\n#&gt; contaminated 101.875 0.4375\n\n\n\n\n\nfrom scipy.optimize import minimize\n\ndef fit_lad(data):\n    loss = lambda p: np.mean(np.abs(data[\"glucose\"] - (p[0] + p[1] * data[\"age\"])))\n    return minimize(loss, [data[\"glucose\"].mean(), 0.0], method=\"Nelder-Mead\",\n                    options={\"maxiter\": 5000, \"fatol\": 1e-12, \"xatol\": 1e-10}).x\n\nglu_bad = glu.copy()\nglu_bad.loc[[0, 2, 4], \"glucose\"] = glu_bad.loc[[0, 2, 4], \"glucose\"] * 3\n\n{\"clean\": fit_lad(glu), \"contaminated\": fit_lad(glu_bad)}\n\n#&gt; {'clean': array([101.875 ,   0.4375]), 'contaminated': array([101.875 ,   0.4375])}\n\n\n\n\n\nThree steps of reasoning.\n\nThe least-absolute-error line is intercept 101.9, slope 0.4375 on the clean data — and intercept 101.9, slope 0.4375 on the contaminated data. To four decimal places, the contamination did not move it at all. Both languages agree, having started from the same guess and minimised the same function.\nSquaring is the mechanism. Tripling a glucose of 194 to 582 multiplies its contribution to the MSE by roughly the square of how far out it now is, so the line is dragged towards it; under absolute error that patient contributes its distance and no more, and three votes out of eighty do not carry.\nSo “the best fit line” is not a property of the data. It is a property of the data and the loss you chose, and the choice was made for you by whoever wrote lm().\n\n\n\n\n\n\n\nNoteWhy squared error anyway\n\n\n\nIf absolute error is this much more robust, why is every default squared? Two reasons, and only one of them is about statistics. The squared loss is differentiable everywhere, which is what lets Exercise 3.3 — Gradient descent follow a gradient and Exercise 3.4 — Ordinary least squares, in closed form solve for the answer in closed form; absolute error has a kink at zero and needs a different class of algorithm. And the mean is the minimiser of squared error while the median minimises absolute error, so the two losses are answering different questions about the outcome, not the same question with different robustness. Convenience, then interpretation — in that order, historically.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#how-the-loss-changes-as-the-line-moves",
+    "href": "day3-02-loss-functions.html#how-the-loss-changes-as-the-line-moves",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "How the loss changes as the line moves",
+    "text": "How the loss changes as the line moves\nSo far a loss has scored a line someone else supplied. Now treat it as a function of the parameters, which is what fitting actually optimises:\n\\[\\text{MSE}(\\hat\\beta_0, \\hat\\beta_1) = \\frac{1}{m} \\sum_{i=1}^{m}\n\\left( y_i - \\left( \\hat{\\beta}_0 + \\hat{\\beta}_1 x_i \\right) \\right)^2\\]\nStart by hand with the first three patients, aged 28, 44 and 26, with glucose 194, 129 and 132. For \\(\\hat\\beta_0 = 3\\) and \\(\\hat\\beta_1 = 5\\) the predictions are 143, 223 and 133, so\n\\[\\frac{(194-143)^2 + (129-223)^2 + (132-133)^2}{3}\n= \\frac{2601 + 8836 + 1}{3} = 3812.67\\]",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#task-3-the-loss-as-a-function-of-the-parameters",
+    "href": "day3-02-loss-functions.html#task-3-the-loss-as-a-function-of-the-parameters",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "Task 3 — The loss as a function of the parameters",
+    "text": "Task 3 — The loss as a function of the parameters\nWrite that formula as a function and check it against the arithmetic above, then evaluate it on all 80 rows at two sets of parameters.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\nmse_of &lt;- function(beta0, beta1, x, y) {\n  mean((y - (______))^2)\n}\n\nfirst3 &lt;- glu |&gt; slice(1:3)\ncheck_matches(mse_of(3, 5, first3$age, first3$glucose), 3812.667,\n              label = \"MSE of (3, 5) on the first three patients\")\n\nc(at_3_5 = mse_of(3, 5, glu$age, glu$glucose),\n  at_4_7 = mse_of(4, 7, glu$age, glu$glucose))\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nThe predicted value for one patient is the intercept plus the slope times that patient’s age. Everything else — the subtraction, the square, the mean — is already written.\n\n\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\n\ndef mse_of(beta0, beta1, x, y):\n    return np.mean((y - (______))**2)\n\nfirst3 = glu.head(3)\ncheck_matches(mse_of(3, 5, first3[\"age\"], first3[\"glucose\"]), 3812.667,\n              label=\"MSE of (3, 5) on the first three patients\")\n\n{\"at_3_5\": mse_of(3, 5, glu[\"age\"], glu[\"glucose\"]),\n \"at_4_7\": mse_of(4, 7, glu[\"age\"], glu[\"glucose\"])}\n\n\n\n\nOn all 80 rows those two candidates score 7462 and 22991 against the fitted line’s 847.5. Both are terrible, and the first is better than the second, which is all a loss is for: ranking candidates.\n\n\n\n\n\n\nWarningWhich number is the intercept\n\n\n\nWriting \\(\\hat\\beta_0 = 3\\), \\(\\hat\\beta_1 = 5\\) and then drawing geom_abline(slope = 3, intercept = 5) plots a different line from the one you scored, and the plot will look convincing. geom_abline() takes slope and intercept by name for exactly this reason. Name both arguments, every time.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#the-whole-surface-at-once",
+    "href": "day3-02-loss-functions.html#the-whole-surface-at-once",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "The whole surface at once",
+    "text": "The whole surface at once\nEvaluate the MSE over a grid of candidate parameter values — 101 intercepts between 60 and 160, 151 slopes between −1 and 2, 15,251 lines in total — and draw the result. The red point is what lm() returned.\n\nRPython\n\n\n\nlibrary(tidyr); library(purrr)\n\nmse_of  &lt;- function(beta0, beta1, x, y) mean((y - (beta0 + beta1 * x))^2)\nfit_ols &lt;- lm(glucose ~ age, data = glu)\n\ngrid &lt;- expand_grid(b0 = seq(60, 160, by = 1),\n                    b1 = seq(-1, 2, by = 0.02)) |&gt;\n  mutate(MSE = map2_dbl(b0, b1, ~ mse_of(.x, .y, glu$age, glu$glucose)))\n\nggplot(grid, aes(x = b0, y = b1)) +\n  geom_raster(aes(fill = log10(MSE))) +\n  geom_contour(aes(z = log10(MSE)), colour = \"white\", alpha = 0.4, bins = 12) +\n  annotate(\"point\", x = coef(fit_ols)[[1]], y = coef(fit_ols)[[2]],\n           colour = \"red\", size = 3) +\n  scale_fill_viridis_c(option = \"magma\") +\n  labs(x = expression(hat(beta)[0]), y = expression(hat(beta)[1]),\n       fill = \"log10(MSE)\")\n\n\n\n\n\n\n\n\n\n\n\nfrom sklearn.linear_model import LinearRegression\nfit_ols = LinearRegression().fit(glu[[\"age\"]], glu[\"glucose\"])\n\ndef mse_of(beta0, beta1, x, y):\n    return np.mean((y - (beta0 + beta1 * x))**2)\n\nb0_vals = np.arange(60, 160.001, 1.0)\nb1_vals = np.arange(-1, 2.0001, 0.02)\nB0, B1 = np.meshgrid(b0_vals, b1_vals, indexing=\"ij\")\nresid_grid = glu[\"glucose\"].values - (B0[..., None] + B1[..., None] * glu[\"age\"].values)\nMSE = (resid_grid**2).mean(axis=-1)       # average over patients, not parameters\n\nfig, ax = plt.subplots()\ncs = ax.contourf(B0, B1, np.log10(MSE), levels=20, cmap=\"magma\")\nax.scatter([fit_ols.intercept_], [fit_ols.coef_[0]], color=\"red\", zorder=3)\nfig.colorbar(cs, ax=ax, label=\"log10(MSE)\")\n\n#&gt; &lt;matplotlib.colorbar.Colorbar object at 0x16fd31c40&gt;\n\nax.set_xlabel(r\"$\\hat\\beta_0$\"); ax.set_ylabel(r\"$\\hat\\beta_1$\")\nplt.show()\n\n\n\n\n\n\n\n\n\n\n\nTwo features of that picture matter for the next exercise. The surface is a bowl: it has one lowest point and no others, which is why least squares has a single answer. And the bowl is a long diagonal trough rather than a round basin, because the intercept and the slope trade off against each other — raise the slope and you can compensate by lowering the intercept. Exercise 3.3 — Gradient descent walks downhill on this exact surface, and the shape of the trough is what makes that harder than it sounds.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#task-4-find-the-minimum-by-brute-force",
+    "href": "day3-02-loss-functions.html#task-4-find-the-minimum-by-brute-force",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "Task 4 — Find the minimum by brute force",
+    "text": "Task 4 — Find the minimum by brute force\nPull the lowest cell out of the grid you just built and compare it with the fitted line.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\nbest &lt;- grid |&gt; slice_min(______, n = 1)\nbest\n\ncheck_matches(best$b1, coef(fit_ols)[[\"age\"]], tol = 0.05,\n              label = \"grid-search slope\")\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nslice_min() takes the name of the column to minimise, unquoted.\n\n\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\n\ni, j = np.unravel_index(MSE.______(), MSE.shape)\nprint(b0_vals[i], b1_vals[j], MSE[i, j])\n\ncheck_matches(b1_vals[j], fit_ols.coef_[0], tol=0.05, label=\"grid-search slope\")\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nYou want the position of the smallest value in a 2-D array, which numpy gives you as a flat index; unravel_index is already there to turn it back into a row and a column.\n\n\n\n\n\n\nThe grid’s best cell is intercept 110, slope 0.30, with an MSE of 847.55 — against lm()’s 110.298, 0.2887 and 847.52. The difference is the spacing of the grid and nothing else.\n\n\n\n\n\n\nNoteWhy not just use the grid\n\n\n\nFifteen thousand evaluations to recover two numbers already feels wasteful, and it is: the grid also has to be centred near the answer to find it, which requires knowing the answer. With ten parameters rather than two, a grid of this resolution would need more evaluations than there are atoms in the room. Grid search is a teaching device here, not a method.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#reflection",
+    "href": "day3-02-loss-functions.html#reflection",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "Reflection",
+    "text": "Reflection\n\nA colleague reports an RMSE of 29.1 mg/dL and a MAE of 22.3 mg/dL for the same model and asks which is the real error. What do you say?\nYou are predicting length of stay so that a bed manager can plan tomorrow’s discharges. Give one argument for scoring that model with absolute error and one for squared error, and say which you would defend to the bed manager.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#stretch",
+    "href": "day3-02-loss-functions.html#stretch",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "Stretch",
+    "text": "Stretch\n\n\n\n\n\n\nNoteStretch 1 — Where does the squared loss put the line\n\n\n\nContaminate a single patient rather than three, and increase the multiplier from 1 to 10 in steps, refitting each time. Plot the fitted slope against the multiplier. The relationship is close to linear, and it has no breakpoint: there is no size of error at which squared loss decides to ignore a point.\n\n\n\n\n\n\n\n\nNoteStretch 2 — A loss that is neither\n\n\n\nHuber loss is squared for small residuals and absolute for large ones. Write it, minimise it with optim() or minimize() on the contaminated data, and find the value of its cut-off at which the fitted slope flips back to positive. That number is the amount of contamination you have implicitly assumed.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-02-loss-functions.html#what-you-can-and-cannot-now-claim",
+    "href": "day3-02-loss-functions.html#what-you-can-and-cannot-now-claim",
+    "title": "Exercise 3.2 — Loss functions",
+    "section": "What you can and cannot now claim",
+    "text": "What you can and cannot now claim\nCan: that you can compute any of the standard regression losses from residuals, state what each does with a badly mispredicted patient, and demonstrate that the best fit line depends on which loss was chosen.\nCannot: that you can find the minimum of a loss for any model worth fitting. A grid of 15,251 candidates found two parameters approximately. Exercise 3.3 — Gradient descent replaces the grid with a method that uses the slope of the loss itself.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Exercise 3.2 — Loss functions</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html",
+    "href": "day3-03-gradient-descent.html",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "",
+    "text": "Objectives",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#objectives",
+    "href": "day3-03-gradient-descent.html#objectives",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "",
+    "text": "Write the gradient descent update rule from memory and say what each symbol in it does.\nMinimise a function of one variable in code, and diagnose from the printed path whether the learning rate is too large, too small, or about right.\nExplain why the same algorithm started from two different places returns two different answers, and when that matters.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#why-this-here",
+    "href": "day3-03-gradient-descent.html#why-this-here",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "Why this, here",
+    "text": "Why this, here\nExercise 3.2 — Loss functions found the lowest point of a loss surface by evaluating 15,251 candidate lines. That works for two parameters and nothing larger. Every model you will meet after this week — logistic regression on Day 4, and anything with a neural network in it afterwards — is fitted by the method on this page instead: start somewhere, measure which way is downhill, take a step, repeat.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#the-update-rule",
+    "href": "day3-03-gradient-descent.html#the-update-rule",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "The update rule",
+    "text": "The update rule\n\\[x_{n+1} = x_n - \\alpha f'(x_n)\\]\n\n\\(x_n\\) is the current guess.\n\\(f'(x_n)\\) is the derivative of the function at that guess — the slope.\n\\(\\alpha\\) is the learning rate: a small positive number controlling step size.\n\nThe minus sign carries the whole idea. Where the slope is positive the function rises to the right, so we subtract and move left; where it is negative we subtract a negative and move right. Either way the step is against the slope, and the steeper the slope the bigger the step.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#minimising-fx-x2",
+    "href": "day3-03-gradient-descent.html#minimising-fx-x2",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "Minimising \\(f(x) = x^2\\)",
+    "text": "Minimising \\(f(x) = x^2\\)\nThe derivative is \\(f'(x) = 2x\\), so the rule becomes \\(x_{n+1} = x_n - 2\\alpha\nx_n\\). We know the answer is \\(x = 0\\), which is why this is the example: you can see whether the algorithm is working.\n\nRPython\n\n\n\nlibrary(ggplot2); library(dplyr); library(patchwork)\n\nf       &lt;- function(x) x^2\nf_prime &lt;- function(x) 2 * x\n\ncurve_df &lt;- data.frame(x = seq(-10, 10, length.out = 200)) |&gt;\n  mutate(f_x = f(x), f_prime_x = f_prime(x))\n\np1 &lt;- ggplot(curve_df, aes(x, f_x)) + geom_line(colour = \"steelblue\") +\n  geom_hline(yintercept = 0) + geom_vline(xintercept = 0) +\n  labs(title = expression(f(x) == x^2), y = \"f(x)\")\np2 &lt;- ggplot(curve_df, aes(x, f_prime_x)) + geom_line(colour = \"firebrick\") +\n  geom_hline(yintercept = 0) + geom_vline(xintercept = 0) +\n  labs(title = expression(paste(f, \"'\", (x) == 2 * x)), y = \"f'(x)\")\np1 + p2\n\n\n\n\n\n\n\n\n\n\n\nimport numpy as np\nimport matplotlib.pyplot as plt\n\nf       = lambda x: x**2\nf_prime = lambda x: 2 * x\n\nxs = np.linspace(-10, 10, 200)\nfig, axes = plt.subplots(1, 2, figsize=(9, 3.5))\naxes[0].plot(xs, f(xs), color=\"steelblue\");  axes[0].set_title(\"f(x) = x^2\")\naxes[1].plot(xs, f_prime(xs), color=\"firebrick\"); axes[1].set_title(\"f'(x) = 2x\")\nfor ax in axes:\n    ax.axhline(0, color=\"black\", lw=0.8); ax.axvline(0, color=\"black\", lw=0.8)\n    ax.set_xlabel(\"x\")\nplt.tight_layout(); plt.show()\n\n\n\n\n\n\n\n\n\n\n\nStart at \\(x = -10\\) with \\(\\alpha = 0.8\\) and take ten steps.\n\nRPython\n\n\n\nalpha &lt;- 0.8\nx     &lt;- -10\npath  &lt;- numeric(10)\n\nfor (i in 1:10) {\n  x       &lt;- x - alpha * f_prime(x)\n  path[i] &lt;- x\n  cat(\"step\", i, \": x =\", signif(x, 4), \" f(x) =\", signif(f(x), 4), \"\\n\")\n}\n\n#&gt; step 1 : x = 6  f(x) = 36 \n#&gt; step 2 : x = -3.6  f(x) = 12.96 \n#&gt; step 3 : x = 2.16  f(x) = 4.666 \n#&gt; step 4 : x = -1.296  f(x) = 1.68 \n#&gt; step 5 : x = 0.7776  f(x) = 0.6047 \n#&gt; step 6 : x = -0.4666  f(x) = 0.2177 \n#&gt; step 7 : x = 0.2799  f(x) = 0.07836 \n#&gt; step 8 : x = -0.168  f(x) = 0.02821 \n#&gt; step 9 : x = 0.1008  f(x) = 0.01016 \n#&gt; step 10 : x = -0.06047  f(x) = 0.003656\n\n\n\n\n\nalpha = 0.8\nx     = -10.0\npath  = []\n\nfor i in range(1, 11):\n    x = x - alpha * f_prime(x)\n    path.append(x)\n    print(f\"step {i}: x = {x:.4g}  f(x) = {f(x):.4g}\")\n\n#&gt; step 1: x = 6  f(x) = 36\n#&gt; step 2: x = -3.6  f(x) = 12.96\n#&gt; step 3: x = 2.16  f(x) = 4.666\n#&gt; step 4: x = -1.296  f(x) = 1.68\n#&gt; step 5: x = 0.7776  f(x) = 0.6047\n#&gt; step 6: x = -0.4666  f(x) = 0.2177\n#&gt; step 7: x = 0.2799  f(x) = 0.07836\n#&gt; step 8: x = -0.168  f(x) = 0.02821\n#&gt; step 9: x = 0.1008  f(x) = 0.01016\n#&gt; step 10: x = -0.06047  f(x) = 0.003656\n\n\n\n\n\nThe guess goes −10, 6, −3.6, 2.16, −1.296 and so on: it crosses the minimum every single step and lands closer each time. Overshooting is not failure. With \\(\\alpha = 0.8\\) each step is 1.6 times the distance to the minimum, so the sign flips and the magnitude shrinks by 0.6.\n\nRPython\n\n\n\nsteps_df &lt;- data.frame(step = 1:10, x = path) |&gt; mutate(f_x = f(x))\n\nggplot(curve_df, aes(x, f_x)) +\n  geom_line(colour = \"grey60\") +\n  geom_point(data = steps_df, aes(x = x, y = f_x, fill = step),\n             shape = 21, size = 3, colour = \"black\") +\n  scale_fill_gradient(low = \"yellow\", high = \"red\") +\n  labs(x = \"x\", y = \"f(x)\", fill = \"step\")\n\n\n\n\n\n\n\n\n\n\n\nfig, ax = plt.subplots()\nax.plot(xs, f(xs), color=\"grey\")\nsc = ax.scatter(path, [f(v) for v in path], c=range(1, len(path) + 1),\n                cmap=\"autumn_r\", edgecolor=\"black\", zorder=3)\nfig.colorbar(sc, ax=ax, label=\"step\")\n\n#&gt; &lt;matplotlib.colorbar.Colorbar object at 0x15987ff50&gt;\n\nax.set_xlabel(\"x\"); ax.set_ylabel(\"f(x)\")\nplt.show()",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#task-1-your-turn-on-a-function-whose-minimum-you-can-check",
+    "href": "day3-03-gradient-descent.html#task-1-your-turn-on-a-function-whose-minimum-you-can-check",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "Task 1 — Your turn, on a function whose minimum you can check",
+    "text": "Task 1 — Your turn, on a function whose minimum you can check\nMinimise\n\\[f(x) = x^2 + 3x + 5\\]\nDifferentiate it on paper first: you should get \\(f'(x) = 2x + 3\\), which is zero at \\(x = -1.5\\). Then write the loop and see whether the algorithm agrees with your algebra.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\n\ng       &lt;- function(x) x^2 + 3 * x + 5\ng_prime &lt;- function(x) ______\n\nalpha &lt;- 0.1\nx     &lt;- 2\nfor (i in 1:40) {\n  x &lt;- x - ______ * g_prime(x)\n}\ncheck_matches(x, -1.5, label = \"minimiser of x^2 + 3x + 5\")\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nThe derivative of \\(ax^2\\) is \\(2ax\\), the derivative of \\(bx\\) is \\(b\\), and the derivative of a constant is zero. The second blank is the step size, which is already defined above the loop.\n\n\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\n\ng       = lambda x: x**2 + 3 * x + 5\ng_prime = lambda x: ______\n\nalpha = 0.1\nx = 2.0\nfor i in range(40):\n    x = x - ______ * g_prime(x)\n\ncheck_matches(x, -1.5, label=\"minimiser of x^2 + 3x + 5\")\n\n\n\n\nForty steps get you to −1.4995. The algorithm approaches the minimum and never arrives, which is true of gradient descent in general: you stop when the improvement stops mattering, not when the gradient is zero.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#the-learning-rate-is-the-whole-game",
+    "href": "day3-03-gradient-descent.html#the-learning-rate-is-the-whole-game",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "The learning rate is the whole game",
+    "text": "The learning rate is the whole game\nRun the same problem — \\(f(x) = x^2\\) from \\(x = -10\\) — at four learning rates for twenty steps each.\n\nRPython\n\n\n\ndescend_1d &lt;- function(alpha, x0 = -10, n = 20) {\n  x &lt;- x0\n  for (i in seq_len(n)) x &lt;- x - alpha * f_prime(x)\n  x\n}\n\nrates &lt;- c(0.01, 0.1, 0.8, 1.0, 1.05)\ndata.frame(alpha = rates,\n           final_x = sapply(rates, descend_1d),\n           final_f = sapply(rates, function(a) f(descend_1d(a))))\n\n#&gt;   alpha       final_x      final_f\n#&gt; 1  0.01 -6.676080e+00 4.457004e+01\n#&gt; 2  0.10 -1.152922e-01 1.329228e-02\n#&gt; 3  0.80 -3.656158e-04 1.336749e-07\n#&gt; 4  1.00 -1.000000e+01 1.000000e+02\n#&gt; 5  1.05 -6.727500e+01 4.525926e+03\n\n\n\n\n\nimport pandas as pd\n\ndef descend_1d(alpha, x0=-10.0, n=20):\n    x = x0\n    for _ in range(n):\n        x = x - alpha * f_prime(x)\n    return x\n\nrates = [0.01, 0.1, 0.8, 1.0, 1.05]\npd.DataFrame({\"alpha\": rates,\n              \"final_x\": [descend_1d(a) for a in rates],\n              \"final_f\": [f(descend_1d(a)) for a in rates]})\n\n\n\n\n\n\n\n\nalpha\nfinal_x\nfinal_f\n\n\n\n\n0\n0.01\n-6.676080\n4.457004e+01\n\n\n1\n0.10\n-0.115292\n1.329228e-02\n\n\n2\n0.80\n-0.000366\n1.336749e-07\n\n\n3\n1.00\n-10.000000\n1.000000e+02\n\n\n4\n1.05\n-67.274999\n4.525926e+03\n\n\n\n\n\n\n\n\n\n\nRead that table carefully, because every row is a different lesson.\n\n\n\n\n\n\n\n\n\\(\\alpha\\)\nAfter 20 steps\nWhat happened\n\n\n\n\n0.01\n\\(x = -6.68\\)\ncorrect direction, far too slow — it needs thousands of steps\n\n\n0.1\n\\(x = -0.115\\)\nsteady approach from one side\n\n\n0.8\n\\(x = -0.00037\\)\novershoots every step and converges fastest of the five\n\n\n1.0\n\\(x = -10\\)\nbounces between −10 and 10 for ever, making no progress at all\n\n\n1.05\n\\(x = -67.3\\)\ndiverges: each step is further out than the last\n\n\n\nThe fastest rate here is not the smallest one, and the boundary between working and diverging is sharp. For \\(f(x)=x^2\\) the step multiplies the distance to the minimum by \\((1 - 2\\alpha)\\), so anything below 1 converges, 1 exactly cycles, and above 1 explodes. There is no warning and no error message: at \\(\\alpha = 1.05\\) the loop runs happily and returns a number.\n\n\n\n\n\n\nWarningA run that finished is not a run that worked\n\n\n\nNothing in any of those five runs raised an error. If you only look at the final number, the diverging run and the converging run are indistinguishable in form — both are a number. Always print the path, or the loss, and look at whether it is going down.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#task-2-find-the-edge-yourself",
+    "href": "day3-03-gradient-descent.html#task-2-find-the-edge-yourself",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "Task 2 — Find the edge yourself",
+    "text": "Task 2 — Find the edge yourself\nRun the descent at learning rates either side of the boundary and identify, to within 0.05, the largest rate that still converges for \\(f(x) = x^2\\).\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nrates &lt;- seq(0.8, 1.2, by = 0.05)\nfinals &lt;- sapply(rates, function(a) descend_1d(a, x0 = -10, n = ______))\ndata.frame(alpha = rates, final_x = signif(finals, 3))\n\n\n\n\n# Replace every ______ below, then run this cell.\nrates = np.arange(0.8, 1.21, 0.05)\nfinals = [descend_1d(a, x0=-10.0, n=______) for a in rates]\npd.DataFrame({\"alpha\": rates.round(2), \"final_x\": np.round(finals, 3)})\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nTwenty steps is not enough to tell a slow divergence from a slow convergence. Use enough iterations that the difference is unmistakable — a few dozen will do, and you can afford thousands.\n\n\n\n\n\n\nThen answer: the boundary you found is a property of \\(f(x) = x^2\\) and would be different for \\(f(x) = 100x^2\\). What does that imply about carrying a learning rate over from one problem to another?",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#local-and-global-minima",
+    "href": "day3-03-gradient-descent.html#local-and-global-minima",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "Local and global minima",
+    "text": "Local and global minima\nEverything above had one minimum. Now take\n\\[f(x) = x^4 + x^3 - 2x^2 \\qquad f'(x) = 4x^3 + 3x^2 - 4x\\]\nwhich has two: a shallow one near \\(x = 0.69\\) and a deeper one near \\(x = -1.44\\).\n\nRPython\n\n\n\nh       &lt;- function(x) x^4 + x^3 - 2 * x^2\nh_prime &lt;- function(x) 4 * x^3 + 3 * x^2 - 4 * x\n\ndescend_h &lt;- function(x0, alpha = 0.03, n = 200) {\n  x &lt;- x0\n  for (i in seq_len(n)) x &lt;- x - alpha * h_prime(x)\n  c(start = x0, end = x, f_end = h(x))\n}\n\nt(sapply(c(1, 0.2, 0, -0.1, -0.5, 2), descend_h))\n\n#&gt;      start        end      f_end\n#&gt; [1,]   1.0  0.6930005 -0.3970463\n#&gt; [2,]   0.2  0.6930005 -0.3970463\n#&gt; [3,]   0.0  0.0000000  0.0000000\n#&gt; [4,]  -0.1 -1.4430005 -2.8334224\n#&gt; [5,]  -0.5 -1.4430005 -2.8334224\n#&gt; [6,]   2.0  0.6930005 -0.3970463\n\n\n\n\n\nh       = lambda x: x**4 + x**3 - 2 * x**2\nh_prime = lambda x: 4 * x**3 + 3 * x**2 - 4 * x\n\ndef descend_h(x0, alpha=0.03, n=200):\n    x = float(x0)\n    for _ in range(n):\n        x = x - alpha * h_prime(x)\n    return {\"start\": x0, \"end\": x, \"f_end\": h(x)}\n\npd.DataFrame([descend_h(s) for s in (1, 0.2, 0, -0.1, -0.5, 2)])\n\n\n\n\n\n\n\n\nstart\nend\nf_end\n\n\n\n\n0\n1.0\n0.693\n-0.397046\n\n\n1\n0.2\n0.693\n-0.397046\n\n\n2\n0.0\n0.000\n0.000000\n\n\n3\n-0.1\n-1.443\n-2.833422\n\n\n4\n-0.5\n-1.443\n-2.833422\n\n\n5\n2.0\n0.693\n-0.397046\n\n\n\n\n\n\n\n\n\n\n\nRPython\n\n\n\ncurve_h &lt;- data.frame(x = seq(-2, 1.5, length.out = 300)) |&gt; mutate(f_x = h(x))\nends    &lt;- data.frame(start = c(1, 0.2, 0, -0.1, -0.5, 2)) |&gt;\n  mutate(end = sapply(start, function(s) descend_h(s)[[\"end\"]]), f_end = h(end))\n\nggplot(curve_h, aes(x, f_x)) +\n  geom_line(colour = \"grey40\") +\n  geom_point(data = ends, aes(x = end, y = f_end), colour = \"red\", size = 3) +\n  labs(x = \"x\", y = \"f(x)\")\n\n\n\n\n\n\n\n\n\n\n\ngrid_h = np.linspace(-2, 1.5, 300)\nends = [descend_h(s)[\"end\"] for s in (1, 0.2, 0, -0.1, -0.5, 2)]\n\nfig, ax = plt.subplots()\nax.plot(grid_h, h(grid_h), color=\"grey\")\nax.scatter(ends, [h(e) for e in ends], color=\"red\", zorder=3)\nax.set_xlabel(\"x\"); ax.set_ylabel(\"f(x)\")\nplt.show()\n\n\n\n\n\n\n\n\n\n\n\nStarting at 1, 0.2 or 2 lands on \\(x = 0.693\\), where \\(f = -0.397\\). Starting at −0.1 or −0.5 lands on \\(x = -1.443\\), where \\(f = -2.833\\) — seven times lower. Nothing distinguishes the two runs except where they began, and neither run can tell you it stopped in the worse of the two places.\nStarting at exactly 0 is the strangest case: the derivative there is zero, so the first step moves nowhere and every step after it moves nowhere. Gradient descent stops at any stationary point, and \\(x = 0\\) here is a local maximum.\n\n\n\n\n\n\nNoteWhy this does not ruin least squares\n\n\n\nThe MSE surface you plotted in Exercise 3.2 — Loss functions is a bowl with one minimum — convex, in the technical term — so for linear regression this whole worry is moot: every starting point reaches the same answer. The worry is real for almost everything else, which is why deep learning papers report random seeds, and why “we trained it twice and got different models” is a sentence you will hear.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#task-3-where-is-the-watershed",
+    "href": "day3-03-gradient-descent.html#task-3-where-is-the-watershed",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "Task 3 — Where is the watershed",
+    "text": "Task 3 — Where is the watershed\nFind, to within 0.05, the starting value between −0.1 and 0.2 at which the destination switches from one minimum to the other. Predict it before you compute it.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nstarts &lt;- seq(-0.1, 0.2, by = 0.01)\ndata.frame(start = starts,\n           end = round(sapply(starts, function(s) ______), 3))\n\n\n\n\n# Replace every ______ below, then run this cell.\nstarts = np.arange(-0.1, 0.201, 0.01)\npd.DataFrame({\"start\": starts.round(2),\n              \"end\": [round(______, 3) for s in starts]})",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#two-parameters-at-once",
+    "href": "day3-03-gradient-descent.html#two-parameters-at-once",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "Two parameters at once",
+    "text": "Two parameters at once\nA loss has as many derivatives as it has parameters. Collect them into a gradient vector and the update rule is unchanged — it just applies to every parameter simultaneously. For\n\\[f(x, y) = x\\sin(y) + x^2 \\qquad\n\\nabla f = \\left\\langle \\sin(y) + 2x,\\; x\\cos(y) \\right\\rangle\\]\n\nRPython\n\n\n\nfxy &lt;- function(x, y) x * sin(y) + x^2\ngrad_x &lt;- function(x, y) sin(y) + 2 * x\ngrad_y &lt;- function(x, y) x * cos(y)\n\nx &lt;- 1; y &lt;- 2; alpha &lt;- 0.01\ntrace_xy &lt;- data.frame(iter = 0, x = x, y = y, f = fxy(x, y))\n\nfor (i in 1:1000) {\n  gx &lt;- grad_x(x, y); gy &lt;- grad_y(x, y)\n  x &lt;- x - alpha * gx\n  y &lt;- y - alpha * gy\n  if (i %% 100 == 0)\n    trace_xy &lt;- rbind(trace_xy, data.frame(iter = i, x = x, y = y, f = fxy(x, y)))\n}\ntrace_xy\n\n#&gt;    iter          x        y          f\n#&gt; 1     0  1.0000000 2.000000  1.9092974\n#&gt; 2   100 -0.2426550 2.084195 -0.1524906\n#&gt; 3   200 -0.4284631 1.933253 -0.2170447\n#&gt; 4   300 -0.4741877 1.801955 -0.2367211\n#&gt; 5   400 -0.4901867 1.713580 -0.2449154\n#&gt; 6   500 -0.4962948 1.657935 -0.2481033\n#&gt; 7   600 -0.4986182 1.623729 -0.2492997\n#&gt; 8   700 -0.4994889 1.602895 -0.2497424\n#&gt; 9   800 -0.4998117 1.590248 -0.2499054\n#&gt; 10  900 -0.4999308 1.582581 -0.2499653\n#&gt; 11 1000 -0.4999746 1.577936 -0.2499873\n\n\n\n\n\nfxy    = lambda x, y: x * np.sin(y) + x**2\ngrad_x = lambda x, y: np.sin(y) + 2 * x\ngrad_y = lambda x, y: x * np.cos(y)\n\nx, y, alpha = 1.0, 2.0, 0.01\nrows = [{\"iter\": 0, \"x\": x, \"y\": y, \"f\": fxy(x, y)}]\n\nfor i in range(1, 1001):\n    gx, gy = grad_x(x, y), grad_y(x, y)\n    x, y = x - alpha * gx, y - alpha * gy\n    if i % 100 == 0:\n        rows.append({\"iter\": i, \"x\": x, \"y\": y, \"f\": fxy(x, y)})\n\npd.DataFrame(rows)\n\n\n\n\n\n\n\n\niter\nx\ny\nf\n\n\n\n\n0\n0\n1.000000\n2.000000\n1.909297\n\n\n1\n100\n-0.242655\n2.084195\n-0.152491\n\n\n2\n200\n-0.428463\n1.933253\n-0.217045\n\n\n3\n300\n-0.474188\n1.801955\n-0.236721\n\n\n4\n400\n-0.490187\n1.713580\n-0.244915\n\n\n5\n500\n-0.496295\n1.657935\n-0.248103\n\n\n6\n600\n-0.498618\n1.623729\n-0.249300\n\n\n7\n700\n-0.499489\n1.602895\n-0.249742\n\n\n8\n800\n-0.499812\n1.590248\n-0.249905\n\n\n9\n900\n-0.499931\n1.582581\n-0.249965\n\n\n10\n1000\n-0.499975\n1.577936\n-0.249987\n\n\n\n\n\n\n\n\n\n\nIt reaches \\(x = -0.5\\), \\(y = 1.578\\), \\(f = -0.25\\), which is the exact minimum of this function: for any \\(y\\) the best \\(x\\) is \\(-\\sin(y)/2\\), giving \\(f = -\\sin^2(y)/4\\), smallest when \\(\\sin y = 1\\). Notice how much of the progress happens early — after 100 iterations \\(f\\) is already −0.153, and the remaining 900 buy −0.097.\n\n\n\n\n\n\nNotePartial derivatives by hand, and when not to\n\n\n\nWe differentiated \\(f\\) twice by hand, once per variable. For a model with a million parameters nobody does that: the derivatives are generated mechanically — symbolically, as a computer algebra system would, or by automatic differentiation, which is what every deep learning framework is at bottom. Knowing that the gradient is just a list of slopes is enough to read those tools’ output.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#the-result-that-should-bother-you",
+    "href": "day3-03-gradient-descent.html#the-result-that-should-bother-you",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "The result that should bother you",
+    "text": "The result that should bother you\nNow put the method on the actual problem: find the intercept and slope that minimise the MSE for glucose against age, by gradient descent instead of by lm(). The gradients of \\(\\text{MSE}(\\beta_0, \\beta_1) = \\frac{1}{m}\\sum (y_i - \\beta_0 - \\beta_1 x_i)^2\\) are\n\\[\\frac{\\partial \\text{MSE}}{\\partial \\beta_0} = -\\frac{2}{m}\\sum r_i\n\\qquad\n\\frac{\\partial \\text{MSE}}{\\partial \\beta_1} = -\\frac{2}{m}\\sum x_i r_i\\]\nwith \\(r_i = y_i - \\beta_0 - \\beta_1 x_i\\). Exercise 3.4 — Ordinary least squares, in closed form derives them.\n\nRPython\n\n\n\nlibrary(readr)\ndiab &lt;- read_csv(\"data/diabetes.csv\")\nglu  &lt;- diab |&gt; filter(glucose &gt; 0) |&gt; slice(1:80) |&gt; select(age, glucose)\n\ndescend_mse &lt;- function(x, y, alpha, n) {\n  b0 &lt;- 0; b1 &lt;- 0\n  mse &lt;- numeric(n)\n  for (i in seq_len(n)) {\n    r  &lt;- y - (b0 + b1 * x)\n    b0 &lt;- b0 - alpha * (-2 * mean(r))\n    b1 &lt;- b1 - alpha * (-2 * mean(x * r))\n    mse[i] &lt;- mean((y - (b0 + b1 * x))^2)\n  }\n  list(b0 = b0, b1 = b1, mse = mse)\n}\n\nraw &lt;- descend_mse(glu$age, glu$glucose, alpha = 1e-4, n = 1000)\nc(intercept = raw$b0, slope = raw$b1, MSE = tail(raw$mse, 1))\n\n#&gt;   intercept       slope         MSE \n#&gt;    3.234060    3.040203 2512.521591\n\ncoef(lm(glucose ~ age, data = glu))\n\n#&gt; (Intercept)         age \n#&gt; 110.2979509   0.2886749\n\n\n\n\n\nimport pandas as pd\ndiab = pd.read_csv(\"data/diabetes.csv\")\nglu = (diab.loc[diab[\"glucose\"] &gt; 0, [\"age\", \"glucose\"]]\n           .head(80).reset_index(drop=True))\n\ndef descend_mse(x, y, alpha, n):\n    x, y = np.asarray(x, float), np.asarray(y, float)\n    b0 = b1 = 0.0\n    mse = np.empty(n)\n    for i in range(n):\n        r = y - (b0 + b1 * x)\n        b0 = b0 - alpha * (-2 * r.mean())\n        b1 = b1 - alpha * (-2 * (x * r).mean())\n        mse[i] = np.mean((y - (b0 + b1 * x))**2)\n    return {\"b0\": b0, \"b1\": b1, \"mse\": mse}\n\nraw = descend_mse(glu[\"age\"], glu[\"glucose\"], alpha=1e-4, n=1000)\nraw[\"b0\"], raw[\"b1\"], raw[\"mse\"][-1]\n\n#&gt; (np.float64(3.2340597363518033), np.float64(3.040202790594225), np.float64(2512.5215912023486))\n\n\n\n\n\nAfter a thousand iterations the descent reports an intercept of 3.23 and a slope of 3.04, with an MSE of 2513. The correct answer is 110.298 and 0.2887, with an MSE of 847.5. The descent is not close, and it is worse than predicting the mean glucose for everybody, which scores 863.\nThree steps of reasoning.\n\nThe run did not fail. The MSE went down at every iteration and the loop finished without complaint. Had we only printed the final parameters and drawn a line through the data, the plot would have looked plausible.\nThe cause is the shape of the surface from Exercise 3.2 — Loss functions: a long diagonal trough, not a round bowl. Age has a mean of 33 and glucose a mean of 120, so the \\(\\beta_1\\) gradient is hundreds of times larger than the \\(\\beta_0\\) one. Any learning rate small enough to keep \\(\\beta_1\\) stable leaves \\(\\beta_0\\) crawling. Raising \\(\\alpha\\) to \\(10^{-3}\\) does not fix it either — try it, and watch both parameters overflow to infinity within a few hundred steps.\nThis is the usual failure of gradient descent on raw clinical data: not a wrong answer that announces itself, but a right-shaped answer that is nowhere near the optimum. The published version of this material reported those unconverged numbers as the optimised parameters.\n\nThe fix is to standardise both columns — subtract the mean, divide by the standard deviation — so the trough becomes a bowl, descend there, and convert the answer back.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#task-4-make-it-converge",
+    "href": "day3-03-gradient-descent.html#task-4-make-it-converge",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "Task 4 — Make it converge",
+    "text": "Task 4 — Make it converge\nStandardise, descend with a learning rate a thousand times larger, and rescale the parameters to the original units.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\n\nzx &lt;- (glu$age - mean(glu$age)) / sd(glu$age)\nzy &lt;- (glu$glucose - ______) / sd(glu$glucose)\n\nstd &lt;- descend_mse(zx, zy, alpha = 0.1, n = 50)\n\nslope     &lt;- std$b1 * sd(glu$glucose) / sd(glu$age)\nintercept &lt;- mean(glu$glucose) + sd(glu$glucose) * std$b0 - slope * mean(glu$age)\n\nc(intercept = intercept, slope = slope)\ncheck_matches(slope, coef(lm(glucose ~ age, data = glu))[[\"age\"]],\n              label = \"slope from gradient descent\")\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nStandardising a column means centring it on its own mean and dividing by its own standard deviation. The line above does it for age; do the same thing to glucose.\n\n\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\nfrom sklearn.linear_model import LinearRegression\n\nmx, sx = glu[\"age\"].mean(), glu[\"age\"].std()\nmy, sy = glu[\"glucose\"].mean(), glu[\"glucose\"].std()\nzx = (glu[\"age\"] - mx) / sx\nzy = (glu[\"glucose\"] - ______) / sy\n\nstd = descend_mse(zx, zy, alpha=0.1, n=50)\n\nslope     = std[\"b1\"] * sy / sx\nintercept = my + sy * std[\"b0\"] - slope * mx\n\nref = LinearRegression().fit(glu[[\"age\"]], glu[\"glucose\"])\nprint(intercept, slope)\ncheck_matches(slope, ref.coef_[0], label=\"slope from gradient descent\")\n\n\n\n\nFifty iterations on the standardised data give 110.298 and 0.28867, agreeing with lm() to five significant figures. The same algorithm, the same data, the same loss; twenty times fewer iterations and a thousand times larger step. Scaling was not a tidying-up step, it was the difference between an answer and no answer.\n\n\n\n\n\n\nNoteOne more thing the standardised fit tells you\n\n\n\nOn standardised columns the fitted slope is 0.1347, which is exactly the correlation between age and glucose. That is not a coincidence, and Exercise 3.4 — Ordinary least squares, in closed form shows why.\n\n\n\nRPython\n\n\n\nstd_shown &lt;- descend_mse((glu$age - mean(glu$age)) / sd(glu$age),\n                         (glu$glucose - mean(glu$glucose)) / sd(glu$glucose),\n                         alpha = 0.1, n = 50)\n\ndata.frame(iteration = 1:50, MSE = std_shown$mse) |&gt;\n  ggplot(aes(iteration, MSE)) +\n  geom_line(colour = \"firebrick\") +\n  labs(x = \"Iteration\", y = \"MSE (standardised units)\")\n\n\n\n\n\n\n\n\n\n\n\nstd_shown = descend_mse((glu[\"age\"] - glu[\"age\"].mean()) / glu[\"age\"].std(),\n                        (glu[\"glucose\"] - glu[\"glucose\"].mean()) / glu[\"glucose\"].std(),\n                        alpha=0.1, n=50)\n\nfig, ax = plt.subplots()\nax.plot(range(1, 51), std_shown[\"mse\"], color=\"firebrick\")\nax.set_xlabel(\"Iteration\"); ax.set_ylabel(\"MSE (standardised units)\")\nplt.show()\n\n\n\n\n\n\n\n\n\n\n\nThat curve is the plot to draw every time you run an optimiser. A descent that is working looks like this: a steep fall, then a flat tail. Anything else — a rise, a wobble, a straight line still sloping down at the last iteration — is telling you to change the learning rate or the number of steps.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#reflection",
+    "href": "day3-03-gradient-descent.html#reflection",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "Reflection",
+    "text": "Reflection\n\nYou are handed a fitted model and a plot of its loss against iteration. The curve is still falling at the final iteration. What do you do, and what would you have to check before trusting the model as it stands?\nStandardising changed the parameters you had to find but not the model. Why can the two intercepts — one on standardised columns, one on the original — differ while the predictions stay identical?",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#stretch",
+    "href": "day3-03-gradient-descent.html#stretch",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "Stretch",
+    "text": "Stretch\n\n\n\n\n\n\nNoteStretch 1 — How few iterations do you need\n\n\n\nOn the standardised data, find the smallest number of iterations at \\(\\alpha = 0.5\\) that still matches lm() to three decimal places. Then halve the learning rate and repeat. The product of the two numbers is roughly constant, which is the trade-off every optimiser is managing.\n\n\n\n\n\n\n\n\nNoteStretch 2 — One patient at a time\n\n\n\nModify descend_mse() to use a single randomly chosen patient’s residual for each update rather than the mean over all 80 — stochastic gradient descent. The loss curve becomes noisy and the answer still arrives. Then say why a method that uses a worse estimate of the gradient is the one used to fit models with billions of parameters.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-03-gradient-descent.html#what-you-can-and-cannot-now-claim",
+    "href": "day3-03-gradient-descent.html#what-you-can-and-cannot-now-claim",
+    "title": "Exercise 3.3 — Gradient descent",
+    "section": "What you can and cannot now claim",
+    "text": "What you can and cannot now claim\nCan: that you can minimise a function numerically in either language, diagnose a learning rate from the loss curve, and state why a converged descent on a convex loss gives the same answer as lm().\nCannot: that you needed any of this for linear regression. For this particular model there is an exact formula, obtainable with algebra and no iteration at all, and that is Exercise 3.4 — Ordinary least squares, in closed form.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Exercise 3.3 — Gradient descent</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html",
+    "href": "day3-04-ols.html",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "",
+    "text": "Objectives",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html#objectives",
+    "href": "day3-04-ols.html#objectives",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "",
+    "text": "Derive the ordinary least squares estimators for a single predictor, in your own handwriting, from the squared-error loss.\nCompute both estimators from a dataset with nothing but means, a covariance and a variance, and show that they agree with lm().\nName the two conditions the derivation imposes on the fitted residuals, and check them numerically.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html#why-this-here",
+    "href": "day3-04-ols.html#why-this-here",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "Why this, here",
+    "text": "Why this, here\nExercise 3.3 — Gradient descent minimised the squared-error loss by walking downhill, and needed standardised columns and a well-chosen learning rate to get there. For this particular loss and this particular model, none of that is necessary: the minimum can be written down. This exercise does the algebra, and then checks it against the software.\n\n\n\n\n\n\nNoteThis exercise is one language, deliberately\n\n\n\nThe derivation is algebra and has no R version or Python version. Only the verification at the end is code, and that appears in both languages. If you are following the booklet in Python, the three pages of mathematics below still apply to you in full — LinearRegression is solving the same equations as lm().",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html#setting-up-the-minimisation-problem",
+    "href": "day3-04-ols.html#setting-up-the-minimisation-problem",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "Setting up the minimisation problem",
+    "text": "Setting up the minimisation problem\nWe want the intercept and slope that minimise the sum of squared residuals:\n\\[\\min_{\\hat{\\beta_0}, \\hat{\\beta_1}} \\; W, \\qquad\\text{where}\\qquad\nW = \\sum_{i=1}^{N} (y_i - \\hat{\\beta_0} - \\hat{\\beta_1} x_i)^2 \\tag{12.1}\\]\nMinimising the sum and minimising the mean are the same problem: dividing by \\(N\\) scales the whole surface without moving its lowest point. We use the sum here because it keeps the algebra clean.\nA minimum of a smooth function is where all its partial derivatives vanish. There are two parameters, so there are two equations.\n\\[\\frac{\\partial W}{\\partial \\hat{\\beta_0}} =\n\\sum_{i=1}^{N} -2(y_i - \\hat{\\beta_0} - \\hat{\\beta_1} x_i) = 0 \\tag{12.2}\\]\n\\[\\frac{\\partial W}{\\partial \\hat{\\beta_1}} =\n\\sum_{i=1}^{N} -2 x_i (y_i - \\hat{\\beta_0} - \\hat{\\beta_1} x_i) = 0 \\tag{12.3}\\]\nBoth follow from the chain rule: the inside of the bracket differentiates to \\(-1\\) with respect to \\(\\hat\\beta_0\\) and to \\(-x_i\\) with respect to \\(\\hat\\beta_1\\). These two are the normal equations, and everything below is rearrangement.\n\n\n\n\n\n\nNoteWhere the gradients of Exercise 3.3 — Gradient descent came from\n\n\n\nEquation 12.2 and Equation 12.3, divided by \\(N\\), are exactly the two gradients the descent loop used. The difference between the two exercises is not the mathematics; it is that here we set the derivatives to zero and solve, while there we evaluated them at the current guess and took a step.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html#solving-for-hatbeta_0",
+    "href": "day3-04-ols.html#solving-for-hatbeta_0",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "Solving for \\(\\hat{\\beta_0}\\)",
+    "text": "Solving for \\(\\hat{\\beta_0}\\)\nDivide Equation 12.2 by \\(-2\\) — which is allowed because the right-hand side is zero, and is the reason some textbooks write the loss with a \\(\\tfrac{1}{2}\\) in front:\n\\[\\sum_{i=1}^{N} (y_i - \\hat{\\beta_0} - \\hat{\\beta_1} x_i) = 0\\]\nDistribute the summation over the three terms. The middle one is a constant summed \\(N\\) times:\n\\[\\sum_{i=1}^{N} y_i - N\\hat{\\beta_0} - \\hat{\\beta_1}\\sum_{i=1}^{N} x_i = 0\n\\qquad\\Longrightarrow\\qquad\nN \\hat{\\beta_0} = \\sum_{i=1}^{N} y_i - \\hat{\\beta_1} \\sum_{i=1}^{N} x_i\\]\nDivide by \\(N\\) and use \\(\\frac{1}{N}\\sum y_i = \\bar{y}\\) and \\(\\frac{1}{N}\\sum x_i = \\bar{x}\\):\n\\[\\boxed{\\;\\hat{\\beta_0} = \\bar{y} - \\hat{\\beta_1} \\bar{x}\\;}\\]\nRead that before going on: whatever the slope turns out to be, the fitted line passes through the point \\((\\bar{x}, \\bar{y})\\). The mean of the predictors and the mean of the outcome are always on the line.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html#solving-for-hatbeta_1",
+    "href": "day3-04-ols.html#solving-for-hatbeta_1",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "Solving for \\(\\hat{\\beta_1}\\)",
+    "text": "Solving for \\(\\hat{\\beta_1}\\)\nDivide Equation 12.3 by \\(-2\\) as well, and expand:\n\\[\\sum_{i=1}^{N} \\left( x_i y_i - \\hat{\\beta_0} x_i - \\hat{\\beta_1} x_i^2 \\right) = 0\\]\nSubstitute \\(\\hat{\\beta_0} = \\bar{y} - \\hat{\\beta_1} \\bar{x}\\) from above:\n\\[\\sum_{i=1}^{N} x_i y_i - \\sum_{i=1}^{N}(\\bar{y} - \\hat{\\beta_1}\\bar{x})x_i\n- \\hat{\\beta_1} \\sum_{i=1}^{N} x_i^2 = 0\\]\nDistribute the sums, pulling the constants \\(\\bar{x}\\) and \\(\\bar{y}\\) out in front:\n\\[\\sum_{i=1}^{N} x_i y_i - \\bar{y}\\sum_{i=1}^{N}x_i\n+ \\hat{\\beta_1}\\bar{x} \\sum_{i=1}^{N} x_i - \\hat{\\beta_1} \\sum_{i=1}^{N} x_i^2 = 0\\]\nNow collect the two terms in \\(\\hat{\\beta_1}\\) on one side and use \\(\\sum x_i = N\\bar{x}\\) and \\(\\sum y_i = N\\bar{y}\\):\n\\[\\hat{\\beta_1}\\left(\\sum_{i=1}^{N} x_i^2 - N\\bar{x}^2\\right)\n= \\sum_{i=1}^{N} x_i y_i - N\\bar{x}\\bar{y}\\]\nwhich, using the identity in the callout below for both sides, is\n\\[\\hat{\\beta_1} = \\frac{\\sum_{i=1}^{N} (x_i - \\bar{x})(y_i - \\bar{y})}\n{\\sum_{i=1}^{N} (x_i - \\bar{x})^2}\n= \\frac{\\operatorname{Cov}(x,y)}{\\operatorname{Var}(x)}\\]\n\n\n\n\n\n\nNoteThe identity, in six steps\n\n\n\n\n\n\\[\\sum_{i=1}^{N} (x_i - \\bar{x})(y_i - \\bar{y}) = \\sum_{i=1}^{N} x_i y_i - N \\bar{x} \\bar{y}\\]\nStep 1 — expand the product. \\[\\sum_{i=1}^{N} (x_i - \\bar{x})(y_i - \\bar{y})\n= \\sum_{i=1}^{N} \\left( x_i y_i - x_i \\bar{y} - \\bar{x} y_i + \\bar{x} \\bar{y} \\right)\\]\nStep 2 — separate the summation. \\[= \\sum_{i=1}^{N} x_i y_i - \\sum_{i=1}^{N} x_i \\bar{y}\n  - \\sum_{i=1}^{N} \\bar{x} y_i + \\sum_{i=1}^{N} \\bar{x} \\bar{y}\\]\nStep 3 — factor the constants out. \\(\\bar{x}\\) and \\(\\bar{y}\\) do not depend on \\(i\\), so \\[\\sum_{i=1}^{N} x_i \\bar{y} = \\bar{y} \\sum_{i=1}^{N} x_i, \\qquad\n\\sum_{i=1}^{N} \\bar{x} y_i = \\bar{x} \\sum_{i=1}^{N} y_i, \\qquad\n\\sum_{i=1}^{N} \\bar{x} \\bar{y} = N \\bar{x} \\bar{y}\\]\nStep 4 — substitute back. \\[= \\sum_{i=1}^{N} x_i y_i - \\bar{y} \\sum_{i=1}^{N} x_i\n  - \\bar{x} \\sum_{i=1}^{N} y_i + N \\bar{x} \\bar{y}\\]\nStep 5 — use \\(\\sum x_i = N \\bar{x}\\) and \\(\\sum y_i = N \\bar{y}\\). \\[= \\sum_{i=1}^{N} x_i y_i - \\bar{y} (N \\bar{x}) - \\bar{x} (N \\bar{y})\n  + N \\bar{x} \\bar{y}\\]\nStep 6 — combine. The second and third terms are each \\(-N\\bar{x}\\bar{y}\\), and one of them cancels the fourth: \\[= \\sum_{i=1}^{N} x_i y_i - N \\bar{x} \\bar{y}\\]\nSetting \\(y = x\\) gives the companion identity \\(\\sum (x_i - \\bar{x})^2 = \\sum x_i^2 - N\\bar{x}^2\\), which is the denominator.\n\n\n\nSo the complete solution, for one predictor, is two lines of arithmetic:\n\\[\\hat{\\beta_1} = \\frac{\\operatorname{Cov}(x,y)}{\\operatorname{Var}(x)}\n\\qquad\\qquad\n\\hat{\\beta_0} = \\bar{y} - \\hat{\\beta_1} \\bar{x}\\]\nNo iteration, no learning rate, no starting guess. The derivation follows the one in Berkeley’s EEP118 handout; with more than one predictor the same argument is done in matrix form and gives \\(\\hat{\\beta} = (X^\\top X)^{-1} X^\\top y\\), which is what lm() actually evaluates.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html#task-1-the-closed-form-against-the-software",
+    "href": "day3-04-ols.html#task-1-the-closed-form-against-the-software",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "Task 1 — The closed form against the software",
+    "text": "Task 1 — The closed form against the software\nCompute both estimators from means, a covariance and a variance, and compare them with the fitted model.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nlibrary(readr); library(dplyr)\nsource(\"checks/checks.R\")\n\ndiab &lt;- read_csv(\"data/diabetes.csv\")\nglu  &lt;- diab |&gt; filter(glucose &gt; 0) |&gt; slice(1:80) |&gt; select(age, glucose)\nx    &lt;- glu$age\ny    &lt;- glu$glucose\n\nb1hat &lt;- ______ / ______\nb0hat &lt;- mean(y) - b1hat * ______\n\nfit &lt;- lm(glucose ~ age, data = glu)\nrbind(closed_form = c(b0hat, b1hat), lm = coef(fit))\n\ncheck_matches(b1hat, coef(fit)[[\"age\"]], tol = 1e-8, label = \"closed-form slope\")\n\n\n\n\n\n\n\nTipStuck?\n\n\n\n\n\nTwo functions, cov() and var(), in the order the formula gives them. The third blank is the mean of the predictor.\n\n\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport pandas as pd, numpy as np, sys; sys.path.append(\"checks\")\nfrom checks import *\nfrom sklearn.linear_model import LinearRegression\n\ndiab = pd.read_csv(\"data/diabetes.csv\")\nglu = (diab.loc[diab[\"glucose\"] &gt; 0, [\"age\", \"glucose\"]]\n           .head(80).reset_index(drop=True))\nx, y = glu[\"age\"], glu[\"glucose\"]\n\nb1hat = ______ / ______          # pandas: x.cov(y) and x.var(), both ddof=1\nb0hat = y.mean() - b1hat * ______\n\nfit = LinearRegression().fit(glu[[\"age\"]], y)\nprint({\"closed_form\": (b0hat, b1hat), \"sklearn\": (fit.intercept_, fit.coef_[0])})\n\ncheck_matches(b1hat, fit.coef_[0], tol=1e-8, label=\"closed-form slope\")\n\n\n\n\nBoth give 110.298 and 0.2886749. Not approximately: to every digit either language will print. lm() is not doing anything you have not just done by hand, and neither is LinearRegression.\n\n\n\n\n\n\nNoteThe covariance ratio also explains Exercise 3.3 — Gradient descent\n\n\n\nStandardising both columns makes \\(\\operatorname{Var}(x) = 1\\) and turns \\(\\operatorname{Cov}(x,y)\\) into the correlation, so on standardised data \\(\\hat\\beta_1 = \\operatorname{Cor}(x,y)\\) — the 0.1347 the descent converged to. The correlation is the slope of the standardised fit, which is a more useful definition of it than the one most people carry.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html#task-2-the-two-conditions-the-derivation-imposes",
+    "href": "day3-04-ols.html#task-2-the-two-conditions-the-derivation-imposes",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "Task 2 — The two conditions the derivation imposes",
+    "text": "Task 2 — The two conditions the derivation imposes\nEquation 12.2 and Equation 12.3 say that at the optimum, \\(\\sum r_i = 0\\) and \\(\\sum x_i r_i = 0\\). Those are not assumptions about the world; they are consequences of having minimised. Check both for the fitted line, and for the hand-drawn line from Exercise 3.2 — Loss functions.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\nr_fitted &lt;- ______                     # residuals of the fitted line\nr_guess  &lt;- y - (120 + 0.5 * x)        # residuals of the hand-drawn line\n\nrbind(fitted = c(sum_r = sum(r_fitted), sum_xr = sum(x * r_fitted)),\n      guess  = c(sum_r = sum(r_guess),  sum_xr = sum(x * r_guess)))\n\ncheck_matches(sum(r_fitted), 0, tol = 1e-6, label = \"sum of fitted residuals\")\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\nr_fitted = ______                      # residuals of the fitted line\nr_guess  = y - (120 + 0.5 * x)\n\nprint({\"fitted\": (r_fitted.sum(), (x * r_fitted).sum()),\n       \"guess\":  (r_guess.sum(),  (x * r_guess).sum())})\n\ncheck_matches(r_fitted.sum(), 0, tol=1e-6, label=\"sum of fitted residuals\")\n\n\n\n\nThe fitted residuals sum to something of the order of \\(10^{-13}\\) and their product with age to the order of \\(10^{-11}\\): zero, to the precision floating-point arithmetic allows. The hand-drawn line’s residuals sum to −1338.5 and its cross-product to −47700.5.\nThat is a diagnostic worth keeping. If someone hands you fitted values from a least-squares model and the residuals do not sum to zero, either there is no intercept in the model or those are not least-squares fitted values.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html#the-result-that-should-bother-you",
+    "href": "day3-04-ols.html#the-result-that-should-bother-you",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "The result that should bother you",
+    "text": "The result that should bother you\nThe derivation divides by \\(\\operatorname{Var}(x)\\). It therefore returns an answer for any dataset in which the predictor is not perfectly constant — and says nothing about how large that variance is. Refit the same model on progressively narrower age bands.\n\nRPython\n\n\n\nbands &lt;- list(c(21, 25), c(21, 30), c(21, 40), c(21, 81))\n\ndo.call(rbind, lapply(bands, function(b) {\n  s &lt;- glu |&gt; filter(age &gt;= b[1], age &lt;= b[2])\n  data.frame(band = paste(b[1], \"to\", b[2]), n = nrow(s),\n             var_age = var(s$age),\n             slope = cov(s$age, s$glucose) / var(s$age))\n}))\n\n#&gt;       band  n    var_age     slope\n#&gt; 1 21 to 25 32   1.910282 0.6812665\n#&gt; 2 21 to 30 48   8.074025 4.1727148\n#&gt; 3 21 to 40 59  21.303916 2.2139585\n#&gt; 4 21 to 81 80 190.398576 0.2886749\n\n\n\n\n\nrows = []\nfor lo, hi in [(21, 25), (21, 30), (21, 40), (21, 81)]:\n    s = glu[(glu[\"age\"] &gt;= lo) & (glu[\"age\"] &lt;= hi)]\n    rows.append({\"band\": f\"{lo} to {hi}\", \"n\": len(s),\n                 \"var_age\": s[\"age\"].var(),\n                 \"slope\": s[\"age\"].cov(s[\"glucose\"]) / s[\"age\"].var()})\npd.DataFrame(rows)\n\n\n\n\n\n\n\n\nband\nn\nvar_age\nslope\n\n\n\n\n0\n21 to 25\n32\n1.910282\n0.681266\n\n\n1\n21 to 30\n48\n8.074025\n4.172715\n\n\n2\n21 to 40\n59\n21.303916\n2.213958\n\n\n3\n21 to 81\n80\n190.398576\n0.288675\n\n\n\n\n\n\n\n\n\n\nThree steps of reasoning.\n\nOver the full range the slope is 0.289 mg/dL per year. Among patients aged 21 to 40 it is 2.21, and among those aged 21 to 30 it is 4.17 — fourteen times the full-range estimate, from a subset of the same 80 patients.\nThe mechanism is the denominator. Restricting the age range cuts \\(\\operatorname{Var}(x)\\) from 190 to 8, and the covariance in the numerator is estimated from fewer, closer points, so it is noise-dominated. The estimator is behaving exactly as derived; the data cannot support what is being asked of it.\nSo a published slope is not a property of a relationship. It is a property of a relationship and the range of predictor values the sample happened to cover. When you compare your coefficient with someone else’s, compare the predictor ranges first.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html#task-3-somewhere-the-formula-has-not-been",
+    "href": "day3-04-ols.html#task-3-somewhere-the-formula-has-not-been",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "Task 3 — Somewhere the formula has not been",
+    "text": "Task 3 — Somewhere the formula has not been\ndata/birthweight.csv holds 600 pregnancies: bpd (biparietal diameter, mm), ad (abdominal diameter, mm) and bw (birth weight, g). Apply the closed form to predict bw from bpd, and confirm it against the fitted model.\n\nRPython\n\n\n\n# Replace every ______ below, then run this cell.\nsource(\"checks/checks.R\")\nbwt &lt;- read_csv(\"data/birthweight.csv\")\n\nslope_bw     &lt;- ______\nintercept_bw &lt;- ______\n\nfit_bw &lt;- lm(bw ~ bpd, data = bwt)\nrbind(closed_form = c(intercept_bw, slope_bw), lm = coef(fit_bw))\n\ncheck_matches(slope_bw, coef(fit_bw)[[\"bpd\"]], tol = 1e-8,\n              label = \"closed-form slope, birth weight\")\n\n\n\n\n# Replace every ______ below, then run this cell.\nimport sys; sys.path.append(\"checks\")\nfrom checks import *\nbwt = pd.read_csv(\"data/birthweight.csv\")\n\nslope_bw     = ______\nintercept_bw = ______\n\nfit_bw = LinearRegression().fit(bwt[[\"bpd\"]], bwt[\"bw\"])\nprint({\"closed_form\": (intercept_bw, slope_bw),\n       \"sklearn\": (fit_bw.intercept_, fit_bw.coef_[0])})\n\ncheck_matches(slope_bw, fit_bw.coef_[0], tol=1e-8,\n              label=\"closed-form slope, birth weight\")\n\n\n\n\nThe answer is 891.21 + 29.04 per mm of biparietal diameter. Then report two more things before you believe it: the in-sample MSE, and the MSE of predicting the mean birth weight for every pregnancy. Ours are 106,801 and 129,410, so the model removes 17% of the squared error — ten times what age managed for glucose, and still not a model anyone should be handed without the plot.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html#reflection",
+    "href": "day3-04-ols.html#reflection",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "Reflection",
+    "text": "Reflection\n\nThe derivation never mentions the data being normally distributed, independent, or anything else. What exactly does it assume, and where in the algebra would you look to find out?\nGiven that the closed form exists and takes microseconds, why is the whole of modern machine learning fitted by gradient descent?",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html#stretch",
+    "href": "day3-04-ols.html#stretch",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "Stretch",
+    "text": "Stretch\n\n\n\n\n\n\nNoteStretch 1 — Two predictors, in matrix form\n\n\n\nBuild the design matrix \\(X\\) with a column of ones and the columns bpd and ad, and evaluate \\((X^\\top X)^{-1} X^\\top y\\) with solve() in R or np.linalg.solve in Python. Compare with lm(bw ~ bpd + ad). Then compare the bpd coefficient with the single-predictor one from Task 3: here they are close because bpd and ad are almost uncorrelated, which is unusual in clinical data and is why the comparison is normally not so forgiving.\n\n\n\n\n\n\n\n\nNoteStretch 2 — Break the formula\n\n\n\nConstruct a dataset where the closed form fails or misleads: all patients the same age, two patients only, or one patient with an age of 10,000. Predict what each will do before you run it, and say which of the three a real extract is most likely to contain.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
+  },
+  {
+    "objectID": "day3-04-ols.html#what-you-can-and-cannot-now-claim",
+    "href": "day3-04-ols.html#what-you-can-and-cannot-now-claim",
+    "title": "Exercise 3.4 — Ordinary least squares, in closed form",
+    "section": "What you can and cannot now claim",
+    "text": "What you can and cannot now claim\nCan: that you can derive and compute the least squares estimators for one predictor, verify them against both languages’ implementations, and state the two conditions a least-squares fit imposes on its residuals.\nCannot: that any of today’s models are good. Every number on every page was computed on the rows the model was fitted to, and we have not scored a single held-out patient.",
+    "crumbs": [
+      "Day 3 — Supervised Learning.Linear Regression",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Exercise 3.4 — Ordinary least squares, in closed form</span>"
+    ]
   }
 ]
