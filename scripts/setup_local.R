@@ -14,6 +14,7 @@ r_pkgs  <- c("tidymodels", "tidyverse", "data.table", "rpart", "reticulate",
              # Days 2-6
              "mlbench",     # the synthetic diabetes data (Days 2-6)
              "naniar", "mice", "finalfit",   # missingness (Day 2)
+             "fastDummies",  # one-hot encoding without a recipe (Day 2)
              "rpart.plot",  # drawing trees (Day 5)
              "ranger",      # the random forest engine (Day 5)
              "glmnet",      # penalised regression (Day 5.5)
