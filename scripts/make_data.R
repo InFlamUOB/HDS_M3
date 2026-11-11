@@ -166,92 +166,132 @@ writeLines(c(
   "  an extra package; the R side loads the package, as written.",
   "",
   "clinic_extract.csv",
-  "  Simulated here, seed 20262. 150 rows, one row per patient. Carries the",
-  "  defects Exercises 2.3-2.6 are built on: three spellings of one referral",
-  "  source (GP / gp / General Practitioner), six hospital sites of which one is",
-  "  rare, a near-constant consent flag, a right-skewed bmi containing one",
-  "  implausible 61.2, a bp_systolic on a different numeric scale, and missing",
-  "  values recorded three different ways - the string \'unknown\' in age, the",
-  "  string \'?\' in bmi, and empty cells in bp_systolic. The outcome was drawn",
-  "  from the complete values before anything was blanked out, so the",
-  "  missingness is a recording failure and nothing more."
+  "  Simulated here, seed 20262. 180 rows, one per patient, as a deliberately",
+  "  messy GP extract. There is no bmi column on purpose: height and weight are",
+  "  given and BMI is derived by students in Exercise 2.3, which is what makes",
+  "  the three heights typed in metres matter - they propagate into a BMI in the",
+  "  hundreds of thousands against a plausible range of about 16 to 44.",
+  "",
+  "  Deliberate defects: patient_id is unique per row, so one-hot encoding it",
+  "  gives one column per patient; GP_practice has four common practices, three",
+  "  rare ones and an Other that already exists, so grouping rare levels merges",
+  "  into an existing category and cuts the encoded columns from 16 to 13; sex",
+  "  appears as Male/male/M/Female/female/F and smoking_status in four",
+  "  spellings; age contains one impossible 250 and weight_kg one impossible",
+  "  800.",
+  "",
+  "  Missing values use five conventions across four columns - the strings",
+  "  unknown, ?, not recorded and N/A, the number -999, and genuinely empty",
+  "  cells. A naive is.na() count finds 9 of the 44. -999 is the dangerous one:",
+  "  it parses as a number, so systolic_BP loads as numeric and its mean reads",
+  "  73.6 mmHg instead of 131.7 with no error and no warning, whereas the text",
+  "  codes at least force height_cm and weight_kg to character.",
+  "",
+  "  diabetes was drawn from the complete values before anything was spoiled,",
+  "  and systolic_BP is a straight line in age and BMI, so Exercise 2.6 has a",
+  "  genuinely predictable regression target."
 ), "data/PROVENANCE.txt")
 
 # ---------------------------------------------------------------------------
-# Day 2, Exercises 2.3-2.6: one small, deliberately messy clinic extract.
+# Day 2, Exercises 2.3-2.6: one messy GP patient extract.
 #
 # Everything from cleaning to the finished pipeline runs on this single file,
-# so each exercise inherits the previous one's output. It is small on purpose -
-# 150 rows, so a student can print the whole table and find the problems by
-# eye before writing any code to find them - but large enough that a histogram
-# and an 80/20 split still mean something.
+# so each exercise inherits the previous one's output. 180 rows - small enough
+# that a student can print it and find problems by eye, large enough that a
+# histogram and an 80/20 split still mean something.
 #
-# Its own seed, so the draws above are untouched and regenerating this block
-# cannot change any earlier file.
+# Its own seed, so the draws above are untouched.
+#
+# NOTE: there is deliberately no bmi column. Height and weight are here and BMI
+# is derived by students in Exercise 2.3, which is what makes the height
+# recorded in metres matter: it propagates into a BMI in the thousands.
 #
 # Deliberate defects, one per teaching point:
-#   referral_source   GP / gp / General Practitioner - the same source, three
-#                     spellings, so a naive count reports three categories
-#   hospital_site     six sites, one of them rare - the "group into Other"
-#                     case, and the one most likely to be absent from a
-#                     training split
-#   consented         near-constant: one value for all but two rows, so its
-#                     variance is almost zero and it carries almost nothing
-#   bmi               right-skewed, plus one implausible 61.2 that survives
-#                     every scaler differently
-#   bp_systolic       on a quite different numeric scale from bmi, which is
-#                     what makes scaling visible at all
-#   missing values    written three different ways in three columns - the
-#                     string "unknown", the string "?", and an empty cell -
-#                     so read_csv types all three columns as text and a
-#                     student who does not look gets a mean of NA
+#   patient_id      a unique value per row, so one-hot encoding it produces one
+#                   column per patient - the "should we encode everything?" case
+#   GP_practice     four common practices, THREE rare ones, and an "Other" that
+#                   already exists, so grouping rare levels has to merge into an
+#                   existing category and genuinely reduces the column count
+#   sex             Male / male / M / Female / female / F
+#   smoking_status  inconsistent labels, plus two missing-value codes
+#   age             one impossible 250
+#   height_cm       mostly centimetres, three entered in metres
+#   weight_kg       one impossible 800
+#   systolic_BP     missing recorded as -999 and as an empty cell
+#   missing codes   five conventions across four columns: "unknown", "?",
+#                   "not recorded", "N/A", -999, and genuinely empty cells.
+#                   -999 is the dangerous one: it PARSES AS A NUMBER, so the
+#                   column stays numeric and the mean is silently wrong, where
+#                   the text codes at least force the column to character and
+#                   make the failure loud.
 #
-# The outcome is generated from the COMPLETE values, before any value is
-# blanked out. Missingness here is a recording failure, not a cause of the
-# outcome, which is the honest setup for imputation: the information really is
-# recoverable in principle.
+# diabetes is generated from the COMPLETE values, before anything is spoiled,
+# and systolic_BP is a straight line in age and BMI so that Exercise 2.6 has a
+# genuinely predictable regression target.
 # ---------------------------------------------------------------------------
 
 set.seed(20262)
-n_clinic <- 150
+n_clinic <- 180
+
+height_true <- round(rnorm(n_clinic, 168, 9.5))
+weight_true <- round(exp(rnorm(n_clinic, log(76), 0.19)), 1)
+bmi_true    <- weight_true / (height_true / 100)^2
+age_true    <- round(pmin(pmax(rnorm(n_clinic, 58, 14), 19), 92))
+sbp_true    <- round(88 + 0.46 * age_true + 0.62 * bmi_true +
+                       rnorm(n_clinic, 0, 9))
+
+lp <- -7.6 + 0.045 * age_true + 0.075 * bmi_true + 0.012 * sbp_true
+diabetes <- rbinom(n_clinic, 1, plogis(lp))
+
+# Four common practices, three rare, and an Other that is already in the data.
+practice <- sample(
+  c("Alderley Road", "Bournbrook", "Cherry Tree", "Dovecote Lane",
+    "Edgbaston Row", "Fiveways", "Granton Street", "Other"),
+  n_clinic, replace = TRUE,
+  prob = c(0.24, 0.21, 0.18, 0.15, 0.035, 0.03, 0.025, 0.08))
+
+sex <- sample(c("Male", "male", "M", "Female", "female", "F"),
+              n_clinic, replace = TRUE,
+              prob = c(0.26, 0.11, 0.08, 0.29, 0.14, 0.12))
+
+smoking <- sample(c("Never", "never", "Ex-smoker", "ex smoker", "Current",
+                    "current smoker"),
+                  n_clinic, replace = TRUE,
+                  prob = c(0.3, 0.12, 0.2, 0.08, 0.2, 0.1))
 
 clinic <- data.frame(
-  patient_id  = sprintf("P%03d", seq_len(n_clinic)),
-  age         = round(pmin(pmax(rnorm(n_clinic, 58, 14), 19), 92)),
-  bmi         = round(exp(rnorm(n_clinic, log(27), 0.22)), 1)
+  patient_id     = sprintf("P%03d", seq_len(n_clinic)),
+  GP_practice    = practice,
+  sex            = sex,
+  age            = as.character(age_true),
+  height_cm      = as.character(height_true),
+  weight_kg      = as.character(weight_true),
+  systolic_BP    = as.character(sbp_true),
+  smoking_status = smoking,
+  diabetes       = diabetes,
+  stringsAsFactors = FALSE
 )
-clinic$bmi[7] <- 61.2   # a transcription slip: 61.2 instead of 26.1
 
-# Systolic pressure rises with age and with BMI, both as straight lines. It is
-# the regression target of Exercise 2.6, so it has to be genuinely predictable:
-# a leak can only be measured against a model that was learning something in
-# the first place. The relationship is linear by construction, which is why the
-# squared-term task in Exercise 2.5 correctly finds nothing.
-clinic$bp_systolic <- round(
-  88 + 0.46 * clinic$age + 0.62 * clinic$bmi + rnorm(n_clinic, 0, 9))
+# --- now spoil the recording, after diabetes exists ------------------------
 
-clinic$referral_source <- sample(
-  c("GP", "gp", "General Practitioner", "A&E", "Self-referral"),
-  n_clinic, replace = TRUE, prob = c(0.34, 0.12, 0.10, 0.30, 0.14))
+# Data-entry errors, each one correctable by a reader who thinks about it.
+clinic$age[13]       <- "250"                       # impossible
+clinic$weight_kg[47] <- "800"                       # impossible
+metres <- c(22, 96, 141)                            # height typed in metres
+clinic$height_cm[metres] <- sprintf(
+  "%.2f", as.numeric(clinic$height_cm[metres]) / 100)
 
-clinic$hospital_site <- sample(
-  c("Queen Elizabeth", "Heartlands", "Good Hope", "Solihull", "City", "Sutton"),
-  n_clinic, replace = TRUE, prob = c(0.26, 0.22, 0.20, 0.15, 0.15, 0.02))
+# Missing values, five conventions across four columns.
+pool <- setdiff(seq_len(n_clinic), c(13, 47, metres))
+pick <- function(k) { out <- sample(pool, k); pool <<- setdiff(pool, out); out }
 
-clinic$consented <- ifelse(seq_len(n_clinic) %in% c(44, 119), "N", "Y")
+clinic$height_cm[pick(8)]      <- "unknown"
+clinic$height_cm[pick(4)]      <- NA            # written out as an empty cell
+clinic$weight_kg[pick(7)]      <- "?"
+clinic$systolic_BP[pick(9)]    <- "-999"        # parses as a number
+clinic$systolic_BP[pick(5)]    <- NA
+clinic$smoking_status[pick(6)] <- "not recorded"
+clinic$smoking_status[pick(5)] <- "N/A"
 
-lp <- -6.2 + 0.045 * clinic$age + 0.070 * clinic$bmi + 0.012 * clinic$bp_systolic
-clinic$outcome <- rbinom(n_clinic, 1, plogis(lp))
-
-# Now spoil the recording, after the outcome exists.
-clinic$age         <- as.character(clinic$age)
-clinic$bmi         <- as.character(clinic$bmi)
-clinic$bp_systolic <- as.character(clinic$bp_systolic)
-clinic$age[sample(n_clinic, 11)]         <- "unknown"
-clinic$bmi[sample(n_clinic, 9)]          <- "?"
-clinic$bp_systolic[sample(n_clinic, 13)] <- NA    # written out as an empty cell
-
-clinic <- clinic[, c("patient_id", "age", "bmi", "bp_systolic",
-                     "referral_source", "hospital_site", "consented", "outcome")]
 readr::write_csv(clinic, "data/clinic_extract.csv", na = "")
 message("wrote clinic_extract.csv: ", nrow(clinic), " rows")

@@ -33,44 +33,10 @@ reasonable thing to ask.
 
 ## Starting point
 
-Each chapter stands alone, so we reload and repeat the cleaning from
-@sec-cleaning in one block.
-
-:::::: columns
-::: {.column width="48%"}
-**Python**
-
-```{python}
-import pandas as pd
-import numpy as np
-
-num_cols = ["age", "bmi", "bp_systolic"]
-ref_map = {
-    "GP": "GP", "gp": "GP",
-    "General Practitioner": "GP",
-    "A&E": "A&E",
-    "Self-referral": "Self-referral",
-}
-
-clinic = pd.read_csv(
-    "data/clinic_extract.csv"
-)
-for c in num_cols:
-    clinic[c] = pd.to_numeric(
-        clinic[c], errors="coerce"
-    )
-clinic["referral_source"] = (
-    clinic["referral_source"].map(ref_map)
-)
-clinic.shape
-```
-:::
-
-::: {.column width="4%"}
-:::
-
-::: {.column width="48%"}
-**R**
+@sec-cleaning left the extract clean but incomplete. Each chapter stands alone,
+so the block below repeats that cleaning in one go — the codes recognised, the
+labels standardised, the two correctable heights fixed, the two impossible
+values admitted as missing, and BMI derived.
 
 ```{r}
 #| message: false
@@ -79,26 +45,49 @@ library(dplyr)
 library(tidyr)
 library(readr)
 library(ggplot2)
+library(stringr)
+library(forcats)
 
-num_cols <- c("age", "bmi", "bp_systolic")
+na_codes <- c("unknown", "?", "not recorded", "N/A", "-999")
+num_cols <- c("age", "height_cm", "weight_kg", "systolic_BP")
 
-clinic <- read_csv(
-  "data/clinic_extract.csv",
-  show_col_types = FALSE
-) |>
-  mutate(across(
-    all_of(num_cols),
-    ~ suppressWarnings(as.numeric(.x))
-  )) |>
-  mutate(referral_source = recode(
-    referral_source,
-    "gp" = "GP",
-    "General Practitioner" = "GP"
-  ))
-dim(clinic)
+gp <- read_csv("data/clinic_extract.csv", show_col_types = FALSE) |>
+  mutate(across(everything(), ~ if_else(as.character(.x) %in% na_codes,
+                                        NA_character_, as.character(.x)))) |>
+  mutate(across(all_of(num_cols), as.numeric),
+         diabetes = as.integer(diabetes)) |>
+  mutate(
+    height_cm = if_else(height_cm < 3, height_cm * 100, height_cm),
+    age       = if_else(age > 120, NA_real_, age),
+    weight_kg = if_else(weight_kg > 300, NA_real_, weight_kg),
+    sex = case_when(
+      str_to_lower(str_trim(sex)) %in% c("male", "m")   ~ "Male",
+      str_to_lower(str_trim(sex)) %in% c("female", "f") ~ "Female"),
+    GP_practice = fct_lump_min(factor(GP_practice), min = 10,
+                               other_level = "Other")
+  ) |>
+  mutate(BMI = weight_kg / (height_cm / 100)^2)
+
+dim(gp)
 ```
-:::
-::::::
+
+```{python}
+#| echo: false
+import pandas as pd, numpy as np
+na_codes = ["unknown", "?", "not recorded", "N/A", "-999"]
+num_cols = ["age", "height_cm", "weight_kg", "systolic_BP"]
+gp_py = pd.read_csv("data/clinic_extract.csv")
+gp_py = gp_py.replace(na_codes, np.nan)
+for c in num_cols:
+    gp_py[c] = pd.to_numeric(gp_py[c], errors="coerce")
+gp_py.loc[gp_py.height_cm < 3, "height_cm"] *= 100
+gp_py.loc[gp_py.age > 120, "age"] = np.nan
+gp_py.loc[gp_py.weight_kg > 300, "weight_kg"] = np.nan
+gp_py["BMI"] = gp_py.weight_kg / (gp_py.height_cm / 100) ** 2
+```
+
+Note that `BMI` is itself derived from two columns that have gaps, so it
+inherits both — one of the things this exercise has to deal with.
 
 ### How much is missing, and where
 
@@ -107,10 +96,10 @@ dim(clinic)
 **Python**
 
 ```{python}
-print(clinic[num_cols].isna().sum())
+print(gp_py[num_cols].isna().sum())
 print("complete rows:",
-      clinic.dropna().shape[0],
-      "of", clinic.shape[0])
+      gp_py.dropna().shape[0],
+      "of", gp_py.shape[0])
 ```
 :::
 
@@ -121,10 +110,10 @@ print("complete rows:",
 **R**
 
 ```{r}
-print(colSums(is.na(clinic[num_cols])))
+print(colSums(is.na(gp[num_cols])))
 cat("complete rows:",
-    sum(complete.cases(clinic)),
-    "of", nrow(clinic), "\n")
+    sum(complete.cases(gp)),
+    "of", nrow(gp), "\n")
 ```
 :::
 ::::::
@@ -143,11 +132,11 @@ The idea is the simplest one available: put the column's own average where a
 value is missing. It needs no model, no package, and one line.
 
 ```{r}
-imp_mean <- clinic |>
+imp_mean <- gp |>
   mutate(across(all_of(num_cols),
                 ~ if_else(is.na(.x), mean(.x, na.rm = TRUE), .x)))
 
-imp_median <- clinic |>
+imp_median <- gp |>
   mutate(across(all_of(num_cols),
                 ~ if_else(is.na(.x), median(.x, na.rm = TRUE), .x)))
 
@@ -157,14 +146,14 @@ cat("missing left, median:", sum(is.na(imp_median[num_cols])), "\n")
 
 ### What it did to the spread
 
-Filling 9 values of `bmi` with one single number means nine rows now sit
+Filling 9 values of `BMI` with one single number means nine rows now sit
 exactly on top of each other. The column's standard deviation must fall.
 Measure it rather than taking it on trust:
 
 ```{r}
 comparison <- data.frame(
   column    = num_cols,
-  sd_before = sapply(clinic[num_cols], sd, na.rm = TRUE),
+  sd_before = sapply(gp[num_cols], sd, na.rm = TRUE),
   sd_mean   = sapply(imp_mean[num_cols], sd),
   sd_median = sapply(imp_median[num_cols], sd)
 )
@@ -181,45 +170,71 @@ though you had.
 
 ### Why median, for this column
 
-`bmi` is right-skewed and contains one implausible value of 61.2. The mean is
+`BMI` is right-skewed and contains one implausible value of 61.2. The mean is
 pulled upward by it; the median is not.
 
 ```{r}
-cat("bmi mean  :", round(mean(clinic$bmi, na.rm = TRUE), 2), "\n")
-cat("bmi median:", round(median(clinic$bmi, na.rm = TRUE), 2), "\n")
+cat("BMI mean  :", round(mean(gp$BMI, na.rm = TRUE), 2), "\n")
+cat("BMI median:", round(median(gp$BMI, na.rm = TRUE), 2), "\n")
 ```
 
-Every imputed `bmi` inherits whichever of those you chose. With a skewed
+Every imputed `BMI` inherits whichever of those you chose. With a skewed
 column, the mean puts nine patients at a value that more than half the cohort
 sits below.
 
-See it as a distribution. Nine values at one number do not announce themselves
-in a histogram of the finished column — they land inside the existing peak and
-disappear. So colour them:
+### A derived feature does not impute itself
+
+Here is the trap. `BMI` was computed from height and weight **before** the
+imputation, so filling the gaps in those two columns does nothing to it — the
+derived column still has every gap it started with.
+
+```{r}
+cat("BMI missing, before imputing:", sum(is.na(gp$BMI)), "\n")
+cat("BMI missing, after imputing height and weight:",
+    sum(is.na(imp_median$BMI)), "\n")
+```
+
+Unchanged. The fix is to recompute the derived column from the filled inputs,
+and the order matters: impute first, then derive.
+
+```{r}
+imp_median <- imp_median |>
+  mutate(BMI = weight_kg / (height_cm / 100)^2)
+
+cat("BMI missing, after recomputing:", sum(is.na(imp_median$BMI)), "\n")
+```
+
+Note what those recomputed BMI values now are: a ratio of two numbers that were
+themselves invented. The uncertainty does not announce itself — it is buried one
+step further from the data than it was before.
+
+Now colour the imputed rows, because a value at the median does not announce
+itself in a histogram either — it lands inside the existing peak and disappears:
 
 ```{r}
 #| fig-height: 2.6
-imp_mean |>
-  mutate(source = if_else(is.na(clinic$bmi), "imputed", "observed")) |>
-  ggplot(aes(x = bmi, fill = source)) +
+imp_median |>
+  mutate(source = if_else(is.na(gp$weight_kg) | is.na(gp$height_cm),
+                          "imputed", "observed")) |>
+  ggplot(aes(x = BMI, fill = source)) +
   geom_histogram(bins = 30) +
   scale_fill_manual(values = c(imputed = "#c0392b", observed = "grey40")) +
-  labs(x = "bmi", y = NULL, fill = NULL)
+  labs(x = "BMI", y = NULL, fill = NULL)
 ```
 
 That is the honest picture, and it is also the warning: had you not kept track
 of which rows you filled, nothing in the finished column would tell you. A
 column of imputed values looks exactly like a column of measurements. Record
-which is which — a `bmi_was_missing` indicator costs one column and keeps the
+which is which — a `BMI_was_missing` indicator costs one column and keeps the
 distinction available to everything downstream.
 
 ------------------------------------------------------------------------
 
 ## Iterative imputation, in Python
 
-Mean imputation ignores every other column. If a patient's `bmi` is missing but
-their `age` and `bp_systolic` are recorded, those two carry information about
-the likely `bmi`, and the mean throws it away.
+Mean imputation ignores every other column. If a patient's `BMI` is missing but
+their `age` and `systolic_BP` are recorded, those two carry information about
+the likely `BMI`, and the mean throws it away.
 
 Iterative imputation uses it. It models each column with missing values as a
 function of the other columns, predicts the gaps, and repeats — each round
@@ -232,9 +247,9 @@ from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer
 
 imp = IterativeImputer(random_state=42, max_iter=20)
-filled = imp.fit_transform(clinic[num_cols])
+filled = imp.fit_transform(gp_py[num_cols])
 
-imp_iter = clinic.copy()
+imp_iter = gp_py.copy()
 imp_iter[num_cols] = filled
 print("missing left:", int(imp_iter[num_cols].isna().sum().sum()))
 print("iterations run:", imp.n_iter_)
@@ -249,12 +264,12 @@ telling you something.
 Compare what the two approaches put in the same cells:
 
 ```{python}
-gaps = clinic["bmi"].isna()
+gaps = gp_py["BMI"].isna()
 side_by_side = pd.DataFrame({
-    "age": clinic.loc[gaps, "age"],
-    "bp": clinic.loc[gaps, "bp_systolic"],
-    "mean_filled": clinic["bmi"].mean(),
-    "iter_filled": imp_iter.loc[gaps, "bmi"].round(1),
+    "age": gp_py.loc[gaps, "age"],
+    "bp": gp_py.loc[gaps, "systolic_BP"],
+    "mean_filled": gp_py["BMI"].mean(),
+    "iter_filled": imp_iter.loc[gaps, "BMI"].round(1),
 })
 side_by_side.head(9)
 ```
@@ -283,31 +298,31 @@ published analysis, usually silently. Quantify it.
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-kept = clinic.______()
-print(kept.shape[0], "of", clinic.shape[0])
-print("lost:", round(100 * (1 - kept.shape[0] / clinic.shape[0]), 1), "%")
+kept = gp_py.______()
+print(kept.shape[0], "of", gp_py.shape[0])
+print("lost:", round(100 * (1 - kept.shape[0] / gp_py.shape[0]), 1), "%")
 
 # Did dropping change who is in the data?
-print(clinic["outcome"].mean().round(3))
+print(gp_py["diabetes"].mean().round(3))
 print(kept["______"].mean().round(3))
 ```
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
 The first blank is the method that removes rows containing any missing value.
-The last is the outcome column, so you can compare its rate before and after.
+The last is the `diabetes` column, so you can compare its rate before and after.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-kept = clinic.dropna()
-print(kept.shape[0], "of", clinic.shape[0])
-print("lost:", round(100 * (1 - kept.shape[0] / clinic.shape[0]), 1), "%")
+kept = gp_py.dropna()
+print(kept.shape[0], "of", gp_py.shape[0])
+print("lost:", round(100 * (1 - kept.shape[0] / gp_py.shape[0]), 1), "%")
 
-print(clinic["outcome"].mean().round(3))
-print(kept["outcome"].mean().round(3))
+print(gp_py["diabetes"].mean().round(3))
+print(kept["diabetes"].mean().round(3))
 ```
 
 Around a fifth of the cohort goes. The outcome rate barely moves here, which is
@@ -321,12 +336,12 @@ you cannot count on when they were not.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-kept <- clinic |> filter(______(clinic))
-cat(nrow(kept), "of", nrow(clinic), "\n")
-cat("lost:", round(100 * (1 - nrow(kept) / nrow(clinic)), 1), "%\n")
+kept <- gp |> filter(______(gp))
+cat(nrow(kept), "of", nrow(gp), "\n")
+cat("lost:", round(100 * (1 - nrow(kept) / nrow(gp)), 1), "%\n")
 
 # Most-frequent-category imputation, for a categorical column
-mode_site <- names(sort(table(clinic$hospital_site), decreasing = ______))[1]
+mode_site <- names(sort(table(gp$GP_practice), decreasing = ______))[1]
 mode_site
 ```
 
@@ -340,11 +355,11 @@ anywhere. For the second, you want the *largest* count first.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-kept <- clinic |> filter(complete.cases(clinic))
-cat(nrow(kept), "of", nrow(clinic), "\n")
-cat("lost:", round(100 * (1 - nrow(kept) / nrow(clinic)), 1), "%\n")
+kept <- gp |> filter(complete.cases(gp))
+cat(nrow(kept), "of", nrow(gp), "\n")
+cat("lost:", round(100 * (1 - nrow(kept) / nrow(gp)), 1), "%\n")
 
-mode_site <- names(sort(table(clinic$hospital_site), decreasing = TRUE))[1]
+mode_site <- names(sort(table(gp$GP_practice), decreasing = TRUE))[1]
 mode_site
 ```
 
@@ -370,12 +385,12 @@ comparison from the R section.
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-imp_mean_py = clinic.copy()
-imp_mean_py[num_cols] = clinic[num_cols].fillna(
-    clinic[num_cols].______()
+imp_mean_py = gp_py.copy()
+imp_mean_py[num_cols] = gp_py[num_cols].fillna(
+    gp_py[num_cols].______()
 )
 
-sd_before = clinic[num_cols].std()
+sd_before = gp_py[num_cols].std()
 sd_after = imp_mean_py[num_cols].______()
 print((100 * (sd_after - sd_before) / sd_before).round(1))
 ```
@@ -391,10 +406,10 @@ Series of per-column values.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-imp_mean_py = clinic.copy()
-imp_mean_py[num_cols] = clinic[num_cols].fillna(clinic[num_cols].mean())
+imp_mean_py = gp_py.copy()
+imp_mean_py[num_cols] = gp_py[num_cols].fillna(gp_py[num_cols].mean())
 
-sd_before = clinic[num_cols].std()
+sd_before = gp_py[num_cols].std()
 sd_after = imp_mean_py[num_cols].std()
 print((100 * (sd_after - sd_before) / sd_before).round(1))
 ```
@@ -413,7 +428,7 @@ prediction. Run it if `mice` is installed; read the answer if not.
 #| eval: false
 # Replace every ______ below, then run this cell.
 library(mice)
-fit <- mice(clinic[______], m = 1, maxit = 10, printFlag = FALSE)
+fit <- mice(gp_py[______], m = 1, maxit = 10, printFlag = FALSE)
 imp_iter_r <- complete(fit)
 sum(is.na(imp_iter_r))
 ```
@@ -430,7 +445,7 @@ impute a patient identifier and should not be shown one.
 ```{r}
 #| eval: false
 library(mice)
-fit <- mice(clinic[num_cols], m = 1, maxit = 10, printFlag = FALSE)
+fit <- mice(gp[num_cols], m = 1, maxit = 10, printFlag = FALSE)
 imp_iter_r <- complete(fit)
 sum(is.na(imp_iter_r))
 ```
@@ -462,8 +477,8 @@ a measure of how uncertain each filled-in value was.
 ## Stretch
 
 ### Stretch 1 — Make the imputation wrong on purpose
-The values in this file were blanked out at random. Blank out `bmi` instead
-for the patients with the highest `bp_systolic`, then impute with the mean and
+The values in this file were blanked out at random. Blank out `BMI` instead
+for the patients with the highest `systolic_BP`, then impute with the mean and
 compare the imputed values against the ones you deleted. You know the truth,
 so you can measure the error — and see how an assumption of random missingness
 fails when it is not true.

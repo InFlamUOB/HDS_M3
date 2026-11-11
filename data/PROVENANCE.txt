@@ -1,4 +1,4 @@
-generated: 2026-11-10 20:16:20 GMT
+generated: 2026-11-10 22:52:45 GMT
 R version: 4.5.3
 seed: 2025
 script: scripts/make_data.R
@@ -14,12 +14,27 @@ gapminder.csv
   an extra package; the R side loads the package, as written.
 
 clinic_extract.csv
-  Simulated here, seed 20262. 150 rows, one row per patient. Carries the
-  defects Exercises 2.3-2.6 are built on: three spellings of one referral
-  source (GP / gp / General Practitioner), six hospital sites of which one is
-  rare, a near-constant consent flag, a right-skewed bmi containing one
-  implausible 61.2, a bp_systolic on a different numeric scale, and missing
-  values recorded three different ways - the string 'unknown' in age, the
-  string '?' in bmi, and empty cells in bp_systolic. The outcome was drawn
-  from the complete values before anything was blanked out, so the
-  missingness is a recording failure and nothing more.
+  Simulated here, seed 20262. 180 rows, one per patient, as a deliberately
+  messy GP extract. There is no bmi column on purpose: height and weight are
+  given and BMI is derived by students in Exercise 2.3, which is what makes
+  the three heights typed in metres matter - they propagate into a BMI in the
+  hundreds of thousands against a plausible range of about 16 to 44.
+
+  Deliberate defects: patient_id is unique per row, so one-hot encoding it
+  gives one column per patient; GP_practice has four common practices, three
+  rare ones and an Other that already exists, so grouping rare levels merges
+  into an existing category and cuts the encoded columns from 16 to 13; sex
+  appears as Male/male/M/Female/female/F and smoking_status in four
+  spellings; age contains one impossible 250 and weight_kg one impossible
+  800.
+
+  Missing values use five conventions across four columns - the strings
+  unknown, ?, not recorded and N/A, the number -999, and genuinely empty
+  cells. A naive is.na() count finds 9 of the 44. -999 is the dangerous one:
+  it parses as a number, so systolic_BP loads as numeric and its mean reads
+  73.6 mmHg instead of 131.7 with no error and no warning, whereas the text
+  codes at least force height_cm and weight_kg to character.
+
+  diabetes was drawn from the complete values before anything was spoiled,
+  and systolic_BP is a straight line in age and BMI, so Exercise 2.6 has a
+  genuinely predictable regression target.

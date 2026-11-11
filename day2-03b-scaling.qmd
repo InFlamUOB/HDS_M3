@@ -22,7 +22,7 @@ By the end of this exercise you will be able to:
 ## Why this, here
 
 @sec-imputation left a complete table. Its three numeric columns are still
-measured in unrelated units: `age` in years, `bmi` in kg/m², `bp_systolic` in
+measured in unrelated units: `age` in years, `BMI` in kg/m², `systolic_BP` in
 mmHg. Nothing is wrong with that — but several models behave as though the
 numbers were comparable, and will quietly let the column with the widest range
 dominate.
@@ -34,6 +34,9 @@ moment.
 
 ## Starting point
 
+Picking up from @sec-imputation: the same cleaning, then median imputation so
+nothing is missing, then BMI recomputed from the filled inputs.
+
 ```{r}
 #| message: false
 #| warning: false
@@ -41,27 +44,46 @@ library(dplyr)
 library(tidyr)
 library(readr)
 library(ggplot2)
+library(stringr)
+library(forcats)
 
-num_cols <- c("age", "bmi", "bp_systolic")
+na_codes <- c("unknown", "?", "not recorded", "N/A", "-999")
+num_cols <- c("age", "height_cm", "weight_kg", "systolic_BP")
 
-clinic <- read_csv("data/clinic_extract.csv", show_col_types = FALSE) |>
-  mutate(across(all_of(num_cols), ~ suppressWarnings(as.numeric(.x)))) |>
-  mutate(across(all_of(num_cols), ~ if_else(is.na(.x), median(.x, na.rm = TRUE), .x)))
+gp <- read_csv("data/clinic_extract.csv", show_col_types = FALSE) |>
+  mutate(across(everything(), ~ if_else(as.character(.x) %in% na_codes,
+                                        NA_character_, as.character(.x)))) |>
+  mutate(across(all_of(num_cols), as.numeric)) |>
+  mutate(
+    height_cm = if_else(height_cm < 3, height_cm * 100, height_cm),
+    age       = if_else(age > 120, NA_real_, age),
+    weight_kg = if_else(weight_kg > 300, NA_real_, weight_kg)
+  ) |>
+  mutate(across(all_of(num_cols),
+                ~ if_else(is.na(.x), median(.x, na.rm = TRUE), .x))) |>
+  mutate(BMI = weight_kg / (height_cm / 100)^2)
 
-sapply(clinic[num_cols], range)
+scale_cols <- c("age", "BMI", "systolic_BP")
+sapply(gp[scale_cols], range) |> round(1)
 ```
 
 ```{python}
 #| echo: false
 import pandas as pd, numpy as np
-num_cols = ["age", "bmi", "bp_systolic"]
-clinic = pd.read_csv("data/clinic_extract.csv")
+na_codes = ["unknown", "?", "not recorded", "N/A", "-999"]
+num_cols = ["age", "height_cm", "weight_kg", "systolic_BP"]
+gp_py = pd.read_csv("data/clinic_extract.csv").replace(na_codes, np.nan)
 for c in num_cols:
-    clinic[c] = pd.to_numeric(clinic[c], errors="coerce")
-clinic[num_cols] = clinic[num_cols].fillna(clinic[num_cols].median())
+    gp_py[c] = pd.to_numeric(gp_py[c], errors="coerce")
+gp_py.loc[gp_py.height_cm < 3, "height_cm"] *= 100
+gp_py.loc[gp_py.age > 120, "age"] = np.nan
+gp_py.loc[gp_py.weight_kg > 300, "weight_kg"] = np.nan
+gp_py[num_cols] = gp_py[num_cols].fillna(gp_py[num_cols].median())
+gp_py["BMI"] = gp_py.weight_kg / (gp_py.height_cm / 100) ** 2
+scale_cols = ["age", "BMI", "systolic_BP"]
 ```
 
-Three columns, three ranges, none of them comparable. `bp_systolic` spans the
+Three columns, three ranges, none of them comparable. `systolic_BP` spans the
 widest numeric distance, and to a model that measures distances — anything
 using a Euclidean distance, and anything regularised — that width is
 indistinguishable from importance.
@@ -87,9 +109,9 @@ from sklearn.preprocessing import (
 )
 
 mm = MinMaxScaler()
-X_mm = mm.fit_transform(clinic[num_cols])
+X_mm = mm.fit_transform(gp_py[scale_cols])
 pd.DataFrame(
-    X_mm, columns=num_cols
+    X_mm, columns=scale_cols
 ).describe().loc[["min", "max"]]
 ```
 :::
@@ -104,10 +126,10 @@ pd.DataFrame(
 minmax <- function(x) {
   (x - min(x)) / (max(x) - min(x))
 }
-X_mm <- clinic |>
-  mutate(across(all_of(num_cols), minmax))
+X_mm <- gp |>
+  mutate(across(all_of(scale_cols), minmax))
 
-sapply(X_mm[num_cols], range)
+sapply(X_mm[scale_cols], range)
 ```
 :::
 ::::::
@@ -124,9 +146,9 @@ stays extreme, which is usually what you want.
 
 ```{python}
 ss = StandardScaler()
-X_ss = ss.fit_transform(clinic[num_cols])
+X_ss = ss.fit_transform(gp_py[scale_cols])
 pd.DataFrame(
-    X_ss, columns=num_cols
+    X_ss, columns=scale_cols
 ).agg(["mean", "std"]).round(3)
 ```
 :::
@@ -138,13 +160,13 @@ pd.DataFrame(
 **R**
 
 ```{r}
-X_ss <- clinic |>
-  mutate(across(all_of(num_cols),
+X_ss <- gp |>
+  mutate(across(all_of(scale_cols),
                 ~ as.numeric(scale(.x))))
 
 round(rbind(
-  mean = sapply(X_ss[num_cols], mean),
-  sd   = sapply(X_ss[num_cols], sd)
+  mean = sapply(X_ss[scale_cols], mean),
+  sd   = sapply(X_ss[scale_cols], sd)
 ), 3)
 ```
 :::
@@ -161,9 +183,9 @@ extreme value barely moves, which is the whole idea.
 
 ```{python}
 rs = RobustScaler()
-X_rs = rs.fit_transform(clinic[num_cols])
+X_rs = rs.fit_transform(gp_py[scale_cols])
 pd.DataFrame(
-    X_rs, columns=num_cols
+    X_rs, columns=scale_cols
 ).describe().loc[["50%", "max"]].round(2)
 ```
 :::
@@ -178,12 +200,12 @@ pd.DataFrame(
 robust <- function(x) {
   (x - median(x)) / IQR(x)
 }
-X_rs <- clinic |>
-  mutate(across(all_of(num_cols), robust))
+X_rs <- gp |>
+  mutate(across(all_of(scale_cols), robust))
 
 round(rbind(
-  median = sapply(X_rs[num_cols], median),
-  max    = sapply(X_rs[num_cols], max)
+  median = sapply(X_rs[scale_cols], median),
+  max    = sapply(X_rs[scale_cols], max)
 ), 2)
 ```
 :::
@@ -191,44 +213,46 @@ round(rbind(
 
 ## What the one bad value does to each
 
-`bmi` contains a transcription slip: 61.2 where 26.1 was meant. It is a single
-row out of 150. Watch what each scaler does with it.
+`BMI` has a genuine high extreme — the heaviest patient in the cohort, not a
+typo. @sec-cleaning already removed the errors; what is left is real. Watch
+what each scaler does with a value you must **not** throw away.
 
 ```{r}
-i <- which.max(clinic$bmi)
+i <- which.max(gp$BMI)
 
 data.frame(
   scaler  = c("Min-Max", "Standard", "Robust"),
-  outlier = c(X_mm$bmi[i], X_ss$bmi[i], X_rs$bmi[i]),
-  median_row = c(median(X_mm$bmi), median(X_ss$bmi), median(X_rs$bmi)),
-  bulk_max_excl_outlier = c(max(X_mm$bmi[-i]), max(X_ss$bmi[-i]), max(X_rs$bmi[-i]))
+  outlier = c(X_mm$BMI[i], X_ss$BMI[i], X_rs$BMI[i]),
+  median_row = c(median(X_mm$BMI), median(X_ss$BMI), median(X_rs$BMI)),
+  bulk_max_excl_outlier = c(max(X_mm$BMI[-i]), max(X_ss$BMI[-i]), max(X_rs$BMI[-i]))
 ) |>
   mutate(across(where(is.numeric), ~ round(.x, 2)))
 ```
 
 Read the last column against the second, and be precise about what you see.
 
-Under **Min-Max** the outlier is pinned at 1 by definition, and because it sets
-the maximum, every other value is divided by a range it inflated. The 149 good
-rows now span 0 to 0.62 — one bad row has taken 38% of the available scale and
-left the real data crowded into the rest. Under **Standard** and **Robust** the
-outlier is not pinned at all: it sits out at roughly 5.8 units in both, which
-is the honest description of a value that far from the centre.
+Under **Min-Max** the extreme is pinned at 1 by definition, and because it sets
+the maximum, every other value is divided by a range it stretched. The rest of
+the cohort now spans 0 to about 0.88, so a single patient has claimed roughly
+an eighth of the available scale. Under **Standard** and **Robust** nothing is
+pinned: the extreme sits out at about 3.0 standard deviations and 2.4
+interquartile ranges respectively, which is an honest description of a value
+that far from the centre rather than an arbitrary ceiling.
 
 So the three are not as different here as the usual advice implies, because
-this outlier is only moderately extreme. The difference appears when it gets
-worse. The slip was 61.2 in place of 26.1 — suppose a digit had gone in front
-instead:
+this extreme is only moderately extreme — it is the heaviest patient, not a
+typo. The difference appears when it gets worse. Suppose one weight had been recorded with a digit in front of it and had
+slipped past Exercise 2.3:
 
 ```{r}
-worse <- clinic$bmi
-worse[i] <- 161.2
+worse <- gp$BMI
+worse[i] <- gp$BMI[i] * 3
 
 rbind(
-  `bulk max, Min-Max`  = c(now = max(minmax(clinic$bmi)[-i]), worse = max(minmax(worse)[-i])),
-  `bulk max, Standard` = c(max(as.numeric(scale(clinic$bmi))[-i]),
+  `bulk max, Min-Max`  = c(now = max(minmax(gp$BMI)[-i]), worse = max(minmax(worse)[-i])),
+  `bulk max, Standard` = c(max(as.numeric(scale(gp$BMI))[-i]),
                            max(as.numeric(scale(worse))[-i])),
-  `bulk max, Robust`   = c(max(robust(clinic$bmi)[-i]), max(robust(worse)[-i]))
+  `bulk max, Robust`   = c(max(robust(gp$BMI)[-i]), max(robust(worse)[-i]))
 ) |> round(2)
 ```
 
@@ -259,12 +283,12 @@ lost. Reach for Robust when you have looked at the distribution and seen a tail
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-i = clinic["bmi"].______()           # position of the largest bmi
+i = gp_py["BMI"].______()           # position of the largest BMI
 
 for name, scaler in [("minmax", MinMaxScaler()),
                      ("standard", StandardScaler()),
                      ("robust", ______())]:
-    z = scaler.fit_transform(clinic[["bmi"]]).ravel()
+    z = scaler.fit_transform(gp_py[["BMI"]]).ravel()
     bulk = np.delete(z, i)
     print(name, "outlier %.2f  bulk max %.2f" % (z[i], bulk.______()))
 ```
@@ -279,12 +303,12 @@ uses the median and IQR. The third is the largest value of the remaining rows.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-i = clinic["bmi"].argmax()
+i = gp_py["BMI"].argmax()
 
 for name, scaler in [("minmax", MinMaxScaler()),
                      ("standard", StandardScaler()),
                      ("robust", RobustScaler())]:
-    z = scaler.fit_transform(clinic[["bmi"]]).ravel()
+    z = scaler.fit_transform(gp_py[["BMI"]]).ravel()
     bulk = np.delete(z, i)
     print(name, "outlier %.2f  bulk max %.2f" % (z[i], bulk.max()))
 ```
@@ -299,13 +323,13 @@ Min-Max it is enormous; under Robust the bulk keeps its range.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-i <- which.max(clinic$bmi)
+i <- which.max(gp$BMI)
 
 for (nm in c("minmax", "standard", "robust")) {
   z <- switch(nm,
-    minmax   = minmax(clinic$bmi),
-    standard = as.numeric(scale(clinic$bmi)),
-    robust   = ______(clinic$bmi)
+    minmax   = minmax(gp$BMI),
+    standard = as.numeric(scale(gp$BMI)),
+    robust   = ______(gp$BMI)
   )
   cat(nm, "outlier", round(z[i], 2),
       " bulk max", round(max(z[______]), 2), "\n")
@@ -322,13 +346,13 @@ excludes one position from a vector — a minus sign does it.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-i <- which.max(clinic$bmi)
+i <- which.max(gp$BMI)
 
 for (nm in c("minmax", "standard", "robust")) {
   z <- switch(nm,
-    minmax   = minmax(clinic$bmi),
-    standard = as.numeric(scale(clinic$bmi)),
-    robust   = robust(clinic$bmi)
+    minmax   = minmax(gp$BMI),
+    standard = as.numeric(scale(gp$BMI)),
+    robust   = robust(gp$BMI)
   )
   cat(nm, "outlier", round(z[i], 2),
       " bulk max", round(max(z[-i]), 2), "\n")
@@ -355,17 +379,17 @@ skewness <- function(x) {
   mean((x - mean(x))^3) / mean((x - mean(x))^2)^1.5
 }
 
-cat("bmi skew, as recorded:", round(skewness(clinic$bmi), 2), "\n")
-cat("after square root    :", round(skewness(sqrt(clinic$bmi)), 2), "\n")
-cat("after log            :", round(skewness(log(clinic$bmi)), 2), "\n")
+cat("BMI skew, as recorded:", round(skewness(gp$BMI), 2), "\n")
+cat("after square root    :", round(skewness(sqrt(gp$BMI)), 2), "\n")
+cat("after log            :", round(skewness(log(gp$BMI)), 2), "\n")
 ```
 
 Scaling, for contrast, leaves skewness **exactly** where it was — subtracting a
 constant and dividing by a constant cannot change a shape:
 
 ```{r}
-cat("min-max scaled :", round(skewness(minmax(clinic$bmi)), 2), "\n")
-cat("standardised   :", round(skewness(as.numeric(scale(clinic$bmi))), 2), "\n")
+cat("min-max scaled :", round(skewness(minmax(gp$BMI)), 2), "\n")
+cat("standardised   :", round(skewness(as.numeric(scale(gp$BMI))), 2), "\n")
 ```
 
 ### Log and square root are the same idea at different strengths
@@ -380,7 +404,7 @@ $\lambda = 2$ squares it. Smaller $\lambda$ pulls a long right tail in harder.
 powers <- c("square (2)" = 2, "none (1)" = 1, "sqrt (0.5)" = 0.5, "log (0)" = 0)
 
 purrr::imap_dfr(powers, function(lam, nm) {
-  v <- if (lam == 0) log(clinic$bmi) else clinic$bmi^lam
+  v <- if (lam == 0) log(gp$BMI) else gp$BMI^lam
   data.frame(label = nm, value = as.numeric(scale(v)))
 }) |>
   mutate(label = factor(label, levels = names(powers))) |>
@@ -395,7 +419,7 @@ you are turning one dial. Choosing between log and square root is choosing how
 far to turn it — not choosing between two unrelated techniques.
 
 One constraint comes with the family: the log of zero is undefined and the log
-of a negative number does not exist. `bmi` is strictly positive so it is safe
+of a negative number does not exist. `BMI` is strictly positive so it is safe
 here, but a column containing zeros — a count of previous admissions, say —
 needs `log1p`, or a transformation built to tolerate zeros.
 
@@ -450,9 +474,9 @@ residuals.
 from sklearn.preprocessing import PolynomialFeatures
 
 pf = PolynomialFeatures(degree=2, include_bias=False)
-wide = pf.fit_transform(clinic[num_cols])
-print("columns:", len(num_cols), "->", wide.shape[1])
-print(pf.get_feature_names_out(num_cols))
+wide = pf.fit_transform(gp_py[scale_cols])
+print("columns:", len(scale_cols), "->", wide.shape[1])
+print(pf.get_feature_names_out(scale_cols))
 ```
 
 Three columns became nine: each original, each square, and each pairwise
@@ -471,8 +495,8 @@ wrong rows.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-m1 <- lm(bp_systolic ~ age, data = clinic)
-m2 <- lm(bp_systolic ~ age + I(age^______), data = clinic)
+m1 <- lm(systolic_BP ~ age, data = gp)
+m2 <- lm(systolic_BP ~ age + I(age^______), data = gp)
 
 cat("residual SD, straight:", round(sigma(m1), 3), "\n")
 cat("residual SD, squared :", round(sigma(______), 3), "\n")
@@ -490,8 +514,8 @@ is what stops the formula interpreting `^` as an interaction.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-m1 <- lm(bp_systolic ~ age, data = clinic)
-m2 <- lm(bp_systolic ~ age + I(age^2), data = clinic)
+m1 <- lm(systolic_BP ~ age, data = gp)
+m2 <- lm(systolic_BP ~ age + I(age^2), data = gp)
 
 cat("residual SD, straight:", round(sigma(m1), 3), "\n")
 cat("residual SD, squared :", round(sigma(m2), 3), "\n")
@@ -514,9 +538,9 @@ there. Compare with the simulated bending example above, where it was.
 # Replace every ______ below, then run this cell.
 from sklearn.linear_model import LinearRegression
 
-X1 = clinic[["age"]].values
-X2 = np.column_stack([clinic["age"], clinic["age"] ** ______])
-y = clinic["bp_systolic"].values
+X1 = gp_py[["age"]].values
+X2 = np.column_stack([gp_py["age"], gp_py["age"] ** ______])
+y = gp_py["systolic_BP"].values
 
 for name, X in [("straight", X1), ("squared", X2)]:
     pred = LinearRegression().fit(X, y).predict(X)
@@ -536,9 +560,9 @@ squared residuals before the square root is taken.
 ```{python}
 from sklearn.linear_model import LinearRegression
 
-X1 = clinic[["age"]].values
-X2 = np.column_stack([clinic["age"], clinic["age"] ** 2])
-y = clinic["bp_systolic"].values
+X1 = gp_py[["age"]].values
+X2 = np.column_stack([gp_py["age"], gp_py["age"] ** 2])
+y = gp_py["systolic_BP"].values
 
 for name, X in [("straight", X1), ("squared", X2)]:
     pred = LinearRegression().fit(X, y).predict(X)
@@ -558,9 +582,9 @@ answer, and why @sec-pipeline-steps insists on a held-out split.
 
 ## Reflection
 
-1. Min-Max compressed the whole `bmi` column because one value set the maximum.
+1. Min-Max compressed the whole `BMI` column because one value set the maximum.
    Which of the three scalers would you choose for a variable where the extreme
-   values are real and clinically important, and why?
+   values are real and gpally important, and why?
 2. Standardising a column makes its mean 0 and its standard deviation 1. Does
    it make the column normally distributed? Justify your answer using the
    skewness numbers above.
@@ -574,12 +598,12 @@ answer, and why @sec-pipeline-steps insists on a held-out split.
 
 ### Stretch 1 — Find the turning power yourself
 Write a loop over $\lambda$ from $-1$ to $2$ in steps of $0.25$, compute the
-skewness of `bmi` raised to each power (using the log at $\lambda = 0$), and
+skewness of `BMI` raised to each power (using the log at $\lambda = 0$), and
 plot skewness against $\lambda$. Read the value that brings it closest to zero
 off your own plot. You have just performed a Box-Cox transformation by hand.
 
 ### Stretch 2 — Scaling where it changes an answer
-Fit a k-nearest-neighbours classifier for `outcome` on the three numeric
+Fit a k-nearest-neighbours classifier for `diabetes` on the three numeric
 columns, once unscaled and once standardised, and compare. Then explain the
 difference in terms of what a Euclidean distance does when one column is
 measured in hundreds and another in tens.
@@ -588,11 +612,11 @@ measured in hundreds and another in tens.
 
 You can say the features are on comparable scales, that you chose the scaler
 having looked at the distribution rather than by habit, that you know what the
-one bad `bmi` value does to each option, and that you can add a polynomial term
+one bad `BMI` value does to each option, and that you can add a polynomial term
 and test whether it earned its place.
 
 You cannot claim any of these numbers would survive contact with new data. Every
 minimum, maximum, mean, standard deviation, median and IQR above was computed
-from all 150 rows — including the rows you are about to hold out and call a
+from all 180 rows — including the rows you are about to hold out and call a
 test set. Each one is a quantity *learned from data*, and learning it from the
 wrong rows is the subject of @sec-pipeline-steps.

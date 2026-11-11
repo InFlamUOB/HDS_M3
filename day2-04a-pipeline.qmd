@@ -45,11 +45,15 @@ distinction impossible to get wrong.
 
 ## The target, and the one rule about it
 
-We predict `bp_systolic` from age, BMI and the two categorical columns.
+We predict `systolic_BP` from age, BMI, the GP practice and smoking status.
 
-Thirteen rows have no recorded blood pressure. **Do not impute them.** An
+Some patients have no recorded blood pressure. **Do not impute them.** An
 imputed target is a value you invented, scored against itself — the model would
 be rewarded for reproducing your own median. Drop those rows and say so.
+
+Everything before the split below is a **fixed** repair: recognising the
+missing-value codes, standardising the labels, correcting the heights in
+metres. None of it looks at the data to decide what to do.
 
 :::::: columns
 ::: {.column width="48%"}
@@ -59,27 +63,30 @@ be rewarded for reproducing your own median. Drop those rows and say so.
 import pandas as pd
 import numpy as np
 
-num = ["age", "bmi"]
-cat = ["referral_source",
-       "hospital_site"]
-ref_map = {
-    "GP": "GP", "gp": "GP",
-    "General Practitioner": "GP",
-    "A&E": "A&E",
-    "Self-referral": "Self-referral",
-}
+num = ["age", "BMI"]
+cat = ["GP_practice",
+       "smoking_status"]
+na_codes = ["unknown", "?",
+            "not recorded", "N/A",
+            "-999"]
 
 d = pd.read_csv(
     "data/clinic_extract.csv"
-)
-for c in num + ["bp_systolic"]:
+).replace(na_codes, np.nan)
+for c in ["age", "height_cm",
+          "weight_kg",
+          "systolic_BP"]:
     d[c] = pd.to_numeric(
-        d[c], errors="coerce"
-    )
-d["referral_source"] = (
-    d["referral_source"].map(ref_map)
-)
-d = d[d["bp_systolic"].notna()]
+        d[c], errors="coerce")
+d.loc[d.height_cm < 3,
+      "height_cm"] *= 100
+d.loc[d.age > 120, "age"] = np.nan
+d.loc[d.weight_kg > 300,
+      "weight_kg"] = np.nan
+d["BMI"] = (d.weight_kg /
+            (d.height_cm / 100) ** 2)
+
+d = d[d["systolic_BP"].notna()]
 d = d.reset_index(drop=True)
 d.shape
 ```
@@ -96,23 +103,39 @@ d.shape
 #| warning: false
 library(tidymodels)
 library(readr)
+library(stringr)
 
-num <- c("age", "bmi")
+na_codes <- c("unknown", "?",
+              "not recorded",
+              "N/A", "-999")
+num <- c("age", "height_cm",
+         "weight_kg",
+         "systolic_BP")
 
 d <- read_csv(
   "data/clinic_extract.csv",
   show_col_types = FALSE
 ) |>
   mutate(across(
-    all_of(c(num, "bp_systolic")),
-    ~ suppressWarnings(as.numeric(.x))
-  )) |>
-  mutate(referral_source = recode(
-    referral_source,
-    "gp" = "GP",
-    "General Practitioner" = "GP"
-  )) |>
-  filter(!is.na(bp_systolic))
+    everything(),
+    ~ if_else(
+      as.character(.x) %in% na_codes,
+      NA_character_,
+      as.character(.x)))) |>
+  mutate(across(all_of(num),
+                as.numeric)) |>
+  mutate(
+    height_cm = if_else(
+      height_cm < 3,
+      height_cm * 100, height_cm),
+    age = if_else(age > 120,
+                  NA_real_, age),
+    weight_kg = if_else(
+      weight_kg > 300,
+      NA_real_, weight_kg)) |>
+  mutate(BMI = weight_kg /
+           (height_cm / 100)^2) |>
+  filter(!is.na(systolic_BP))
 
 dim(d)
 ```
@@ -144,7 +167,7 @@ from sklearn.model_selection import (
 )
 
 X = d[num + cat]
-y = d["bp_systolic"]
+y = d["systolic_BP"]
 
 X_tr, X_te, y_tr, y_te = (
     train_test_split(
@@ -195,9 +218,9 @@ round(base_py, 3)
 **R**
 
 ```{r}
-guess <- median(train$bp_systolic)
+guess <- median(train$systolic_BP)
 base_r <- mean(abs(
-  test$bp_systolic - guess
+  test$systolic_BP - guess
 ))
 round(base_r, 3)
 ```
@@ -259,8 +282,8 @@ pipe = Pipeline([
 
 ```{r}
 rec <- recipe(
-  bp_systolic ~ age + bmi +
-    referral_source + hospital_site,
+  systolic_BP ~ age + BMI +
+    smoking_status + GP_practice,
   data = train
 ) |>
   step_other(
@@ -324,7 +347,7 @@ fitted_wf <- fit(wf, data = train)
 
 preds <- predict(fitted_wf, test)
 honest_r <- mean(abs(
-  test$bp_systolic - preds$.pred
+  test$systolic_BP - preds$.pred
 ))
 print(c(round(honest_r, 3),
         baseline = round(base_r, 3)))
@@ -443,7 +466,7 @@ print("difference %.4f" % (fine2 - leak2))
 
 Around three hundredths of a mmHg, and on this seed the leaked version is
 slightly **worse** — a leak is not obliged to flatter you. Twenty values were
-imputed (11 in `age`, 9 in `bmi`), and the two medians they were filled with
+imputed (11 in `age`, 9 in `BMI`), and the two medians they were filled with
 barely differ, because 109 training rows and 137 total rows have almost the
 same median. Change the seed and the sign of that difference changes with it,
 which is the signature of noise rather than of an effect.
@@ -464,9 +487,9 @@ before separating features from target, which is the natural order to work in.
 ```{python}
 from sklearn.impute import KNNImputer
 
-# WRONG: the imputer can see bp_systolic while filling age and bmi
+# WRONG: the imputer can see systolic_BP while filling age and BMI
 with_target = X[num].copy()
-with_target["bp_systolic"] = y.values
+with_target["systolic_BP"] = y.values
 filled = pd.DataFrame(
     KNNImputer(n_neighbors=5).fit_transform(with_target),
     columns=with_target.columns,
@@ -575,7 +598,7 @@ and the imputer is only ever handed the first.
 #| eval: false
 # Replace every ______ below, then run this cell.
 rec_knn <- recipe(
-  bp_systolic ~ age + bmi + referral_source + hospital_site,
+  systolic_BP ~ age + BMI + smoking_status + GP_practice,
   data = ______
 ) |>
   step_other(all_nominal_predictors(), threshold = 0.07) |>
@@ -586,7 +609,7 @@ rec_knn <- recipe(
 wf_knn <- workflow() |> add_recipe(rec_knn) |> add_model(linear_reg())
 fit_knn <- fit(wf_knn, data = ______)
 
-mean(abs(test$bp_systolic - predict(fit_knn, test)$.pred))
+mean(abs(test$systolic_BP - predict(fit_knn, test)$.pred))
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -601,7 +624,7 @@ analysis those are the same rows.
 ## Worked answer
 ```{r}
 rec_knn <- recipe(
-  bp_systolic ~ age + bmi + referral_source + hospital_site,
+  systolic_BP ~ age + BMI + smoking_status + GP_practice,
   data = train
 ) |>
   step_other(all_nominal_predictors(), threshold = 0.07) |>
@@ -612,10 +635,10 @@ rec_knn <- recipe(
 wf_knn <- workflow() |> add_recipe(rec_knn) |> add_model(linear_reg())
 fit_knn <- fit(wf_knn, data = train)
 
-mean(abs(test$bp_systolic - predict(fit_knn, test)$.pred))
+mean(abs(test$systolic_BP - predict(fit_knn, test)$.pred))
 ```
 
-The recipe names `bp_systolic` on the left of the formula, so every `step_*`
+The recipe names `systolic_BP` on the left of the formula, so every `step_*`
 knows it is the outcome and no step will use it as a predictor. That is the
 structural reason the leak cannot occur: the role of each column is declared
 once, and respected by everything downstream.
