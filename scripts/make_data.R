@@ -349,3 +349,67 @@ messy_gp <- tibble::tribble(
 
 readr::write_csv(messy_gp, "data/messy_gp_patients.csv", na = "")
 message("wrote messy_gp_patients.csv: ", nrow(messy_gp), " rows")
+
+# ---------------------------------------------------------------------------
+# hospital_admissions.csv and creatinine_truth.csv - Exercise 2.4
+#
+# 250 admissions. Own seed, so nothing above is disturbed. The design goals,
+# each checked after generation (see data/PROVENANCE.txt):
+#
+#   creatinine      right-skewed, because renal impairment becomes commoner
+#                   with age; partly predictable from age and heart rate, so a
+#                   model-based imputer has something to use, and partly not,
+#                   so it still misses
+#   missingness     creatinine is missing more often for emergency admissions
+#                   (missing at random given admission type); smoking history
+#                   likewise, since there is no time to take one
+#   CRP             complete and strongly right-skewed, for scaling and logs
+#   length_of_stay  log-normal, the skewed target for later exercises
+#   the reveal      18 of the patients with missing creatinine have their true
+#                   value kept in creatinine_truth.csv
+# ---------------------------------------------------------------------------
+
+set.seed(20263)
+n <- 250
+adm <- sample(c("Emergency","Elective"), n, replace = TRUE, prob = c(0.56, 0.44))
+age <- round(pmin(95, pmax(18, rnorm(n, 62, 16) + ifelse(adm == "Emergency", 3, 0))))
+height_cm <- round(rnorm(n, 168, 9.5))
+weight_kg <- round(rnorm(n, 78, 14), 1)
+heart_rate <- round(rnorm(n, 76, 11) + ifelse(adm == "Emergency", 7, 0))
+systolic_BP <- round(rnorm(n, 126, 14) + 0.25 * (age - 62))
+impaired <- runif(n) < plogis((age - 70) / 9) * 0.45
+creat_true <- round(68 + 0.70 * (age - 62) + 0.45 * (heart_rate - 76) +
+                    ifelse(adm == "Emergency", 10, 0) + rnorm(n, 0, 8) +
+                    impaired * rgamma(n, shape = 2.4, scale = 17))
+smoking <- sample(c("Never","Former","Current"), n, replace = TRUE,
+                  prob = c(0.45, 0.33, 0.22))
+los <- round(exp(1.1 + 0.012 * (age - 62) + 0.004 * (creat_true - 80) +
+                 ifelse(adm == "Emergency", 0.45, 0) + rnorm(n, 0, 0.5)), 1)
+
+hospital <- tibble::tibble(
+  patient_id = sprintf("H%03d", 1:n), admission_type = adm, age = age,
+  height_cm = height_cm, weight_kg = weight_kg, systolic_BP = systolic_BP,
+  heart_rate = heart_rate, creatinine = creat_true,
+  smoking_status = smoking, length_of_stay = los)
+
+hospital$creatinine[runif(n) <
+  ifelse(hospital$admission_type == "Emergency", 0.34, 0.09)] <- NA
+hospital$smoking_status[runif(n) <
+  ifelse(hospital$admission_type == "Emergency", 0.17, 0.03)] <- NA
+
+truth_ids <- sample(hospital$patient_id[is.na(hospital$creatinine)], 18)
+creatinine_truth <- tibble::tibble(
+  patient_id = truth_ids,
+  true_creatinine = creat_true[match(truth_ids, hospital$patient_id)])
+
+# CRP is drawn last, after everything above, so adding it changed no other
+# value in the file. Log-normal and complete: a long right tail for the scaling
+# and log-transform exercises, higher in emergencies and in longer stays.
+crp <- round(exp(1.3 + 0.9 * (adm == "Emergency") + 0.45 * log(los) +
+                 rnorm(n, 0, 0.95)), 1)
+hospital <- tibble::add_column(hospital, CRP = crp, .after = "creatinine")
+
+readr::write_csv(hospital, "data/hospital_admissions.csv", na = "")
+readr::write_csv(creatinine_truth, "data/creatinine_truth.csv")
+message("wrote hospital_admissions.csv: ", nrow(hospital), " rows; ",
+        "creatinine_truth.csv: ", nrow(creatinine_truth), " rows")

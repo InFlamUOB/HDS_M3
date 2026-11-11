@@ -4,374 +4,362 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 2.4 — Imputation {#sec-imputation}
+# Exercise 2.4 — Missing data and imputation {#sec-imputation}
 
 ::: {.callout-note appearance="simple"}
-## In R or in Python
-Pick a tab and stay in it. The two tabs are the same exercise — the same
-sections, the same tasks, the same numbers — so complete either one.
+## 20 minutes, in R or in Python
+Pick a tab and stay in it. The two tabs are the same exercise — the same steps,
+the same questions, and the same numbers apart from one place that says so.
 :::
 
 ## Objectives
 
 By the end of this exercise you will be able to:
 
-- quantify how much data you would lose by dropping every incomplete row;
-- fill missing values with a mean or a median, and measure what that does to
-  the spread of the column;
-- say why the median is the safer default for a skewed variable;
-- explain why imputing the inputs of a derived feature does not fill the
-  derived feature;
-- argue for leaving a value missing rather than inventing one.
+- describe who is missing, not just how much;
+- fill a missing number with a mean or median, and a missing category with its
+  mode, and say what each does to the distribution;
+- argue for keeping "Unknown" as a category;
+- impute a value from a patient's other measurements;
+- measure how wrong an imputation was, and say why it could not have been
+  right.
 
-## Why this, here
+## The scenario
 
-@sec-cleaning cleaned a small extract by hand. This chapter applies the same
-moves to a larger one, `clinic_extract.csv`, and then goes further: once the
-missing-value codes are real missing values they can finally be counted, and
-something has to be decided about them, because most models will not accept a
-missing value at all.
-
-## Starting point
-
-Each chapter stands alone, so the block below does in one go what
-@sec-cleaning did step by step — the codes recognised, the labels standardised,
-the three correctable heights fixed, the two impossible values admitted as
-missing — and then derives BMI.
+`hospital_admissions.csv` holds 250 emergency and elective admissions. The aim,
+eventually, is to predict length of stay — but some of the information is
+missing. Creatinine results are often not back yet when an emergency patient's
+record is extracted, and some patients have no recorded smoking status.
 
 :::::: {.panel-tabset group="language"}
 
 ## R
 
+### 1. Explore the missingness
+
+Load the data and count what is missing.
+
 ```{r}
 #| message: false
 #| warning: false
-library(dplyr)
-library(tidyr)
-library(readr)
-library(ggplot2)
-library(stringr)
-library(forcats)
+library(tidyverse)
+library(finalfit)
+library(mice)
 
-na_codes <- c("unknown", "?", "not recorded", "N/A", "-999")
-num_cols <- c("age", "height_cm", "weight_kg", "systolic_BP")
+hospital <- read_csv("data/hospital_admissions.csv", show_col_types = FALSE)
 
-gp <- read_csv("data/clinic_extract.csv", show_col_types = FALSE) |>
-  mutate(across(everything(), ~ if_else(as.character(.x) %in% na_codes,
-                                        NA_character_, as.character(.x)))) |>
-  mutate(across(all_of(num_cols), as.numeric),
-         diabetes = as.integer(diabetes)) |>
+glimpse(hospital)
+colSums(is.na(hospital))
+```
+
+Creatinine is missing for 42 of the 250 patients and smoking status for 32.
+Before deciding what to do about that, ask *who* is missing. Compare the
+patients with and without a creatinine result:
+
+```{r}
+hospital <- hospital |>
+  mutate(creatinine_missing = factor(
+    if_else(is.na(creatinine), "Missing", "Observed")))
+
+hospital |>
+  summary_factorlist(
+    dependent   = "creatinine_missing",
+    explanatory = c("admission_type", "age", "systolic_BP", "heart_rate"),
+    p = TRUE
+  )
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Are the patients with missing creatinine systematically different from the
+   rest? In which variable?
+2. What would happen to the cohort if you simply removed every patient with a
+   missing value?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Yes, and in one variable only. Emergency admissions make up 71% of the patients
+with no creatinine result but 50% of those with one (p = 0.018). Age, blood
+pressure and heart rate show no convincing difference.
+
+That is worth noticing: the missingness follows *how the patient arrived*, not
+what their measurements were. A comparison of the measurements alone would have
+found nothing.
+
+```{r}
+complete <- hospital |> drop_na()
+
+nrow(complete)
+round(100 * mean(hospital$admission_type == "Emergency"), 1)
+round(100 * mean(complete$admission_type == "Emergency"), 1)
+```
+
+Dropping incomplete rows keeps 182 of 250 — more than a quarter of the cohort
+gone — and the loss is not even. Emergency admissions fall from 53.6% of the
+data to 45.6%. A model fitted to what remains has been trained on a cohort that
+is more elective than the hospital really is, and nothing in the output would
+tell you.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### 2. Simple imputation
+
+#### A number: mean and median
+
+The simplest thing to do with a missing number is to put the column's own
+average in its place.
+
+```{r}
+hospital <- hospital |>
   mutate(
-    height_cm = if_else(height_cm < 3, height_cm * 100, height_cm),
-    age       = if_else(age > 120, NA_real_, age),
-    weight_kg = if_else(weight_kg > 300, NA_real_, weight_kg),
-    sex = case_when(
-      str_to_lower(str_trim(sex)) %in% c("male", "m")   ~ "Male",
-      str_to_lower(str_trim(sex)) %in% c("female", "f") ~ "Female"),
-    GP_practice = fct_lump_min(factor(GP_practice), min = 10,
-                               other_level = "Other")
+    creatinine_mean   = replace_na(creatinine, mean(creatinine, na.rm = TRUE)),
+    creatinine_median = replace_na(creatinine, median(creatinine, na.rm = TRUE))
+  )
+
+round(mean(hospital$creatinine, na.rm = TRUE), 1)
+median(hospital$creatinine, na.rm = TRUE)
+```
+
+Now look at what that did to the distribution:
+
+```{r}
+#| fig-height: 2.8
+#| warning: false
+hospital |>
+  select(observed = creatinine, `mean imputed` = creatinine_mean) |>
+  pivot_longer(everything()) |>
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30, fill = "steelblue") +
+  facet_wrap(~ name) +
+  labs(x = "Creatinine (µmol/L)", y = "Patients")
+
+round(sd(hospital$creatinine, na.rm = TRUE), 1)
+round(sd(hospital$creatinine_mean), 1)
+```
+
+#### A category: the most common value, or an honest "Unknown"
+
+Smoking status has three categories — Never, Former and Current — so there is
+no mean to take. The usual substitute is the most frequent category. The
+alternative is to say what you actually know.
+
+```{r}
+mode_smoking <- hospital |>
+  filter(!is.na(smoking_status)) |>
+  count(smoking_status, sort = TRUE) |>
+  slice(1) |>
+  pull(smoking_status)
+
+hospital <- hospital |>
+  mutate(
+    smoking_imputed = replace_na(smoking_status, mode_smoking),
+    smoking_unknown = replace_na(smoking_status, "Unknown")
+  )
+
+hospital |> count(smoking_status)
+hospital |> count(smoking_imputed)
+hospital |> count(smoking_unknown)
+```
+
+Before choosing between them, look at who the unknowns are:
+
+```{r}
+hospital |>
+  group_by(smoking_unknown) |>
+  summarise(patients = n(),
+            pct_emergency = round(100 * mean(admission_type == "Emergency")))
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. What did mean imputation do to the creatinine histogram, and to its standard
+   deviation?
+2. What happened to the smoking-status distribution after filling with the most
+   common category?
+3. Would keeping "Unknown" as its own category be more appropriate here? Use
+   the last table to argue it.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+**Creatinine.** Forty-two patients now sit on exactly the same value, 78.9, and
+the histogram grows a spike there that no real cohort has. The standard
+deviation falls from 24.4 to 22.2. Nothing was learned about those patients,
+but the column now looks more consistent than the measurements ever were — and
+every confidence interval computed from it afterwards will be too narrow. The
+median version does the same thing at 76.
+
+**Smoking.** "Never" was 107 of 250 patients, 42.8%. After mode imputation it
+is 139, 55.6%. Thirteen percentage points of never-smokers were created by the
+filling, and the other two categories did not move — the commonest group got
+commoner, which is exactly the direction that hides a minority.
+
+**Unknown.** Yes, here. The patients with no recorded smoking status are 84%
+emergency admissions, against roughly half of everyone else. They are not a
+random sample of the cohort: they are the people nobody had time to ask.
+Relabelling all 32 of them as never-smokers erases that. Keeping `Unknown` as a
+category invents nothing, and leaves a model free to learn that "not asked" is
+itself informative.
+
+The general rule: fill a category with its mode only when you believe the gaps
+are scattered at random. When *who is missing* carries meaning, say so.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### 3. Using the other variables
+
+Mean and median imputation give every patient the same number, whatever else is
+known about them. But an 85-year-old emergency admission and a 30-year-old
+elective one are unlikely to have the same creatinine. Can age, blood pressure
+and heart rate do better?
+
+`mice` fits a regression of creatinine on the other three columns, using the
+patients where it was measured, and predicts it where it was not. It is
+installed along with `finalfit`, so there is nothing extra to set up.
+
+```{r}
+imp <- hospital |>
+  select(age, systolic_BP, heart_rate, creatinine) |>
+  mice(m = 1, maxit = 1, method = "norm.predict", printFlag = FALSE)
+
+hospital$creatinine_advanced <- complete(imp)$creatinine
+
+sum(is.na(hospital$creatinine_advanced))
+```
+
+::: {.callout-note appearance="simple"}
+## What the three arguments mean
+`m = 1` asks for one filled-in dataset. `maxit = 1` is one pass, which is all
+that is needed here because only creatinine has gaps among these four columns.
+`method = "norm.predict"` fills each gap with the regression's best guess.
+
+The Python tab does the same job with scikit-learn's `IterativeImputer`. The
+two are the same idea, so their answers land very close together but are not
+identical.
+:::
+
+::: {.callout-important appearance="simple"}
+## Think about it
+Two patients of the same age, with the same blood pressure and heart rate, will
+be given the same imputed creatinine. Why might their real values be very
+different?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Because creatinine depends on things this table does not contain: kidney
+disease, muscle mass, hydration, sex, the drugs the patient is on. Two patients
+who look identical on three vital signs can differ on every one of those.
+
+The imputer can only use the columns it is given. It is not estimating the
+patient's creatinine; it is reporting the average creatinine of patients who
+resemble them on age, blood pressure and heart rate.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### 4. The reveal: how close were we?
+
+For 18 of the patients with no creatinine, the real measurement was kept back.
+Here it is.
+
+```{r}
+creatinine_truth <- read_csv("data/creatinine_truth.csv",
+                             show_col_types = FALSE)
+
+comparison <- hospital |>
+  inner_join(creatinine_truth, by = "patient_id")
+
+comparison |>
+  select(patient_id, true_creatinine,
+         creatinine_mean, creatinine_median, creatinine_advanced) |>
+  mutate(across(where(is.numeric), ~ round(.x, 1))) |>
+  head(6)
+```
+
+Read across each row. The mean and median columns are one number repeated. The
+last column moves with the patient — and still does not match the truth for
+any of them.
+
+Now the average size of the miss, across all 18:
+
+```{r}
+comparison |>
+  summarise(
+    Mean     = mean(abs(true_creatinine - creatinine_mean)),
+    Median   = mean(abs(true_creatinine - creatinine_median)),
+    Advanced = mean(abs(true_creatinine - creatinine_advanced))
   ) |>
-  mutate(BMI = weight_kg / (height_cm / 100)^2)
-
-dim(gp)
+  round(2)
 ```
 
-Note that `BMI` is itself derived from two columns that have gaps, so it
-inherits both — one of the things this exercise has to deal with.
-
-#### How much is missing, and where
-
-```{r}
-print(colSums(is.na(gp[num_cols])))
-cat("BMI missing:", sum(is.na(gp$BMI)), "\n")
-cat("complete rows:", sum(complete.cases(gp)), "of", nrow(gp), "\n")
-```
-
-Note the arithmetic. The four numeric columns are missing 1, 12, 8 and 14
-values — 35 in total — and `BMI` is missing 20 of its own, inherited from
-height and weight. Yet 46 of the 180 rows are incomplete, leaving 134 whole.
-Forty-six is more than any single column's gap count, because the gaps fall in
-different rows. This is the first argument against dropping incomplete rows:
-the loss compounds across columns, and it compounds faster the more columns
-you have.
-
-------------------------------------------------------------------------
-
-### Mean and median imputation
-
-The idea is the simplest one available: put the column's own average where a
-value is missing. It needs no model, no package, and one line.
-
-```{r}
-imp_mean <- gp |>
-  mutate(across(all_of(num_cols),
-                ~ if_else(is.na(.x), mean(.x, na.rm = TRUE), .x)))
-
-imp_median <- gp |>
-  mutate(across(all_of(num_cols),
-                ~ if_else(is.na(.x), median(.x, na.rm = TRUE), .x)))
-
-cat("missing left, mean:  ", sum(is.na(imp_mean[num_cols])), "\n")
-cat("missing left, median:", sum(is.na(imp_median[num_cols])), "\n")
-```
-
-`scikit-learn`'s `SimpleImputer` does the same job in the Python tab, and that
-is the form you will meet again in @sec-pipeline-steps, where the imputer has
-to be fitted on the training rows alone.
-
-#### What it did to the spread
-
-Thirty-five values across four columns have just been replaced by four
-repeated numbers, so those rows now sit exactly on top of each other in each
-column. The standard deviations must fall. Measure it rather than taking it on
-trust:
-
-```{r}
-comparison <- data.frame(
-  column    = num_cols,
-  sd_before = sapply(gp[num_cols], sd, na.rm = TRUE),
-  sd_mean   = sapply(imp_mean[num_cols], sd),
-  sd_median = sapply(imp_median[num_cols], sd)
-)
-comparison$pct_change_mean <- round(
-  100 * (comparison$sd_mean - comparison$sd_before) / comparison$sd_before, 1)
-comparison
-```
-
-Every standard deviation shrank — by 0.3% for `age`, which was missing one
-value, and by 4.0% for `systolic_BP`, which was missing fourteen. The size of
-the shrinkage tracks how much of the column you invented.
-
-That matters because a standard deviation is what a confidence interval is
-built from: impute the mean into 8% of a column and every interval computed
-from it afterwards is narrower than the evidence justifies. You have not added
-information, but you have made the data look as though you had.
-
-#### Why median, for this column
-
-`BMI` is right-skewed. The mean is pulled upward by the heavier tail; the
-median is not.
-
-```{r}
-cat("BMI mean  :", round(mean(gp$BMI, na.rm = TRUE), 2), "\n")
-cat("BMI median:", round(median(gp$BMI, na.rm = TRUE), 2), "\n")
-```
-
-A gap of 0.35 of a BMI unit between the two. That is small here because the
-skew is mild, and it is the right habit anyway: whichever you choose, every
-filled-in value inherits it, so on a strongly skewed column the mean would put
-a block of patients at a value most of the cohort sits below.
-
-#### A derived feature does not impute itself
-
-Here is the trap. `BMI` was computed from height and weight **before** the
-imputation, so filling the gaps in those two columns does nothing to it — the
-derived column still has every gap it started with.
-
-```{r}
-cat("BMI missing, before imputing:", sum(is.na(gp$BMI)), "\n")
-cat("BMI missing, after imputing height and weight:",
-    sum(is.na(imp_median$BMI)), "\n")
-```
-
-Twenty before, twenty after. Unchanged. The fix is to recompute the derived
-column from the filled inputs, and the order matters: impute first, then
-derive.
-
-```{r}
-imp_median <- imp_median |>
-  mutate(BMI = weight_kg / (height_cm / 100)^2)
-
-cat("BMI missing, after recomputing:", sum(is.na(imp_median$BMI)), "\n")
-```
-
-Zero. Note what those recomputed BMI values now are: a ratio of two numbers
-that were themselves invented. The uncertainty does not announce itself — it is
-buried one step further from the data than it was before.
-
-Now colour the imputed rows, because a value at the median does not announce
-itself in a histogram either — it lands inside the existing peak and disappears:
-
-```{r}
-#| fig-height: 2.6
-imp_median |>
-  mutate(source = if_else(is.na(gp$weight_kg) | is.na(gp$height_cm),
-                          "imputed", "observed")) |>
-  ggplot(aes(x = BMI, fill = source)) +
-  geom_histogram(bins = 30) +
-  scale_fill_manual(values = c(imputed = "#c0392b", observed = "grey40")) +
-  labs(x = "BMI", y = NULL, fill = NULL)
-```
-
-Twenty red rows, all of them inside the existing peak. That is the honest
-picture, and it is also the warning: had you not kept track of which rows you
-filled, nothing in the finished column would tell you. A column of imputed
-values looks exactly like a column of measurements. Record which is which — a
-`BMI_was_missing` indicator costs one column and keeps the distinction
-available to everything downstream.
-
-------------------------------------------------------------------------
-
-### Task 1 — What dropping costs
-
-Dropping every incomplete row is the default in a surprising amount of
-published analysis, usually silently. Quantify it.
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-kept <- gp |> filter(______(gp))
-cat(nrow(kept), "of", nrow(gp), "\n")
-cat("lost:", round(100 * (1 - nrow(kept) / nrow(gp)), 1), "%\n")
-
-# Did dropping change who is in the data?
-cat(round(mean(gp$diabetes), 3), "\n")
-cat(round(mean(kept$______), 3), "\n")
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is the function returning TRUE for rows with no missing value
-anywhere. The last is the `diabetes` column, so you can compare its rate before
-and after.
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Which method came closest?
+2. Did the advanced method get any single patient exactly right?
+3. What clinical information, missing from this table, would have helped?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-```{r}
-kept <- gp |> filter(complete.cases(gp))
-cat(nrow(kept), "of", nrow(gp), "\n")
-cat("lost:", round(100 * (1 - nrow(kept) / nrow(gp)), 1), "%\n")
+The advanced method, with an average miss of about 8.4 µmol/L against 11.4 for
+the mean and 11.3 for the median. (It reads 8.45 in the R tab and 8.35 in the
+Python tab, because the two packages fit the regression slightly differently.)
 
-cat(round(mean(gp$diabetes), 3), "\n")
-cat(round(mean(kept$diabetes), 3), "\n")
-```
+It got **none** of the 18 exactly right. Only 6 were within 5 µmol/L. The worst
+was patient H151, imputed at about 113 against a real 92 — more than 20 out.
 
-A quarter of the cohort goes — 134 rows kept of 180, 25.6% lost. The outcome
-rate barely moves, from 0.233 to 0.224, which is what you expect when values
-were blanked out at random — and is exactly what you cannot count on when they
-were not.
+So using the other variables helped, by about a quarter. It did not recover the
+truth, and it could not have: renal history, medication and muscle mass are the
+things that move creatinine, and none of them is in the table.
 :::
 :::
 
 ------------------------------------------------------------------------
 
-### Task 2 — The categorical analogue
+### What to take from this
 
-A mean is no use to a column of practice names. The usual substitute is the
-most frequent category. Find it, and see how big it already is.
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-mode_site <- names(sort(table(gp$GP_practice), decreasing = ______))[1]
-mode_site
-
-sum(gp$GP_practice == mode_site)
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-You want the *largest* count first.
+::: {.callout-warning appearance="simple"}
+## Imputation is making data up
+Every value you filled in this exercise is an invention. A careful one, in the
+last case, but an invention — and once it is in the column it looks exactly like
+a measurement.
 :::
 
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-mode_site <- names(sort(table(gp$GP_practice), decreasing = TRUE))[1]
-mode_site
+1. **Look at who is missing before deciding what to do.** Here the gaps tracked
+   emergency admission, so dropping them would have quietly changed the cohort.
+2. **Simple methods distort.** The mean put 42 patients on one value and
+   shrank the spread; the mode turned 43% never-smokers into 56%.
+3. **Better methods are better, not right.** Using three other variables cut
+   the error by about a quarter and still missed one patient by more than 20.
+4. **Sometimes the honest answer is a category called Unknown.**
 
-sum(gp$GP_practice == mode_site)
-```
+### Optional: multiple imputation
 
-Bournbrook, with 49 of the 180 patients. Most-frequent-category imputation is
-the categorical analogue of the mean, and it has the same defect in a sharper
-form: it makes the commonest category commoner, which is precisely the
-direction that hides a minority group. Filling a missing practice with
-Bournbrook does not record ignorance, it records a guess that favours the
-majority.
-:::
-:::
+The `mice` package is built for something more than the single fill used above.
+Its default method does not give each gap one best guess; it draws a *plausible*
+value, and it is meant to be run several times, so that the spread between the
+filled-in datasets shows how uncertain each value was. That is multiple
+imputation, and it is the honest way to carry imputation uncertainty through to
+a final result. Read more at [amices.org/mice](https://amices.org/mice/).
 
-------------------------------------------------------------------------
-
-### Reflection
-
-1. The four numeric columns were missing 1, 12, 8 and 14 values, yet 46 of the
-   180 rows were incomplete. Explain the arithmetic to someone who has not seen
-   the data, and say what it implies for a dataset with 50 columns.
-2. Mean imputation shrank every standard deviation. Name one statistic you
-   would report after imputing that would now be wrong, and say in which
-   direction.
-3. Imputing height and weight left `BMI` exactly as missing as before. Name
-   another derived quantity in a clinical dataset where the same trap would
-   apply.
-4. Under what circumstance is leaving a value missing — and telling the reader
-   it is missing — a better answer than any of the methods here?
-
-### Stretch
-
-#### Stretch 1 — Iterative imputation
-
-Mean imputation ignores every other column. If a patient's `BMI` is missing but
-their `age` and `systolic_BP` are recorded, those two carry information about
-the likely `BMI`, and the mean throws it away. Iterative imputation uses it: it
-models each column with missing values as a function of the other columns,
-predicts the gaps, and repeats — each round using the previous round's filled-in
-values — until the estimates settle.
-
-It is a model, and it carries a model's assumptions: that the columns are
-related in a way the imputer can represent, and that the missingness does not
-itself depend on the value that is missing. For this dataset we happen to know
-the second assumption holds, because `data/PROVENANCE.txt` records that values
-were blanked out at random after the outcome was generated. On real data you
-would not know that, and you would have to argue for it.
-
-R's implementation is the [`mice` package](https://amices.org/mice/), whose
-name is the method: Multivariate Imputation by Chained Equations. It is not
-used anywhere in this booklet, so treat this as reading rather than a cell to
-run. Two things are worth knowing before you reach for it. Its default method
-for a numeric column is predictive mean matching, which borrows a real observed
-value from a similar patient rather than predicting a new one. And it is built
-to produce *several* completed datasets rather than one, because the spread
-between them is the measure of how uncertain each filled-in value was —
-asking it for a single dataset throws away the thing it exists to give you.
-
-The Python tab shows the scikit-learn equivalent,
-[`IterativeImputer`](https://scikit-learn.org/stable/modules/generated/sklearn.impute.IterativeImputer.html),
-if you want to see one run.
-
-#### Stretch 2 — Make the imputation wrong on purpose
-The values in this file were blanked out at random. Blank out `BMI` instead
-for the patients with the highest `systolic_BP`, then impute with the mean and
-compare the imputed values against the ones you deleted. You know the truth,
-so you can measure the error — and see how an assumption of random missingness
-fails when it is not true.
-
-#### Stretch 3 — Does better imputation buy a better model?
-Fit the same classifier on the mean-imputed and the median-imputed data and
-compare the test-set accuracy. Form a view before you run it. Then consider how
-much of any difference you would be willing to attribute to the imputer, given
-that the comparison rests on one split.
-
-### What you can and cannot now claim
-
-You can say the extract is now complete: no model will refuse it, and you can
-state exactly which values were observed and which you supplied, and by what
-rule.
-
-You cannot say the imputed values are correct. They are estimates, and the mean
-and median versions are estimates that ignore every other column in the table.
-You also cannot claim your downstream uncertainty is honest — the shrinkage you
-measured is still there.
-
-And once again, none of this was done safely. Every mean and median above was
-computed from all 180 rows, including the rows you will later use to test. That
-is @sec-pipeline-steps.
+Next: @sec-scaling.
 
 ## Python
+
+### 1. Explore the missingness
+
+Load the data and count what is missing.
 
 ```{python}
 #| message: false
@@ -379,340 +367,305 @@ is @sec-pipeline-steps.
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import stats
 
-na_codes = ["unknown", "?", "not recorded", "N/A", "-999"]
-num_cols = ["age", "height_cm", "weight_kg", "systolic_BP"]
+hospital = pd.read_csv("data/hospital_admissions.csv")
 
-gp_py = pd.read_csv("data/clinic_extract.csv",
-                    keep_default_na=False, na_values=[""])
-gp_py = gp_py.replace(na_codes, np.nan).replace(-999, np.nan)
-for c in num_cols:
-    gp_py[c] = pd.to_numeric(gp_py[c], errors="coerce")
-
-gp_py.loc[gp_py.height_cm < 3, "height_cm"] *= 100
-gp_py.loc[gp_py.age > 120, "age"] = np.nan
-gp_py.loc[gp_py.weight_kg > 300, "weight_kg"] = np.nan
-
-spelling = gp_py["sex"].str.strip().str.lower()
-sex_clean = pd.Series(np.nan, index=gp_py.index, dtype="object")
-sex_clean[spelling.isin(["male", "m"])]   = "Male"
-sex_clean[spelling.isin(["female", "f"])] = "Female"
-gp_py["sex"] = sex_clean
-
-counts = gp_py["GP_practice"].value_counts()
-rare = counts[counts < 10].index
-gp_py["GP_practice"] = gp_py["GP_practice"].where(
-    ~gp_py["GP_practice"].isin(rare), "Other")
-
-gp_py["BMI"] = gp_py.weight_kg / (gp_py.height_cm / 100) ** 2
-
-print(gp_py.shape)
+print(hospital.dtypes)
+print(hospital.isna().sum())
 ```
 
-Note that `BMI` is itself derived from two columns that have gaps, so it
-inherits both — one of the things this exercise has to deal with.
-
-#### How much is missing, and where
+Creatinine is missing for 42 of the 250 patients and smoking status for 32.
+Before deciding what to do about that, ask *who* is missing. Compare the
+patients with and without a creatinine result:
 
 ```{python}
-print(gp_py[num_cols].isna().sum())
-print("BMI missing:", int(gp_py["BMI"].isna().sum()))
-print("complete rows:", gp_py.dropna().shape[0], "of", gp_py.shape[0])
+hospital["creatinine_missing"] = np.where(
+    hospital["creatinine"].isna(), "Missing", "Observed")
+
+table = pd.crosstab(hospital["admission_type"], hospital["creatinine_missing"])
+print((100 * table / table.sum()).round(1))
+print("p =", round(stats.chi2_contingency(table)[1], 3), "\n")
+
+for col in ["age", "systolic_BP", "heart_rate"]:
+    missing  = hospital.loc[hospital["creatinine_missing"] == "Missing", col]
+    observed = hospital.loc[hospital["creatinine_missing"] == "Observed", col]
+    print(f"{col:12s} {missing.mean():6.1f} ({missing.std():.1f})   "
+          f"{observed.mean():6.1f} ({observed.std():.1f})   "
+          f"p = {stats.ttest_ind(missing, observed).pvalue:.3f}")
 ```
 
-Note the arithmetic. The four numeric columns are missing 1, 12, 8 and 14
-values — 35 in total — and `BMI` is missing 20 of its own, inherited from
-height and weight. Yet 46 of the 180 rows are incomplete, leaving 134 whole.
-Forty-six is more than any single column's gap count, because the gaps fall in
-different rows. This is the first argument against dropping incomplete rows:
-the loss compounds across columns, and it compounds faster the more columns
-you have.
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Are the patients with missing creatinine systematically different from the
+   rest? In which variable?
+2. What would happen to the cohort if you simply removed every patient with a
+   missing value?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Yes, and in one variable only. Emergency admissions make up 71% of the patients
+with no creatinine result but 50% of those with one (p = 0.018). Age, blood
+pressure and heart rate show no convincing difference.
+
+That is worth noticing: the missingness follows *how the patient arrived*, not
+what their measurements were. A comparison of the measurements alone would have
+found nothing.
+
+```{python}
+complete = hospital.dropna()
+
+print(len(complete))
+print(round(100 * (hospital["admission_type"] == "Emergency").mean(), 1))
+print(round(100 * (complete["admission_type"] == "Emergency").mean(), 1))
+```
+
+Dropping incomplete rows keeps 182 of 250 — more than a quarter of the cohort
+gone — and the loss is not even. Emergency admissions fall from 53.6% of the
+data to 45.6%. A model fitted to what remains has been trained on a cohort that
+is more elective than the hospital really is, and nothing in the output would
+tell you.
+:::
+:::
 
 ------------------------------------------------------------------------
 
-### Mean and median imputation
+### 2. Simple imputation
 
-The idea is the simplest one available: put the column's own average where a
-value is missing. It needs no model, no package, and one line.
+#### A number: mean and median
+
+The simplest thing to do with a missing number is to put the column's own
+average in its place.
 
 ```{python}
-imp_mean = gp_py.copy()
-imp_mean[num_cols] = gp_py[num_cols].fillna(gp_py[num_cols].mean())
+hospital["creatinine_mean"] = hospital["creatinine"].fillna(
+    hospital["creatinine"].mean())
+hospital["creatinine_median"] = hospital["creatinine"].fillna(
+    hospital["creatinine"].median())
 
-imp_median = gp_py.copy()
-imp_median[num_cols] = gp_py[num_cols].fillna(gp_py[num_cols].median())
-
-print("missing left, mean:  ", int(imp_mean[num_cols].isna().sum().sum()))
-print("missing left, median:", int(imp_median[num_cols].isna().sum().sum()))
+print(round(hospital["creatinine"].mean(), 1))
+print(hospital["creatinine"].median())
 ```
 
-`SimpleImputer(strategy="mean")` does the same job through `scikit-learn`, and
-that is the form you will meet again in @sec-pipeline-steps, where the imputer
-has to be fitted on the training rows alone. `fillna` is used here because this
-chapter is about what imputation *does*, not yet about where it belongs.
-
-#### What it did to the spread
-
-Thirty-five values across four columns have just been replaced by four
-repeated numbers, so those rows now sit exactly on top of each other in each
-column. The standard deviations must fall. Measure it rather than taking it on
-trust:
+Now look at what that did to the distribution:
 
 ```{python}
-comparison = pd.DataFrame({
-    "sd_before": gp_py[num_cols].std(),
-    "sd_mean":   imp_mean[num_cols].std(),
-    "sd_median": imp_median[num_cols].std(),
-})
-comparison["pct_change_mean"] = (
-    100 * (comparison.sd_mean - comparison.sd_before) / comparison.sd_before
-).round(1)
-print(comparison.round(3))
-```
-
-Every standard deviation shrank — by 0.3% for `age`, which was missing one
-value, and by 4.0% for `systolic_BP`, which was missing fourteen. The size of
-the shrinkage tracks how much of the column you invented.
-
-That matters because a standard deviation is what a confidence interval is
-built from: impute the mean into 8% of a column and every interval computed
-from it afterwards is narrower than the evidence justifies. You have not added
-information, but you have made the data look as though you had.
-
-#### Why median, for this column
-
-`BMI` is right-skewed. The mean is pulled upward by the heavier tail; the
-median is not.
-
-```{python}
-print("BMI mean  :", round(gp_py["BMI"].mean(), 2))
-print("BMI median:", round(gp_py["BMI"].median(), 2))
-```
-
-A gap of 0.35 of a BMI unit between the two. That is small here because the
-skew is mild, and it is the right habit anyway: whichever you choose, every
-filled-in value inherits it, so on a strongly skewed column the mean would put
-a block of patients at a value most of the cohort sits below.
-
-#### A derived feature does not impute itself
-
-Here is the trap. `BMI` was computed from height and weight **before** the
-imputation, so filling the gaps in those two columns does nothing to it — the
-derived column still has every gap it started with.
-
-```{python}
-print("BMI missing, before imputing:", int(gp_py["BMI"].isna().sum()))
-print("BMI missing, after imputing height and weight:",
-      int(imp_median["BMI"].isna().sum()))
-```
-
-Twenty before, twenty after. Unchanged. The fix is to recompute the derived
-column from the filled inputs, and the order matters: impute first, then
-derive.
-
-```{python}
-imp_median["BMI"] = imp_median.weight_kg / (imp_median.height_cm / 100) ** 2
-
-print("BMI missing, after recomputing:", int(imp_median["BMI"].isna().sum()))
-```
-
-Zero. Note what those recomputed BMI values now are: a ratio of two numbers
-that were themselves invented. The uncertainty does not announce itself — it is
-buried one step further from the data than it was before.
-
-Now colour the imputed rows, because a value at the median does not announce
-itself in a histogram either — it lands inside the existing peak and disappears:
-
-```{python}
-#| fig-height: 2.6
-was_filled = gp_py["weight_kg"].isna() | gp_py["height_cm"].isna()
-
-fig, ax = plt.subplots(figsize=(7, 2.6))
-bins = np.histogram_bin_edges(imp_median["BMI"].dropna(), bins=30)
-ax.hist([imp_median.loc[~was_filled, "BMI"], imp_median.loc[was_filled, "BMI"]],
-        bins=bins, stacked=True, color=["grey", "#c0392b"],
-        label=["observed", "imputed"])
-ax.set_xlabel("BMI")
-ax.legend(frameon=False)
+#| fig-height: 2.8
+fig, axes = plt.subplots(1, 2, figsize=(8, 2.8), sharey=True)
+axes[0].hist(hospital["creatinine_mean"], bins=30, color="steelblue")
+axes[0].set_title("mean imputed")
+axes[1].hist(hospital["creatinine"].dropna(), bins=30, color="steelblue")
+axes[1].set_title("observed")
+for ax in axes:
+    ax.set_xlabel("Creatinine (µmol/L)")
+axes[0].set_ylabel("Patients")
+fig.tight_layout()
 plt.show()
+
+print(round(hospital["creatinine"].std(), 1))
+print(round(hospital["creatinine_mean"].std(), 1))
 ```
 
-Twenty red rows, all of them inside the existing peak. That is the honest
-picture, and it is also the warning: had you not kept track of which rows you
-filled, nothing in the finished column would tell you. A column of imputed
-values looks exactly like a column of measurements. Record which is which — a
-`BMI_was_missing` indicator costs one column and keeps the distinction
-available to everything downstream.
+#### A category: the most common value, or an honest "Unknown"
 
-------------------------------------------------------------------------
-
-### Task 1 — What dropping costs
-
-Dropping every incomplete row is the default in a surprising amount of
-published analysis, usually silently. Quantify it.
+Smoking status has three categories — Never, Former and Current — so there is
+no mean to take. The usual substitute is the most frequent category. The
+alternative is to say what you actually know.
 
 ```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-kept = gp_py.______()
-print(kept.shape[0], "of", gp_py.shape[0])
-print("lost:", round(100 * (1 - kept.shape[0] / gp_py.shape[0]), 1), "%")
+mode_smoking = hospital["smoking_status"].value_counts().index[0]
 
-# Did dropping change who is in the data?
-print(round(gp_py["diabetes"].mean(), 3))
-print(round(kept["______"].mean(), 3))
+hospital["smoking_imputed"] = hospital["smoking_status"].fillna(mode_smoking)
+hospital["smoking_unknown"] = hospital["smoking_status"].fillna("Unknown")
+
+print(hospital["smoking_status"].value_counts(dropna=False).sort_index())
+print(hospital["smoking_imputed"].value_counts().sort_index())
+print(hospital["smoking_unknown"].value_counts().sort_index())
 ```
 
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is the method that removes rows containing any missing value.
-The last is the `diabetes` column, so you can compare its rate before and after.
+Before choosing between them, look at who the unknowns are:
+
+```{python}
+print(hospital.groupby("smoking_unknown").agg(
+    patients=("patient_id", "size"),
+    pct_emergency=("admission_type",
+                   lambda s: round(100 * (s == "Emergency").mean()))))
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. What did mean imputation do to the creatinine histogram, and to its standard
+   deviation?
+2. What happened to the smoking-status distribution after filling with the most
+   common category?
+3. Would keeping "Unknown" as its own category be more appropriate here? Use
+   the last table to argue it.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-```{python}
-kept = gp_py.dropna()
-print(kept.shape[0], "of", gp_py.shape[0])
-print("lost:", round(100 * (1 - kept.shape[0] / gp_py.shape[0]), 1), "%")
+**Creatinine.** Forty-two patients now sit on exactly the same value, 78.9, and
+the histogram grows a spike there that no real cohort has. The standard
+deviation falls from 24.4 to 22.2. Nothing was learned about those patients,
+but the column now looks more consistent than the measurements ever were — and
+every confidence interval computed from it afterwards will be too narrow. The
+median version does the same thing at 76.
 
-print(round(gp_py["diabetes"].mean(), 3))
-print(round(kept["diabetes"].mean(), 3))
-```
+**Smoking.** "Never" was 107 of 250 patients, 42.8%. After mode imputation it
+is 139, 55.6%. Thirteen percentage points of never-smokers were created by the
+filling, and the other two categories did not move — the commonest group got
+commoner, which is exactly the direction that hides a minority.
 
-A quarter of the cohort goes — 134 rows kept of 180, 25.6% lost. The outcome
-rate barely moves, from 0.233 to 0.224, which is what you expect when values
-were blanked out at random — and is exactly what you cannot count on when they
-were not.
+**Unknown.** Yes, here. The patients with no recorded smoking status are 84%
+emergency admissions, against roughly half of everyone else. They are not a
+random sample of the cohort: they are the people nobody had time to ask.
+Relabelling all 32 of them as never-smokers erases that. Keeping `Unknown` as a
+category invents nothing, and leaves a model free to learn that "not asked" is
+itself informative.
+
+The general rule: fill a category with its mode only when you believe the gaps
+are scattered at random. When *who is missing* carries meaning, say so.
 :::
 :::
 
 ------------------------------------------------------------------------
 
-### Task 2 — The categorical analogue
+### 3. Using the other variables
 
-A mean is no use to a column of practice names. The usual substitute is the
-most frequent category. Find it, and see how big it already is.
+Mean and median imputation give every patient the same number, whatever else is
+known about them. But an 85-year-old emergency admission and a 30-year-old
+elective one are unlikely to have the same creatinine. Can age, blood pressure
+and heart rate do better?
 
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-mode_site = gp_py["GP_practice"].value_counts().index[______]
-print(mode_site)
-
-print(int((gp_py["GP_practice"] == mode_site).sum()))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-`value_counts()` is already sorted largest first, so you want its first entry.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-mode_site = gp_py["GP_practice"].value_counts().index[0]
-print(mode_site)
-
-print(int((gp_py["GP_practice"] == mode_site).sum()))
-```
-
-Bournbrook, with 49 of the 180 patients. Most-frequent-category imputation is
-the categorical analogue of the mean, and it has the same defect in a sharper
-form: it makes the commonest category commoner, which is precisely the
-direction that hides a minority group. Filling a missing practice with
-Bournbrook does not record ignorance, it records a guess that favours the
-majority.
-:::
-:::
-
-------------------------------------------------------------------------
-
-### Reflection
-
-1. The four numeric columns were missing 1, 12, 8 and 14 values, yet 46 of the
-   180 rows were incomplete. Explain the arithmetic to someone who has not seen
-   the data, and say what it implies for a dataset with 50 columns.
-2. Mean imputation shrank every standard deviation. Name one statistic you
-   would report after imputing that would now be wrong, and say in which
-   direction.
-3. Imputing height and weight left `BMI` exactly as missing as before. Name
-   another derived quantity in a clinical dataset where the same trap would
-   apply.
-4. Under what circumstance is leaving a value missing — and telling the reader
-   it is missing — a better answer than any of the methods here?
-
-### Stretch
-
-#### Stretch 1 — Iterative imputation
-
-Mean imputation ignores every other column. If a patient's `BMI` is missing but
-their `age` and `systolic_BP` are recorded, those two carry information about
-the likely `BMI`, and the mean throws it away. Iterative imputation uses it: it
-models each column with missing values as a function of the other columns,
-predicts the gaps, and repeats — each round using the previous round's filled-in
-values — until the estimates settle.
-
-It is a model, and it carries a model's assumptions: that the columns are
-related in a way the imputer can represent, and that the missingness does not
-itself depend on the value that is missing. For this dataset we happen to know
-the second assumption holds, because `data/PROVENANCE.txt` records that values
-were blanked out at random after the outcome was generated. On real data you
-would not know that, and you would have to argue for it.
-
-`scikit-learn` ships this as
-[`IterativeImputer`](https://scikit-learn.org/stable/modules/generated/sklearn.impute.IterativeImputer.html),
-still marked experimental, so it has to be enabled explicitly:
+`IterativeImputer` fits a regression of creatinine on the other three columns,
+using the patients where it was measured, and predicts it where it was not. It
+is still marked experimental in scikit-learn, so it has to be switched on.
 
 ```{python}
 from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer
 
-imp = IterativeImputer(random_state=42, max_iter=20)
-imp_iter = gp_py.copy()
-imp_iter[num_cols] = imp.fit_transform(gp_py[num_cols])
+features = ["age", "systolic_BP", "heart_rate", "creatinine"]
 
-print("missing left:", int(imp_iter[num_cols].isna().sum().sum()))
-print("iterations run:", imp.n_iter_)
+imputer = IterativeImputer(random_state=42)
+hospital["creatinine_advanced"] = (
+    imputer.fit_transform(hospital[features])[:, -1])
+
+print(int(hospital["creatinine_advanced"].isna().sum()))
 ```
 
-Read the iteration count as a diagnostic: with four columns and few gaps there
-is very little for the rounds to refine, so the estimates stop moving almost
-immediately. On a wide table it would be larger, and an imputer that runs to
-`max_iter` without settling is telling you something.
+::: {.callout-note appearance="simple"}
+## The same idea in R
+The R tab does this job with the `mice` package. The two are the same idea —
+a regression on the other columns — so their answers land very close together
+but are not identical.
+:::
 
-R's equivalent is the [`mice` package](https://amices.org/mice/) — Multivariate
-Imputation by Chained Equations — which is not used in this booklet but is the
-standard tool there.
+::: {.callout-important appearance="simple"}
+## Think about it
+Two patients of the same age, with the same blood pressure and heart rate, will
+be given the same imputed creatinine. Why might their real values be very
+different?
+:::
 
-#### Stretch 2 — Make the imputation wrong on purpose
-The values in this file were blanked out at random. Blank out `BMI` instead
-for the patients with the highest `systolic_BP`, then impute with the mean and
-compare the imputed values against the ones you deleted. You know the truth,
-so you can measure the error — and see how an assumption of random missingness
-fails when it is not true.
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+Because creatinine depends on things this table does not contain: kidney
+disease, muscle mass, hydration, sex, the drugs the patient is on. Two patients
+who look identical on three vital signs can differ on every one of those.
 
-#### Stretch 3 — Does better imputation buy a better model?
-Fit the same classifier on the mean-imputed and the median-imputed data and
-compare the test-set accuracy. Form a view before you run it. Then consider how
-much of any difference you would be willing to attribute to the imputer, given
-that the comparison rests on one split.
+The imputer can only use the columns it is given. It is not estimating the
+patient's creatinine; it is reporting the average creatinine of patients who
+resemble them on age, blood pressure and heart rate.
+:::
+:::
 
-### What you can and cannot now claim
+------------------------------------------------------------------------
 
-You can say the extract is now complete: no model will refuse it, and you can
-state exactly which values were observed and which you supplied, and by what
-rule.
+### 4. The reveal: how close were we?
 
-You cannot say the imputed values are correct. They are estimates, and the mean
-and median versions are estimates that ignore every other column in the table.
-You also cannot claim your downstream uncertainty is honest — the shrinkage you
-measured is still there.
+For 18 of the patients with no creatinine, the real measurement was kept back.
+Here it is.
 
-And once again, none of this was done safely. Every mean and median above was
-computed from all 180 rows, including the rows you will later use to test. That
-is @sec-pipeline-steps.
+```{python}
+creatinine_truth = pd.read_csv("data/creatinine_truth.csv")
+
+comparison = hospital.merge(creatinine_truth, on="patient_id")
+
+print(comparison[["patient_id", "true_creatinine", "creatinine_mean",
+                  "creatinine_median", "creatinine_advanced"]]
+      .round(1).head(6).to_string(index=False))
+```
+
+Read across each row. The mean and median columns are one number repeated. The
+last column moves with the patient — and still does not match the truth for
+any of them.
+
+Now the average size of the miss, across all 18:
+
+```{python}
+print({name: round(float((comparison["true_creatinine"] - comparison[col])
+                         .abs().mean()), 2)
+       for name, col in [("Mean", "creatinine_mean"),
+                         ("Median", "creatinine_median"),
+                         ("Advanced", "creatinine_advanced")]})
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Which method came closest?
+2. Did the advanced method get any single patient exactly right?
+3. What clinical information, missing from this table, would have helped?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+The advanced method, with an average miss of about 8.4 µmol/L against 11.4 for
+the mean and 11.3 for the median. (It reads 8.45 in the R tab and 8.35 in the
+Python tab, because the two packages fit the regression slightly differently.)
+
+It got **none** of the 18 exactly right. Only 6 were within 5 µmol/L. The worst
+was patient H151, imputed at about 113 against a real 92 — more than 20 out.
+
+So using the other variables helped, by about a quarter. It did not recover the
+truth, and it could not have: renal history, medication and muscle mass are the
+things that move creatinine, and none of them is in the table.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### What to take from this
+
+::: {.callout-warning appearance="simple"}
+## Imputation is making data up
+Every value you filled in this exercise is an invention. A careful one, in the
+last case, but an invention — and once it is in the column it looks exactly like
+a measurement.
+:::
+
+1. **Look at who is missing before deciding what to do.** Here the gaps tracked
+   emergency admission, so dropping them would have quietly changed the cohort.
+2. **Simple methods distort.** The mean put 42 patients on one value and
+   shrank the spread; the mode turned 43% never-smokers into 56%.
+3. **Better methods are better, not right.** Using three other variables cut
+   the error by about a quarter and still missed one patient by more than 20.
+4. **Sometimes the honest answer is a category called Unknown.**
+
+### Optional: multiple imputation
+
+The `mice` package is built for something more than the single fill used above.
+Its default method does not give each gap one best guess; it draws a *plausible*
+value, and it is meant to be run several times, so that the spread between the
+filled-in datasets shows how uncertain each value was. That is multiple
+imputation, and it is the honest way to carry imputation uncertainty through to
+a final result. Read more at [amices.org/mice](https://amices.org/mice/).
+
+Next: @sec-scaling.
 
 ::::::
