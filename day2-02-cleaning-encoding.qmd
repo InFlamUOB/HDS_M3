@@ -6,29 +6,16 @@ engine: knitr
 
 # Exercise 2.3 — Exploring and cleaning messy patient data {#sec-cleaning}
 
-::: {.callout-note appearance="simple"}
-## 25-30 minutes, in R or in Python
-Pick a tab and stay in it. The two tabs are the same exercise — the same steps,
-the same questions, the same numbers — so work through either one.
-:::
 
-## Objectives
+## Overview
 
-By the end of this exercise you will be able to:
+Real data is messy! If done properly, most of the time in a data anlysis project is spent understanding the data, cleaning it and preprocessing it to the format you require for downstream analysis. Messiness comes in many different ways so just be aware that you need to visualize, ask questions and practice! Below you have some common examples you might encounter as well as some inisght into what one-hot encoding means. 
 
-- read a messy extract and say, from its types and summaries alone, what is
-  wrong with it;
-- correct a value that can be recovered and admit one that cannot;
-- group rare categories, and say what that costs;
-- standardise inconsistent labels, and say what happens if you do not;
-- one-hot encode a categorical variable, count the columns it adds, and decide
-  whether it was worth doing.
 
 ## The data
 
 `messy_gp_patients.csv` holds 30 patients from a handful of GP practices, with
-their age, height and smoking status. It is small enough to read end to end,
-and it has the problems a real extract has.
+their age, height and smoking status. 
 
 :::::: {.panel-tabset group="language"}
 
@@ -44,26 +31,18 @@ Load it and look before you touch anything.
 library(tidyverse)
 library(fastDummies)
 
-gp <- read_csv("data/messy_gp_patients.csv", show_col_types = FALSE)
+gp <- read_csv("data/messy_gp_patients.csv")
 
-dim(gp)
 glimpse(gp)
 summary(gp)
 ```
 
-::: {.callout-note appearance="simple"}
-## Why `show_col_types = FALSE`
-`read_csv()` normally prints the type it guessed for every column. That is
-useful, and here it would fill the page, so it is switched off — but the guessed
-types are exactly what the first question is about, which is why `glimpse()`
-comes next.
-:::
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
 1. How many patients and how many variables are there?
 2. Which columns came in as numbers and which as text?
-3. Does anything look wrong with `height_cm` or `age`?
+3. Does anything look wrong? 
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
@@ -76,7 +55,7 @@ finding. A column of heights should be numeric; it is not, so something in it is
 not a number. One text value anywhere in a column is enough to make the whole
 column text.
 
-`summary()` then shows an age of 250, which no patient has.
+`summary()` then shows an age of 250, which no patient has and minimum height of 1.5 cm
 :::
 :::
 
@@ -93,15 +72,14 @@ unique(gp$height_cm)
 ```
 
 Two values are not ordinary heights in centimetres: `unknown`, and `1.72` —
-a height recorded in metres. They need different treatment, because one of them
-is recoverable and the other is not.
+a height recorded in metres. 
 
 ```{r}
 gp <- gp |>
   mutate(
-    height_cm = na_if(height_cm, "unknown"),
-    height_cm = as.numeric(height_cm),
-    height_cm = if_else(!is.na(height_cm) & height_cm < 3,
+    height_cm = na_if(height_cm, "unknown"), #what is this function doing? Check it out!!  https://dplyr.tidyverse.org/reference/na_if.html
+    height_cm = as.numeric(height_cm), # why do we have to have this after the NA has been corrected? 
+    height_cm = if_else(!is.na(height_cm) & height_cm < 3, # what re we doing here?  
                         height_cm * 100,
                         height_cm)
   )
@@ -111,14 +89,29 @@ summary(gp$height_cm)
 
 Heights now run from 155 to 183 cm, with one missing.
 
+::: {.callout-important appearance="simple"}
+## Important
+
+This process of turning messy data into clean structured format is called *data wrangling* and the best way to get better at it is lots of practice. Tidyverse has developed a language to help you do this in a consistent way. Practice and explore the functions available to you. The more you use them, the more you will understand how to use them effectively. To discover what is available explore, for example here are amazing examples of data wrnagling at their best by the same people taht develop tidyverse  [Tidy Tuesday](https://www.youtube.com/playlist?list=PL19ev-r1GBwkuyiwnxoHTRC8TTqP8OEi8)  
+:::
+
+Lets continue. We detected a possibe data entry error with age of 250 through summarise. Would have also detected it through a boxplot. 
+
 #### Age
 
 Find the implausible ones rather than assuming you know where they are:
 
 ```{r}
-gp |> filter(age < 0 | age > 110)
+
+ggplot(gp, aes(y = age)) +
+  geom_boxplot() +
+  labs(y = "Age (years)") + 
+  theme_bw()
+
+
 ```
 
+With the following filter we can set implausible values to `NA`
 ```{r}
 gp <- gp |>
   mutate(age = if_else(age < 0 | age > 110, NA_real_, as.numeric(age)))
@@ -134,23 +127,6 @@ Why is replacing an impossible age with missing better than replacing it with
 zero — or than leaving it at 250?
 :::
 
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-Because 0 is a number a model will believe. It would be treated as a newborn,
-pulling the mean age down and the age–outcome relationship with it. Leaving 250
-is worse again, for the same reason in the other direction.
-
-Missing is the only one of the three that is *true*. We know the recorded value
-is wrong and we do not know what it should have been — it could have been 25, or
-50, or a mistyped date of birth. Missing says exactly that, and every later step
-can then decide what to do about it. Note the contrast with the height in
-metres: `1.72` could only have meant `172`, so that one is corrected rather than
-discarded. Correcting a value you can infer is cleaning; inventing one you
-cannot is something else.
-:::
-:::
-
 ------------------------------------------------------------------------
 
 ### 3. Exploring and collapsing the GP practices
@@ -161,6 +137,36 @@ How many patients are registered at each practice?
 gp |> count(GP_practice, sort = TRUE)
 ```
 
+::: {.callout-tip collapse="true"}
+## From characters to factors
+
+GP practice is currently stored as a character variable. However, it represents a set of distinct categories rather than free text.
+
+In R, we can represent categorical variables using factors.
+
+```{r}
+class(gp$GP_practice)
+
+```
+
+```{r}
+gp <- gp |>
+  mutate(GP_practice = factor(GP_practice))
+
+```
+
+```{r}
+class(gp$GP_practice)
+levels(gp$GP_practice)
+```
+
+Explore more about factors [r4ds] (https://r4ds.hadley.nz/factors.html) 
+
+:::
+
+
+
+
 ```{r}
 #| fig-height: 2.6
 gp |>
@@ -170,8 +176,7 @@ gp |>
   labs(x = "GP practice", y = "Number of patients")
 ```
 
-Three practices have a single patient. Combine anything with fewer than three
-into an `Other` category:
+Three practices have a single patient. Difficult to establish any association with it (cannot find a pattern if just one sample! )so lets combine anything with fewer than three patients into an `Other` category:
 
 ```{r}
 gp <- gp |>
@@ -190,25 +195,6 @@ gp |> count(GP_practice, sort = TRUE)
 3. What information did you just lose?
 :::
 
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-Eight practices become five: Bournbrook 9, Cherry Tree 7, Dovecote Lane 6,
-Selly Oak 3, and `Other` 5.
-
-The extract **already had** an `Other` category with two patients, and
-Harborne, Edgbaston and Kings Heath were merged into it rather than into a
-second one. Two plus three is the five you see. That is worth checking every
-time you group rare levels, because an `Other` that already exists and an
-`Other` you create mean different things and will be silently combined.
-
-What you lose is the identity of those three practices. If one of them had an
-unusual case mix — a practice serving a care home, say — that signal is now
-averaged into a category whose only shared property is being small. What you
-gain is five columns instead of eight when you encode, each supported by at
-least three patients.
-:::
-:::
 
 ------------------------------------------------------------------------
 
@@ -254,30 +240,12 @@ Never 12, Former 8, Current 7, and 3 genuinely missing.
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-1. Why standardise the labels *before* encoding or analysing them?
+1. Why standardise the labels *before* encoding or analysing them? Understand what each function does! They will get more intuitive with practice and always be in the lookout for easier ways of performing your analysis! Instead of using this case_when could have done long ifelse statements but this is more readable and easier to understand.
 2. `Never` and `never` differed by one capital letter. What would a model have
    done with them?
-3. The recipe above lower-cases and trims **before** matching. Why is that order
-   necessary rather than tidy?
 :::
 
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-Because a category is only a category if it is spelled one way. Left alone,
-`Never` and `never` are two different values: a frequency table reports 8 and 4
-instead of 12, a bar chart shows two bars, and one-hot encoding produces two
-columns — each with a smaller count than the real category, so each looks rarer
-and weaker than it is. The model never learns they are the same thing; it
-cannot, because nothing in the data says so.
 
-Lower-casing and trimming first turns `Never`, `never` and a stray
-` never ` into one string before any matching happens. Match first and you would
-need an entry for every spelling, and you would miss the one you did not think
-of. Cleaning the form of a value and then matching on meaning is the order that
-scales.
-:::
-:::
 
 ------------------------------------------------------------------------
 
@@ -289,14 +257,11 @@ somehow. One-hot encoding gives each category its own 0/1 column.
 ```{r}
 gp_encoded <- dummy_cols(gp,
                          select_columns = "GP_practice",
-                         remove_selected_columns = TRUE)
+                         remove_selected_columns = TRUE) #why is this important? 
 
 ncol(gp)
 ncol(gp_encoded)
-
-gp_encoded |>
-  select(patient_id, starts_with("GP_practice_")) |>
-  head(10)
+# View(gp_encoded)
 ```
 
 Five columns became nine: the practice column is gone and five indicator
@@ -317,11 +282,9 @@ c(original = ncol(gp),
 ::: {.callout-important appearance="simple"}
 ## Think about it
 1. How many columns did each encoding add?
-2. What do the 0 and the 1 actually mean?
+2. What do the 0 (cold) and the 1 (hot) actually mean?
 3. Why was collapsing the rare practices worth doing *before* encoding?
-4. Would the patient-identifier columns help predict anything about a patient
-   who is not in this table?
-5. So: should every categorical variable be one-hot encoded?
+5. Should every categorical variable be one-hot encoded? What do you think of a gender column with just Male and Female class? Should we hot-encode it? 
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
@@ -348,19 +311,6 @@ with it.
 
 ------------------------------------------------------------------------
 
-### What to take from this
-
-1. **Explore before cleaning.** The column types, the frequency tables and the
-   summaries are what told you something was wrong — a height column stored as
-   text, an age of 250, ten spellings of three categories. None of it announced
-   itself.
-2. **Cleaning is a sequence of decisions, not a checklist.** You corrected one
-   impossible value and admitted another as missing, and the difference was
-   whether the intended value could be known. You grouped three practices and
-   lost their identity to gain columns that can support an estimate.
-3. **Encoding is not automatically useful.** The same operation that turned a
-   practice into five usable columns turned an identifier into thirty useless
-   ones.
 
 ## Python
 
@@ -676,18 +626,6 @@ with it.
 
 ------------------------------------------------------------------------
 
-### What to take from this
 
-1. **Explore before cleaning.** The column types, the frequency tables and the
-   summaries are what told you something was wrong — a height column stored as
-   text, an age of 250, ten spellings of three categories. None of it announced
-   itself.
-2. **Cleaning is a sequence of decisions, not a checklist.** You corrected one
-   impossible value and admitted another as missing, and the difference was
-   whether the intended value could be known. You grouped three practices and
-   lost their identity to gain columns that can support an estimate.
-3. **Encoding is not automatically useful.** The same operation that turned a
-   practice into five usable columns turned an identifier into thirty useless
-   ones.
 
 ::::::

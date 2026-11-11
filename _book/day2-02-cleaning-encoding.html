@@ -2,16 +2,13 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.9.38">
+<meta name="generator" content="quarto-1.8.27">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
 <title>Exercise 2.3 — Exploring and cleaning messy patient data – Statistical Machine Learning &amp; Data Analytics</title>
 <style>
-/* Default styles provided by pandoc.
-** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
-*/
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
 div.columns{display: flex; gap: min(4vw, 1.5em);}
@@ -72,14 +69,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="./day2-01-correlation-missingness.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-68d006cd884444a66203cf37d1af94b0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-858c91a982f22841b60e7d9947849be3.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
@@ -223,7 +221,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#objectives" id="toc-objectives" class="nav-link active" data-scroll-target="#objectives">Objectives</a></li>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
   <li><a href="#the-data" id="toc-the-data" class="nav-link" data-scroll-target="#the-data">The data</a></li>
   </ul>
 </nav>
@@ -250,33 +248,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<div class="callout callout-style-simple callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>25-30 minutes, in R or in Python
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>Pick a tab and stay in it. The two tabs are the same exercise — the same steps, the same questions, the same numbers — so work through either one.</p>
-</div>
-</div>
-<section id="objectives" class="level2">
-<h2 class="anchored" data-anchor-id="objectives">Objectives</h2>
-<p>By the end of this exercise you will be able to:</p>
-<ul>
-<li>read a messy extract and say, from its types and summaries alone, what is wrong with it;</li>
-<li>correct a value that can be recovered and admit one that cannot;</li>
-<li>group rare categories, and say what that costs;</li>
-<li>standardise inconsistent labels, and say what happens if you do not;</li>
-<li>one-hot encode a categorical variable, count the columns it adds, and decide whether it was worth doing.</li>
-</ul>
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>Real data is messy! If done properly, most of the time in a data anlysis project is spent understanding the data, cleaning it and preprocessing it to the format you require for downstream analysis. Messiness comes in many different ways so just be aware that you need to visualize, ask questions and practice! Below you have some common examples you might encounter as well as some inisght into what one-hot encoding means.</p>
 </section>
 <section id="the-data" class="level2">
 <h2 class="anchored" data-anchor-id="the-data">The data</h2>
-<p><code>messy_gp_patients.csv</code> holds 30 patients from a handful of GP practices, with their age, height and smoking status. It is small enough to read end to end, and it has the problems a real extract has.</p>
+<p><code>messy_gp_patients.csv</code> holds 30 patients from a handful of GP practices, with their age, height and smoking status.</p>
 <div class="tabset-margin-container"></div><div class="panel-tabset" data-group="language">
 <ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true" href="">R</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false" href="">Python</a></li></ul>
 <div class="tab-content" data-group="language">
@@ -288,13 +266,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fastDummies)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>gp <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/messy_gp_patients.csv"</span>, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>gp <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/messy_gp_patients.csv"</span>)</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(gp)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; [1] 30  5</code></pre>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">glimpse</span>(gp)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">glimpse</span>(gp)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; Rows: 30
 #&gt; Columns: 5
@@ -304,7 +278,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 #&gt; $ height_cm      &lt;chr&gt; "178", "165", "182", "171", "160", "174", "169", "155",…
 #&gt; $ smoking_status &lt;chr&gt; "Never", "Current", "Ex-smoker", "never", "Former", "Cu…</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(gp)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(gp)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;   patient_id        GP_practice             age          height_cm        
 #&gt;  Length:30          Length:30          Min.   : 28.00   Length:30         
@@ -322,19 +296,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 #&gt; </code></pre>
 </div>
 </div>
-<div class="callout callout-style-simple callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>Why <code>show_col_types = FALSE</code>
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p><code>read_csv()</code> normally prints the type it guessed for every column. That is useful, and here it would fill the page, so it is switched off — but the guessed types are exactly what the first question is about, which is why <code>glimpse()</code> comes next.</p>
-</div>
-</div>
 <div class="callout callout-style-simple callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -348,7 +309,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ol type="1">
 <li>How many patients and how many variables are there?</li>
 <li>Which columns came in as numbers and which as text?</li>
-<li>Does anything look wrong with <code>height_cm</code> or <code>age</code>?</li>
+<li>Does anything look wrong?</li>
 </ol>
 </div>
 </div>
@@ -360,7 +321,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h4 class="anchored" data-anchor-id="height">Height</h4>
 <p>Look at what is actually in the column:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">unique</span>(gp<span class="sc">$</span>height_cm)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">unique</span>(gp<span class="sc">$</span>height_cm)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;  [1] "178"     "165"     "182"     "171"     "160"     "174"     "169"    
 #&gt;  [8] "155"     "180"     "167"     "1.72"    "163"     "176"     "158"    
@@ -369,42 +330,61 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 #&gt; [29] "161"     "172"</code></pre>
 </div>
 </div>
-<p>Two values are not ordinary heights in centimetres: <code>unknown</code>, and <code>1.72</code> — a height recorded in metres. They need different treatment, because one of them is recoverable and the other is not.</p>
+<p>Two values are not ordinary heights in centimetres: <code>unknown</code>, and <code>1.72</code> — a height recorded in metres.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>gp <span class="ot">&lt;-</span> gp <span class="sc">|&gt;</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">height_cm =</span> <span class="fu">na_if</span>(height_cm, <span class="st">"unknown"</span>),</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">height_cm =</span> <span class="fu">as.numeric</span>(height_cm),</span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">height_cm =</span> <span class="fu">if_else</span>(<span class="sc">!</span><span class="fu">is.na</span>(height_cm) <span class="sc">&amp;</span> height_cm <span class="sc">&lt;</span> <span class="dv">3</span>,</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>                        height_cm <span class="sc">*</span> <span class="dv">100</span>,</span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>                        height_cm)</span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(gp<span class="sc">$</span>height_cm)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>gp <span class="ot">&lt;-</span> gp <span class="sc">|&gt;</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">height_cm =</span> <span class="fu">na_if</span>(height_cm, <span class="st">"unknown"</span>), <span class="co">#what is this function doing? Check it out!!  https://dplyr.tidyverse.org/reference/na_if.html</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">height_cm =</span> <span class="fu">as.numeric</span>(height_cm), <span class="co"># why do we have to have this after the NA has been corrected? </span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">height_cm =</span> <span class="fu">if_else</span>(<span class="sc">!</span><span class="fu">is.na</span>(height_cm) <span class="sc">&amp;</span> height_cm <span class="sc">&lt;</span> <span class="dv">3</span>, <span class="co"># what re we doing here?  </span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>                        height_cm <span class="sc">*</span> <span class="dv">100</span>,</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>                        height_cm)</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(gp<span class="sc">$</span>height_cm)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
 #&gt;   155.0   163.0   170.0   169.6   176.0   183.0       1</code></pre>
 </div>
 </div>
 <p>Heights now run from 155 to 183 cm, with one missing.</p>
+<div class="callout callout-style-simple callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Important
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>This process of turning messy data into clean structured format is called <em>data wrangling</em> and the best way to get better at it is lots of practice. Tidyverse has developed a language to help you do this in a consistent way. Practice and explore the functions available to you. The more you use them, the more you will understand how to use them effectively. To discover what is available explore, for example here are amazing examples of data wrnagling at their best by the same people taht develop tidyverse <a href="https://www.youtube.com/playlist?list=PL19ev-r1GBwkuyiwnxoHTRC8TTqP8OEi8">Tidy Tuesday</a></p>
+</div>
+</div>
+<p>Lets continue. We detected a possibe data entry error with age of 250 through summarise. Would have also detected it through a boxplot.</p>
 </section>
 <section id="age" class="level4">
 <h4 class="anchored" data-anchor-id="age">Age</h4>
 <p>Find the implausible ones rather than assuming you know where they are:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span> <span class="fu">filter</span>(age <span class="sc">&lt;</span> <span class="dv">0</span> <span class="sc">|</span> age <span class="sc">&gt;</span> <span class="dv">110</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; # A tibble: 1 × 5
-#&gt;   patient_id GP_practice   age height_cm smoking_status
-#&gt;   &lt;chr&gt;      &lt;chr&gt;       &lt;dbl&gt;     &lt;dbl&gt; &lt;chr&gt;         
-#&gt; 1 P014       Cherry Tree   250       158 Never</code></pre>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(gp, <span class="fu">aes</span>(<span class="at">y =</span> age)) <span class="sc">+</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"Age (years)"</span>) <span class="sc">+</span> </span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day2-02-cleaning-encoding_files/figure-html/unnamed-chunk-5-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
 </div>
 </div>
+</div>
+<p>With the following filter we can set implausible values to <code>NA</code></p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>gp <span class="ot">&lt;-</span> gp <span class="sc">|&gt;</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age =</span> <span class="fu">if_else</span>(age <span class="sc">&lt;</span> <span class="dv">0</span> <span class="sc">|</span> age <span class="sc">&gt;</span> <span class="dv">110</span>, <span class="cn">NA_real_</span>, <span class="fu">as.numeric</span>(age)))</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(<span class="fu">is.na</span>(gp<span class="sc">$</span>age))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>gp <span class="ot">&lt;-</span> gp <span class="sc">|&gt;</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age =</span> <span class="fu">if_else</span>(age <span class="sc">&lt;</span> <span class="dv">0</span> <span class="sc">|</span> age <span class="sc">&gt;</span> <span class="dv">110</span>, <span class="cn">NA_real_</span>, <span class="fu">as.numeric</span>(age)))</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(<span class="fu">is.na</span>(gp<span class="sc">$</span>age))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; [1] 1</code></pre>
 </div>
@@ -430,7 +410,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 class="anchored" data-anchor-id="exploring-and-collapsing-the-gp-practices">3. Exploring and collapsing the GP practices</h3>
 <p>How many patients are registered at each practice?</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span> <span class="fu">count</span>(GP_practice, <span class="at">sort =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span> <span class="fu">count</span>(GP_practice, <span class="at">sort =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 8 × 2
 #&gt;   GP_practice       n
@@ -445,28 +425,67 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 #&gt; 8 Kings Heath       1</code></pre>
 </div>
 </div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-4-contents" aria-controls="callout-4" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>From characters to factors
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-4" class="callout-4-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>GP practice is currently stored as a character variable. However, it represents a set of distinct categories rather than free text.</p>
+<p>In R, we can represent categorical variables using factors.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">fct_infreq</span>(GP_practice))) <span class="sc">+</span></span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_bar</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>) <span class="sc">+</span></span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"GP practice"</span>, <span class="at">y =</span> <span class="st">"Number of patients"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(gp<span class="sc">$</span>GP_practice)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; [1] "character"</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>gp <span class="ot">&lt;-</span> gp <span class="sc">|&gt;</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">GP_practice =</span> <span class="fu">factor</span>(GP_practice))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(gp<span class="sc">$</span>GP_practice)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; [1] "factor"</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">levels</span>(gp<span class="sc">$</span>GP_practice)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; [1] "Bournbrook"    "Cherry Tree"   "Dovecote Lane" "Edgbaston"    
+#&gt; [5] "Harborne"      "Kings Heath"   "Other"         "Selly Oak"</code></pre>
+</div>
+</div>
+<p>Explore more about factors [r4ds] (https://r4ds.hadley.nz/factors.html)</p>
+</div>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">fct_infreq</span>(GP_practice))) <span class="sc">+</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_bar</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>) <span class="sc">+</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"GP practice"</span>, <span class="at">y =</span> <span class="st">"Number of patients"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day2-02-cleaning-encoding_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+<p><img src="day2-02-cleaning-encoding_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
 </figure>
 </div>
 </div>
 </div>
-<p>Three practices have a single patient. Combine anything with fewer than three into an <code>Other</code> category:</p>
+<p>Three practices have a single patient. Difficult to establish any association with it (cannot find a pattern if just one sample! )so lets combine anything with fewer than three patients into an <code>Other</code> category:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>gp <span class="ot">&lt;-</span> gp <span class="sc">|&gt;</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">GP_practice =</span> <span class="fu">fct_lump_min</span>(<span class="fu">factor</span>(GP_practice),</span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>                                    <span class="at">min =</span> <span class="dv">3</span>,</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>                                    <span class="at">other_level =</span> <span class="st">"Other"</span>))</span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span> <span class="fu">count</span>(GP_practice, <span class="at">sort =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>gp <span class="ot">&lt;-</span> gp <span class="sc">|&gt;</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">GP_practice =</span> <span class="fu">fct_lump_min</span>(<span class="fu">factor</span>(GP_practice),</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>                                    <span class="at">min =</span> <span class="dv">3</span>,</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>                                    <span class="at">other_level =</span> <span class="st">"Other"</span>))</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span> <span class="fu">count</span>(GP_practice, <span class="at">sort =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 5 × 2
 #&gt;   GP_practice       n
@@ -501,7 +520,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 class="anchored" data-anchor-id="cleaning-and-visualising-smoking-status">4. Cleaning and visualising smoking status</h3>
 <p>Count the categories as recorded:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span> <span class="fu">count</span>(smoking_status, <span class="at">sort =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span> <span class="fu">count</span>(smoking_status, <span class="at">sort =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 10 × 2
 #&gt;    smoking_status     n
@@ -519,35 +538,35 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">fct_infreq</span>(smoking_status))) <span class="sc">+</span></span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_bar</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>) <span class="sc">+</span></span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Smoking status"</span>, <span class="at">y =</span> <span class="st">"Patients"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">fct_infreq</span>(smoking_status))) <span class="sc">+</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_bar</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>) <span class="sc">+</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Smoking status"</span>, <span class="at">y =</span> <span class="st">"Patients"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day2-02-cleaning-encoding_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+<p><img src="day2-02-cleaning-encoding_files/figure-html/unnamed-chunk-14-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
 </figure>
 </div>
 </div>
 </div>
 <p>Ten different spellings for what are really three categories, plus two codes that mean “not recorded”. Standardise the labels and turn the codes into missing values:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>gp <span class="ot">&lt;-</span> gp <span class="sc">|&gt;</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">smoking_status =</span> <span class="fu">str_to_lower</span>(<span class="fu">str_trim</span>(smoking_status)),</span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">smoking_status =</span> <span class="fu">case_when</span>(</span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>      smoking_status <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"never"</span>, <span class="st">"non-smoker"</span>, <span class="st">"non smoker"</span>) <span class="sc">~</span> <span class="st">"Never"</span>,</span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>      smoking_status <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"former"</span>, <span class="st">"ex-smoker"</span>, <span class="st">"ex smoker"</span>)  <span class="sc">~</span> <span class="st">"Former"</span>,</span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>      smoking_status <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"current"</span>, <span class="st">"current smoker"</span>, <span class="st">"smoker"</span>) <span class="sc">~</span> <span class="st">"Current"</span>,</span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>      smoking_status <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"unknown"</span>, <span class="st">"n/a"</span>, <span class="st">""</span>, <span class="st">"?"</span>) <span class="sc">~</span> <span class="cn">NA_character_</span>,</span>
-<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> smoking_status</span>
-<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">smoking_status =</span> <span class="fu">factor</span>(smoking_status)</span>
-<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span> <span class="fu">count</span>(smoking_status, <span class="at">sort =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>gp <span class="ot">&lt;-</span> gp <span class="sc">|&gt;</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">smoking_status =</span> <span class="fu">str_to_lower</span>(<span class="fu">str_trim</span>(smoking_status)),</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">smoking_status =</span> <span class="fu">case_when</span>(</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>      smoking_status <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"never"</span>, <span class="st">"non-smoker"</span>, <span class="st">"non smoker"</span>) <span class="sc">~</span> <span class="st">"Never"</span>,</span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>      smoking_status <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"former"</span>, <span class="st">"ex-smoker"</span>, <span class="st">"ex smoker"</span>)  <span class="sc">~</span> <span class="st">"Former"</span>,</span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>      smoking_status <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"current"</span>, <span class="st">"current smoker"</span>, <span class="st">"smoker"</span>) <span class="sc">~</span> <span class="st">"Current"</span>,</span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>      smoking_status <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"unknown"</span>, <span class="st">"n/a"</span>, <span class="st">""</span>, <span class="st">"?"</span>) <span class="sc">~</span> <span class="cn">NA_character_</span>,</span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> smoking_status</span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">smoking_status =</span> <span class="fu">factor</span>(smoking_status)</span>
+<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>gp <span class="sc">|&gt;</span> <span class="fu">count</span>(smoking_status, <span class="at">sort =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 4 × 2
 #&gt;   smoking_status     n
@@ -570,9 +589,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="callout-body-container callout-body">
 <ol type="1">
-<li>Why standardise the labels <em>before</em> encoding or analysing them?</li>
+<li>Why standardise the labels <em>before</em> encoding or analysing them? Understand what each function does! They will get more intuitive with practice and always be in the lookout for easier ways of performing your analysis! Instead of using this case_when could have done long ifelse statements but this is more readable and easier to understand.</li>
 <li><code>Never</code> and <code>never</code> differed by one capital letter. What would a model have done with them?</li>
-<li>The recipe above lower-cases and trims <strong>before</strong> matching. Why is that order necessary rather than tidy?</li>
 </ol>
 </div>
 </div>
@@ -582,49 +600,30 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 class="anchored" data-anchor-id="what-happens-when-you-one-hot-encode">5. What happens when you one-hot encode?</h3>
 <p>Most algorithms need numbers, so a categorical variable has to become numeric somehow. One-hot encoding gives each category its own 0/1 column.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>gp_encoded <span class="ot">&lt;-</span> <span class="fu">dummy_cols</span>(gp,</span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">select_columns =</span> <span class="st">"GP_practice"</span>,</span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">remove_selected_columns =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="fu">ncol</span>(gp)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>gp_encoded <span class="ot">&lt;-</span> <span class="fu">dummy_cols</span>(gp,</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">select_columns =</span> <span class="st">"GP_practice"</span>,</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">remove_selected_columns =</span> <span class="cn">TRUE</span>) <span class="co">#why is this important? </span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a><span class="fu">ncol</span>(gp)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; [1] 5</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ncol</span>(gp_encoded)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ncol</span>(gp_encoded)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; [1] 9</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>gp_encoded <span class="sc">|&gt;</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(patient_id, <span class="fu">starts_with</span>(<span class="st">"GP_practice_"</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; # A tibble: 10 × 6
-#&gt;    patient_id GP_practice_Bournbrook `GP_practice_Cherry Tree`
-#&gt;    &lt;chr&gt;                       &lt;int&gt;                     &lt;int&gt;
-#&gt;  1 P001                            1                         0
-#&gt;  2 P002                            1                         0
-#&gt;  3 P003                            1                         0
-#&gt;  4 P004                            1                         0
-#&gt;  5 P005                            1                         0
-#&gt;  6 P006                            1                         0
-#&gt;  7 P007                            1                         0
-#&gt;  8 P008                            1                         0
-#&gt;  9 P009                            1                         0
-#&gt; 10 P010                            0                         1
-#&gt; # ℹ 3 more variables: `GP_practice_Dovecote Lane` &lt;int&gt;,
-#&gt; #   `GP_practice_Selly Oak` &lt;int&gt;, GP_practice_Other &lt;int&gt;</code></pre>
-</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># View(gp_encoded)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>Five columns became nine: the practice column is gone and five indicator columns have taken its place.</p>
 <p>Now try the same thing on the patient identifier:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>gp_ids_encoded <span class="ot">&lt;-</span> <span class="fu">dummy_cols</span>(gp,</span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>                             <span class="at">select_columns =</span> <span class="st">"patient_id"</span>,</span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>                             <span class="at">remove_selected_columns =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">original =</span> <span class="fu">ncol</span>(gp),</span>
-<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">practice_encoded =</span> <span class="fu">ncol</span>(gp_encoded),</span>
-<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">id_encoded =</span> <span class="fu">ncol</span>(gp_ids_encoded))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>gp_ids_encoded <span class="ot">&lt;-</span> <span class="fu">dummy_cols</span>(gp,</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>                             <span class="at">select_columns =</span> <span class="st">"patient_id"</span>,</span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>                             <span class="at">remove_selected_columns =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">original =</span> <span class="fu">ncol</span>(gp),</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">practice_encoded =</span> <span class="fu">ncol</span>(gp_encoded),</span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">id_encoded =</span> <span class="fu">ncol</span>(gp_ids_encoded))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;         original practice_encoded       id_encoded 
 #&gt;                5                9               34</code></pre>
@@ -642,22 +641,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="callout-body-container callout-body">
 <ol type="1">
 <li>How many columns did each encoding add?</li>
-<li>What do the 0 and the 1 actually mean?</li>
+<li>What do the 0 (cold) and the 1 (hot) actually mean?</li>
 <li>Why was collapsing the rare practices worth doing <em>before</em> encoding?</li>
-<li>Would the patient-identifier columns help predict anything about a patient who is not in this table?</li>
-<li>So: should every categorical variable be one-hot encoded?</li>
+<li>Should every categorical variable be one-hot encoded? What do you think of a gender column with just Male and Female class? Should we hot-encode it?</li>
 </ol>
 </div>
 </div>
 <hr>
-</section>
-<section id="what-to-take-from-this" class="level3">
-<h3 class="anchored" data-anchor-id="what-to-take-from-this">What to take from this</h3>
-<ol type="1">
-<li><strong>Explore before cleaning.</strong> The column types, the frequency tables and the summaries are what told you something was wrong — a height column stored as text, an age of 250, ten spellings of three categories. None of it announced itself.</li>
-<li><strong>Cleaning is a sequence of decisions, not a checklist.</strong> You corrected one impossible value and admitted another as missing, and the difference was whether the intended value could be known. You grouped three practices and lost their identity to gain columns that can support an estimate.</li>
-<li><strong>Encoding is not automatically useful.</strong> The same operation that turned a practice into five usable columns turned an identifier into thirty useless ones.</li>
-</ol>
 </section>
 </div>
 <div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
@@ -665,27 +655,27 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 class="anchored" data-anchor-id="first-look-at-the-data-1">1. First look at the data</h3>
 <p>Load it and look before you touch anything.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
-<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>gp_py <span class="op">=</span> pd.read_csv(<span class="st">"data/messy_gp_patients.csv"</span>,</span>
-<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>                    keep_default_na<span class="op">=</span><span class="va">False</span>, na_values<span class="op">=</span>[<span class="st">""</span>])</span>
-<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py.shape)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>gp_py <span class="op">=</span> pd.read_csv(<span class="st">"data/messy_gp_patients.csv"</span>,</span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>                    keep_default_na<span class="op">=</span><span class="va">False</span>, na_values<span class="op">=</span>[<span class="st">""</span>])</span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py.shape)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; (30, 5)</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py.dtypes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py.dtypes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; patient_id        object
-#&gt; GP_practice       object
-#&gt; age                int64
-#&gt; height_cm         object
-#&gt; smoking_status    object
+<pre><code>#&gt; patient_id          str
+#&gt; GP_practice         str
+#&gt; age               int64
+#&gt; height_cm           str
+#&gt; smoking_status      str
 #&gt; dtype: object</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py.describe(include<span class="op">=</span><span class="st">"all"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py.describe(include<span class="op">=</span><span class="st">"all"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;        patient_id GP_practice         age height_cm smoking_status
 #&gt; count          30          30   30.000000        30             30
@@ -739,21 +729,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h4 class="anchored" data-anchor-id="height-1">Height</h4>
 <p>Look at what is actually in the column:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[<span class="st">"height_cm"</span>].unique())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[<span class="st">"height_cm"</span>].unique())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; ['178' '165' '182' '171' '160' '174' '169' '155' '180' '167' '1.72' '163'
-#&gt;  '176' '158' '170' '181' '166' '173' '159' '177' '168' 'unknown' '164'
-#&gt;  '175' '162' '179' '157' '183' '161' '172']</code></pre>
+<pre><code>#&gt; &lt;StringArray&gt;
+#&gt; [    '178',     '165',     '182',     '171',     '160',     '174',     '169',
+#&gt;      '155',     '180',     '167',    '1.72',     '163',     '176',     '158',
+#&gt;      '170',     '181',     '166',     '173',     '159',     '177',     '168',
+#&gt;  'unknown',     '164',     '175',     '162',     '179',     '157',     '183',
+#&gt;      '161',     '172']
+#&gt; Length: 30, dtype: str</code></pre>
 </div>
 </div>
 <p>Two values are not ordinary heights in centimetres: <code>unknown</code>, and <code>1.72</code> — a height recorded in metres. They need different treatment, because one of them is recoverable and the other is not.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>gp_py[<span class="st">"height_cm"</span>] <span class="op">=</span> pd.to_numeric(</span>
-<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>    gp_py[<span class="st">"height_cm"</span>].replace(<span class="st">"unknown"</span>, np.nan), errors<span class="op">=</span><span class="st">"coerce"</span>)</span>
-<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>gp_py.loc[gp_py[<span class="st">"height_cm"</span>] <span class="op">&lt;</span> <span class="dv">3</span>, <span class="st">"height_cm"</span>] <span class="op">*=</span> <span class="dv">100</span></span>
-<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[<span class="st">"height_cm"</span>].describe().<span class="bu">round</span>(<span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>gp_py[<span class="st">"height_cm"</span>] <span class="op">=</span> pd.to_numeric(</span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>    gp_py[<span class="st">"height_cm"</span>].replace(<span class="st">"unknown"</span>, np.nan), errors<span class="op">=</span><span class="st">"coerce"</span>)</span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a>gp_py.loc[gp_py[<span class="st">"height_cm"</span>] <span class="op">&lt;</span> <span class="dv">3</span>, <span class="st">"height_cm"</span>] <span class="op">*=</span> <span class="dv">100</span></span>
+<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-6"><a href="#cb44-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[<span class="st">"height_cm"</span>].describe().<span class="bu">round</span>(<span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; count     29.0
 #&gt; mean     169.6
@@ -772,16 +766,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h4 class="anchored" data-anchor-id="age-1">Age</h4>
 <p>Find the implausible ones rather than assuming you know where they are:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[(gp_py[<span class="st">"age"</span>] <span class="op">&lt;</span> <span class="dv">0</span>) <span class="op">|</span> (gp_py[<span class="st">"age"</span>] <span class="op">&gt;</span> <span class="dv">110</span>)])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[(gp_py[<span class="st">"age"</span>] <span class="op">&lt;</span> <span class="dv">0</span>) <span class="op">|</span> (gp_py[<span class="st">"age"</span>] <span class="op">&gt;</span> <span class="dv">110</span>)])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;    patient_id  GP_practice  age  height_cm smoking_status
 #&gt; 13       P014  Cherry Tree  250      158.0          Never</code></pre>
 </div>
 </div>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>gp_py[<span class="st">"age"</span>] <span class="op">=</span> gp_py[<span class="st">"age"</span>].where((gp_py[<span class="st">"age"</span>] <span class="op">&gt;=</span> <span class="dv">0</span>) <span class="op">&amp;</span> (gp_py[<span class="st">"age"</span>] <span class="op">&lt;=</span> <span class="dv">110</span>))</span>
-<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">int</span>(gp_py[<span class="st">"age"</span>].isna().<span class="bu">sum</span>()))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb48"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a>gp_py[<span class="st">"age"</span>] <span class="op">=</span> gp_py[<span class="st">"age"</span>].where((gp_py[<span class="st">"age"</span>] <span class="op">&gt;=</span> <span class="dv">0</span>) <span class="op">&amp;</span> (gp_py[<span class="st">"age"</span>] <span class="op">&lt;=</span> <span class="dv">110</span>))</span>
+<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">int</span>(gp_py[<span class="st">"age"</span>].isna().<span class="bu">sum</span>()))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; 1</code></pre>
 </div>
@@ -807,7 +801,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 class="anchored" data-anchor-id="exploring-and-collapsing-the-gp-practices-1">3. Exploring and collapsing the GP practices</h3>
 <p>How many patients are registered at each practice?</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[<span class="st">"GP_practice"</span>].value_counts())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb50"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[<span class="st">"GP_practice"</span>].value_counts())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; GP_practice
 #&gt; Bournbrook       9
@@ -822,31 +816,31 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>counts <span class="op">=</span> gp_py[<span class="st">"GP_practice"</span>].value_counts()</span>
-<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">7</span>, <span class="fl">2.6</span>))</span>
-<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a>ax.barh(counts.index[::<span class="op">-</span><span class="dv">1</span>], counts.values[::<span class="op">-</span><span class="dv">1</span>], color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
-<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Number of patients"</span>)</span>
-<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"GP practice"</span>)</span>
-<span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
-<span id="cb49-8"><a href="#cb49-8" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb52"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>counts <span class="op">=</span> gp_py[<span class="st">"GP_practice"</span>].value_counts()</span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">7</span>, <span class="fl">2.6</span>))</span>
+<span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a>ax.barh(counts.index[::<span class="op">-</span><span class="dv">1</span>], counts.values[::<span class="op">-</span><span class="dv">1</span>], color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
+<span id="cb52-5"><a href="#cb52-5" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Number of patients"</span>)</span>
+<span id="cb52-6"><a href="#cb52-6" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"GP practice"</span>)</span>
+<span id="cb52-7"><a href="#cb52-7" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb52-8"><a href="#cb52-8" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day2-02-cleaning-encoding_files/figure-html/unnamed-chunk-21-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="672"></p>
+<p><img src="day2-02-cleaning-encoding_files/figure-html/unnamed-chunk-24-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="672"></p>
 </figure>
 </div>
 </div>
 </div>
 <p>Three practices have a single patient. Combine anything with fewer than three into an <code>Other</code> category:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb50"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>counts <span class="op">=</span> gp_py[<span class="st">"GP_practice"</span>].value_counts()</span>
-<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>rare <span class="op">=</span> counts[counts <span class="op">&lt;</span> <span class="dv">3</span>].index</span>
-<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>gp_py[<span class="st">"GP_practice"</span>] <span class="op">=</span> gp_py[<span class="st">"GP_practice"</span>].where(</span>
-<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">~</span>gp_py[<span class="st">"GP_practice"</span>].isin(rare), <span class="st">"Other"</span>)</span>
-<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[<span class="st">"GP_practice"</span>].value_counts())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a>counts <span class="op">=</span> gp_py[<span class="st">"GP_practice"</span>].value_counts()</span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>rare <span class="op">=</span> counts[counts <span class="op">&lt;</span> <span class="dv">3</span>].index</span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a>gp_py[<span class="st">"GP_practice"</span>] <span class="op">=</span> gp_py[<span class="st">"GP_practice"</span>].where(</span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">~</span>gp_py[<span class="st">"GP_practice"</span>].isin(rare), <span class="st">"Other"</span>)</span>
+<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-7"><a href="#cb53-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[<span class="st">"GP_practice"</span>].value_counts())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; GP_practice
 #&gt; Bournbrook       9
@@ -880,7 +874,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 class="anchored" data-anchor-id="cleaning-and-visualising-smoking-status-1">4. Cleaning and visualising smoking status</h3>
 <p>Count the categories as recorded:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb52"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[<span class="st">"smoking_status"</span>].value_counts(dropna<span class="op">=</span><span class="va">False</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[<span class="st">"smoking_status"</span>].value_counts(dropna<span class="op">=</span><span class="va">False</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; smoking_status
 #&gt; Never             8
@@ -897,35 +891,35 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb54"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a>counts <span class="op">=</span> gp_py[<span class="st">"smoking_status"</span>].value_counts(dropna<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">7</span>, <span class="fl">2.6</span>))</span>
-<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a>ax.barh([<span class="bu">str</span>(i) <span class="cf">for</span> i <span class="kw">in</span> counts.index][::<span class="op">-</span><span class="dv">1</span>], counts.values[::<span class="op">-</span><span class="dv">1</span>],</span>
-<span id="cb54-5"><a href="#cb54-5" aria-hidden="true" tabindex="-1"></a>        color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
-<span id="cb54-6"><a href="#cb54-6" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Patients"</span>)</span>
-<span id="cb54-7"><a href="#cb54-7" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Smoking status"</span>)</span>
-<span id="cb54-8"><a href="#cb54-8" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
-<span id="cb54-9"><a href="#cb54-9" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb57"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a>counts <span class="op">=</span> gp_py[<span class="st">"smoking_status"</span>].value_counts(dropna<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">7</span>, <span class="fl">2.6</span>))</span>
+<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a>ax.barh([<span class="bu">str</span>(i) <span class="cf">for</span> i <span class="kw">in</span> counts.index][::<span class="op">-</span><span class="dv">1</span>], counts.values[::<span class="op">-</span><span class="dv">1</span>],</span>
+<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a>        color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
+<span id="cb57-6"><a href="#cb57-6" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Patients"</span>)</span>
+<span id="cb57-7"><a href="#cb57-7" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Smoking status"</span>)</span>
+<span id="cb57-8"><a href="#cb57-8" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb57-9"><a href="#cb57-9" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day2-02-cleaning-encoding_files/figure-html/unnamed-chunk-24-3.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="672"></p>
+<p><img src="day2-02-cleaning-encoding_files/figure-html/unnamed-chunk-27-3.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="672"></p>
 </figure>
 </div>
 </div>
 </div>
 <p>Ten different spellings for what are really three categories, plus two codes that mean “not recorded”. Standardise the labels and turn the codes into missing values:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a>spelling <span class="op">=</span> gp_py[<span class="st">"smoking_status"</span>].<span class="bu">str</span>.strip().<span class="bu">str</span>.lower()</span>
-<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>labels <span class="op">=</span> {<span class="op">**</span>{k: <span class="st">"Never"</span>   <span class="cf">for</span> k <span class="kw">in</span> [<span class="st">"never"</span>, <span class="st">"non-smoker"</span>, <span class="st">"non smoker"</span>]},</span>
-<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a>          <span class="op">**</span>{k: <span class="st">"Former"</span>  <span class="cf">for</span> k <span class="kw">in</span> [<span class="st">"former"</span>, <span class="st">"ex-smoker"</span>, <span class="st">"ex smoker"</span>]},</span>
-<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>          <span class="op">**</span>{k: <span class="st">"Current"</span> <span class="cf">for</span> k <span class="kw">in</span> [<span class="st">"current"</span>, <span class="st">"current smoker"</span>, <span class="st">"smoker"</span>]},</span>
-<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a>          <span class="op">**</span>{k: np.nan    <span class="cf">for</span> k <span class="kw">in</span> [<span class="st">"unknown"</span>, <span class="st">"n/a"</span>, <span class="st">""</span>, <span class="st">"?"</span>]}}</span>
-<span id="cb55-7"><a href="#cb55-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a>gp_py[<span class="st">"smoking_status"</span>] <span class="op">=</span> spelling.<span class="bu">map</span>(labels)</span>
-<span id="cb55-9"><a href="#cb55-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb55-10"><a href="#cb55-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[<span class="st">"smoking_status"</span>].value_counts(dropna<span class="op">=</span><span class="va">False</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb58"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a>spelling <span class="op">=</span> gp_py[<span class="st">"smoking_status"</span>].<span class="bu">str</span>.strip().<span class="bu">str</span>.lower()</span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>labels <span class="op">=</span> {<span class="op">**</span>{k: <span class="st">"Never"</span>   <span class="cf">for</span> k <span class="kw">in</span> [<span class="st">"never"</span>, <span class="st">"non-smoker"</span>, <span class="st">"non smoker"</span>]},</span>
+<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a>          <span class="op">**</span>{k: <span class="st">"Former"</span>  <span class="cf">for</span> k <span class="kw">in</span> [<span class="st">"former"</span>, <span class="st">"ex-smoker"</span>, <span class="st">"ex smoker"</span>]},</span>
+<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a>          <span class="op">**</span>{k: <span class="st">"Current"</span> <span class="cf">for</span> k <span class="kw">in</span> [<span class="st">"current"</span>, <span class="st">"current smoker"</span>, <span class="st">"smoker"</span>]},</span>
+<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a>          <span class="op">**</span>{k: np.nan    <span class="cf">for</span> k <span class="kw">in</span> [<span class="st">"unknown"</span>, <span class="st">"n/a"</span>, <span class="st">""</span>, <span class="st">"?"</span>]}}</span>
+<span id="cb58-7"><a href="#cb58-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-8"><a href="#cb58-8" aria-hidden="true" tabindex="-1"></a>gp_py[<span class="st">"smoking_status"</span>] <span class="op">=</span> spelling.<span class="bu">map</span>(labels)</span>
+<span id="cb58-9"><a href="#cb58-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-10"><a href="#cb58-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py[<span class="st">"smoking_status"</span>].value_counts(dropna<span class="op">=</span><span class="va">False</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; smoking_status
 #&gt; Never      12
@@ -959,31 +953,31 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 class="anchored" data-anchor-id="what-happens-when-you-one-hot-encode-1">5. What happens when you one-hot encode?</h3>
 <p>Most algorithms need numbers, so a categorical variable has to become numeric somehow. One-hot encoding gives each category its own 0/1 column.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb57"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a>gp_encoded <span class="op">=</span> pd.get_dummies(gp_py, columns<span class="op">=</span>[<span class="st">"GP_practice"</span>], dtype<span class="op">=</span><span class="bu">int</span>)</span>
-<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py.shape[<span class="dv">1</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb60"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>gp_encoded <span class="op">=</span> pd.get_dummies(gp_py, columns<span class="op">=</span>[<span class="st">"GP_practice"</span>], dtype<span class="op">=</span><span class="bu">int</span>)</span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_py.shape[<span class="dv">1</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; 5</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb59"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_encoded.shape[<span class="dv">1</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb62"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_encoded.shape[<span class="dv">1</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; 9</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb61"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a>cols <span class="op">=</span> [<span class="st">"patient_id"</span>] <span class="op">+</span> [c <span class="cf">for</span> c <span class="kw">in</span> gp_encoded.columns</span>
-<span id="cb61-2"><a href="#cb61-2" aria-hidden="true" tabindex="-1"></a>                         <span class="cf">if</span> c.startswith(<span class="st">"GP_practice_"</span>)]</span>
-<span id="cb61-3"><a href="#cb61-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_encoded[cols].head(<span class="dv">10</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb64"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a>cols <span class="op">=</span> [<span class="st">"patient_id"</span>] <span class="op">+</span> [c <span class="cf">for</span> c <span class="kw">in</span> gp_encoded.columns</span>
+<span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a>                         <span class="cf">if</span> c.startswith(<span class="st">"GP_practice_"</span>)]</span>
+<span id="cb64-3"><a href="#cb64-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gp_encoded[cols].head(<span class="dv">10</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;   patient_id  GP_practice_Bournbrook  ...  GP_practice_Other  GP_practice_Selly Oak
-#&gt; 0       P001                       1  ...                  0                      0
-#&gt; 1       P002                       1  ...                  0                      0
-#&gt; 2       P003                       1  ...                  0                      0
-#&gt; 3       P004                       1  ...                  0                      0
-#&gt; 4       P005                       1  ...                  0                      0
-#&gt; 5       P006                       1  ...                  0                      0
-#&gt; 6       P007                       1  ...                  0                      0
-#&gt; 7       P008                       1  ...                  0                      0
-#&gt; 8       P009                       1  ...                  0                      0
-#&gt; 9       P010                       0  ...                  0                      0
+<pre><code>#&gt;   patient_id  ...  GP_practice_Selly Oak
+#&gt; 0       P001  ...                      0
+#&gt; 1       P002  ...                      0
+#&gt; 2       P003  ...                      0
+#&gt; 3       P004  ...                      0
+#&gt; 4       P005  ...                      0
+#&gt; 5       P006  ...                      0
+#&gt; 6       P007  ...                      0
+#&gt; 7       P008  ...                      0
+#&gt; 8       P009  ...                      0
+#&gt; 9       P010  ...                      0
 #&gt; 
 #&gt; [10 rows x 6 columns]</code></pre>
 </div>
@@ -991,11 +985,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Five columns became nine: the practice column is gone and five indicator columns have taken its place.</p>
 <p>Now try the same thing on the patient identifier:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb63"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a>gp_ids_encoded <span class="op">=</span> pd.get_dummies(gp_py, columns<span class="op">=</span>[<span class="st">"patient_id"</span>], dtype<span class="op">=</span><span class="bu">int</span>)</span>
-<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb63-3"><a href="#cb63-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>({<span class="st">"original"</span>: gp_py.shape[<span class="dv">1</span>],</span>
-<span id="cb63-4"><a href="#cb63-4" aria-hidden="true" tabindex="-1"></a>       <span class="st">"practice_encoded"</span>: gp_encoded.shape[<span class="dv">1</span>],</span>
-<span id="cb63-5"><a href="#cb63-5" aria-hidden="true" tabindex="-1"></a>       <span class="st">"id_encoded"</span>: gp_ids_encoded.shape[<span class="dv">1</span>]})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb66"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a>gp_ids_encoded <span class="op">=</span> pd.get_dummies(gp_py, columns<span class="op">=</span>[<span class="st">"patient_id"</span>], dtype<span class="op">=</span><span class="bu">int</span>)</span>
+<span id="cb66-2"><a href="#cb66-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb66-3"><a href="#cb66-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>({<span class="st">"original"</span>: gp_py.shape[<span class="dv">1</span>],</span>
+<span id="cb66-4"><a href="#cb66-4" aria-hidden="true" tabindex="-1"></a>       <span class="st">"practice_encoded"</span>: gp_encoded.shape[<span class="dv">1</span>],</span>
+<span id="cb66-5"><a href="#cb66-5" aria-hidden="true" tabindex="-1"></a>       <span class="st">"id_encoded"</span>: gp_ids_encoded.shape[<span class="dv">1</span>]})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; {'original': 5, 'practice_encoded': 9, 'id_encoded': 34}</code></pre>
 </div>
@@ -1020,14 +1014,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <hr>
-</section>
-<section id="what-to-take-from-this-1" class="level3">
-<h3 class="anchored" data-anchor-id="what-to-take-from-this-1">What to take from this</h3>
-<ol type="1">
-<li><strong>Explore before cleaning.</strong> The column types, the frequency tables and the summaries are what told you something was wrong — a height column stored as text, an age of 250, ten spellings of three categories. None of it announced itself.</li>
-<li><strong>Cleaning is a sequence of decisions, not a checklist.</strong> You corrected one impossible value and admitted another as missing, and the difference was whether the intended value could be known. You grouped three practices and lost their identity to gain columns that can support an estimate.</li>
-<li><strong>Encoding is not automatically useful.</strong> The same operation that turned a practice into five usable columns turned an identifier into thirty useless ones.</li>
-</ol>
 </section>
 </div>
 </div>
