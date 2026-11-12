@@ -32,7 +32,11 @@ Today we open it. This exercise sets up the pieces — data, algorithm, fitted
 parameters, prediction — so that @sec-loss-functions can ask what "best fit"
 means and @sec-gradient-descent can ask how the best fit is found.
 
-## The data we fit to
+:::::: {.panel-tabset group="language"}
+
+## R
+
+### The data we fit to
 
 Today's outcome is a blood glucose measurement and the single predictor is age.
 The question behind it: **does knowing a patient's age tell you anything useful
@@ -45,11 +49,9 @@ carries the defect you met on Day 2 — five rows record a glucose of 0, which i
 not a measurement — so we drop those rows and keep the first 80 of what is left,
 small enough to see every point on a scatter plot.
 
-::: {.panel-tabset}
-## R
-
 ```{r}
-library(readr); library(dplyr); library(ggplot2)
+library(tidyverse)
+library(tidymodels)
 
 diab <- read_csv("data/diabetes.csv")
 glu  <- diab |> filter(glucose > 0) |> slice(1:80) |> select(age, glucose)
@@ -58,24 +60,6 @@ nrow(glu)
 head(glu)
 ```
 
-## Python
-
-```{python}
-import pandas as pd
-import numpy as np
-
-diab = pd.read_csv("data/diabetes.csv")
-glu = (diab.loc[diab["glucose"] > 0, ["age", "glucose"]]
-           .head(80)
-           .reset_index(drop=True))
-
-len(glu), glu.head()
-```
-:::
-
-::: {.panel-tabset}
-## R
-
 ```{r}
 ggplot(glu, aes(x = age, y = glucose)) +
   geom_point(alpha = 0.7) +
@@ -83,26 +67,14 @@ ggplot(glu, aes(x = age, y = glucose)) +
        y = "Glucose, mg/dL (the label)")
 ```
 
-## Python
-
-```{python}
-import matplotlib.pyplot as plt
-fig, ax = plt.subplots()
-ax.scatter(glu["age"], glu["glucose"], alpha=0.7)
-ax.set_xlabel("Age in years (the feature)")
-ax.set_ylabel("Glucose, mg/dL (the label)")
-plt.show()
-```
-:::
-
 Look at the scatter before you fit anything, and write down what slope you
 expect. You will be asked for it again at the end.
 
-## The three things that make a prediction
+### The three things that make a prediction
 
 | | What it is | In the code below |
 |---|---|---|
-| The **learning algorithm** | a procedure for turning data into parameters | `linear_reg()`, `LinearRegression()` |
+| The **learning algorithm** | a procedure for turning data into parameters | `linear_reg()` |
 | The **fitted model** | the parameters it produced, and nothing else | $\hat\beta_0 = 110.30$, $\hat\beta_1 = 0.289$ |
 | The **dataset** | what the algorithm was allowed to see | the 80 rows in `glu` |
 
@@ -122,35 +94,17 @@ intercept — often called the bias — and $\beta_1$ the weight on the feature,
 which is the slope. Both are *parameters*: numbers the fitting procedure
 returns.
 
-## Fitting, in both languages
-
-::: {.panel-tabset}
-## R
+### Fitting the model
 
 ```{r}
-library(parsnip)
-
 lm_model <- linear_reg() |> set_engine("lm") |> set_mode("regression")
 ls_fit   <- lm_model |> fit(glucose ~ age, data = glu)
 
 coef(extract_fit_engine(ls_fit))
 ```
 
-## Python
-
-```{python}
-from sklearn.linear_model import LinearRegression
-
-X = glu[["age"]]      # 2-D: a frame, not a series
-y = glu["glucose"]    # 1-D
-lin_reg = LinearRegression().fit(X, y)
-
-lin_reg.intercept_, lin_reg.coef_[0]
-```
-:::
-
-The two agree to every decimal worth printing, because both solve the same
-least-squares problem on the same 80 rows. @sec-ols shows you the algebra they
+R and Python agree to every decimal worth printing here, because both solve
+the same least-squares problem on the same 80 rows. @sec-ols shows you the algebra they
 are solving and verifies it by hand.
 
 ::: {.callout-warning}
@@ -168,22 +122,12 @@ $$\widehat{\text{glucose}} = 110.30 + 0.289 \times \text{age}$$
 
 and that is the entire deliverable of the fitting step. Two numbers.
 
-## Predicting, inside and outside the data
-
-::: {.panel-tabset}
-## R
+### Predicting, inside and outside the data
 
 ```{r}
 new_patients <- data.frame(age = c(45, 10))
 predict(ls_fit, new_data = new_patients)
 ```
-
-## Python
-
-```{python}
-lin_reg.predict(pd.DataFrame({"age": [45, 10]}))
-```
-:::
 
 A 45-year-old gets a predicted glucose of about 123.3. So does a 10-year-old,
 at about 113.2 — even though the youngest patient in the data is 21, and these
@@ -200,67 +144,37 @@ what the model does *not* give you: any sense of how confident it is. That is a
 statistical question and this is a prediction course.
 :::
 
-## Task 1 — Predict from the parameters, not from the function
+### Task 1 — Predict from the parameters, not from the function
 
 `predict()` is a convenience. Reproduce it with arithmetic: compute the
 predicted glucose for a 60-year-old from the two coefficients.
 
-::: {.panel-tabset}
-## R
-
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 b <- coef(extract_fit_engine(ls_fit))
 pred_60 <- ______ + ______ * 60
-check_metric_range(pred_60, 120, 135, "predicted glucose at age 60")
+unname(pred_60)
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 b <- coef(extract_fit_engine(ls_fit))
 pred_60 <- b[1] + b[2] * 60
-check_metric_range(pred_60, 120, 135, "predicted glucose at age 60")
+unname(pred_60)
 ```
-:::
-:::
-
-## Python
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
-pred_60 = ______ + ______ * 60
-check_metric_range(pred_60, 120, 135, "predicted glucose at age 60")
-```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-import sys; sys.path.append("checks")
-from checks import *
-pred_60 = lin_reg.intercept_ + lin_reg.coef_[0] * 60
-check_metric_range(pred_60, 120, 135, "predicted glucose at age 60")
-```
-:::
 :::
 :::
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-The two numbers you need are the ones the fitting step printed. In R they come
-out of `coef()` in the order intercept, then slope; in Python they are two
-separate attributes of the fitted object.
+The two numbers you need are the ones the fitting step printed. They come out
+of `coef()` in the order intercept, then slope.
 :::
 
-## Task 2 — Make the line earn its place
+### Task 2 — Make the line earn its place
 
 A fitted line is only worth having if it beats a predictor that does no
 learning. Compute the mean squared error of the line on these 80 rows, and the
@@ -271,62 +185,33 @@ Both numbers are computed on the rows the model was fitted to, which
 this exercise is about what fitting *does*, not about how well it generalises.
 Read every number on this page as in-sample.
 
-::: {.panel-tabset}
-## R
-
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 pred_line <- predict(ls_fit, new_data = glu)$.pred
 mse_line  <- mean((glu$glucose - ______)^2)
 mse_mean  <- mean((glu$glucose - ______)^2)
-check_beats_baseline(mse_line, mse_mean)
+c(line = mse_line, mean_only = mse_mean)
+round(100 * mse_line / mse_mean, 1)   # the line's error as a % of the baseline's
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 pred_line <- predict(ls_fit, new_data = glu)$.pred
 mse_line  <- mean((glu$glucose - pred_line)^2)
 mse_mean  <- mean((glu$glucose - mean(glu$glucose))^2)
-check_beats_baseline(mse_line, mse_mean)
+c(line = mse_line, mean_only = mse_mean)
+round(100 * mse_line / mse_mean, 1)   # the line's error as a % of the baseline's
 ```
 :::
 :::
 
-## Python
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
-mse_line = np.mean((y - ______)**2)
-mse_mean = np.mean((y - ______)**2)
-check_beats_baseline(mse_line, mse_mean)
-```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-import sys; sys.path.append("checks")
-from checks import *
-mse_line = np.mean((y - lin_reg.predict(X))**2)
-mse_mean = np.mean((y - y.mean())**2)
-check_beats_baseline(mse_line, mse_mean)
-```
-:::
-:::
-:::
-
-The check prints the line's error as a percentage of the baseline's. Write the
+The last line prints the line's error as a percentage of the baseline's. Write the
 percentage down before you read the next section.
 
-## The result that should bother you
+### The result that should bother you
 
 The line's in-sample mean squared error is 847.5. The mean squared error of
 ignoring age entirely and predicting 119.9 for everyone is 863.2. Fitting
@@ -335,9 +220,6 @@ removed 1.8% of the squared error.
 Now destroy the relationship on purpose and fit again. Shuffling the age column
 breaks any link between a patient's age and their glucose while leaving both
 distributions exactly as they were.
-
-::: {.panel-tabset}
-## R
 
 ```{r}
 set.seed(42)
@@ -349,20 +231,6 @@ pred_shuffled <- predict(fit_shuffled, new_data = glu_shuffled)$.pred
 coef(extract_fit_engine(fit_shuffled))
 mean((glu_shuffled$glucose - pred_shuffled)^2)
 ```
-
-## Python
-
-```{python}
-rng = np.random.default_rng(42)
-glu_shuffled = glu.assign(age=rng.permutation(glu["age"].values))
-
-fit_shuffled = LinearRegression().fit(glu_shuffled[["age"]], glu_shuffled["glucose"])
-mse_shuffled = np.mean((glu_shuffled["glucose"]
-                        - fit_shuffled.predict(glu_shuffled[["age"]]))**2)
-
-fit_shuffled.intercept_, fit_shuffled.coef_[0], mse_shuffled
-```
-:::
 
 Three steps of reasoning.
 
@@ -379,14 +247,11 @@ Three steps of reasoning.
 Keep this: the entire day is about finding the best line, and the best line
 here is nearly useless. Being able to hold both of those at once is the point.
 
-## Task 3 — Change the algorithm, keep everything else
+### Task 3 — Change the algorithm, keep everything else
 
 A decision tree is a different learning algorithm applied to the identical
 dataset and the identical question. For now, swap one line and look at the
 shape of what comes out.
-
-::: {.panel-tabset}
-## R
 
 ```{r}
 #| eval: false
@@ -420,40 +285,8 @@ rpart.plot(extract_fit_engine(dt_fit), roundint = FALSE)
 :::
 :::
 
-## Python
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-from sklearn.tree import DecisionTreeRegressor, export_text
-
-tree_reg = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5).fit(______, ______)
-print(export_text(tree_reg, feature_names=["age"]))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The tree takes the same two arguments the linear model took, in the same order.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-from sklearn.tree import DecisionTreeRegressor, export_text
-
-tree_reg = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5).fit(X, y)
-print(export_text(tree_reg, feature_names=["age"]))
-```
-:::
-:::
-:::
-
 Now plot both models' predictions over the data. The line is a line; the tree is
 a staircase, constant within each age band it chose.
-
-::: {.panel-tabset}
-## R
 
 ```{r}
 dt_fit_shown <- decision_tree(mode = "regression") |> set_engine("rpart") |>
@@ -469,22 +302,6 @@ ggplot(glu_pred, aes(x = age)) +
   geom_line(aes(y = pred_line), colour = "steelblue", linewidth = 1) +
   labs(x = "Age (years)", y = "Glucose (mg/dL)")
 ```
-
-## Python
-
-```{python}
-from sklearn.tree import DecisionTreeRegressor
-tree_shown = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5).fit(X, y)
-
-grid = pd.DataFrame({"age": np.linspace(glu["age"].min(), glu["age"].max(), 400)})
-fig, ax = plt.subplots()
-ax.scatter(glu["age"], glu["glucose"], alpha=0.5)
-ax.plot(grid["age"], tree_shown.predict(grid), color="darkred")
-ax.plot(grid["age"], lin_reg.predict(grid), color="steelblue")
-ax.set_xlabel("Age (years)"); ax.set_ylabel("Glucose (mg/dL)")
-plt.show()
-```
-:::
 
 The tree's in-sample mean squared error is lower than the line's: 685.7 in R
 with `rpart`'s default pruning, 677.9 in Python with a depth of 3. Both are well
@@ -502,13 +319,10 @@ genuine difference between the two libraries' defaults, and you should expect to
 have to state tree-stopping rules explicitly whenever you report one.
 :::
 
-## Task 4 — The role of the dataset
+### Task 4 — The role of the dataset
 
 Refit both models on the first 30 rows only, and predict glucose for a
 25-year-old with each of the four fitted models.
-
-::: {.panel-tabset}
-## R
 
 ```{r}
 #| eval: false
@@ -541,7 +355,287 @@ c(line80 = predict(ls_fit,   at25)$.pred, line30 = predict(ls_fit30, at25)$.pred
 :::
 :::
 
+Answer in writing, in one sentence each.
+
+1. Which model's prediction for a 25-year-old moved more when 50 rows were
+   taken away, and by how much?
+2. The learning algorithm did not change between the two fits. What did?
+3. On 30 rows the `rpart` tree has two leaves rather than six. What has the
+   algorithm concluded, and is it wrong to conclude it?
+
 ## Python
+
+### The data we fit to
+
+Today's outcome is a blood glucose measurement and the single predictor is age.
+The question behind it: **does knowing a patient's age tell you anything useful
+about their glucose?** The answer today is more interesting than you might
+expect.
+
+`data/diabetes.csv` is the module's case study: 768 adults screened for type 2
+diabetes, eight measurements from a single visit and a `pos`/`neg` outcome. It
+carries the defect you met on Day 2 — five rows record a glucose of 0, which is
+not a measurement — so we drop those rows and keep the first 80 of what is left,
+small enough to see every point on a scatter plot.
+
+```{python}
+import pandas as pd
+import numpy as np
+
+diab = pd.read_csv("data/diabetes.csv")
+glu = (diab.loc[diab["glucose"] > 0, ["age", "glucose"]]
+           .head(80)
+           .reset_index(drop=True))
+
+len(glu), glu.head()
+```
+
+```{python}
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots()
+ax.scatter(glu["age"], glu["glucose"], alpha=0.7)
+ax.set_xlabel("Age in years (the feature)")
+ax.set_ylabel("Glucose, mg/dL (the label)")
+plt.show()
+```
+
+Look at the scatter before you fit anything, and write down what slope you
+expect. You will be asked for it again at the end.
+
+### The three things that make a prediction
+
+| | What it is | In the code below |
+|---|---|---|
+| The **learning algorithm** | a procedure for turning data into parameters | `LinearRegression()` |
+| The **fitted model** | the parameters it produced, and nothing else | $\hat\beta_0 = 110.30$, $\hat\beta_1 = 0.289$ |
+| The **dataset** | what the algorithm was allowed to see | the 80 rows in `glu` |
+
+: {tbl-colwidths="[24,44,32]"}
+
+The algorithm is chosen by you, the parameters are chosen by the data, and the
+prediction is a consequence of both. Students conflate the first two constantly:
+"linear regression predicted 123" is wrong, because linear regression predicts
+nothing until it has been shown a dataset.
+
+In machine learning notation the model is written
+
+$$y = \beta_0 + \beta_1 x_1$$
+
+where $y$ is the label (glucose), $x_1$ the feature (age), $\beta_0$ the
+intercept — often called the bias — and $\beta_1$ the weight on the feature,
+which is the slope. Both are *parameters*: numbers the fitting procedure
+returns.
+
+### Fitting the model
+
+```{python}
+from sklearn.linear_model import LinearRegression
+
+X = glu[["age"]]      # 2-D: a frame, not a series
+y = glu["glucose"]    # 1-D
+lin_reg = LinearRegression().fit(X, y)
+
+lin_reg.intercept_, lin_reg.coef_[0]
+```
+
+R and Python agree to every decimal worth printing here, because both solve
+the same least-squares problem on the same 80 rows. @sec-ols shows you the algebra they
+are solving and verifies it by hand.
+
+So the fitted model is
+
+$$\widehat{\text{glucose}} = 110.30 + 0.289 \times \text{age}$$
+
+and that is the entire deliverable of the fitting step. Two numbers.
+
+### Predicting, inside and outside the data
+
+```{python}
+lin_reg.predict(pd.DataFrame({"age": [45, 10]}))
+```
+
+A 45-year-old gets a predicted glucose of about 123.3. So does a 10-year-old,
+at about 113.2 — even though the youngest patient in the data is 21, and these
+are adults with no children among them. The model is an infinite line. It will
+return a number for an age of 200, or of −40, and nothing in the code will
+object.
+
+::: {.callout-note}
+## Extrapolation is a modelling decision, not a software error
+The line is fitted on ages 21 to 81. Using it at 10 asserts that the same
+relationship holds in children, which nothing in these data supports. Every
+model will happily extrapolate; the restraint has to come from you. Note also
+what the model does *not* give you: any sense of how confident it is. That is a
+statistical question and this is a prediction course.
+:::
+
+### Task 1 — Predict from the parameters, not from the function
+
+`predict()` is a convenience. Reproduce it with arithmetic: compute the
+predicted glucose for a 60-year-old from the two coefficients.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+pred_60 = ______ + ______ * 60
+print(round(pred_60, 2))
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+pred_60 = lin_reg.intercept_ + lin_reg.coef_[0] * 60
+print(round(pred_60, 2))
+```
+:::
+:::
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The two numbers you need are the ones the fitting step printed. They are two
+separate attributes of the fitted object.
+:::
+
+### Task 2 — Make the line earn its place
+
+A fitted line is only worth having if it beats a predictor that does no
+learning. Compute the mean squared error of the line on these 80 rows, and the
+mean squared error of predicting the mean glucose for everybody.
+
+Both numbers are computed on the rows the model was fitted to, which
+@sec-pipeline told you is not evidence of anything. Today that is deliberate:
+this exercise is about what fitting *does*, not about how well it generalises.
+Read every number on this page as in-sample.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+mse_line = np.mean((y - ______)**2)
+mse_mean = np.mean((y - ______)**2)
+print(round(mse_line, 1), round(mse_mean, 1))
+print(round(100 * mse_line / mse_mean, 1))   # the line's error as a % of the baseline's
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+mse_line = np.mean((y - lin_reg.predict(X))**2)
+mse_mean = np.mean((y - y.mean())**2)
+print(round(mse_line, 1), round(mse_mean, 1))
+print(round(100 * mse_line / mse_mean, 1))   # the line's error as a % of the baseline's
+```
+:::
+:::
+
+The last line prints the line's error as a percentage of the baseline's. Write the
+percentage down before you read the next section.
+
+### The result that should bother you
+
+The line's in-sample mean squared error is 847.5. The mean squared error of
+ignoring age entirely and predicting 119.9 for everyone is 863.2. Fitting
+removed 1.8% of the squared error.
+
+Now destroy the relationship on purpose and fit again. Shuffling the age column
+breaks any link between a patient's age and their glucose while leaving both
+distributions exactly as they were.
+
+```{python}
+rng = np.random.default_rng(42)
+glu_shuffled = glu.assign(age=rng.permutation(glu["age"].values))
+
+fit_shuffled = LinearRegression().fit(glu_shuffled[["age"]], glu_shuffled["glucose"])
+mse_shuffled = np.mean((glu_shuffled["glucose"]
+                        - fit_shuffled.predict(glu_shuffled[["age"]]))**2)
+
+fit_shuffled.intercept_, fit_shuffled.coef_[0], mse_shuffled
+```
+
+Three steps of reasoning.
+
+1. Shuffled age cannot predict glucose. Any apparent fit is coincidence, and
+   its error is what "no relationship at all" looks like in these units.
+2. The shuffled fit's error is around 850 in R and around 861 in Python — the
+   two seeds shuffle differently — against 847.5 for the real age column and
+   863.2 for the baseline. The real predictor buys you almost nothing that a
+   deliberately broken one does not.
+3. The algebra in @sec-ols is exact, the fit is genuinely the best straight
+   line there is, and the model is still not worth deploying. A minimum is not
+   the same thing as a small number.
+
+Keep this: the entire day is about finding the best line, and the best line
+here is nearly useless. Being able to hold both of those at once is the point.
+
+### Task 3 — Change the algorithm, keep everything else
+
+A decision tree is a different learning algorithm applied to the identical
+dataset and the identical question. For now, swap one line and look at the
+shape of what comes out.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+from sklearn.tree import DecisionTreeRegressor, export_text
+
+tree_reg = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5).fit(______, ______)
+print(export_text(tree_reg, feature_names=["age"]))
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The tree takes the same two arguments the linear model took, in the same order.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+from sklearn.tree import DecisionTreeRegressor, export_text
+
+tree_reg = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5).fit(X, y)
+print(export_text(tree_reg, feature_names=["age"]))
+```
+:::
+:::
+
+Now plot both models' predictions over the data. The line is a line; the tree is
+a staircase, constant within each age band it chose.
+
+```{python}
+from sklearn.tree import DecisionTreeRegressor
+tree_shown = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5).fit(X, y)
+
+grid = pd.DataFrame({"age": np.linspace(glu["age"].min(), glu["age"].max(), 400)})
+fig, ax = plt.subplots()
+ax.scatter(glu["age"], glu["glucose"], alpha=0.5)
+ax.plot(grid["age"], tree_shown.predict(grid), color="darkred")
+ax.plot(grid["age"], lin_reg.predict(grid), color="steelblue")
+ax.set_xlabel("Age (years)"); ax.set_ylabel("Glucose (mg/dL)")
+plt.show()
+```
+
+The tree's in-sample mean squared error is lower than the line's: 685.7 in R
+with `rpart`'s default pruning, 677.9 in Python with a depth of 3. Both are well
+below the line's 847.5. The tree is not better. It has more parameters — one
+mean per leaf rather than two numbers for the whole dataset — and more
+parameters always fit the rows you fitted them to more closely.
+
+::: {.callout-note}
+## The two trees are not the same tree
+`rpart` and scikit-learn choose splits the same way but stop differently:
+`rpart` prunes using a complexity parameter and cross-validation, scikit-learn
+stops when you tell it to. Ours end up with six leaves and seven respectively.
+Unlike the linear coefficients, which agreed to the decimal, the trees are a
+genuine difference between the two libraries' defaults, and you should expect to
+have to state tree-stopping rules explicitly whenever you report one.
+:::
+
+### Task 4 — The role of the dataset
+
+Refit both models on the first 30 rows only, and predict glucose for a
+25-year-old with each of the four fitted models.
 
 ```{python}
 #| eval: false
@@ -573,15 +667,16 @@ at25 = pd.DataFrame({"age": [25]})
 ```
 :::
 :::
-:::
 
 Answer in writing, in one sentence each.
 
 1. Which model's prediction for a 25-year-old moved more when 50 rows were
    taken away, and by how much?
 2. The learning algorithm did not change between the two fits. What did?
-3. On 30 rows the `rpart` tree has two leaves rather than six. What has the
-   algorithm concluded, and is it wrong to conclude it?
+3. In R, `rpart` grows a tree with two leaves rather than six on 30 rows. What
+   has that algorithm concluded, and is it wrong to conclude it?
+
+::::::
 
 ## Reflection
 
