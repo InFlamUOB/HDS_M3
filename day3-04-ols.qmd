@@ -169,14 +169,13 @@ actually evaluates.
 Compute both estimators from means, a covariance and a variance, and compare
 them with the fitted model.
 
-::: {.panel-tabset}
+::: {.panel-tabset group="language"}
 ## R
 
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-library(readr); library(dplyr)
-source("checks/checks.R")
+library(tidyverse)
 
 diab <- read_csv("data/diabetes.csv")
 glu  <- diab |> filter(glucose > 0) |> slice(1:80) |> select(age, glucose)
@@ -188,8 +187,6 @@ b0hat <- mean(y) - b1hat * ______
 
 fit <- lm(glucose ~ age, data = glu)
 rbind(closed_form = c(b0hat, b1hat), lm = coef(fit))
-
-check_matches(b1hat, coef(fit)[["age"]], tol = 1e-8, label = "closed-form slope")
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -202,8 +199,7 @@ third blank is the mean of the predictor.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-library(readr); library(dplyr)
-source("checks/checks.R")
+library(tidyverse)
 
 diab <- read_csv("data/diabetes.csv")
 glu  <- diab |> filter(glucose > 0) |> slice(1:80) |> select(age, glucose)
@@ -215,8 +211,6 @@ b0hat <- mean(y) - b1hat * mean(x)
 
 fit <- lm(glucose ~ age, data = glu)
 rbind(closed_form = c(b0hat, b1hat), lm = coef(fit))
-
-check_matches(b1hat, coef(fit)[["age"]], tol = 1e-8, label = "closed-form slope")
 ```
 :::
 :::
@@ -226,8 +220,8 @@ check_matches(b1hat, coef(fit)[["age"]], tol = 1e-8, label = "closed-form slope"
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import pandas as pd, numpy as np, sys; sys.path.append("checks")
-from checks import *
+import pandas as pd
+import numpy as np
 from sklearn.linear_model import LinearRegression
 
 diab = pd.read_csv("data/diabetes.csv")
@@ -240,16 +234,14 @@ b0hat = y.mean() - b1hat * ______
 
 fit = LinearRegression().fit(glu[["age"]], y)
 print({"closed_form": (b0hat, b1hat), "sklearn": (fit.intercept_, fit.coef_[0])})
-
-check_matches(b1hat, fit.coef_[0], tol=1e-8, label="closed-form slope")
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import pandas as pd, numpy as np, sys; sys.path.append("checks")
-from checks import *
+import pandas as pd
+import numpy as np
 from sklearn.linear_model import LinearRegression
 
 diab = pd.read_csv("data/diabetes.csv")
@@ -262,8 +254,6 @@ b0hat = y.mean() - b1hat * x.mean()
 
 fit = LinearRegression().fit(glu[["age"]], y)
 print({"closed_form": (b0hat, b1hat), "sklearn": (fit.intercept_, fit.coef_[0])})
-
-check_matches(b1hat, fit.coef_[0], tol=1e-8, label="closed-form slope")
 ```
 :::
 :::
@@ -289,34 +279,28 @@ $\sum x_i r_i = 0$. Those are not assumptions about the world; they are
 consequences of having minimised. Check both for the fitted line, and for the
 hand-drawn line from @sec-loss-functions.
 
-::: {.panel-tabset}
+::: {.panel-tabset group="language"}
 ## R
 
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 r_fitted <- ______                     # residuals of the fitted line
 r_guess  <- y - (120 + 0.5 * x)        # residuals of the hand-drawn line
 
 rbind(fitted = c(sum_r = sum(r_fitted), sum_xr = sum(x * r_fitted)),
       guess  = c(sum_r = sum(r_guess),  sum_xr = sum(x * r_guess)))
-
-check_matches(sum(r_fitted), 0, tol = 1e-6, label = "sum of fitted residuals")
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 r_fitted <- resid(fit)
 r_guess  <- y - (120 + 0.5 * x)
 
 rbind(fitted = c(sum_r = sum(r_fitted), sum_xr = sum(x * r_fitted)),
       guess  = c(sum_r = sum(r_guess),  sum_xr = sum(x * r_guess)))
-
-check_matches(sum(r_fitted), 0, tol = 1e-6, label = "sum of fitted residuals")
 ```
 :::
 :::
@@ -326,30 +310,22 @@ check_matches(sum(r_fitted), 0, tol = 1e-6, label = "sum of fitted residuals")
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 r_fitted = ______                      # residuals of the fitted line
 r_guess  = y - (120 + 0.5 * x)
 
 print({"fitted": (r_fitted.sum(), (x * r_fitted).sum()),
        "guess":  (r_guess.sum(),  (x * r_guess).sum())})
-
-check_matches(r_fitted.sum(), 0, tol=1e-6, label="sum of fitted residuals")
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 r_fitted = y - fit.predict(glu[["age"]])
 r_guess  = y - (120 + 0.5 * x)
 
 print({"fitted": (r_fitted.sum(), (x * r_fitted).sum()),
        "guess":  (r_guess.sum(),  (x * r_guess).sum())})
-
-check_matches(r_fitted.sum(), 0, tol=1e-6, label="sum of fitted residuals")
 ```
 :::
 :::
@@ -371,7 +347,7 @@ answer for any dataset in which the predictor is not perfectly constant — and
 says nothing about how large that variance is. Refit the same model on
 progressively narrower age bands.
 
-::: {.panel-tabset}
+::: {.panel-tabset group="language"}
 ## R
 
 ```{r}
@@ -419,13 +395,12 @@ Three steps of reasoning.
 `ad` (abdominal diameter, mm) and `bw` (birth weight, g). Apply the closed form
 to predict `bw` from `bpd`, and confirm it against the fitted model.
 
-::: {.panel-tabset}
+::: {.panel-tabset group="language"}
 ## R
 
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
 bwt <- read_csv("data/birthweight.csv")
 
 slope_bw     <- ______
@@ -433,16 +408,12 @@ intercept_bw <- ______
 
 fit_bw <- lm(bw ~ bpd, data = bwt)
 rbind(closed_form = c(intercept_bw, slope_bw), lm = coef(fit_bw))
-
-check_matches(slope_bw, coef(fit_bw)[["bpd"]], tol = 1e-8,
-              label = "closed-form slope, birth weight")
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
 bwt <- read_csv("data/birthweight.csv")
 
 slope_bw     <- cov(bwt$bpd, bwt$bw) / var(bwt$bpd)
@@ -450,9 +421,6 @@ intercept_bw <- mean(bwt$bw) - slope_bw * mean(bwt$bpd)
 
 fit_bw <- lm(bw ~ bpd, data = bwt)
 rbind(closed_form = c(intercept_bw, slope_bw), lm = coef(fit_bw))
-
-check_matches(slope_bw, coef(fit_bw)[["bpd"]], tol = 1e-8,
-              label = "closed-form slope, birth weight")
 ```
 :::
 :::
@@ -462,8 +430,6 @@ check_matches(slope_bw, coef(fit_bw)[["bpd"]], tol = 1e-8,
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
 bwt = pd.read_csv("data/birthweight.csv")
 
 slope_bw     = ______
@@ -472,17 +438,12 @@ intercept_bw = ______
 fit_bw = LinearRegression().fit(bwt[["bpd"]], bwt["bw"])
 print({"closed_form": (intercept_bw, slope_bw),
        "sklearn": (fit_bw.intercept_, fit_bw.coef_[0])})
-
-check_matches(slope_bw, fit_bw.coef_[0], tol=1e-8,
-              label="closed-form slope, birth weight")
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
 bwt = pd.read_csv("data/birthweight.csv")
 
 slope_bw     = bwt["bpd"].cov(bwt["bw"]) / bwt["bpd"].var()
@@ -491,9 +452,6 @@ intercept_bw = bwt["bw"].mean() - slope_bw * bwt["bpd"].mean()
 fit_bw = LinearRegression().fit(bwt[["bpd"]], bwt["bw"])
 print({"closed_form": (intercept_bw, slope_bw),
        "sklearn": (fit_bw.intercept_, fit_bw.coef_[0])})
-
-check_matches(slope_bw, fit_bw.coef_[0], tol=1e-8,
-              label="closed-form slope, birth weight")
 ```
 :::
 :::
@@ -535,7 +493,7 @@ to about 190. Birth weight: intercept ≈ 890, slope ≈ 29 g per mm, in-sample 
 ≈ 105,000–108,000 against a baseline of ≈ 129,000.
 
 **Common failures.** (1) `var(x)` against `var(y)` in the denominator, which
-gives a plausible-looking wrong slope — the check catches it, and it is worth
+gives a plausible-looking wrong slope — comparing with the software's slope catches it, and it is worth
 asking what the ratio they computed actually estimates. (2) Writing
 `cov(x, y) / var(x)` with `x` and `y` the wrong way round, which gives the slope
 of age on glucose; ask what regressing the predictor on the outcome would even

@@ -31,7 +31,11 @@ get.
 models — logistic regression, and anything with a neural network in it — are
 fitted by the method on this page instead: start somewhere, measure which way is downhill, take a step, repeat.
 
-## The update rule
+:::::: {.panel-tabset group="language"}
+
+## R
+
+### The update rule
 
 $$x_{n+1} = x_n - \alpha f'(x_n)$$
 
@@ -44,17 +48,15 @@ rises to the right, so we subtract and move left; where it is negative we
 subtract a negative and move right. Either way the step is *against* the slope,
 and the steeper the slope the bigger the step.
 
-## Minimising $f(x) = x^2$
+### Minimising $f(x) = x^2$
 
 The derivative is $f'(x) = 2x$, so the rule becomes $x_{n+1} = x_n - 2\alpha
 x_n$. We know the answer is $x = 0$, which is why this is the example: you can
 see whether the algorithm is working.
 
-::: {.panel-tabset}
-## R
-
 ```{r}
-library(ggplot2); library(dplyr); library(patchwork)
+library(tidyverse)
+library(patchwork)
 
 f       <- function(x) x^2
 f_prime <- function(x) 2 * x
@@ -71,30 +73,7 @@ p2 <- ggplot(curve_df, aes(x, f_prime_x)) + geom_line(colour = "firebrick") +
 p1 + p2
 ```
 
-## Python
-
-```{python}
-import numpy as np
-import matplotlib.pyplot as plt
-
-f       = lambda x: x**2
-f_prime = lambda x: 2 * x
-
-xs = np.linspace(-10, 10, 200)
-fig, axes = plt.subplots(1, 2, figsize=(9, 3.5))
-axes[0].plot(xs, f(xs), color="steelblue");  axes[0].set_title("f(x) = x^2")
-axes[1].plot(xs, f_prime(xs), color="firebrick"); axes[1].set_title("f'(x) = 2x")
-for ax in axes:
-    ax.axhline(0, color="black", lw=0.8); ax.axvline(0, color="black", lw=0.8)
-    ax.set_xlabel("x")
-plt.tight_layout(); plt.show()
-```
-:::
-
 Start at $x = -10$ with $\alpha = 0.8$ and take ten steps.
-
-::: {.panel-tabset}
-## R
 
 ```{r}
 alpha <- 0.8
@@ -108,27 +87,10 @@ for (i in 1:10) {
 }
 ```
 
-## Python
-
-```{python}
-alpha = 0.8
-x     = -10.0
-path  = []
-
-for i in range(1, 11):
-    x = x - alpha * f_prime(x)
-    path.append(x)
-    print(f"step {i}: x = {x:.4g}  f(x) = {f(x):.4g}")
-```
-:::
-
 The guess goes −10, 6, −3.6, 2.16, −1.296 and so on: it crosses the minimum
 every single step and lands closer each time. Overshooting is not failure. With
 $\alpha = 0.8$ each step is 1.6 times the distance to the minimum, so the sign
 flips and the magnitude shrinks by 0.6.
-
-::: {.panel-tabset}
-## R
 
 ```{r}
 steps_df <- data.frame(step = 1:10, x = path) |> mutate(f_x = f(x))
@@ -141,20 +103,7 @@ ggplot(curve_df, aes(x, f_x)) +
   labs(x = "x", y = "f(x)", fill = "step")
 ```
 
-## Python
-
-```{python}
-fig, ax = plt.subplots()
-ax.plot(xs, f(xs), color="grey")
-sc = ax.scatter(path, [f(v) for v in path], c=range(1, len(path) + 1),
-                cmap="autumn_r", edgecolor="black", zorder=3)
-fig.colorbar(sc, ax=ax, label="step")
-ax.set_xlabel("x"); ax.set_ylabel("f(x)")
-plt.show()
-```
-:::
-
-## Task 1 — Your turn, on a function whose minimum you can check
+### Task 1 — Your turn, on a function whose minimum you can check
 
 Minimise
 
@@ -164,14 +113,9 @@ Differentiate it on paper first: you should get $f'(x) = 2x + 3$, which is zero
 at $x = -1.5$. Then write the loop and see whether the algorithm agrees with
 your algebra.
 
-::: {.panel-tabset}
-## R
-
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
-
 g       <- function(x) x^2 + 3 * x + 5
 g_prime <- function(x) ______
 
@@ -180,7 +124,7 @@ x     <- 2
 for (i in 1:40) {
   x <- x - ______ * g_prime(x)
 }
-check_matches(x, -1.5, label = "minimiser of x^2 + 3x + 5")
+x   # your algebra said -1.5
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -194,8 +138,6 @@ already defined above the loop.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
-
 g       <- function(x) x^2 + 3 * x + 5
 g_prime <- function(x) 2 * x + 3
 
@@ -204,48 +146,8 @@ x     <- 2
 for (i in 1:40) {
   x <- x - alpha * g_prime(x)
 }
-check_matches(x, -1.5, label = "minimiser of x^2 + 3x + 5")
+x   # your algebra said -1.5
 ```
-:::
-:::
-
-## Python
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
-
-g       = lambda x: x**2 + 3 * x + 5
-g_prime = lambda x: ______
-
-alpha = 0.1
-x = 2.0
-for i in range(40):
-    x = x - ______ * g_prime(x)
-
-check_matches(x, -1.5, label="minimiser of x^2 + 3x + 5")
-```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-import sys; sys.path.append("checks")
-from checks import *
-
-g       = lambda x: x**2 + 3 * x + 5
-g_prime = lambda x: 2 * x + 3
-
-alpha = 0.1
-x = 2.0
-for i in range(40):
-    x = x - alpha * g_prime(x)
-
-check_matches(x, -1.5, label="minimiser of x^2 + 3x + 5")
-```
-:::
 :::
 :::
 
@@ -253,13 +155,10 @@ Forty steps get you to −1.4995. The algorithm approaches the minimum and never
 arrives, which is true of gradient descent in general: you stop when the
 improvement stops mattering, not when the gradient is zero.
 
-## The learning rate is the whole game
+### The learning rate is the whole game
 
 Run the same problem — $f(x) = x^2$ from $x = -10$ — at four learning rates for
 twenty steps each.
-
-::: {.panel-tabset}
-## R
 
 ```{r}
 descend_1d <- function(alpha, x0 = -10, n = 20) {
@@ -273,24 +172,6 @@ data.frame(alpha = rates,
            final_x = sapply(rates, descend_1d),
            final_f = sapply(rates, function(a) f(descend_1d(a))))
 ```
-
-## Python
-
-```{python}
-import pandas as pd
-
-def descend_1d(alpha, x0=-10.0, n=20):
-    x = x0
-    for _ in range(n):
-        x = x - alpha * f_prime(x)
-    return x
-
-rates = [0.01, 0.1, 0.8, 1.0, 1.05]
-pd.DataFrame({"alpha": rates,
-              "final_x": [descend_1d(a) for a in rates],
-              "final_f": [f(descend_1d(a)) for a in rates]})
-```
-:::
 
 Read that table carefully, because every row is a different lesson.
 
@@ -316,13 +197,10 @@ both are a number. Always print the path, or the loss, and look at whether it is
 going down.
 :::
 
-## Task 2 — Find the edge yourself
+### Task 2 — Find the edge yourself
 
 Run the descent at learning rates either side of the boundary and identify, to
 within 0.05, the largest rate that still converges for $f(x) = x^2$.
-
-::: {.panel-tabset}
-## R
 
 ```{r}
 #| eval: false
@@ -343,49 +221,17 @@ data.frame(alpha = rates, final_x = signif(finals, 3))
 :::
 :::
 
-## Python
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-rates = np.arange(0.8, 1.21, 0.05)
-finals = [descend_1d(a, x0=-10.0, n=______) for a in rates]
-pd.DataFrame({"alpha": rates.round(2), "final_x": np.round(finals, 3)})
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-Twenty steps is not enough to tell a slow divergence from a slow convergence.
-Use enough iterations that the difference is unmistakable — a few dozen will do,
-and you can afford thousands.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-rates = np.arange(0.8, 1.21, 0.05)
-finals = [descend_1d(a, x0=-10.0, n=60) for a in rates]
-pd.DataFrame({"alpha": rates.round(2), "final_x": np.round(finals, 3)})
-```
-:::
-:::
-:::
-
 Then answer: the boundary you found is a property of $f(x) = x^2$ and would be
 different for $f(x) = 100x^2$. What does that imply about carrying a learning
 rate over from one problem to another?
 
-## Local and global minima
+### Local and global minima
 
 Everything above had one minimum. Now take
 
 $$f(x) = x^4 + x^3 - 2x^2 \qquad f'(x) = 4x^3 + 3x^2 - 4x$$
 
 which has two: a shallow one near $x = 0.69$ and a deeper one near $x = -1.44$.
-
-::: {.panel-tabset}
-## R
 
 ```{r}
 h       <- function(x) x^4 + x^3 - 2 * x^2
@@ -400,25 +246,6 @@ descend_h <- function(x0, alpha = 0.03, n = 200) {
 t(sapply(c(1, 0.2, 0, -0.1, -0.5, 2), descend_h))
 ```
 
-## Python
-
-```{python}
-h       = lambda x: x**4 + x**3 - 2 * x**2
-h_prime = lambda x: 4 * x**3 + 3 * x**2 - 4 * x
-
-def descend_h(x0, alpha=0.03, n=200):
-    x = float(x0)
-    for _ in range(n):
-        x = x - alpha * h_prime(x)
-    return {"start": x0, "end": x, "f_end": h(x)}
-
-pd.DataFrame([descend_h(s) for s in (1, 0.2, 0, -0.1, -0.5, 2)])
-```
-:::
-
-::: {.panel-tabset}
-## R
-
 ```{r}
 curve_h <- data.frame(x = seq(-2, 1.5, length.out = 300)) |> mutate(f_x = h(x))
 ends    <- data.frame(start = c(1, 0.2, 0, -0.1, -0.5, 2)) |>
@@ -429,20 +256,6 @@ ggplot(curve_h, aes(x, f_x)) +
   geom_point(data = ends, aes(x = end, y = f_end), colour = "red", size = 3) +
   labs(x = "x", y = "f(x)")
 ```
-
-## Python
-
-```{python}
-grid_h = np.linspace(-2, 1.5, 300)
-ends = [descend_h(s)["end"] for s in (1, 0.2, 0, -0.1, -0.5, 2)]
-
-fig, ax = plt.subplots()
-ax.plot(grid_h, h(grid_h), color="grey")
-ax.scatter(ends, [h(e) for e in ends], color="red", zorder=3)
-ax.set_xlabel("x"); ax.set_ylabel("f(x)")
-plt.show()
-```
-:::
 
 Starting at 1, 0.2 or 2 lands on $x = 0.693$, where $f = -0.397$. Starting at
 −0.1 or −0.5 lands on $x = -1.443$, where $f = -2.833$ — seven times lower.
@@ -462,14 +275,11 @@ everything else, which is why deep learning papers report random seeds, and why
 "we trained it twice and got different models" is a sentence you will hear.
 :::
 
-## Task 3 — Where is the watershed
+### Task 3 — Where is the watershed
 
 Find, to within 0.05, the starting value between −0.1 and 0.2 at which the
 destination switches from one minimum to the other. Predict it before you
 compute it.
-
-::: {.panel-tabset}
-## R
 
 ```{r}
 #| eval: false
@@ -490,29 +300,7 @@ data.frame(start = starts,
 :::
 :::
 
-## Python
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-starts = np.arange(-0.1, 0.201, 0.01)
-pd.DataFrame({"start": starts.round(2),
-              "end": [round(______, 3) for s in starts]})
-```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-starts = np.arange(-0.1, 0.201, 0.01)
-pd.DataFrame({"start": starts.round(2),
-              "end": [round(descend_h(s)["end"], 3) for s in starts]})
-```
-:::
-:::
-:::
-
-## Two parameters at once
+### Two parameters at once
 
 A loss has as many derivatives as it has parameters. Collect them into a
 gradient vector and the update rule is unchanged — it just applies to every
@@ -520,9 +308,6 @@ parameter simultaneously. For
 
 $$f(x, y) = x\sin(y) + x^2 \qquad
 \nabla f = \left\langle \sin(y) + 2x,\; x\cos(y) \right\rangle$$
-
-::: {.panel-tabset}
-## R
 
 ```{r}
 fxy <- function(x, y) x * sin(y) + x^2
@@ -542,26 +327,6 @@ for (i in 1:1000) {
 trace_xy
 ```
 
-## Python
-
-```{python}
-fxy    = lambda x, y: x * np.sin(y) + x**2
-grad_x = lambda x, y: np.sin(y) + 2 * x
-grad_y = lambda x, y: x * np.cos(y)
-
-x, y, alpha = 1.0, 2.0, 0.01
-rows = [{"iter": 0, "x": x, "y": y, "f": fxy(x, y)}]
-
-for i in range(1, 1001):
-    gx, gy = grad_x(x, y), grad_y(x, y)
-    x, y = x - alpha * gx, y - alpha * gy
-    if i % 100 == 0:
-        rows.append({"iter": i, "x": x, "y": y, "f": fxy(x, y)})
-
-pd.DataFrame(rows)
-```
-:::
-
 It reaches $x = -0.5$, $y = 1.578$, $f = -0.25$, which is the exact minimum of
 this function: for any $y$ the best $x$ is $-\sin(y)/2$, giving
 $f = -\sin^2(y)/4$, smallest when $\sin y = 1$. Notice how much of the progress
@@ -578,7 +343,7 @@ Knowing that the gradient is just a list of slopes is enough to read those
 tools' output.
 :::
 
-## The result that should bother you
+### The result that should bother you
 
 Now put the method on the actual problem: find the intercept and slope that
 minimise the MSE for glucose against age, by gradient descent instead of by
@@ -592,11 +357,7 @@ $$\frac{\partial \text{MSE}}{\partial \beta_0} = -\frac{2}{m}\sum r_i
 
 with $r_i = y_i - \beta_0 - \beta_1 x_i$. @sec-ols derives them.
 
-::: {.panel-tabset}
-## R
-
 ```{r}
-library(readr)
 diab <- read_csv("data/diabetes.csv")
 glu  <- diab |> filter(glucose > 0) |> slice(1:80) |> select(age, glucose)
 
@@ -616,30 +377,6 @@ raw <- descend_mse(glu$age, glu$glucose, alpha = 1e-4, n = 1000)
 c(intercept = raw$b0, slope = raw$b1, MSE = tail(raw$mse, 1))
 coef(lm(glucose ~ age, data = glu))
 ```
-
-## Python
-
-```{python}
-import pandas as pd
-diab = pd.read_csv("data/diabetes.csv")
-glu = (diab.loc[diab["glucose"] > 0, ["age", "glucose"]]
-           .head(80).reset_index(drop=True))
-
-def descend_mse(x, y, alpha, n):
-    x, y = np.asarray(x, float), np.asarray(y, float)
-    b0 = b1 = 0.0
-    mse = np.empty(n)
-    for i in range(n):
-        r = y - (b0 + b1 * x)
-        b0 = b0 - alpha * (-2 * r.mean())
-        b1 = b1 - alpha * (-2 * (x * r).mean())
-        mse[i] = np.mean((y - (b0 + b1 * x))**2)
-    return {"b0": b0, "b1": b1, "mse": mse}
-
-raw = descend_mse(glu["age"], glu["glucose"], alpha=1e-4, n=1000)
-raw["b0"], raw["b1"], raw["mse"][-1]
-```
-:::
 
 After a thousand iterations the descent reports an intercept of 3.23 and a slope
 of 3.04, with an MSE of 2513. The correct answer is 110.298 and 0.2887, with an
@@ -666,19 +403,14 @@ The fix is to standardise both columns — subtract the mean, divide by the
 standard deviation — so the trough becomes a bowl, descend there, and convert
 the answer back.
 
-## Task 4 — Make it converge
+### Task 4 — Make it converge
 
 Standardise, descend with a learning rate a thousand times larger, and rescale
 the parameters to the original units.
 
-::: {.panel-tabset}
-## R
-
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
-
 zx <- (glu$age - mean(glu$age)) / sd(glu$age)
 zy <- (glu$glucose - ______) / sd(glu$glucose)
 
@@ -688,8 +420,7 @@ slope     <- std$b1 * sd(glu$glucose) / sd(glu$age)
 intercept <- mean(glu$glucose) + sd(glu$glucose) * std$b0 - slope * mean(glu$age)
 
 c(intercept = intercept, slope = slope)
-check_matches(slope, coef(lm(glucose ~ age, data = glu))[["age"]],
-              label = "slope from gradient descent")
+coef(lm(glucose ~ age, data = glu))   # the answer to compare with
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -703,8 +434,6 @@ glucose.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-source("checks/checks.R")
-
 zx <- (glu$age - mean(glu$age)) / sd(glu$age)
 zy <- (glu$glucose - mean(glu$glucose)) / sd(glu$glucose)
 
@@ -714,59 +443,8 @@ slope     <- std$b1 * sd(glu$glucose) / sd(glu$age)
 intercept <- mean(glu$glucose) + sd(glu$glucose) * std$b0 - slope * mean(glu$age)
 
 c(intercept = intercept, slope = slope)
-check_matches(slope, coef(lm(glucose ~ age, data = glu))[["age"]],
-              label = "slope from gradient descent")
+coef(lm(glucose ~ age, data = glu))   # the answer to compare with
 ```
-:::
-:::
-
-## Python
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
-from sklearn.linear_model import LinearRegression
-
-mx, sx = glu["age"].mean(), glu["age"].std()
-my, sy = glu["glucose"].mean(), glu["glucose"].std()
-zx = (glu["age"] - mx) / sx
-zy = (glu["glucose"] - ______) / sy
-
-std = descend_mse(zx, zy, alpha=0.1, n=50)
-
-slope     = std["b1"] * sy / sx
-intercept = my + sy * std["b0"] - slope * mx
-
-ref = LinearRegression().fit(glu[["age"]], glu["glucose"])
-print(intercept, slope)
-check_matches(slope, ref.coef_[0], label="slope from gradient descent")
-```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-import sys; sys.path.append("checks")
-from checks import *
-from sklearn.linear_model import LinearRegression
-
-mx, sx = glu["age"].mean(), glu["age"].std()
-my, sy = glu["glucose"].mean(), glu["glucose"].std()
-zx = (glu["age"] - mx) / sx
-zy = (glu["glucose"] - my) / sy
-
-std = descend_mse(zx, zy, alpha=0.1, n=50)
-
-slope     = std["b1"] * sy / sx
-intercept = my + sy * std["b0"] - slope * mx
-
-ref = LinearRegression().fit(glu[["age"]], glu["glucose"])
-print(intercept, slope)
-check_matches(slope, ref.coef_[0], label="slope from gradient descent")
-```
-:::
 :::
 :::
 
@@ -783,9 +461,6 @@ correlation between age and glucose. That is not a coincidence, and
 @sec-ols shows why.
 :::
 
-::: {.panel-tabset}
-## R
-
 ```{r}
 std_shown <- descend_mse((glu$age - mean(glu$age)) / sd(glu$age),
                          (glu$glucose - mean(glu$glucose)) / sd(glu$glucose),
@@ -797,7 +472,438 @@ data.frame(iteration = 1:50, MSE = std_shown$mse) |>
   labs(x = "Iteration", y = "MSE (standardised units)")
 ```
 
+That curve is the plot to draw every time you run an optimiser. A descent that
+is working looks like this: a steep fall, then a flat tail. Anything else — a
+rise, a wobble, a straight line still sloping down at the last iteration — is
+telling you to change the learning rate or the number of steps.
+
 ## Python
+
+### The update rule
+
+$$x_{n+1} = x_n - \alpha f'(x_n)$$
+
+- $x_n$ is the current guess.
+- $f'(x_n)$ is the derivative of the function at that guess — the slope.
+- $\alpha$ is the learning rate: a small positive number controlling step size.
+
+The minus sign carries the whole idea. Where the slope is positive the function
+rises to the right, so we subtract and move left; where it is negative we
+subtract a negative and move right. Either way the step is *against* the slope,
+and the steeper the slope the bigger the step.
+
+### Minimising $f(x) = x^2$
+
+The derivative is $f'(x) = 2x$, so the rule becomes $x_{n+1} = x_n - 2\alpha
+x_n$. We know the answer is $x = 0$, which is why this is the example: you can
+see whether the algorithm is working.
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+
+f       = lambda x: x**2
+f_prime = lambda x: 2 * x
+
+xs = np.linspace(-10, 10, 200)
+fig, axes = plt.subplots(1, 2, figsize=(9, 3.5))
+axes[0].plot(xs, f(xs), color="steelblue");  axes[0].set_title("f(x) = x^2")
+axes[1].plot(xs, f_prime(xs), color="firebrick"); axes[1].set_title("f'(x) = 2x")
+for ax in axes:
+    ax.axhline(0, color="black", lw=0.8); ax.axvline(0, color="black", lw=0.8)
+    ax.set_xlabel("x")
+plt.tight_layout(); plt.show()
+```
+
+Start at $x = -10$ with $\alpha = 0.8$ and take ten steps.
+
+```{python}
+alpha = 0.8
+x     = -10.0
+path  = []
+
+for i in range(1, 11):
+    x = x - alpha * f_prime(x)
+    path.append(x)
+    print(f"step {i}: x = {x:.4g}  f(x) = {f(x):.4g}")
+```
+
+The guess goes −10, 6, −3.6, 2.16, −1.296 and so on: it crosses the minimum
+every single step and lands closer each time. Overshooting is not failure. With
+$\alpha = 0.8$ each step is 1.6 times the distance to the minimum, so the sign
+flips and the magnitude shrinks by 0.6.
+
+```{python}
+fig, ax = plt.subplots()
+ax.plot(xs, f(xs), color="grey")
+sc = ax.scatter(path, [f(v) for v in path], c=range(1, len(path) + 1),
+                cmap="autumn_r", edgecolor="black", zorder=3)
+cbar = fig.colorbar(sc, ax=ax, label="step")
+ax.set_xlabel("x"); ax.set_ylabel("f(x)")
+plt.show()
+```
+
+### Task 1 — Your turn, on a function whose minimum you can check
+
+Minimise
+
+$$f(x) = x^2 + 3x + 5$$
+
+Differentiate it on paper first: you should get $f'(x) = 2x + 3$, which is zero
+at $x = -1.5$. Then write the loop and see whether the algorithm agrees with
+your algebra.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+g       = lambda x: x**2 + 3 * x + 5
+g_prime = lambda x: ______
+
+alpha = 0.1
+x = 2.0
+for i in range(40):
+    x = x - ______ * g_prime(x)
+
+print(round(x, 4))   # your algebra said -1.5
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+g       = lambda x: x**2 + 3 * x + 5
+g_prime = lambda x: 2 * x + 3
+
+alpha = 0.1
+x = 2.0
+for i in range(40):
+    x = x - alpha * g_prime(x)
+
+print(round(x, 4))   # your algebra said -1.5
+```
+:::
+:::
+
+Forty steps get you to −1.4995. The algorithm approaches the minimum and never
+arrives, which is true of gradient descent in general: you stop when the
+improvement stops mattering, not when the gradient is zero.
+
+### The learning rate is the whole game
+
+Run the same problem — $f(x) = x^2$ from $x = -10$ — at four learning rates for
+twenty steps each.
+
+```{python}
+import pandas as pd
+
+def descend_1d(alpha, x0=-10.0, n=20):
+    x = x0
+    for _ in range(n):
+        x = x - alpha * f_prime(x)
+    return x
+
+rates = [0.01, 0.1, 0.8, 1.0, 1.05]
+pd.DataFrame({"alpha": rates,
+              "final_x": [descend_1d(a) for a in rates],
+              "final_f": [f(descend_1d(a)) for a in rates]})
+```
+
+Read that table carefully, because every row is a different lesson.
+
+| $\alpha$ | After 20 steps | What happened |
+|---|---|---|
+| 0.01 | $x = -6.68$ | correct direction, far too slow — it needs thousands of steps |
+| 0.1 | $x = -0.115$ | steady approach from one side |
+| 0.8 | $x = -0.00037$ | overshoots every step and converges fastest of the five |
+| 1.0 | $x = -10$ | bounces between −10 and 10 for ever, making no progress at all |
+| 1.05 | $x = -67.3$ | diverges: each step is further out than the last |
+
+The fastest rate here is not the smallest one, and the boundary between working
+and diverging is sharp. For $f(x)=x^2$ the step multiplies the distance to the
+minimum by $(1 - 2\alpha)$, so anything below 1 converges, 1 exactly cycles, and
+above 1 explodes. There is no warning and no error message: at $\alpha = 1.05$
+the loop runs happily and returns a number.
+
+::: {.callout-warning}
+## A run that finished is not a run that worked
+Nothing in any of those five runs raised an error. If you only look at the final
+number, the diverging run and the converging run are indistinguishable in form —
+both are a number. Always print the path, or the loss, and look at whether it is
+going down.
+:::
+
+### Task 2 — Find the edge yourself
+
+Run the descent at learning rates either side of the boundary and identify, to
+within 0.05, the largest rate that still converges for $f(x) = x^2$.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+rates = np.arange(0.8, 1.21, 0.05)
+finals = [descend_1d(a, x0=-10.0, n=______) for a in rates]
+pd.DataFrame({"alpha": rates.round(2), "final_x": np.round(finals, 3)})
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Twenty steps is not enough to tell a slow divergence from a slow convergence.
+Use enough iterations that the difference is unmistakable — a few dozen will do,
+and you can afford thousands.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+rates = np.arange(0.8, 1.21, 0.05)
+finals = [descend_1d(a, x0=-10.0, n=60) for a in rates]
+pd.DataFrame({"alpha": rates.round(2), "final_x": np.round(finals, 3)})
+```
+:::
+:::
+
+Then answer: the boundary you found is a property of $f(x) = x^2$ and would be
+different for $f(x) = 100x^2$. What does that imply about carrying a learning
+rate over from one problem to another?
+
+### Local and global minima
+
+Everything above had one minimum. Now take
+
+$$f(x) = x^4 + x^3 - 2x^2 \qquad f'(x) = 4x^3 + 3x^2 - 4x$$
+
+which has two: a shallow one near $x = 0.69$ and a deeper one near $x = -1.44$.
+
+```{python}
+h       = lambda x: x**4 + x**3 - 2 * x**2
+h_prime = lambda x: 4 * x**3 + 3 * x**2 - 4 * x
+
+def descend_h(x0, alpha=0.03, n=200):
+    x = float(x0)
+    for _ in range(n):
+        x = x - alpha * h_prime(x)
+    return {"start": x0, "end": x, "f_end": h(x)}
+
+pd.DataFrame([descend_h(s) for s in (1, 0.2, 0, -0.1, -0.5, 2)])
+```
+
+```{python}
+grid_h = np.linspace(-2, 1.5, 300)
+ends = [descend_h(s)["end"] for s in (1, 0.2, 0, -0.1, -0.5, 2)]
+
+fig, ax = plt.subplots()
+ax.plot(grid_h, h(grid_h), color="grey")
+ax.scatter(ends, [h(e) for e in ends], color="red", zorder=3)
+ax.set_xlabel("x"); ax.set_ylabel("f(x)")
+plt.show()
+```
+
+Starting at 1, 0.2 or 2 lands on $x = 0.693$, where $f = -0.397$. Starting at
+−0.1 or −0.5 lands on $x = -1.443$, where $f = -2.833$ — seven times lower.
+Nothing distinguishes the two runs except where they began, and neither run can
+tell you it stopped in the worse of the two places.
+
+Starting at exactly 0 is the strangest case: the derivative there is zero, so the
+first step moves nowhere and every step after it moves nowhere. Gradient descent
+stops at any stationary point, and $x = 0$ here is a local *maximum*.
+
+::: {.callout-note}
+## Why this does not ruin least squares
+The MSE surface you plotted in @sec-loss-functions is a bowl with one minimum —
+convex, in the technical term — so for linear regression this whole worry is
+moot: every starting point reaches the same answer. The worry is real for almost
+everything else, which is why deep learning papers report random seeds, and why
+"we trained it twice and got different models" is a sentence you will hear.
+:::
+
+### Task 3 — Where is the watershed
+
+Find, to within 0.05, the starting value between −0.1 and 0.2 at which the
+destination switches from one minimum to the other. Predict it before you
+compute it.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+starts = np.arange(-0.1, 0.201, 0.01)
+pd.DataFrame({"start": starts.round(2),
+              "end": [round(______, 3) for s in starts]})
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+starts = np.arange(-0.1, 0.201, 0.01)
+pd.DataFrame({"start": starts.round(2),
+              "end": [round(descend_h(s)["end"], 3) for s in starts]})
+```
+:::
+:::
+
+### Two parameters at once
+
+A loss has as many derivatives as it has parameters. Collect them into a
+gradient vector and the update rule is unchanged — it just applies to every
+parameter simultaneously. For
+
+$$f(x, y) = x\sin(y) + x^2 \qquad
+\nabla f = \left\langle \sin(y) + 2x,\; x\cos(y) \right\rangle$$
+
+```{python}
+fxy    = lambda x, y: x * np.sin(y) + x**2
+grad_x = lambda x, y: np.sin(y) + 2 * x
+grad_y = lambda x, y: x * np.cos(y)
+
+x, y, alpha = 1.0, 2.0, 0.01
+rows = [{"iter": 0, "x": x, "y": y, "f": fxy(x, y)}]
+
+for i in range(1, 1001):
+    gx, gy = grad_x(x, y), grad_y(x, y)
+    x, y = x - alpha * gx, y - alpha * gy
+    if i % 100 == 0:
+        rows.append({"iter": i, "x": x, "y": y, "f": fxy(x, y)})
+
+pd.DataFrame(rows)
+```
+
+It reaches $x = -0.5$, $y = 1.578$, $f = -0.25$, which is the exact minimum of
+this function: for any $y$ the best $x$ is $-\sin(y)/2$, giving
+$f = -\sin^2(y)/4$, smallest when $\sin y = 1$. Notice how much of the progress
+happens early — after 100 iterations $f$ is already −0.153, and the remaining 900
+buy −0.097.
+
+::: {.callout-note}
+## Partial derivatives by hand, and when not to
+We differentiated $f$ twice by hand, once per variable. For a model with a
+million parameters nobody does that: the derivatives are generated
+mechanically — symbolically, as a computer algebra system would, or by automatic
+differentiation, which is what every deep learning framework is at bottom.
+Knowing that the gradient is just a list of slopes is enough to read those
+tools' output.
+:::
+
+### The result that should bother you
+
+Now put the method on the actual problem: find the intercept and slope that
+minimise the MSE for glucose against age, by gradient descent instead of by
+`LinearRegression`. The gradients of
+$\text{MSE}(\beta_0, \beta_1) = \frac{1}{m}\sum (y_i - \beta_0 - \beta_1 x_i)^2$
+are
+
+$$\frac{\partial \text{MSE}}{\partial \beta_0} = -\frac{2}{m}\sum r_i
+\qquad
+\frac{\partial \text{MSE}}{\partial \beta_1} = -\frac{2}{m}\sum x_i r_i$$
+
+with $r_i = y_i - \beta_0 - \beta_1 x_i$. @sec-ols derives them.
+
+```{python}
+import pandas as pd
+diab = pd.read_csv("data/diabetes.csv")
+glu = (diab.loc[diab["glucose"] > 0, ["age", "glucose"]]
+           .head(80).reset_index(drop=True))
+
+def descend_mse(x, y, alpha, n):
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    b0 = b1 = 0.0
+    mse = np.empty(n)
+    for i in range(n):
+        r = y - (b0 + b1 * x)
+        b0 = b0 - alpha * (-2 * r.mean())
+        b1 = b1 - alpha * (-2 * (x * r).mean())
+        mse[i] = np.mean((y - (b0 + b1 * x))**2)
+    return {"b0": b0, "b1": b1, "mse": mse}
+
+raw = descend_mse(glu["age"], glu["glucose"], alpha=1e-4, n=1000)
+raw["b0"], raw["b1"], raw["mse"][-1]
+```
+
+After a thousand iterations the descent reports an intercept of 3.23 and a slope
+of 3.04, with an MSE of 2513. The correct answer is 110.298 and 0.2887, with an
+MSE of 847.5. The descent is not close, and it is worse than predicting the mean
+glucose for everybody, which scores 863.
+
+Three steps of reasoning.
+
+1. The run did not fail. The MSE went down at every iteration and the loop
+   finished without complaint. Had we only printed the final parameters and
+   drawn a line through the data, the plot would have looked plausible.
+2. The cause is the shape of the surface from @sec-loss-functions: a long
+   diagonal trough, not a round bowl. Age has a mean of 33 and glucose a mean of
+   120, so the $\beta_1$ gradient is hundreds of times larger than the $\beta_0$
+   one. Any learning rate small enough to keep $\beta_1$ stable leaves $\beta_0$
+   crawling. Raising $\alpha$ to $10^{-3}$ does not fix it either — try it, and
+   watch both parameters overflow to infinity within a few hundred steps.
+3. This is the usual failure of gradient descent on raw clinical data: not a
+   wrong answer that announces itself, but a right-shaped answer that is nowhere
+   near the optimum. The published version of this material reported those
+   unconverged numbers as the optimised parameters.
+
+The fix is to standardise both columns — subtract the mean, divide by the
+standard deviation — so the trough becomes a bowl, descend there, and convert
+the answer back.
+
+### Task 4 — Make it converge
+
+Standardise, descend with a learning rate a thousand times larger, and rescale
+the parameters to the original units.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+from sklearn.linear_model import LinearRegression
+
+mx, sx = glu["age"].mean(), glu["age"].std()
+my, sy = glu["glucose"].mean(), glu["glucose"].std()
+zx = (glu["age"] - mx) / sx
+zy = (glu["glucose"] - ______) / sy
+
+std = descend_mse(zx, zy, alpha=0.1, n=50)
+
+slope     = std["b1"] * sy / sx
+intercept = my + sy * std["b0"] - slope * mx
+
+ref = LinearRegression().fit(glu[["age"]], glu["glucose"])
+print(intercept, slope)
+print(round(ref.intercept_, 3), round(ref.coef_[0], 4))   # the answer to compare with
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+from sklearn.linear_model import LinearRegression
+
+mx, sx = glu["age"].mean(), glu["age"].std()
+my, sy = glu["glucose"].mean(), glu["glucose"].std()
+zx = (glu["age"] - mx) / sx
+zy = (glu["glucose"] - my) / sy
+
+std = descend_mse(zx, zy, alpha=0.1, n=50)
+
+slope     = std["b1"] * sy / sx
+intercept = my + sy * std["b0"] - slope * mx
+
+ref = LinearRegression().fit(glu[["age"]], glu["glucose"])
+print(intercept, slope)
+print(round(ref.intercept_, 3), round(ref.coef_[0], 4))   # the answer to compare with
+```
+:::
+:::
+
+Fifty iterations on the standardised data give 110.298 and 0.28867, agreeing
+with `LinearRegression` to five significant figures. The same algorithm, the same data, the
+same loss; twenty times fewer iterations and a thousand times larger step.
+Scaling was not a tidying-up step, it was the difference between an answer and
+no answer.
+
+::: {.callout-note appearance="simple"}
+## One more thing the standardised fit tells you
+On standardised columns the fitted slope is 0.1347, which is exactly the
+correlation between age and glucose. That is not a coincidence, and
+@sec-ols shows why.
+:::
 
 ```{python}
 std_shown = descend_mse((glu["age"] - glu["age"].mean()) / glu["age"].std(),
@@ -809,12 +915,13 @@ ax.plot(range(1, 51), std_shown["mse"], color="firebrick")
 ax.set_xlabel("Iteration"); ax.set_ylabel("MSE (standardised units)")
 plt.show()
 ```
-:::
 
 That curve is the plot to draw every time you run an optimiser. A descent that
 is working looks like this: a steep fall, then a flat tail. Anything else — a
 rise, a wobble, a straight line still sloping down at the last iteration — is
 telling you to change the learning rate or the number of steps.
+
+::::::
 
 ## Reflection
 
@@ -851,7 +958,8 @@ the loss goes up and students report that gradient descent is broken. Ask them
 to print the loss. (2) Forgetting to reset `x` before rerunning a loop
 interactively, so the second run starts where the first stopped — a real problem
 in Positron where cells are run repeatedly. (3) In Task 4, standardising age but
-not glucose, which converges to the wrong intercept; the check catches it.
+not glucose, which converges to the wrong intercept; comparing with the fitted line
+catches it.
 
 **Plenary.** Ask for a show of hands on which learning rate in the table was
 fastest before revealing it. Most students pick the smallest. Then put the raw
