@@ -101,8 +101,12 @@ def transform(text: str, instructor: bool) -> str:
         # --- div fences ---------------------------------------------------
         if line.startswith(":::"):
             attrs = re.match(r"^:::+\s*\{(.*)\}\s*$", line)
-            if attrs:                                   # opening
-                a = attrs.group(1)
+            # `::: instructor`, `::: web-only`, `::: panel-tabset` — a div opened
+            # with a bare class name and no braces. Reading these as closings
+            # ended a hidden block early and printed instructor notes.
+            bare = re.match(r"^:::+\s*([A-Za-z][\w-]*)\s*$", line)
+            if attrs or bare:                           # opening
+                a = attrs.group(1) if attrs else "." + bare.group(1)
                 div_stack.append(a)
                 if drop_depth is None and (
                     ".web-only" in a
@@ -164,10 +168,11 @@ def main() -> int:
     p.add_argument("--profile", choices=["student", "instructor"], default="student")
     args = p.parse_args()
 
-    chapters = sorted(ROOT.glob(f"day{args.day}-*.qmd"))
-    if not chapters:
-        print(f"no chapters found for day {args.day}", file=sys.stderr)
-        return 1
+    # The live chapters of that day, in booklet order — not every day<N>-*.qmd
+    # on disk, which would print chapters that are commented out of the booklet.
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import make_day_site
+    chapters = [ROOT / name for name in make_day_site.day_part(args.day)[1]]
 
     instructor = args.profile == "instructor"
     parts = [HEADER.format(day=args.day,

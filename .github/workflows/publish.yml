@@ -1,13 +1,18 @@
-# Publishes the booklet to GitHub Pages.
+# Publishes site/ to GitHub Pages.
 #
-# The site is NOT built here. You render it on your own machine, where R and
-# Python live, and commit the _book/ folder; this job simply publishes that
-# folder. The consequence is worth the trade: what students see is byte for byte
-# what you saw locally, with no dependence on which Quarto version a runner
-# happens to install.
+# The site is NOT built here. You render on your own machine, where R and Python
+# live, and commit site/; this job publishes that folder as it stands. What
+# students see is byte for byte what you saw locally.
 #
-# So the rule is: after changing a chapter, `make site`, then commit _book/
-# along with your change. `make check` and the link check guard the rest.
+# site/ holds a homepage and one folder per released day:
+#
+#     site/index.html     links the released days
+#     site/day1/          Day 1, at its own address
+#
+# A day changes only when you release it again with `make release DAY=n` and
+# commit the result. Editing a chapter does not, by itself, change anything a
+# student can see, so there is deliberately no check here that site/ is newer
+# than the chapters.
 #
 # One-time setup: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
 
@@ -34,34 +39,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0   # the staleness check below reads commit dates
 
       - name: Check the chapters
         run: python3 scripts/check_cells.py
 
-      - name: Check that the rendered site is committed and current
+      - name: Check that the site is committed
         run: |
-          if [ ! -f _book/index.html ]; then
-            echo "::error::_book/index.html is missing. Run 'make site' and commit _book/."
+          if [ ! -f site/index.html ]; then
+            echo "::error::site/index.html is missing. Run 'make release DAY=1' and commit site/."
             exit 1
           fi
-          # Compare commit dates, not file mtimes: a checkout gives every file the
-          # same mtime, so an mtime test here would pass or fail at random.
-          src=$(git log -1 --format=%ct -- '*.qmd' '_quarto.yml' 'theme.scss' 'references.bib')
-          book=$(git log -1 --format=%ct -- _book)
-          if [ "$src" -gt "$book" ]; then
-            echo "::error::A chapter changed more recently than _book/. Run 'make site' and commit the result."
-            exit 1
+          echo "Published days:"; ls -d site/day*/ 2>/dev/null || echo "  none"
+
+      - name: Check that no released page shows an answer or an instructor note
+        run: |
+          # A day released with ANSWERS=1 carries the marker file answers-released.
+          bad=0
+          for d in site/day*/; do
+            [ -f "$d/answers-released" ] && continue
+            if grep -l "Worked answer" "$d"*.html; then
+              echo "::error::$d shows worked answers but was not released with ANSWERS=1."
+              bad=1
+            fi
+          done
+          if grep -rlE "Expected values|Common failures" site --include=*.html; then
+            echo "::error::A published page contains instructor notes."
+            bad=1
           fi
+          exit $bad
 
       - name: Check for dead links and unresolved cross-references
-        run: python3 scripts/check_links.py _book
+        run: python3 scripts/check_links.py site
 
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name != 'pull_request'
         with:
-          path: _book
+          path: site
 
   deploy:
     needs: build

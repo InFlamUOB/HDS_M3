@@ -18,28 +18,6 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 CHUNK = re.compile(r"^```\{(r|python)\}\n((?:#\|[^\n]*\n)*)(.*?)\n```[ \t]*$", re.S | re.M)
 problems: list[str] = []
 
-def check_release_lists() -> None:
-    """A released chapter must also be in the all-days working profile.
-
-    _quarto.yml is the student site; _quarto-all.yml is what you render while
-    writing. A chapter in the first but not the second means `make preview`
-    silently stops showing a page students can already read.
-    """
-    def listed(path):
-        return [re.match(r"-\s+(\S+\.qmd)$", l.strip()).group(1)
-                for l in (ROOT / path).read_text().splitlines()
-                if not l.strip().startswith("#") and re.match(r"-\s+\S+\.qmd$", l.strip())]
-
-    released, working = listed("_quarto.yml"), listed("_quarto-all.yml")
-    for name in released:
-        if name not in working:
-            problems.append(f"{name} is published in _quarto.yml but missing "
-                            "from _quarto-all.yml")
-    days = sorted({n[:4] for n in released if n.startswith("day")})
-    print(f"\n  published to students: {', '.join(days) or 'none'} "
-          f"({len(released)} chapters); {len(working)} written in total")
-
-
 def check_code_files() -> None:
     """The downloadable scripts must still match the chapters they came from.
 
@@ -112,7 +90,6 @@ def main() -> int:
               f"{len(spans):>2} worked answers")
 
     check_code_files()
-    check_release_lists()
 
     print(f"\nsolutions are {'RELEASED (published to students)' if released else 'hidden'}")
     if problems:

@@ -44,8 +44,12 @@ def live_chapters():
     return [p.name for p in sorted(ROOT.glob("day*.qmd")) if offers_download(p)]
 
 
-def extract(path):
-    """Return {lang: [(heading, code), ...]} for one chapter."""
+def extract(path, with_answers=False):
+    """Return (title, {lang: [(heading, code), ...]}) for one chapter.
+
+    with_answers=True keeps the code of the worked-answer blocks; instructor
+    blocks are never included.
+    """
     text = path.read_text()
     text = re.sub(r"^---\n.*?\n---\n", "", text, flags=re.S)       # YAML header
     lines = text.splitlines()
@@ -65,13 +69,16 @@ def extract(path):
                 stack.pop()
             i += 1
             continue
-        m = re.match(r"^:{3,}\s*\{(.*)\}\s*$", line)
+        # any fence line with something after the colons opens a div, braces
+        # or not: `::: {.callout-note}`, `::: instructor`, `::: panel-tabset`
+        m = re.match(r"^:{3,}\s*(\S.*?)\s*$", line)
         if m:
             stack.append(m.group(1))
             i += 1
             continue
 
-        hidden = any("show-solutions" in d or "when-profile" in d for d in stack)
+        hidden = any(("show-solutions" in d and not with_answers)
+                     or "when-profile" in d or "instructor" in d for d in stack)
 
         # headings
         m = re.match(r"^(#{1,4})\s+(.*)$", line)
