@@ -4,33 +4,10 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 3.1 — Supervised learning {#sec-supervised-learning}
+## Overview
 
+Repeating the exercise from day 1 (ML pipeline) but understanding what is happening after each coding step. 
 
-:::: {.web-only}
-Every cell on this page is a real R or Python cell. Open
-`day3-01-supervised-learning.qmd` in your editor and run them one at a time —
-the output printed here is what you should get.
-::::
-
-## Objectives
-
-::: {.objective-list}
-- Say what the learning algorithm, the fitted model and the dataset each
-  contribute to a prediction, pointing at one line of code for each.
-- Fit the same model in both languages, read its two parameters, and predict a
-  value both inside and outside the range of the data.
-- Swap the learning algorithm for a decision tree without changing anything
-  else, and describe how the shape of the prediction changes.
-:::
-
-## Why this, here
-
-In @sec-pipeline you fitted a model with one call and read a score off the test
-set. The fitting itself was a black box: `fit()` went in, coefficients came out.
-Today we open it. This exercise sets up the pieces — data, algorithm, fitted
-parameters, prediction — so that @sec-loss-functions can ask what "best fit"
-means and @sec-gradient-descent can ask how the best fit is found.
 
 :::::: {.panel-tabset group="language"}
 
@@ -81,11 +58,9 @@ expect. You will be asked for it again at the end.
 : {tbl-colwidths="[24,44,32]"}
 
 The algorithm is chosen by you, the parameters are chosen by the data, and the
-prediction is a consequence of both. Students conflate the first two constantly:
-"linear regression predicted 123" is wrong, because linear regression predicts
-nothing until it has been shown a dataset.
+prediction is a consequence of both. 
 
-In machine learning notation the model is written
+Can write the leanring algorithm as:
 
 $$y = \beta_0 + \beta_1 x_1$$
 
@@ -103,24 +78,20 @@ ls_fit   <- lm_model |> fit(glucose ~ age, data = glu)
 coef(extract_fit_engine(ls_fit))
 ```
 
-R and Python agree to every decimal worth printing here, because both solve
-the same least-squares problem on the same 80 rows. @sec-ols shows you the algebra they
-are solving and verifies it by hand.
+
 
 ::: {.callout-warning}
 ## `coef()` does not work on a parsnip fit
-`coef(ls_fit)` returns `NULL` — silently, with no error. A `model_fit` object
+`coef(ls_fit)` returns `NULL`. But this is becasue we are workinginside the tidymodels pipleine and so a `model_fit` object
 wraps the engine's fit rather than being one, so you have to reach inside with
-`extract_fit_engine()` first. Passing the `NULL` to `geom_abline()` then fails
-some distance from the line that caused it, which is the most annoying class of
-bug there is.
+`extract_fit_engine()` first.If you remeate dthis using `lm()` directly, `coef()` will work as expected.
 :::
 
 So the fitted model is
 
 $$\widehat{\text{glucose}} = 110.30 + 0.289 \times \text{age}$$
 
-and that is the entire deliverable of the fitting step. Two numbers.
+
 
 ### Predicting, inside and outside the data
 
@@ -139,14 +110,12 @@ object.
 ## Extrapolation is a modelling decision, not a software error
 The line is fitted on ages 21 to 81. Using it at 10 asserts that the same
 relationship holds in children, which nothing in these data supports. Every
-model will happily extrapolate; the restraint has to come from you. Note also
-what the model does *not* give you: any sense of how confident it is. That is a
-statistical question and this is a prediction course.
+model will happily extrapolate; if it makes sense or not,  has to come from you. 
 :::
 
 ### Task 1 — Predict from the parameters, not from the function
 
-`predict()` is a convenience. Reproduce it with arithmetic: compute the
+replicate what `predict()` did above but yourself. Compute the
 predicted glucose for a 60-year-old from the two coefficients.
 
 ```{r}
@@ -174,80 +143,9 @@ The two numbers you need are the ones the fitting step printed. They come out
 of `coef()` in the order intercept, then slope.
 :::
 
-### Task 2 — Make the line earn its place
 
-A fitted line is only worth having if it beats a predictor that does no
-learning. Compute the mean squared error of the line on these 80 rows, and the
-mean squared error of predicting the mean glucose for everybody.
 
-Both numbers are computed on the rows the model was fitted to, which
-@sec-pipeline told you is not evidence of anything. Today that is deliberate:
-this exercise is about what fitting *does*, not about how well it generalises.
-Read every number on this page as in-sample.
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-pred_line <- predict(ls_fit, new_data = glu)$.pred
-mse_line  <- mean((glu$glucose - ______)^2)
-mse_mean  <- mean((glu$glucose - ______)^2)
-c(line = mse_line, mean_only = mse_mean)
-round(100 * mse_line / mse_mean, 1)   # the line's error as a % of the baseline's
-```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-pred_line <- predict(ls_fit, new_data = glu)$.pred
-mse_line  <- mean((glu$glucose - pred_line)^2)
-mse_mean  <- mean((glu$glucose - mean(glu$glucose))^2)
-c(line = mse_line, mean_only = mse_mean)
-round(100 * mse_line / mse_mean, 1)   # the line's error as a % of the baseline's
-```
-:::
-:::
-
-The last line prints the line's error as a percentage of the baseline's. Write the
-percentage down before you read the next section.
-
-### The result that should bother you
-
-The line's in-sample mean squared error is 847.5. The mean squared error of
-ignoring age entirely and predicting 119.9 for everyone is 863.2. Fitting
-removed 1.8% of the squared error.
-
-Now destroy the relationship on purpose and fit again. Shuffling the age column
-breaks any link between a patient's age and their glucose while leaving both
-distributions exactly as they were.
-
-```{r}
-set.seed(42)
-glu_shuffled <- glu |> mutate(age = sample(age))
-
-fit_shuffled  <- lm_model |> fit(glucose ~ age, data = glu_shuffled)
-pred_shuffled <- predict(fit_shuffled, new_data = glu_shuffled)$.pred
-
-coef(extract_fit_engine(fit_shuffled))
-mean((glu_shuffled$glucose - pred_shuffled)^2)
-```
-
-Three steps of reasoning.
-
-1. Shuffled age cannot predict glucose. Any apparent fit is coincidence, and
-   its error is what "no relationship at all" looks like in these units.
-2. The shuffled fit's error is around 850 in R and around 861 in Python — the
-   two seeds shuffle differently — against 847.5 for the real age column and
-   863.2 for the baseline. The real predictor buys you almost nothing that a
-   deliberately broken one does not.
-3. The algebra in @sec-ols is exact, the fit is genuinely the best straight
-   line there is, and the model is still not worth deploying. A minimum is not
-   the same thing as a small number.
-
-Keep this: the entire day is about finding the best line, and the best line
-here is nearly useless. Being able to hold both of those at once is the point.
-
-### Task 3 — Change the algorithm, keep everything else
+### Task 2 — Change the algorithm, keep everything else
 
 A decision tree is a different learning algorithm applied to the identical
 dataset and the identical question. For now, swap one line and look at the
@@ -303,23 +201,9 @@ ggplot(glu_pred, aes(x = age)) +
   labs(x = "Age (years)", y = "Glucose (mg/dL)")
 ```
 
-The tree's in-sample mean squared error is lower than the line's: 685.7 in R
-with `rpart`'s default pruning, 677.9 in Python with a depth of 3. Both are well
-below the line's 847.5. The tree is not better. It has more parameters — one
-mean per leaf rather than two numbers for the whole dataset — and more
-parameters always fit the rows you fitted them to more closely.
 
-::: {.callout-note}
-## The two trees are not the same tree
-`rpart` and scikit-learn choose splits the same way but stop differently:
-`rpart` prunes using a complexity parameter and cross-validation, scikit-learn
-stops when you tell it to. Ours end up with six leaves and seven respectively.
-Unlike the linear coefficients, which agreed to the decimal, the trees are a
-genuine difference between the two libraries' defaults, and you should expect to
-have to state tree-stopping rules explicitly whenever you report one.
-:::
 
-### Task 4 — The role of the dataset
+### Task 3 — The role of the dataset
 
 Refit both models on the first 30 rows only, and predict glucose for a
 25-year-old with each of the four fitted models.
