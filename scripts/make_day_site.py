@@ -4,6 +4,7 @@
     python3 scripts/make_day_site.py --day 1              # build, to look at
     python3 scripts/make_day_site.py --day 1 --publish    # build and release
     python3 scripts/make_day_site.py --day 1 --publish --answers
+    python3 scripts/make_day_site.py --day 2 --publish --unlisted   # online, not on the homepage
     python3 scripts/make_day_site.py --unpublish 3        # take a day down
     python3 scripts/make_day_site.py --home               # rebuild the homepage only
 
@@ -12,6 +13,11 @@ What students see is the folder site/, and nothing else:
     site/index.html     the module homepage, linking the released days
     site/day1/          Day 1: its own sidebar, its own search, its own address
     site/day2/          present only once Day 2 has been released
+
+A day released with --unlisted is online at its own address but is left off the
+homepage: for looking at a day on the web before students are pointed to it.
+Unlisted is not private. Anyone who has, or guesses, the address can open it.
+Release the day again without --unlisted to list it.
 
 GitHub publishes site/ as it is committed. So a day's pages change only when
 you run this script for that day and commit the result. Editing Day 4, or
@@ -227,9 +233,11 @@ def build_day(day, answers=False):
 
 # -------------------------------------------------------------- the homepage
 
-def released_days():
+def released_days(listed_only=False):
+    """Days that are in site/. listed_only leaves out the unlisted ones."""
     return sorted(int(p.name[3:]) for p in SITE.glob("day[0-9]*")
-                  if (p / "index.html").exists())
+                  if (p / "index.html").exists()
+                  and not (listed_only and (p / "unlisted").exists()))
 
 
 def build_home():
@@ -240,7 +248,7 @@ def build_home():
     work.mkdir(parents=True)
 
     blocks = []
-    for day in released_days():
+    for day in released_days(listed_only=True):
         try:
             part_title, chapters = day_part(day)
         except SystemExit:
@@ -267,8 +275,12 @@ def build_home():
     SITE.mkdir(exist_ok=True)
     shutil.copy2(work / "index.html", SITE / "index.html")
     (SITE / ".nojekyll").write_text("")
-    print("  site/index.html lists: %s"
-          % (", ".join("Day %d" % d for d in released_days()) or "no days"))
+    listed = released_days(listed_only=True)
+    hidden = [d for d in released_days() if d not in listed]
+    print("  site/index.html lists: %s%s"
+          % (", ".join("Day %d" % d for d in listed) or "no days",
+             "  |  online but unlisted: " + ", ".join("Day %d" % d for d in hidden)
+             if hidden else ""))
 
 
 def main():
@@ -278,6 +290,8 @@ def main():
                     help="copy the built day into site/ and relist the homepage")
     ap.add_argument("--answers", action="store_true",
                     help="show the worked answers in this build")
+    ap.add_argument("--unlisted", action="store_true",
+                    help="with --publish: put the day online but leave it off the homepage")
     ap.add_argument("--unpublish", type=int, metavar="DAY")
     ap.add_argument("--home", action="store_true")
     args = ap.parse_args()
@@ -306,7 +320,11 @@ def main():
             # tells the publish workflow that answers on these pages are meant
             (target / "answers-released").write_text(
                 "This day was released with its worked answers shown.\n")
-        print("  published to %s" % target.relative_to(ROOT))
+        if args.unlisted:
+            (target / "unlisted").write_text(
+                "This day is online but is not linked from the homepage.\n")
+        print("  published to %s%s" % (target.relative_to(ROOT),
+                                       " (unlisted)" if args.unlisted else ""))
         build_home()
         print("\nCommit site/ and push: that is what puts it online.")
     else:

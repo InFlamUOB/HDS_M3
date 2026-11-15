@@ -6,6 +6,7 @@
 #   make day-site DAY=1     build one day as its own site, to look at before releasing
 #   make release DAY=1      build that day and put it in site/ — commit and push to publish
 #   make release DAY=1 ANSWERS=1   the same, with that day's worked answers shown
+#   make release DAY=2 UNLISTED=1  online at its own address, but not on the homepage
 #   make unrelease DAY=3    take a day off the site
 #   make instructor         build the staff copy into _book-instructor/
 #   make worksheets DAY=1   printable PDFs for one day
@@ -19,6 +20,7 @@
 DAY ?= 1
 TITLE ?= Title of the day
 ANSWERS ?=
+UNLISTED ?=
 QUARTO ?= quarto
 PYTHON ?= python3
 RSCRIPT ?= Rscript
@@ -45,7 +47,7 @@ day-site:
 	$(PYTHON) scripts/make_day_site.py --day $(DAY) $(if $(ANSWERS),--answers,)
 
 release:
-	$(PYTHON) scripts/make_day_site.py --day $(DAY) --publish $(if $(ANSWERS),--answers,)
+	$(PYTHON) scripts/make_day_site.py --day $(DAY) --publish $(if $(ANSWERS),--answers,) $(if $(UNLISTED),--unlisted,)
 	@$(PYTHON) scripts/check_links.py site
 
 unrelease:
