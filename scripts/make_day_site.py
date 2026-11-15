@@ -10,7 +10,9 @@
 
 What students see is the folder site/, and nothing else:
 
-    site/index.html     the module homepage, linking the released days
+    site/index.html     a plain front page. It lists the days only if
+                        _home/index.qmd contains the line {{DAYS}}; as shipped
+                        it does not, so there is no common index
     site/day1/          Day 1: its own sidebar, its own search, its own address
     site/day2/          present only once Day 2 has been released
 
@@ -124,11 +126,20 @@ book:
 {tail}"""
 
 
+def home_lists_days():
+    """Does the homepage carry a list of days? It does only if _home/index.qmd
+    contains the line {{DAYS}}. Without it there is no common index: each day
+    stands alone at its own address and no page links one day to another."""
+    return "{{DAYS}}" in (ROOT / "_home" / "index.qmd").read_text()
+
+
 def day_landing(day, part_title, chapters, data, answers):
     rows = "\n".join("- [%s](%s)" % (chapter_title(c), c) for c in chapters)
     files = "\n".join("| [`%s`](%s){download=\"%s\"} |"
                       % (pathlib.Path(f).name, f, pathlib.Path(f).name) for f in data)
     zip_name = "day%d-data.zip" % day
+    back = ("\n---\n\n[All days of this module](../index.html)\n"
+            if home_lists_days() else "")
     return f"""---
 engine: markdown
 ---
@@ -157,11 +168,7 @@ Save these in a folder called `data`, beside your script, before you start:
 | File |
 |------|
 {files}
-
----
-
-[All days of this module](../index.html)
-"""
+{back}"""
 
 
 def build_day(day, answers=False):
@@ -261,9 +268,9 @@ def build_home():
         blocks.append("\n".join(lines))
     days = "\n\n".join(blocks) or "*No days have been released yet.*"
 
+    # {{DAYS}} is optional: leave it out of _home/index.qmd and the homepage
+    # carries no list of days at all.
     text = (ROOT / "_home" / "index.qmd").read_text()
-    if "{{DAYS}}" not in text:
-        sys.exit("_home/index.qmd must contain the line {{DAYS}}")
     (work / "index.qmd").write_text(text.replace("{{DAYS}}", days))
     shutil.copy2(ROOT / "theme.scss", work / "theme.scss")
     (work / "_quarto.yml").write_text("project:\n  type: default\n")
@@ -275,6 +282,10 @@ def build_home():
     SITE.mkdir(exist_ok=True)
     shutil.copy2(work / "index.html", SITE / "index.html")
     (SITE / ".nojekyll").write_text("")
+    if not home_lists_days():
+        print("  site/index.html carries no list of days; online: %s"
+              % (", ".join("Day %d" % d for d in released_days()) or "none"))
+        return
     listed = released_days(listed_only=True)
     hidden = [d for d in released_days() if d not in listed]
     print("  site/index.html lists: %s%s"
