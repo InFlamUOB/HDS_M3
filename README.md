@@ -1,6 +1,9 @@
 # HDS MSc · Module 3 — exercise booklet
 
-**Live: <https://inflamuob.github.io/HDS_M3/>**
+**Live, one address per teaching day:**
+<https://inflamuob.github.io/HDS_M3/day1/> ·
+<https://inflamuob.github.io/HDS_M3/day2/> ·
+<https://inflamuob.github.io/HDS_M3/day3/>
 
 A Quarto book of machine learning exercises for the Health Data Science MSc,
 organised by teaching day. Each exercise is given in both R and Python. Students
@@ -24,15 +27,16 @@ builds the website.
 
 ### Releasing the answers after a session
 
-One line in `_quarto.yml`:
+Per day, with one command:
 
-```yaml
-show-solutions: true
+```bash
+make release DAY=1 ANSWERS=1
 ```
 
-Then `make site` and push. The site rebuilds with every worked answer and its
-output visible. Set it back to `false`, render and push to hide them again. Until then the answers are
-not merely collapsed — they are not in the page at all.
+Then commit `site/` and push. Day 1's pages now show every worked answer with
+its output; the other days are untouched. Run `make release DAY=1` to hide them
+again. Until released, the answers are not merely collapsed — they are not in
+the page at all. Leave `show-solutions: false` in `_quarto.yml`.
 
 ## Running it
 
@@ -60,9 +64,9 @@ Render buttons in Positron run exactly the same thing:
 
 ```bash
 quarto preview                     # local site at :4200, reloads as you edit
-quarto render                      # build into _book/ — commit this with your edit
+quarto render                      # build the whole booklet into _book/ — your own preview, not published
 python3 scripts/check_cells.py     # before you push: blanks, hidden answers, links
-python3 scripts/check_links.py _book   # after a build: dead links in the HTML
+python3 scripts/check_links.py site    # dead links in what is published
 ```
 
 The rest are the occasional ones:
@@ -71,35 +75,52 @@ The rest are the occasional ones:
 Rscript scripts/setup_local.R                       # install R packages, settle Python
 Rscript scripts/make_data.R                         # regenerate every dataset
 quarto render --profile instructor                  # staff copy, into _book-instructor/
-python3 scripts/make_worksheet.py --day 1 --profile student
-quarto render print/day1-student.qmd --to typst     # then the printable PDF
 python3 scripts/new_day.py --day 2 --title "..." --exercises a,b   # next day
 ```
 
 There is a `Makefile` with shortcuts for all of these — `make preview`, `make
-site`, `make check`, `make day DAY=2`, `make` for the list — but it is only a
+release DAY=1`, `make check`, `make day DAY=2`, `make` for the list — but it is only a
 convenience. `make` is a general build tool that ships with macOS, nothing to do
 with Quarto, and the commands above are what it runs. Ignore it if you prefer.
 
 ## Publishing
 
-`.github/workflows/publish.yml` publishes to GitHub Pages on every push to
-`main`. It does **not** build the site: you render on your own machine, where R
-and Python live, and commit `_book/`; the job publishes that folder. Students
-therefore see byte for byte what you saw locally, with no dependence on which
-Quarto version a runner installs.
+Students see the folder `site/`, and nothing else. It holds one sub-folder per
+released day, each a small site of its own with its own address:
 
-That is the one obligation this design carries: **after changing a chapter, run
-`make site` and commit `_book/` with it.** CI refuses to publish if `_book/` is
-missing, or if any `.qmd` is newer than the rendered site.
+```
+site/day1/    https://inflamuob.github.io/HDS_M3/day1/
+site/day2/    https://inflamuob.github.io/HDS_M3/day2/
+```
 
-Pull requests get the same checks and the same render with deployment skipped,
-so a change can be proved before it publishes.
+`.github/workflows/publish.yml` publishes `site/` to GitHub Pages on every push
+to `main`, exactly as committed. It does **not** build anything: you build on
+your own machine, where R and Python live.
+
+```bash
+make release DAY=2             # build Day 2 into site/day2/
+make release DAY=2 ANSWERS=1   # the same, showing that day's worked answers
+make day-site DAY=2            # build it to look at, without releasing
+make unrelease DAY=2           # take the day down
+git add site && git commit -m "Release Day 2" && git push
+```
+
+**Editing a chapter and pushing it does not change what students see.** A day's
+pages change only when you release that day again. That is the point: you can
+keep writing Day 4 while Day 1 stays exactly as it was handed out.
+
+There is no common index. The days do not link to each other, and the front
+page lists none of them. To bring a list back, add a line containing `{{DAYS}}`
+to `_home/index.qmd` and release the days again.
+
+CI refuses to publish if a released page shows a worked answer that was not
+released with `ANSWERS=1`, or shows instructor notes. Pull requests get the same
+checks with deployment skipped.
 
 ## Layout
 
 ```
-_quarto.yml              book structure, one part per day; the show-solutions switch
+_quarto.yml              the whole working booklet, one part per day
 _quarto-instructor.yml   instructor profile (adds the teaching notes)
 _common.qmd              knitr options and the reticulate pointer, included per chapter
 _templates/exercise.qmd  skeleton for a new exercise
@@ -111,7 +132,11 @@ scripts/make_data.R      generates every dataset from one seed
 scripts/check_cells.py   the pre-push check
 scripts/check_links.py   dead links and unresolved cross-references, after a render
 data/                    generated CSVs, published so students can download them
-_book/                   the rendered site, committed; this is what gets published
+site/                    what is published: one folder per released day
+_home/index.qmd          the text of the front page
+code/                    the R and Python script of each chapter that offers a download
+scripts/make_day_site.py builds and releases one day
+_book/                   your local render of the whole booklet; not committed, not published
 ```
 
 ## Design decisions worth knowing before you edit
@@ -135,7 +160,7 @@ python3 scripts/new_day.py --day 2 --title "Validation you can defend" \
     --exercises first-exercise,second-exercise
 # write the chapters
 python3 scripts/check_cells.py
-quarto render        # executes them; commit _book/ with your changes
-git push
+make release DAY=2   # builds the day into site/day2/
+git add -A && git commit -m "Day 2" && git push
 ```
 

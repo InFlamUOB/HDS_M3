@@ -9,7 +9,6 @@
 #   make release DAY=2 UNLISTED=1  online at its own address, but not on the homepage
 #   make unrelease DAY=3    take a day off the site
 #   make instructor         build the staff copy into _book-instructor/
-#   make worksheets DAY=1   printable PDFs for one day
 #   make day DAY=2 TITLE="..."  scaffold the next day and register it
 #   make data               regenerate every dataset from scripts/make_data.R
 #   make data-zip           rebuild hds-m3-data.zip
@@ -26,7 +25,7 @@ PYTHON ?= python3
 RSCRIPT ?= Rscript
 
 .DEFAULT_GOAL := help
-.PHONY: help setup-r preview book day-site release unrelease instructor worksheets day data data-zip check links clean
+.PHONY: help setup-r preview book day-site release unrelease instructor day data data-zip check links clean
 
 help:
 	@grep -E '^#   make' $(MAKEFILE_LIST) | sed 's/^#   //'
@@ -56,18 +55,6 @@ unrelease:
 instructor:
 	$(QUARTO) render --to html --profile instructor
 
-worksheets:
-	$(PYTHON) scripts/make_worksheet.py --day $(DAY) --profile student
-	$(PYTHON) scripts/make_worksheet.py --day $(DAY) --profile instructor
-	$(QUARTO) render print/day$(DAY)-student.qmd    --to typst
-	$(QUARTO) render print/day$(DAY)-instructor.qmd --to typst
-	@$(PYTHON) -c "import re,sys; \
-	  d=open('print/day$(DAY)-student.pdf','rb').read(); \
-	  n=max(int(m.group(1)) for m in re.finditer(rb'/Count (\d+)', d)); \
-	  print(f'day $(DAY) student worksheet: {n} pages'); \
-	  sys.exit(0 if n <= 20 else 1)" \
-	  || (echo 'The worksheet is over twenty pages. Move narrative into a ::: {.web-only} block rather than cutting tasks.'; exit 1)
-
 day:
 	$(PYTHON) scripts/new_day.py --day $(DAY) --title "$(TITLE)"
 
@@ -84,4 +71,4 @@ links:
 	@$(PYTHON) scripts/check_links.py site
 
 clean:
-	rm -rf _book dist _book-instructor _freeze .quarto print/.quarto print/*.typ
+	rm -rf _book dist _book-instructor _freeze .quarto

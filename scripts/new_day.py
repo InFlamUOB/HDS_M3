@@ -159,8 +159,8 @@ Next:
   2. append any new data to scripts/make_data.R, and register the file under
      BOTH `resources:` keys in _quarto.yml
   3. make check
-  4. make worksheets DAY={day}
-  5. make site, then commit and push — including _book/, which is what publishes""")
+  4. make release DAY={day}, then commit and push — including site/, which is
+     what publishes""")
     return 0
 
 
