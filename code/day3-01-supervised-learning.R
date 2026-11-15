@@ -1,96 +1,125 @@
 # Exercise 3.1 — Supervised learning
 # HDS MSc · Module 3 · exercise booklet
-# https://inflamuob.github.io/HDS_M3/day3-01-supervised-learning.html
+# https://inflamuob.github.io/HDS_M3/day3/day3-01-supervised-learning.html
 #
 # The R code from the chapter, in page order, for you to copy and run.
-# Lines with ______ are blanks to fill in, so this file is a worksheet:
-# it will not run end to end until you have filled them.
 # Run it from the folder that holds your `data` folder.
 #
 # Generated from day3-01-supervised-learning.qmd. Edit the chapter, not this file.
 
 
 # --------------------------------------------------------------------
-# The data we fit to
+# Packages and data
 # --------------------------------------------------------------------
 
-library(tidyverse)
-library(tidymodels)
+library(tidyverse)     # data wrangling and plotting (ggplot2 is part of it)
+library(tidymodels)    # modelling
+
+theme_set(theme_bw())  # white background for every plot
 
 glu <- read_csv("data/glucose_study.csv")
 
-glu
+head(glu)
 
 ggplot(glu, aes(x = age, y = glucose)) +
-  geom_point(alpha = 0.7) +
-  labs(x = "Age in years (the feature)",
-       y = "Glucose, mg/dL (the label)")
+  geom_point() +
+  labs(x = "Age (feature)", y = "Glucose (label)")
 
 # --------------------------------------------------------------------
-# Fitting the model
+# A supervised learning algorithm: linear regression
 # --------------------------------------------------------------------
 
-lm_model <- linear_reg() |> set_engine("lm") |> set_mode("regression")
-ls_fit   <- lm_model |> fit(glucose ~ age, data = glu)
+ggplot(glu, aes(x = age, y = glucose)) +
+  geom_point() +
+  labs(x = "Age (feature)", y = "Glucose (label)") +
+  geom_smooth(method = "lm", se = FALSE)
 
-coef(extract_fit_engine(ls_fit))
+lm_model <- linear_reg() |>
+  set_engine("lm") |>        # the lm implementation of linear regression
+  set_mode("regression")
 
-# --------------------------------------------------------------------
-# Predicting, inside and outside the data
-# --------------------------------------------------------------------
-
-new_patients <- data.frame(age = c(45, 10))
-predict(ls_fit, new_data = new_patients)
-
-# --------------------------------------------------------------------
-# Task 1 — Predict from the parameters, not from the function
-# --------------------------------------------------------------------
-
-# Replace every ______ below, then run this cell.
-b <- coef(extract_fit_engine(ls_fit))
-pred_60 <- ______ + ______ * 60
-unname(pred_60)
-
-# --------------------------------------------------------------------
-# Task 2 — Change the algorithm, keep everything else
-# --------------------------------------------------------------------
-
-# Replace every ______ below, then run this cell.
-library(rpart); library(rpart.plot)
-
-dt_model <- decision_tree(mode = "regression") |> set_engine("______")
-dt_fit   <- dt_model |> fit(glucose ~ age, data = glu)
-
-rpart.plot(extract_fit_engine(dt_fit), roundint = FALSE)
-
-# --------------------------------------------------------------------
-# Stuck?
-# --------------------------------------------------------------------
-
-dt_fit_shown <- decision_tree(mode = "regression") |> set_engine("rpart") |>
+ls_fit <- lm_model |>
   fit(glucose ~ age, data = glu)
 
-glu_pred <- glu |>
-  mutate(pred_tree = predict(dt_fit_shown, new_data = glu)$.pred,
-         pred_line = predict(ls_fit,       new_data = glu)$.pred)
+b <- ls_fit$fit$coefficients   # intercept first, then the slope
+b
 
-ggplot(glu_pred, aes(x = age)) +
-  geom_point(aes(y = glucose), alpha = 0.5) +
-  geom_step(aes(y = pred_tree), colour = "darkred", linewidth = 1) +
-  geom_line(aes(y = pred_line), colour = "steelblue", linewidth = 1) +
+ggplot(glu, aes(x = age, y = glucose)) +
+  geom_point() +
+  labs(x = "Age (feature)", y = "Glucose (label)") +
+  geom_abline(intercept = b[1], slope = b[2],
+              colour = "red", linetype = "dashed", linewidth = 1.5)
+
+age_newsample <- 45
+predicted_glucose <- 110.30 + 0.289 * age_newsample
+print(predicted_glucose)
+
+# predict() wants a data frame, because it normally receives more than one
+# sample and more than one feature. Here it has one row and one column.
+predict(ls_fit, new_data = data.frame(age = 45))
+
+ggplot(glu, aes(x = age, y = glucose)) +
+  geom_point() +
+  annotate("point", x = age_newsample, y = predicted_glucose,
+           colour = "grey50", size = 5) +
+  labs(x = "Age (feature)", y = "Glucose (label)") +
+  geom_abline(intercept = b[1], slope = b[2],
+              colour = "red", linetype = "dashed", linewidth = 1.5)
+
+age_newsample <- 10
+predicted_glucose <- 110.30 + 0.289 * age_newsample
+print(predicted_glucose)
+
+ggplot(glu, aes(x = age, y = glucose)) +
+  geom_point() +
+  annotate("point", x = age_newsample, y = predicted_glucose,
+           colour = "grey50", size = 5) +
+  labs(x = "Age (feature)", y = "Glucose (label)") +
+  geom_abline(intercept = b[1], slope = b[2],
+              colour = "red", linetype = "dashed", linewidth = 1.5) +
+  xlim(0, 100)
+
+# --------------------------------------------------------------------
+# Exercise: understand the role of the dataset in predictive modelling
+# --------------------------------------------------------------------
+
+dt_model <- decision_tree() |>
+  set_engine("rpart") |>     # check out what the rpart package is about
+  set_mode("regression")
+
+dt_fit <- dt_model |>
+  fit(glucose ~ age, data = glu)
+
+# View(dt_fit)
+dt_fit$fit
+
+library(rpart.plot)
+
+rpart.plot(dt_fit$fit, type = 3, fallen.leaves = TRUE,
+           box.palette = "Blues", shadow.col = "gray", roundint = FALSE)
+
+glu$predicted_glucose <- predict(dt_fit, new_data = glu)$.pred
+
+head(glu)
+
+# --------------------------------------------------------------------
+# Stop here
+# --------------------------------------------------------------------
+
+ggplot(glu, aes(x = age, y = glucose)) +
+  geom_point(size = 3, colour = "blue", alpha = 0.7) +
+  geom_step(aes(y = predicted_glucose), colour = "darkred", linewidth = 1.5) +
+  labs(x = "Age (years)", y = "Glucose (mg/dL)")
+
+ggplot(glu, aes(x = age, y = glucose)) +
+  geom_point(size = 3, colour = "blue", alpha = 0.7) +
+  geom_step(aes(y = predicted_glucose), colour = "darkred", linewidth = 1.5) +
+  geom_point(aes(y = predicted_glucose), size = 2, colour = "grey", alpha = 0.8) +
   labs(x = "Age (years)", y = "Glucose (mg/dL)")
 
 # --------------------------------------------------------------------
-# Task 3 — The role of the dataset
+# Discuss
 # --------------------------------------------------------------------
 
-# Replace every ______ below, then run this cell.
-glu30 <- glu |> slice(______)
-
-ls_fit30 <- lm_model |> fit(glucose ~ age, data = ______)
-dt_fit30 <- decision_tree(mode = "regression") |> set_engine("rpart") |>
-  fit(glucose ~ age, data = ______)
-
-at25 <- data.frame(age = 25)
-c(line80 = predict(ls_fit,   at25)$.pred, line30 = predict(ls_fit30, at25)$.pred,
-  tree80 = predict(dt_fit_shown, at25)$.pred, tree30 = predict(dt_fit30, at25)$.pred)
+glu30 <- glu[1:30, ]
+dim(glu30)

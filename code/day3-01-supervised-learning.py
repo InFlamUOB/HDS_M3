@@ -1,95 +1,147 @@
 # Exercise 3.1 — Supervised learning
 # HDS MSc · Module 3 · exercise booklet
-# https://inflamuob.github.io/HDS_M3/day3-01-supervised-learning.html
+# https://inflamuob.github.io/HDS_M3/day3/day3-01-supervised-learning.html
 #
 # The Python code from the chapter, in page order, for you to copy and run.
-# Lines with ______ are blanks to fill in, so this file is a worksheet:
-# it will not run end to end until you have filled them.
 # Run it from the folder that holds your `data` folder.
 #
 # Generated from day3-01-supervised-learning.qmd. Edit the chapter, not this file.
 
 
 # --------------------------------------------------------------------
-# The data we fit to
+# Packages and data
 # --------------------------------------------------------------------
 
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor, plot_tree, export_text  # a new learning algorithm
 
 glu = pd.read_csv("data/glucose_study.csv")
 
 glu.head()
 
-import matplotlib.pyplot as plt
 fig, ax = plt.subplots()
-ax.scatter(glu["age"], glu["glucose"], alpha=0.7)
-ax.set_xlabel("Age in years (the feature)")
-ax.set_ylabel("Glucose, mg/dL (the label)")
+ax.scatter(glu["age"], glu["glucose"])
+ax.set_xlabel("Age (feature)")
+ax.set_ylabel("Glucose (label)")
 plt.show()
 
 # --------------------------------------------------------------------
-# Fitting the model
+# A supervised learning algorithm: linear regression
 # --------------------------------------------------------------------
 
-from sklearn.linear_model import LinearRegression
+fig, ax = plt.subplots()
+sns.regplot(data=glu, x="age", y="glucose", ci=None, ax=ax)
+ax.set_xlabel("Age (feature)")
+ax.set_ylabel("Glucose (label)")
+plt.show()
 
-X = glu[["age"]]      # 2-D: a frame, not a series
-y = glu["glucose"]    # 1-D
-lin_reg = LinearRegression().fit(X, y)
+# 1. Separate X (the feature) and y (the label)
+X = glu[["age"]]      # two-dimensional: a data frame with one column
+y = glu["glucose"]    # one-dimensional: a single column
 
-lin_reg.intercept_, lin_reg.coef_[0]
+# 2. Define the model
+lin_reg = LinearRegression()
+
+# 3. Fit the model
+lin_reg = lin_reg.fit(X, y)
+
+intercept = lin_reg.intercept_
+slope = lin_reg.coef_[0]
+
+print(intercept, slope)
+
+ages = np.array([glu["age"].min(), glu["age"].max()])   # the two ends of the line
+
+fig, ax = plt.subplots()
+ax.scatter(glu["age"], glu["glucose"])
+ax.plot(ages, intercept + slope * ages, color="red", linestyle="--", linewidth=2)
+ax.set_xlabel("Age (feature)")
+ax.set_ylabel("Glucose (label)")
+plt.show()
+
+age_newsample = 45
+predicted_glucose = 110.30 + 0.289 * age_newsample
+print(round(predicted_glucose, 3))
+
+# predict() wants a data frame, because it normally receives more than one
+# sample and more than one feature. Here it has one row and one column.
+lin_reg.predict(pd.DataFrame({"age": [45]}))
+
+fig, ax = plt.subplots()
+ax.scatter(glu["age"], glu["glucose"])
+ax.plot(ages, intercept + slope * ages, color="red", linestyle="--", linewidth=2)
+ax.scatter(age_newsample, predicted_glucose, color="grey", s=150, zorder=3)
+ax.set_xlabel("Age (feature)")
+ax.set_ylabel("Glucose (label)")
+plt.show()
+
+age_newsample = 10
+predicted_glucose = 110.30 + 0.289 * age_newsample
+print(round(predicted_glucose, 3))
+
+ages = np.array([0, 100])   # draw the line well beyond the data
+
+fig, ax = plt.subplots()
+ax.scatter(glu["age"], glu["glucose"])
+ax.plot(ages, intercept + slope * ages, color="red", linestyle="--", linewidth=2)
+ax.scatter(age_newsample, predicted_glucose, color="grey", s=150, zorder=3)
+ax.set_xlim(0, 100)
+ax.set_xlabel("Age (feature)")
+ax.set_ylabel("Glucose (label)")
+plt.show()
 
 # --------------------------------------------------------------------
-# Predicting, inside and outside the data
+# Exercise: understand the role of the dataset in predictive modelling
 # --------------------------------------------------------------------
 
-lin_reg.predict(pd.DataFrame({"age": [45, 10]}))
+# at most 3 questions deep, and at least 5 people in every final group
+tree_reg = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5)
 
-# --------------------------------------------------------------------
-# Task 1 — Predict from the parameters, not from the function
-# --------------------------------------------------------------------
+tree_reg = tree_reg.fit(X, y)
 
-# Replace every ______ below, then run this cell.
-pred_60 = ______ + ______ * 60
-print(round(pred_60, 2))
-
-# --------------------------------------------------------------------
-# Task 2 — Change the algorithm, keep everything else
-# --------------------------------------------------------------------
-
-# Replace every ______ below, then run this cell.
-from sklearn.tree import DecisionTreeRegressor, export_text
-
-tree_reg = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5).fit(______, ______)
 print(export_text(tree_reg, feature_names=["age"]))
 
+fig, ax = plt.subplots(figsize=(10, 6))
+plot_tree(tree_reg, feature_names=["age"], filled=True, rounded=True,
+          fontsize=8, ax=ax)
+plt.tight_layout()
+plt.show()
+
+glu["predicted_glucose"] = tree_reg.predict(X)
+
+glu.head()
+
 # --------------------------------------------------------------------
-# Stuck?
+# Stop here
 # --------------------------------------------------------------------
 
-from sklearn.tree import DecisionTreeRegressor
-tree_shown = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5).fit(X, y)
+ordered = glu.sort_values("age")   # a step line has to be drawn from left to right
 
-grid = pd.DataFrame({"age": np.linspace(glu["age"].min(), glu["age"].max(), 400)})
 fig, ax = plt.subplots()
-ax.scatter(glu["age"], glu["glucose"], alpha=0.5)
-ax.plot(grid["age"], tree_shown.predict(grid), color="darkred")
-ax.plot(grid["age"], lin_reg.predict(grid), color="steelblue")
-ax.set_xlabel("Age (years)"); ax.set_ylabel("Glucose (mg/dL)")
+ax.scatter(glu["age"], glu["glucose"], s=60, color="blue", alpha=0.7)
+ax.step(ordered["age"], ordered["predicted_glucose"], where="post",
+        color="darkred", linewidth=2)
+ax.set_xlabel("Age (years)")
+ax.set_ylabel("Glucose (mg/dL)")
+plt.show()
+
+fig, ax = plt.subplots()
+ax.scatter(glu["age"], glu["glucose"], s=60, color="blue", alpha=0.7)
+ax.step(ordered["age"], ordered["predicted_glucose"], where="post",
+        color="darkred", linewidth=2)
+ax.scatter(glu["age"], glu["predicted_glucose"], s=30, color="grey", alpha=0.8, zorder=3)
+ax.set_xlabel("Age (years)")
+ax.set_ylabel("Glucose (mg/dL)")
 plt.show()
 
 # --------------------------------------------------------------------
-# Task 3 — The role of the dataset
+# Discuss
 # --------------------------------------------------------------------
 
-# Replace every ______ below, then run this cell.
-glu30 = glu.head(______)
-X30, y30 = glu30[["age"]], glu30["glucose"]
-
-lin30  = LinearRegression().fit(______, ______)
-tree30 = DecisionTreeRegressor(max_depth=3, min_samples_leaf=5).fit(______, ______)
-
-at25 = pd.DataFrame({"age": [25]})
-{"line80": lin_reg.predict(at25)[0],   "line30": lin30.predict(at25)[0],
- "tree80": tree_shown.predict(at25)[0], "tree30": tree30.predict(at25)[0]}
+glu30 = glu.iloc[:30]
+glu30.shape
