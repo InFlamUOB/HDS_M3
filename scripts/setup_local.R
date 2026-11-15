@@ -15,13 +15,14 @@ r_pkgs  <- c("tidymodels", "tidyverse", "data.table", "rpart", "reticulate",
              "mlbench",     # the synthetic diabetes data (Days 2-6)
              "naniar", "mice", "finalfit",   # missingness (Day 2)
              "fastDummies",  # one-hot encoding without a recipe (Day 2)
-             "rpart.plot",  # drawing trees (Day 5)
+             "rpart.plot",  # drawing trees (Days 3 and 5)
+             "plotly",      # the 3D loss surface you can turn (Day 3)
              "ranger",      # the random forest engine (Day 5)
              "glmnet",      # penalised regression (Day 5.5)
              "vip",         # variable importance (Days 5-6)
              "DALEX", "DALEXtra")            # model explanation (Day 6)
 py_pkgs <- c("pandas", "numpy", "matplotlib", "seaborn", "scikit-learn", "joblib",
-             "shap")   # Day 6
+             "shap", "plotly")   # Day 6
 
 # ---- R side ----------------------------------------------------------------
 missing <- r_pkgs[!vapply(r_pkgs, requireNamespace, logical(1), quietly = TRUE)]
