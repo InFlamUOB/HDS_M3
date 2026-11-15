@@ -1,0 +1,533 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 3.3 — The best fit line {#sec-best-fit}
+
+
+## Overview
+
+The last exercise scored lines that were handed to you. This one turns that
+round: the loss becomes a function of the intercept and the slope, and fitting
+becomes a search for the pair that scores lowest. You will score candidate
+lines by hand, then score fifteen thousand of them at once and look at the
+surface they trace out — which is the thing every fitting procedure is trying
+to find the bottom of.
+
+
+:::::: {.panel-tabset group="language"}
+
+## R
+
+[**Download the R code from this chapter**](code/day3-02b-best-fit-line.R){download="day3-02b-best-fit-line.R"} — every cell below, in page
+order, with the blanks left for you to fill in. Open it in Positron beside the
+page and run it a chunk at a time.
+
+### Where we left off
+
+Exercise 3.2 scored lines that somebody else had drawn. Load the same 80
+patients, fit the line `lm()` chooses, and rebuild the contaminated copy — the
+one with patients 1, 3 and 5 tripled — because the last task needs both.
+
+```{r}
+library(tidyverse)
+
+glu <- read_csv("data/glucose_study.csv")
+
+fit_ols <- lm(glucose ~ age, data = glu)
+
+glu_bad <- glu |>
+  mutate(glucose = if_else(row_number() %in% c(1, 3, 5),
+                           glucose * 3, glucose))
+
+coef(fit_ols)
+```
+
+------------------------------------------------------------------------
+
+### Step 1 — The loss as a function of the parameters
+
+In Exercise 3.2 a loss scored a line someone else supplied. Now treat it as a
+function of the two parameters, which is what fitting actually optimises:
+
+$$\text{MSE}(\hat\beta_0, \hat\beta_1) = \frac{1}{m} \sum_{i=1}^{m}
+\left( y_i - \left( \hat{\beta}_0 + \hat{\beta}_1 x_i \right) \right)^2$$
+
+Nothing in that formula is new. The residual, the square and the mean are the
+three steps of the last exercise; what has changed is which part you hold fixed.
+The data is now the fixed thing and the parameters are what vary.
+
+Start by hand with the first three patients, aged 28, 44 and 26, with glucose
+194, 129 and 132. For $\hat\beta_0 = 3$ and $\hat\beta_1 = 5$ the predictions
+are 143, 223 and 133, so
+
+$$\frac{(194-143)^2 + (129-223)^2 + (132-133)^2}{3}
+ = \frac{2601 + 8836 + 1}{3} = 3812.67$$
+
+Do that arithmetic on paper before you run the cell. The same three steps as
+before — predict, subtract, square and average — on the first three rows:
+
+```{r}
+glu |>
+  slice(1:3) |>
+  mutate(pred = 3 + 5 * age,
+         r    = glucose - pred) |>
+  summarise(MSE = mean(r^2))
+```
+
+### Task 1 — Score two candidate lines on all 80 patients
+
+Those two parameter values were picked out of the air. Score them on the whole
+dataset, then score a second pair, $\hat\beta_0 = 4$ and $\hat\beta_1 = 7$.
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+glu |>
+  mutate(r_3_5 = glucose - (3 + 5 * age),
+         r_4_7 = glucose - (______)) |>
+  summarise(at_3_5 = mean(r_3_5^2),
+            at_4_7 = mean(r_4_7^2)) |>
+  round(1)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+glu |>
+  mutate(r_3_5 = glucose - (3 + 5 * age),
+         r_4_7 = glucose - (4 + 7 * age)) |>
+  summarise(at_3_5 = mean(r_3_5^2),
+            at_4_7 = mean(r_4_7^2)) |>
+  round(1)
+```
+:::
+:::
+
+On all 80 rows those two candidates score 7,462 and 22,991 against the fitted
+line's 847.5. Both are terrible, and the first is better than the second, which
+is all a loss is for: ranking candidates.
+
+::: {.callout-warning}
+## Which number is the intercept
+Writing $\hat\beta_0 = 3$, $\hat\beta_1 = 5$ and then drawing
+`geom_abline(slope = 3, intercept = 5)` plots a different line from the one you
+scored, and the plot will look convincing. `geom_abline()` takes `slope` and
+`intercept` by name for exactly this reason. Name both arguments, every time.
+:::
+
+------------------------------------------------------------------------
+
+### Step 2 — Every candidate line at once
+
+Ranking two candidates is a loss doing its job. Fitting is the same idea with
+far more candidates. Build a grid of them — 101 intercepts between 60 and 160,
+151 slopes between −1 and 2, 15,251 lines in total — pair every candidate with
+every patient, and score each candidate under both losses.
+
+```{r}
+candidates <- expand_grid(b0 = seq(60, 160, by = 1),
+                          b1 = seq(-1, 2, by = 0.02))
+
+scores <- candidates |>
+  cross_join(glu |> select(age, glucose)) |>
+  mutate(r = glucose - (b0 + b1 * age)) |>
+  summarise(MSE = mean(r^2),
+            MAE = mean(abs(r)), .by = c(b0, b1))
+
+scores
+```
+
+One row per candidate line, with its score under each loss. Draw the MSE
+column as a surface, with the line `lm()` returned marked in red.
+
+```{r}
+ggplot(scores, aes(x = b0, y = b1)) +
+  geom_raster(aes(fill = log10(MSE))) +
+  geom_contour(aes(z = log10(MSE)), colour = "white",
+               alpha = 0.4, bins = 12) +
+  annotate("point", x = coef(fit_ols)[[1]], y = coef(fit_ols)[[2]],
+           colour = "red", size = 3) +
+  scale_fill_viridis_c(option = "magma") +
+  labs(x = expression(hat(beta)[0]), y = expression(hat(beta)[1]),
+       fill = "log10(MSE)")
+```
+
+That picture is the loss function itself, with one colour for every line you
+could have drawn. Two features of it matter for the next exercise. The surface
+is a bowl: it has one lowest point and no others, which is why least squares has
+a single answer. And the bowl is a long diagonal trough rather than a round
+basin, because the intercept and the slope trade off against each other — raise
+the slope and you can compensate by lowering the intercept. Exercise 3.4 walks
+downhill on this exact surface, and the shape of the trough is what makes that
+harder than it sounds.
+
+### Task 2 — Find the best candidate under each loss
+
+Pull the lowest-scoring row out of the grid, first by MSE and then by MAE.
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+scores |> slice_min(______, n = 1)
+scores |> slice_min(MAE, n = 1)
+
+coef(fit_ols)   # the fitted line, to compare
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+scores |> slice_min(MSE, n = 1)
+scores |> slice_min(MAE, n = 1)
+
+coef(fit_ols)   # the fitted line, to compare
+```
+:::
+:::
+
+The best candidate under MSE is intercept 110, slope 0.30, scoring 847.55 —
+against `lm()`'s 110.298, 0.2887 and 847.52. The difference is the spacing of
+the grid and nothing else. Under MAE the best candidate is a different line:
+intercept 99, slope 0.50.
+
+Now do the same on the contaminated data, and watch which of the two losses
+changes its mind.
+
+```{r}
+scores_bad <- candidates |>
+  cross_join(glu_bad |> select(age, glucose)) |>
+  mutate(r = glucose - (b0 + b1 * age)) |>
+  summarise(MSE = mean(r^2),
+            MAE = mean(abs(r)), .by = c(b0, b1))
+
+bind_rows(
+  clean_MSE        = scores     |> slice_min(MSE, n = 1) |> select(b0, b1),
+  contaminated_MSE = scores_bad |> slice_min(MSE, n = 1) |> select(b0, b1),
+  clean_MAE        = scores     |> slice_min(MAE, n = 1) |> select(b0, b1),
+  contaminated_MAE = scores_bad |> slice_min(MAE, n = 1) |> select(b0, b1),
+  .id = "best_under")
+```
+
+| best candidate | intercept | slope |
+|---|---|---|
+| clean data, by MSE | 110 | **+0.30** |
+| contaminated data, by MSE | 136 | **−0.16** |
+| clean data, by MAE | 99 | **+0.50** |
+| contaminated data, by MAE | 103 | **+0.40** |
+
+: {tbl-colwidths="[46,27,27]"}
+
+Squared error reverses the sign of the slope. Absolute error, given the same
+three corrupted patients, still says glucose rises with age. Same data, same
+grid of candidates, same arithmetic — only the loss is different.
+
+::: {.callout-note}
+## Why not just use the grid
+Fifteen thousand evaluations to recover two numbers already feels wasteful, and
+it is: the grid also has to be centred near the answer to find it, which
+requires knowing the answer. With ten parameters rather than two, a grid of this
+resolution would need more evaluations than there are atoms in the room. Grid
+search is a teaching device here, not a method.
+:::
+
+## Python
+
+[**Download the Python code from this chapter**](code/day3-02b-best-fit-line.py){download="day3-02b-best-fit-line.py"} — every cell below, in
+page order, with the blanks left for you to fill in. Open it in Positron beside
+the page and run it a cell at a time.
+
+### Where we left off
+
+Exercise 3.2 scored lines that somebody else had drawn. Load the same 80
+patients, fit the line `lm()` chooses, and rebuild the contaminated copy — the
+one with patients 1, 3 and 5 tripled — because the last task needs both.
+
+```{python}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+
+glu = pd.read_csv("data/glucose_study.csv")
+
+fit_ols = LinearRegression().fit(glu[["age"]], glu["glucose"])
+
+glu_bad = glu.copy()
+glu_bad.loc[[0, 2, 4], "glucose"] *= 3
+
+fit_ols.intercept_, fit_ols.coef_[0]
+```
+
+------------------------------------------------------------------------
+
+### Step 1 — The loss as a function of the parameters
+
+In Exercise 3.2 a loss scored a line someone else supplied. Now treat it as a
+function of the two parameters, which is what fitting actually optimises:
+
+$$\text{MSE}(\hat\beta_0, \hat\beta_1) = \frac{1}{m} \sum_{i=1}^{m}
+\left( y_i - \left( \hat{\beta}_0 + \hat{\beta}_1 x_i \right) \right)^2$$
+
+Nothing in that formula is new. The residual, the square and the mean are the
+three steps of the last exercise; what has changed is which part you hold fixed.
+The data is now the fixed thing and the parameters are what vary.
+
+Start by hand with the first three patients, aged 28, 44 and 26, with glucose
+194, 129 and 132. For $\hat\beta_0 = 3$ and $\hat\beta_1 = 5$ the predictions
+are 143, 223 and 133, so
+
+$$\frac{(194-143)^2 + (129-223)^2 + (132-133)^2}{3}
+ = \frac{2601 + 8836 + 1}{3} = 3812.67$$
+
+Do that arithmetic on paper before you run the cell. The same three steps as
+before — predict, subtract, square and average — on the first three rows:
+
+```{python}
+first3 = glu.head(3).copy()
+first3["pred"] = 3 + 5 * first3["age"]
+first3["r"]    = first3["glucose"] - first3["pred"]
+
+(first3["r"] ** 2).mean()
+```
+
+### Task 1 — Score two candidate lines on all 80 patients
+
+Those two parameter values were picked out of the air. Score them on the whole
+dataset, then score a second pair, $\hat\beta_0 = 4$ and $\hat\beta_1 = 7$.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+r_3_5 = glu["glucose"] - (3 + 5 * glu["age"])
+r_4_7 = glu["glucose"] - (______)
+
+pd.Series({"at_3_5": (r_3_5 ** 2).mean(),
+           "at_4_7": (r_4_7 ** 2).mean()}).round(1)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+r_3_5 = glu["glucose"] - (3 + 5 * glu["age"])
+r_4_7 = glu["glucose"] - (4 + 7 * glu["age"])
+
+pd.Series({"at_3_5": (r_3_5 ** 2).mean(),
+           "at_4_7": (r_4_7 ** 2).mean()}).round(1)
+```
+:::
+:::
+
+On all 80 rows those two candidates score 7,462 and 22,991 against the fitted
+line's 847.5. Both are terrible, and the first is better than the second, which
+is all a loss is for: ranking candidates.
+
+------------------------------------------------------------------------
+
+### Step 2 — Every candidate line at once
+
+Ranking two candidates is a loss doing its job. Fitting is the same idea with
+far more candidates. Build a grid of them — 101 intercepts between 60 and 160,
+151 slopes between −1 and 2, 15,251 lines in total — pair every candidate with
+every patient, and score each candidate under both losses.
+
+```{python}
+b0s = np.arange(60, 161, 1)
+b1s = np.round(np.arange(-1, 2.001, 0.02), 2)
+
+candidates = pd.MultiIndex.from_product(
+    [b0s, b1s], names=["b0", "b1"]).to_frame(index=False)
+
+scores = candidates.merge(glu[["age", "glucose"]], how="cross")
+scores["r"] = scores["glucose"] - (scores["b0"] + scores["b1"] * scores["age"])
+scores = (scores.assign(sq=lambda d: d["r"] ** 2,
+                        ab=lambda d: d["r"].abs())
+                .groupby(["b0", "b1"], as_index=False)
+                .agg(MSE=("sq", "mean"), MAE=("ab", "mean")))
+
+scores.head()
+```
+
+One row per candidate line, with its score under each loss. Draw the MSE
+column as a surface, with the line `lm()` returned marked in red.
+
+(The red point is what `LinearRegression` returned.)
+
+```{python}
+surface = scores.pivot(index="b1", columns="b0", values="MSE")
+
+fig, ax = plt.subplots()
+cs = ax.contourf(surface.columns, surface.index,
+                 np.log10(surface.values), levels=20, cmap="magma")
+ax.scatter([fit_ols.intercept_], [fit_ols.coef_[0]], color="red", zorder=3)
+cbar = fig.colorbar(cs, ax=ax, label="log10(MSE)")
+ax.set_xlabel(r"$\hat\beta_0$")
+ax.set_ylabel(r"$\hat\beta_1$")
+plt.show()
+```
+
+That picture is the loss function itself, with one colour for every line you
+could have drawn. Two features of it matter for the next exercise. The surface
+is a bowl: it has one lowest point and no others, which is why least squares has
+a single answer. And the bowl is a long diagonal trough rather than a round
+basin, because the intercept and the slope trade off against each other — raise
+the slope and you can compensate by lowering the intercept. Exercise 3.4 walks
+downhill on this exact surface, and the shape of the trough is what makes that
+harder than it sounds.
+
+### Task 2 — Find the best candidate under each loss
+
+Pull the lowest-scoring row out of the grid, first by MSE and then by MAE.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+print(scores.nsmallest(1, ______))
+print(scores.nsmallest(1, "MAE"))
+
+print(fit_ols.intercept_, fit_ols.coef_[0])   # the fitted line, to compare
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+print(scores.nsmallest(1, "MSE"))
+print(scores.nsmallest(1, "MAE"))
+
+print(fit_ols.intercept_, fit_ols.coef_[0])   # the fitted line, to compare
+```
+:::
+:::
+
+The best candidate under MSE is intercept 110, slope 0.30, scoring 847.55 —
+against `lm()`'s 110.298, 0.2887 and 847.52. The difference is the spacing of
+the grid and nothing else. Under MAE the best candidate is a different line:
+intercept 99, slope 0.50.
+
+Now do the same on the contaminated data, and watch which of the two losses
+changes its mind.
+
+Read "`lm()`" above as `LinearRegression`: the comparison is the same.
+
+```{python}
+scores_bad = candidates.merge(glu_bad[["age", "glucose"]], how="cross")
+scores_bad["r"] = (scores_bad["glucose"]
+                   - (scores_bad["b0"] + scores_bad["b1"] * scores_bad["age"]))
+scores_bad = (scores_bad.assign(sq=lambda d: d["r"] ** 2,
+                                ab=lambda d: d["r"].abs())
+                        .groupby(["b0", "b1"], as_index=False)
+                        .agg(MSE=("sq", "mean"), MAE=("ab", "mean")))
+
+pd.DataFrame(
+    [scores.nsmallest(1, "MSE")[["b0", "b1"]].iloc[0],
+     scores_bad.nsmallest(1, "MSE")[["b0", "b1"]].iloc[0],
+     scores.nsmallest(1, "MAE")[["b0", "b1"]].iloc[0],
+     scores_bad.nsmallest(1, "MAE")[["b0", "b1"]].iloc[0]],
+    index=["clean_MSE", "contaminated_MSE", "clean_MAE", "contaminated_MAE"])
+```
+
+| best candidate | intercept | slope |
+|---|---|---|
+| clean data, by MSE | 110 | **+0.30** |
+| contaminated data, by MSE | 136 | **−0.16** |
+| clean data, by MAE | 99 | **+0.50** |
+| contaminated data, by MAE | 103 | **+0.40** |
+
+: {tbl-colwidths="[46,27,27]"}
+
+Squared error reverses the sign of the slope. Absolute error, given the same
+three corrupted patients, still says glucose rises with age. Same data, same
+grid of candidates, same arithmetic — only the loss is different.
+
+::: {.callout-note}
+## Why not just use the grid
+Fifteen thousand evaluations to recover two numbers already feels wasteful, and
+it is: the grid also has to be centred near the answer to find it, which
+requires knowing the answer. With ten parameters rather than two, a grid of this
+resolution would need more evaluations than there are atoms in the room. Grid
+search is a teaching device here, not a method.
+:::
+
+::::::
+
+## Reflection
+
+1. The grid's best candidate under squared error is an intercept of 110 and a
+   slope of 0.30; `lm()` returns 110.298 and 0.2887. Is the grid wrong?
+2. You double the resolution of the grid in both parameters. How many candidate
+   lines is that, and how many would the same resolution cost for a model with
+   ten parameters rather than two?
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Answers.** Reflection 1: no. The grid can only return a point it contains, and
+its intercepts are spaced one apart and its slopes 0.02 apart, so 110 and 0.30
+are `lm()`'s answer rounded to the grid. The MSE values say the same thing:
+847.55 against 847.52, a difference in the third decimal of a quantity measured
+in mg/dL squared. Reflection 2: doubling the resolution gives 201 × 301 = 60,501
+candidates, four times as many for one more decimal place. The same resolution
+in ten parameters is $101^{10}$, which is about $10^{20}$ — this is the part
+students should leave with, because it is the reason Exercise 3.4 exists.
+
+**Expected values** (regenerated data varies in the last digit). By hand on the
+first three patients, $\hat\beta_0 = 3$, $\hat\beta_1 = 5$: MSE = 3812.67. On
+all 80 patients: 7,462.5 at (3, 5) and 22,990.6 at (4, 7), against 847.5 for
+the fitted line. Grid: 15,251 candidates; best under MSE is 110 and 0.30 on the
+clean data, 136 and −0.16 on the contaminated; best under MAE is 99 and 0.50 on
+the clean data, 103 and 0.40 on the contaminated.
+
+**Common failures.** (1) Reading the grid's intercept of 110 as a more accurate
+answer than `lm()`'s 110.298; it is the same answer, rounded to the spacing of
+the grid. (2) Passing the intercept where `geom_abline()` expects the slope,
+which draws a plausible-looking line that is not the one they scored. (3)
+Expecting the surface plot to show a round basin, then reading the diagonal
+trough as a mistake in the code rather than as the correlation between the two
+parameters.
+
+**Plenary.** Put the four-row table up at the end: squared error reverses the
+sign of the slope under contamination and absolute error does not. That
+reversal is the moment the day's argument lands. Then ask what they would have
+done without the grid — the answer is the next exercise.
+
+**Timing.** Each grid pairs 15,251 candidates with 80 patients, which is 1.2
+million rows, so expect a pause of a second or two rather than an instant
+answer. If you are short, show the surface plot and discuss it rather than
+having everyone build the grid; the plot is the part they remember.
+:::
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch 1 — Narrow the grid
+Take the best candidate you found, build a second grid of 101 intercepts and
+151 slopes centred on it but ten times finer, and score that. Compare the answer
+with `lm()`'s to three decimal places. Then say how many rounds of this you
+would need to match `lm()` exactly, and what that tells you about the method.
+:::
+
+::: {.callout-note appearance="simple"}
+## Stretch 2 — A loss that is neither
+Huber loss is squared for residuals smaller than some cut-off and absolute for
+the larger ones. Add a third score to the grid for a cut-off you choose, find
+its best candidate on the contaminated data, and then find the cut-off at which
+the best slope flips back to positive. That number is the amount of
+contamination you have implicitly assumed.
+:::
+
+## What you can and cannot now claim
+
+**Can:** that you can write a loss as a function of a model's parameters, score
+any candidate pair against the data, and show that fitting is the search for the
+lowest point of the surface those scores trace out.
+
+**Cannot:** that you can find that lowest point for any model worth fitting. A
+grid of 15,251 candidates recovered two parameters to the spacing of the grid,
+and it only worked because the grid was drawn around the answer. Exercise 3.4
+replaces the grid with a method that uses the slope of the loss itself.

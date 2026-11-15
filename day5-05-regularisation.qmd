@@ -35,16 +35,16 @@ random numbers added on purpose.
 
 ## Why this, here
 
-@sec-random-forest answered the instability of a single tree by averaging:
+Exercise 5.4 answered the instability of a single tree by averaging:
 grow five hundred trees on resampled rows and let the variance cancel. There is
 a second answer to the same problem, and it does not need five hundred of
 anything. Leave one model, and make it harder for the fitting procedure to give
-any coefficient a large value. That is regularisation, and @sec-frameworks
+any coefficient a large value. That is regularisation, and Exercise 4.1
 already met it without arguing for it — scikit-learn applies a penalty by
 default, R's `glmnet` engine applies one when asked, and the chapter closed by
 saying that Day 5 would make the case. This is that case, and the case against.
 
-It sits here, after @sec-resampling and @sec-decision-trees, because the
+It sits here, after Exercise 2.6 and Exercise 5.3, because the
 strength of the penalty is a hyperparameter like `tree_depth`: there is no way
 to read it off the data you fitted on, and the only honest way to choose it is
 the resampling machinery you already have.
@@ -52,7 +52,7 @@ the resampling machinery you already have.
 ## Worked example — twelve predictors, four of which are nothing
 
 We take Day 5's eight predictors and add four columns of random numbers, drawn
-independently of everything else and of each other. @sec-importance uses one
+independently of everything else and of each other. Exercise 9.1 uses one
 such control; four is better, because then the useless columns outnumber the
 predictors that carry any real signal in this data — which, as Day 9 will show,
 is roughly `glucose` and `age`.
@@ -61,7 +61,7 @@ Every predictor is standardised first. A penalty acts on the size of a
 coefficient, and the size of a coefficient depends on the units of its
 predictor, so penalising unstandardised predictors penalises whoever chose the
 units. The standardisation happens inside the recipe or the pipeline, which is
-what makes it honest under resampling (@sec-leakage).
+what makes it honest under resampling (Exercise 2.6).
 
 ::: {.panel-tabset}
 ## R
@@ -131,13 +131,13 @@ print(coefs(plain).round(3))
 ## Two spellings of "no penalty", and one relevel that differs from the rest of Day 5
 `LogisticRegression()` **always** penalises unless you stop it: the default
 `C=1.0` is a ridge penalty, and `C=np.inf` is the unpenalised fit that matches
-R's `glm` (@sec-frameworks). If you are on scikit-learn 1.7 or earlier, write
+R's `glm` (Exercise 4.1). If you are on scikit-learn 1.7 or earlier, write
 `penalty=None`, `penalty="l1"` and `penalty="l2"` where this page writes
 `C=np.inf`, `l1_ratio=1` and `l1_ratio=0`; the older spellings still run on
 1.8 and 1.9 but print a deprecation warning.
 
-The factor levels here are `neg`, `pos` — the order @sec-importance uses, not
-the `pos`, `neg` of @sec-classification-metrics. This page reads coefficients,
+The factor levels here are `neg`, `pos` — the order Exercise 9.1 uses, not
+the `pos`, `neg` of Exercise 5.2. This page reads coefficients,
 and with `neg` first the coefficients are for the probability of `pos`, so a
 positive coefficient means higher risk. The price is `event_level = "second"`
 in every yardstick call below.
@@ -172,7 +172,7 @@ happen to line up with.
 
 Fit the same logistic regression with an L1 penalty, with the strength of the
 penalty tuned by 10-fold cross-validation on the training rows. The test set
-takes no part in the choice, for the reason @sec-decision-trees gave.
+takes no part in the choice, for the reason Exercise 5.3 gave.
 
 ::: {.panel-tabset}
 ## R
@@ -209,7 +209,7 @@ check_metric_range(
 ::: {.callout-tip collapse="true"}
 ## Stuck?
 The first blank is the same placeholder you used for `tree_depth` in
-@sec-decision-trees, so that the grid can supply the values. The second selects
+Exercise 5.3, so that the grid can supply the values. The second selects
 which penalty you get: in `glmnet`'s parameterisation, `mixture` is the share
 of the penalty that is L1, and the lasso is all of it.
 :::
@@ -276,7 +276,7 @@ check_metric_range(roc_auc_score(y_te, lasso_search.predict_proba(X_te)[:, 1]),
 ::: {.callout-tip collapse="true"}
 ## Stuck?
 `l1_ratio` is the share of the penalty that is L1, and the lasso is all of it.
-The scoring string is the one `GridSearchCV` understood in @sec-random-forest.
+The scoring string is the one `GridSearchCV` understood in Exercise 5.4.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
@@ -511,7 +511,7 @@ The table has one row for each distinct pair of survivor counts, printed at the
 weakest penalty that achieves it. Three penalties on it are worth marking: the
 one the tuning chose, the one at which the last control disappears, and the
 strongest penalty whose resampled AUC is still within one standard error of the
-best — the one-standard-error rule of @sec-decision-trees, which the cell above
+best — the one-standard-error rule of Exercise 5.3, which the cell above
 prints. In R they are 0.0085, 0.0418 and 0.204, all different, and the
 one-standard-error rule lands in the stretch of the path where `glucose` is the
 only survivor. In Python they are `C` = 0.386, `C` = 0.0788 and `C` = 0.053,
@@ -695,7 +695,7 @@ scikit-learn's `LogisticRegression` offers no equivalent at all.
 2. Task 3 produced a different variable list from each resample of the same
    537 patients. What would you have to report, instead of a variable list, for
    the reader to see that instability?
-3. Regularisation and the random forest of @sec-random-forest are both answers
+3. Regularisation and the random forest of Exercise 5.4 are both answers
    to variance. Name one thing a penalised regression gives you that the forest
    cannot, and one thing the forest gives you that the penalty cannot.
 
@@ -771,7 +771,7 @@ reference level for "selected by chance".
 
 ::: {.callout-note appearance="simple"}
 ## Stretch 3 — Two rankings of the same data
-@sec-importance ranks the same twelve columns by permutation importance on a
+Exercise 9.1 ranks the same twelve columns by permutation importance on a
 random forest. Put that ranking next to the order in which the lasso path drops
 the columns. Where they disagree, which would you trust, and what would settle
 it?

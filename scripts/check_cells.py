@@ -18,6 +18,65 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 CHUNK = re.compile(r"^```\{(r|python)\}\n((?:#\|[^\n]*\n)*)(.*?)\n```[ \t]*$", re.S | re.M)
 problems: list[str] = []
 
+def check_release_lists() -> None:
+    """A released chapter must also be in the all-days working profile.
+
+    _quarto.yml is the student site; _quarto-all.yml is what you render while
+    writing. A chapter in the first but not the second means `make preview`
+    silently stops showing a page students can already read.
+    """
+    def listed(path):
+        return [re.match(r"-\s+(\S+\.qmd)$", l.strip()).group(1)
+                for l in (ROOT / path).read_text().splitlines()
+                if not l.strip().startswith("#") and re.match(r"-\s+\S+\.qmd$", l.strip())]
+
+    released, working = listed("_quarto.yml"), listed("_quarto-all.yml")
+    for name in released:
+        if name not in working:
+            problems.append(f"{name} is published in _quarto.yml but missing "
+                            "from _quarto-all.yml")
+    days = sorted({n[:4] for n in released if n.startswith("day")})
+    print(f"\n  published to students: {', '.join(days) or 'none'} "
+          f"({len(released)} chapters); {len(working)} written in total")
+
+
+def check_code_files() -> None:
+    """The downloadable scripts must still match the chapters they came from.
+
+    Only chapters that link to their code file are checked: a chapter without
+    that link simply does not offer a download yet.
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import make_code_files as mcf
+
+    n = 0
+    for chapter in sorted(ROOT.glob("day*.qmd")):
+        dests = {lang: ROOT / "code" / (chapter.stem + ext)
+                 for lang, ext in mcf.EXT.items()}
+        if not mcf.offers_download(chapter):
+            for dest in dests.values():
+                if dest.exists():
+                    problems.append(f"code/{dest.name} exists but {chapter.name} "
+                                    "does not link to it; delete one or the other")
+            continue
+        title, blocks = mcf.extract(chapter)
+        for lang, dest in dests.items():
+            chunks = blocks[lang]
+            if not chunks:
+                if dest.exists():
+                    problems.append(f"code/{dest.name}: the chapter has no {lang} "
+                                    "cells left; delete the file")
+            elif not dest.exists():
+                problems.append(f"code/{dest.name} is missing; run "
+                                "python3 scripts/make_code_files.py")
+            elif dest.read_text() != mcf.render(chapter.stem, title, lang, chunks):
+                problems.append(f"code/{dest.name} is out of date; run "
+                                "python3 scripts/make_code_files.py")
+            else:
+                n += 1
+    print(f"\n  {n} downloadable code files match their chapters")
+
+
 def main() -> int:
     cfg = (ROOT / "_quarto.yml").read_text()
     released = re.search(r"^show-solutions:\s*true", cfg, re.M) is not None
@@ -51,6 +110,9 @@ def main() -> int:
 
         print(f"  {name:<34} {n_worked:>2} worked, {n_task:>2} tasks, "
               f"{len(spans):>2} worked answers")
+
+    check_code_files()
+    check_release_lists()
 
     print(f"\nsolutions are {'RELEASED (published to students)' if released else 'hidden'}")
     if problems:

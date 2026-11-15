@@ -1,8 +1,9 @@
 # Everything you need for a teaching day. Run `make` for the list.
 #
 #   make setup-r            install the R packages and settle the Python side
-#   make preview            local site that reloads as you edit
-#   make site               build the booklet into _book/ — commit this with your edit
+#   make preview            every live chapter, reloads as you edit — not published
+#   make site               build the RELEASED days into _book/ — commit this with your edit
+#   make site-all           every live chapter into _book-all/, to read before releasing
 #   make instructor         build the staff copy into _book-instructor/
 #   make worksheets DAY=1   printable PDFs for one day
 #   make day DAY=2 TITLE="..."  scaffold the next day and register it
@@ -20,7 +21,7 @@ PYTHON ?= python3
 RSCRIPT ?= Rscript
 
 .DEFAULT_GOAL := help
-.PHONY: help setup-r preview site instructor worksheets day data data-zip check links all clean
+.PHONY: help setup-r preview site site-all instructor worksheets day data data-zip check links all clean
 
 help:
 	@grep -E '^#   make' $(MAKEFILE_LIST) | sed 's/^#   //'
@@ -28,13 +29,21 @@ help:
 setup-r:
 	$(RSCRIPT) scripts/setup_local.R
 
+# Everything you have written, released or not. Writes _book-all/, which is
+# git-ignored, so previewing a draft day cannot publish it.
 preview:
-	$(QUARTO) preview
+	$(QUARTO) preview --profile all
+
+site-all:
+	$(QUARTO) render --to html --profile all
 
 data-zip:
 	@$(PYTHON) scripts/make_data_zip.py
 
+# The student site: only the days uncommented in _quarto.yml. _book/ is wiped
+# first so a day you have un-released cannot linger as an orphan page.
 site: data-zip
+	rm -rf _book
 	$(QUARTO) render --to html
 
 instructor:
@@ -70,4 +79,4 @@ links:
 all: data site links instructor worksheets
 
 clean:
-	rm -rf _book _book-instructor _freeze .quarto print/.quarto print/*.typ
+	rm -rf _book _book-all _book-instructor _freeze .quarto print/.quarto print/*.typ
