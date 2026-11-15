@@ -4,6 +4,8 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
+# Exercise 3.1 — Supervised learning {#sec-supervised-learning}
+
 ## Overview
 
 Repeating the exercise from day 1 (ML pipeline) but understanding what is happening after each coding step. 
@@ -20,21 +22,19 @@ The question behind it: **does knowing a patient's age tell you anything useful
 about their glucose?** The answer today is more interesting than you might
 expect.
 
-`data/diabetes.csv` is the module's case study: 768 adults screened for type 2
-diabetes, eight measurements from a single visit and a `pos`/`neg` outcome. It
-carries the defect you met on Day 2 — five rows record a glucose of 0, which is
-not a measurement — so we drop those rows and keep the first 80 of what is left,
-small enough to see every point on a scatter plot.
+`data/glucose_study.csv` is the dataset for the whole of Day 3: 80 adults
+screened for type 2 diabetes, with their age in years and one blood glucose
+measurement each. It is drawn from `data/diabetes.csv`, the file you met on Day
+2, with the five impossible readings of 0 removed and the first 80 of what is
+left kept — small enough to see every point on a scatter plot.
 
 ```{r}
 library(tidyverse)
 library(tidymodels)
 
-diab <- read_csv("data/diabetes.csv")
-glu  <- diab |> filter(glucose > 0) |> slice(1:80) |> select(age, glucose)
+glu <- read_csv("data/glucose_study.csv")
 
-nrow(glu)
-head(glu)
+glu
 ```
 
 ```{r}
@@ -60,7 +60,7 @@ expect. You will be asked for it again at the end.
 The algorithm is chosen by you, the parameters are chosen by the data, and the
 prediction is a consequence of both. 
 
-Can write the leanring algorithm as:
+We can write the learning algorithm as:
 
 $$y = \beta_0 + \beta_1 x_1$$
 
@@ -82,9 +82,10 @@ coef(extract_fit_engine(ls_fit))
 
 ::: {.callout-warning}
 ## `coef()` does not work on a parsnip fit
-`coef(ls_fit)` returns `NULL`. But this is becasue we are workinginside the tidymodels pipleine and so a `model_fit` object
-wraps the engine's fit rather than being one, so you have to reach inside with
-`extract_fit_engine()` first.If you remeate dthis using `lm()` directly, `coef()` will work as expected.
+`coef(ls_fit)` returns `NULL`. That is because we are working inside the
+tidymodels pipeline: a `model_fit` object wraps the engine's fit rather than
+being one, so you have to reach inside it with `extract_fit_engine()` first. If
+you repeat this with `lm()` directly, `coef()` works as expected.
 :::
 
 So the fitted model is
@@ -110,13 +111,14 @@ object.
 ## Extrapolation is a modelling decision, not a software error
 The line is fitted on ages 21 to 81. Using it at 10 asserts that the same
 relationship holds in children, which nothing in these data supports. Every
-model will happily extrapolate; if it makes sense or not,  has to come from you. 
+model will happily extrapolate; whether it makes sense to is your call, not the
+software's.
 :::
 
 ### Task 1 — Predict from the parameters, not from the function
 
-replicate what `predict()` did above but yourself. Compute the
-predicted glucose for a 60-year-old from the two coefficients.
+Replicate what `predict()` did above, yourself. Compute the predicted glucose
+for a 60-year-old from the two coefficients.
 
 ```{r}
 #| eval: false
@@ -256,22 +258,19 @@ The question behind it: **does knowing a patient's age tell you anything useful
 about their glucose?** The answer today is more interesting than you might
 expect.
 
-`data/diabetes.csv` is the module's case study: 768 adults screened for type 2
-diabetes, eight measurements from a single visit and a `pos`/`neg` outcome. It
-carries the defect you met on Day 2 — five rows record a glucose of 0, which is
-not a measurement — so we drop those rows and keep the first 80 of what is left,
-small enough to see every point on a scatter plot.
+`data/glucose_study.csv` is the dataset for the whole of Day 3: 80 adults
+screened for type 2 diabetes, with their age in years and one blood glucose
+measurement each. It is drawn from `data/diabetes.csv`, the file you met on Day
+2, with the five impossible readings of 0 removed and the first 80 of what is
+left kept — small enough to see every point on a scatter plot.
 
 ```{python}
 import pandas as pd
 import numpy as np
 
-diab = pd.read_csv("data/diabetes.csv")
-glu = (diab.loc[diab["glucose"] > 0, ["age", "glucose"]]
-           .head(80)
-           .reset_index(drop=True))
+glu = pd.read_csv("data/glucose_study.csv")
 
-len(glu), glu.head()
+glu.head()
 ```
 
 ```{python}
@@ -297,11 +296,9 @@ expect. You will be asked for it again at the end.
 : {tbl-colwidths="[24,44,32]"}
 
 The algorithm is chosen by you, the parameters are chosen by the data, and the
-prediction is a consequence of both. Students conflate the first two constantly:
-"linear regression predicted 123" is wrong, because linear regression predicts
-nothing until it has been shown a dataset.
+prediction is a consequence of both.
 
-In machine learning notation the model is written
+We can write the learning algorithm as:
 
 $$y = \beta_0 + \beta_1 x_1$$
 
@@ -322,15 +319,9 @@ lin_reg = LinearRegression().fit(X, y)
 lin_reg.intercept_, lin_reg.coef_[0]
 ```
 
-R and Python agree to every decimal worth printing here, because both solve
-the same least-squares problem on the same 80 rows. @sec-ols shows you the algebra they
-are solving and verifies it by hand.
-
 So the fitted model is
 
 $$\widehat{\text{glucose}} = 110.30 + 0.289 \times \text{age}$$
-
-and that is the entire deliverable of the fitting step. Two numbers.
 
 ### Predicting, inside and outside the data
 
@@ -348,15 +339,14 @@ object.
 ## Extrapolation is a modelling decision, not a software error
 The line is fitted on ages 21 to 81. Using it at 10 asserts that the same
 relationship holds in children, which nothing in these data supports. Every
-model will happily extrapolate; the restraint has to come from you. Note also
-what the model does *not* give you: any sense of how confident it is. That is a
-statistical question and this is a prediction course.
+model will happily extrapolate; whether it makes sense to is your call, not the
+software's.
 :::
 
 ### Task 1 — Predict from the parameters, not from the function
 
-`predict()` is a convenience. Reproduce it with arithmetic: compute the
-predicted glucose for a 60-year-old from the two coefficients.
+Replicate what `predict()` did above, yourself. Compute the predicted glucose
+for a 60-year-old from the two coefficients.
 
 ```{python}
 #| eval: false
@@ -381,78 +371,7 @@ The two numbers you need are the ones the fitting step printed. They are two
 separate attributes of the fitted object.
 :::
 
-### Task 2 — Make the line earn its place
-
-A fitted line is only worth having if it beats a predictor that does no
-learning. Compute the mean squared error of the line on these 80 rows, and the
-mean squared error of predicting the mean glucose for everybody.
-
-Both numbers are computed on the rows the model was fitted to, which
-@sec-pipeline told you is not evidence of anything. Today that is deliberate:
-this exercise is about what fitting *does*, not about how well it generalises.
-Read every number on this page as in-sample.
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-mse_line = np.mean((y - ______)**2)
-mse_mean = np.mean((y - ______)**2)
-print(round(mse_line, 1), round(mse_mean, 1))
-print(round(100 * mse_line / mse_mean, 1))   # the line's error as a % of the baseline's
-```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-mse_line = np.mean((y - lin_reg.predict(X))**2)
-mse_mean = np.mean((y - y.mean())**2)
-print(round(mse_line, 1), round(mse_mean, 1))
-print(round(100 * mse_line / mse_mean, 1))   # the line's error as a % of the baseline's
-```
-:::
-:::
-
-The last line prints the line's error as a percentage of the baseline's. Write the
-percentage down before you read the next section.
-
-### The result that should bother you
-
-The line's in-sample mean squared error is 847.5. The mean squared error of
-ignoring age entirely and predicting 119.9 for everyone is 863.2. Fitting
-removed 1.8% of the squared error.
-
-Now destroy the relationship on purpose and fit again. Shuffling the age column
-breaks any link between a patient's age and their glucose while leaving both
-distributions exactly as they were.
-
-```{python}
-rng = np.random.default_rng(42)
-glu_shuffled = glu.assign(age=rng.permutation(glu["age"].values))
-
-fit_shuffled = LinearRegression().fit(glu_shuffled[["age"]], glu_shuffled["glucose"])
-mse_shuffled = np.mean((glu_shuffled["glucose"]
-                        - fit_shuffled.predict(glu_shuffled[["age"]]))**2)
-
-fit_shuffled.intercept_, fit_shuffled.coef_[0], mse_shuffled
-```
-
-Three steps of reasoning.
-
-1. Shuffled age cannot predict glucose. Any apparent fit is coincidence, and
-   its error is what "no relationship at all" looks like in these units.
-2. The shuffled fit's error is around 850 in R and around 861 in Python — the
-   two seeds shuffle differently — against 847.5 for the real age column and
-   863.2 for the baseline. The real predictor buys you almost nothing that a
-   deliberately broken one does not.
-3. The algebra in @sec-ols is exact, the fit is genuinely the best straight
-   line there is, and the model is still not worth deploying. A minimum is not
-   the same thing as a small number.
-
-Keep this: the entire day is about finding the best line, and the best line
-here is nearly useless. Being able to hold both of those at once is the point.
-
-### Task 3 — Change the algorithm, keep everything else
+### Task 2 — Change the algorithm, keep everything else
 
 A decision tree is a different learning algorithm applied to the identical
 dataset and the identical question. For now, swap one line and look at the
@@ -500,23 +419,7 @@ ax.set_xlabel("Age (years)"); ax.set_ylabel("Glucose (mg/dL)")
 plt.show()
 ```
 
-The tree's in-sample mean squared error is lower than the line's: 685.7 in R
-with `rpart`'s default pruning, 677.9 in Python with a depth of 3. Both are well
-below the line's 847.5. The tree is not better. It has more parameters — one
-mean per leaf rather than two numbers for the whole dataset — and more
-parameters always fit the rows you fitted them to more closely.
-
-::: {.callout-note}
-## The two trees are not the same tree
-`rpart` and scikit-learn choose splits the same way but stop differently:
-`rpart` prunes using a complexity parameter and cross-validation, scikit-learn
-stops when you tell it to. Ours end up with six leaves and seven respectively.
-Unlike the linear coefficients, which agreed to the decimal, the trees are a
-genuine difference between the two libraries' defaults, and you should expect to
-have to state tree-stopping rules explicitly whenever you report one.
-:::
-
-### Task 4 — The role of the dataset
+### Task 3 — The role of the dataset
 
 Refit both models on the first 30 rows only, and predict glucose for a
 25-year-old with each of the four fitted models.
@@ -572,7 +475,7 @@ Answer in writing, in one sentence each.
 
 ::: {.content-visible when-profile="instructor"}
 ::: {.instructor}
-**Answers.** Task 4: the line at age 25 moves from 117.5 to 105.1, the tree from
+**Answers.** Task 3: the line at age 25 moves from 117.5 to 105.1, the tree from
 116.4 to 95.7 — the tree moves roughly twice as far, because each leaf is a mean
 over a handful of patients while the line pools all of them. What changed is the
 dataset, and only the dataset; this is the whole lesson of the exercise. The
@@ -583,23 +486,23 @@ verb at all, and the in-sample caveat. Reflection 2: choosing the tree after
 seeing the data is the dangerous one.
 
 **Expected values** (regenerated data varies in the last digit). Coefficients
-≈ 110.3 and ≈ 0.29. In-sample MSE: line ≈ 845–850, predict-the-mean ≈ 860–865,
-`rpart` tree ≈ 680–690, scikit-learn depth-3 tree ≈ 675–680. Shuffled-age MSE
-≈ 845–865 depending on the language's generator. Predictions at age 25:
-line ≈ 117, line on 30 rows ≈ 105, tree ≈ 116, tree on 30 rows ≈ 96.
+≈ 110.3 and ≈ 0.29. Predicted glucose at 60 ≈ 127.6. Predictions at age 25:
+line ≈ 117, line on 30 rows ≈ 105, tree ≈ 116, tree on 30 rows ≈ 96. The `rpart`
+tree has six leaves, the scikit-learn depth-3 tree seven: the two libraries stop
+growing a tree differently, which is worth saying out loud if anyone compares
+tabs.
 
 **Common failures.** (1) `coef(ls_fit)` returning `NULL`, which the callout
-pre-empts but students still hit — the error surfaces inside `geom_abline()`.
-(2) In Python, `glu["age"]` instead of `glu[["age"]]`, giving a shape error.
-(3) Reading the 1.8% improvement as "the model is broken" rather than "age does
-not predict glucose here"; the data is behaving, the predictor is weak.
+pre-empts but students still hit. (2) In Python, `glu["age"]` instead of
+`glu[["age"]]`, giving a shape error. (3) Expecting the line to be a good
+predictor: age barely predicts glucose here, which @sec-loss-functions measures.
 
 **Plenary.** Ask for the slope people wrote down from the scatter plot before
 fitting. Most will have guessed something steeper than 0.29. That gap is the
 reason we measure.
 
-**Timing.** Tasks 1 and 2 are quick. Protect twenty minutes for Tasks 3 and 4
-together; if you are short, drop the Python tab of Task 4 and do it in plenary.
+**Timing.** Task 1 is quick. Protect twenty minutes for Tasks 2 and 3 together;
+if you are short, do Task 3 in plenary.
 :::
 :::
 
@@ -607,15 +510,17 @@ together; if you are short, drop the Python tab of Task 4 and do it in plenary.
 
 ::: {.callout-note appearance="simple"}
 ## Stretch 1 — A predictor that works
-Refit the line with `mass` (body mass index) as the predictor instead of age,
-on the same 80 rows, and compare the in-sample MSE with the baseline. Then ask
-the question this exercise cannot: is the comparison between the two predictors
-fair, given that you chose the second one after seeing the first one fail?
+Go back to `data/diabetes.csv` and refit the line with `mass` (body mass index)
+as the predictor instead of age, on the same 80 patients. Does the scatter look
+more convincing? Then ask the question this exercise cannot: is the comparison
+between the two predictors fair, given that you chose the second one after
+seeing the first one?
 :::
 
 ::: {.callout-note appearance="simple"}
 ## Stretch 2 — All 763 rows
-Repeat the fit on every row with a non-zero glucose rather than the first 80.
+Go back to `data/diabetes.csv` and repeat the fit on every row with a non-zero
+glucose rather than the first 80.
 The slope roughly doubles, to about 0.52, and the scatter looks no more
 convincing. Which of the two slopes would you report, and what does your answer
 imply about reporting a coefficient from a subset at all?

@@ -17,142 +17,192 @@ engine: knitr
 
 ## R
 
-### The same 80 rows
+### The data
 
+A loss function needs something to score, so start from the 80 patients and a
+line somebody drew by hand.
 
 ```{r}
 library(tidyverse)
 
-diab <- read_csv("data/diabetes.csv")
-glu  <- diab |> filter(glucose > 0) |> slice(1:80) |> select(age, glucose) #lets take out the 0s
+glu <- read_csv("data/glucose_study.csv")
+
+glu
 ```
 
-### One point, one residual
+### Step 1 — One patient, one residual
 
 A residual is what the model got wrong for one patient:
 
 $$r_i = y_i - \hat{y}_i$$
 
-Take a random predictive model  — $\widehat{\text{glucose}} = 120 + 0.5 \times
-\text{age}$, - and find the patient with the highest error. 
+Take a line nobody fitted — $\widehat{\text{glucose}} = 120 + 0.5 \times
+\text{age}$, invented by hand. Add two columns: what that line predicts, and
+how far each patient is from it.
 
 ```{r}
-glu <- glu |> mutate(pred_guess = 120 + 0.5 * age,
-                     resid_guess = glucose - pred_guess)
+glu <- glu |>
+  mutate(pred_guess  = 120 + 0.5 * age,
+         resid_guess = glucose - pred_guess)
 
-worst <- glu |> slice_max(abs(resid_guess), n = 1)
-worst
+glu
+```
 
+Now find the patient the line serves worst — the largest residual, in either
+direction.
+
+```{r}
+glu |> slice_max(abs(resid_guess), n = 1)
 ```
 
 That patient is 58, their measured glucose is 72, the hand-drawn line predicts
 149, and the residual is −77 mg/dL — an error larger than the measurement
 itself.
 
+The red segments below are the residuals, one per patient. A loss function is
+a rule for turning all 80 of them into a single number.
+
 ```{r}
 ggplot(glu, aes(x = age, y = glucose)) +
   geom_point(alpha = 0.6) +
-  geom_abline(intercept = 120, slope = 0.5, colour = "darkorange", linewidth = 1) +
-  geom_segment(aes(xend = age, yend = pred_guess), colour = "red", alpha = 0.3) +
+  geom_abline(intercept = 120, slope = 0.5,
+              colour = "darkorange", linewidth = 1) +
+  geom_segment(aes(xend = age, yend = pred_guess),
+               colour = "red", alpha = 0.3) +
   labs(x = "Age (years)", y = "Glucose (mg/dL)")
 ```
 
-The red segments are the residuals. A loss function is a rule for turning all
-80 of them into one number.
+### Step 2 — From 80 residuals to one number
 
-### Four ways to add up 80 mistakes
+Residuals are positive and negative, so adding them up cancels most of the
+error away. Two repairs are in common use, and they are not the same.
 
-Residuals are positive and negative, so adding them cancels most of the error
-away. Two repairs are in common use, and they are not equivalent.
+Square each residual, or take its size and ignore the sign:
+
+```{r}
+glu <- glu |>
+  mutate(squared  = resid_guess^2,
+         absolute = abs(resid_guess))
+
+glu |> select(age, glucose, resid_guess, squared, absolute)
+```
+
+Then add them up, or average them:
 
 $$\text{SSR} = \sum_{i=1}^{m} r_i^2 \qquad
 \text{MSE} = \frac{1}{m}\sum_{i=1}^{m} r_i^2 \qquad
 \text{MAE} = \frac{1}{m}\sum_{i=1}^{m} \left| r_i \right|$$
 
-Squaring is the L2 loss; taking the absolute value is the L1 loss. The mean
-squared error is the sum of squared residuals divided by the number of rows, so
-it does not grow simply because the dataset is larger. The root of the MSE —
-RMSE — is back in the outcome's units and is easier to quote.
-
 ```{r}
-loss_table <- function(residuals) {
-  m <- length(residuals)              # the number of residuals passed in,
-  ssr <- sum(residuals^2)             # not the size of some data frame
-  c(SSR = ssr, MSE = ssr / m, RMSE = sqrt(ssr / m),
-    MAE = mean(abs(residuals)))
-}
-
-round(loss_table(glu$resid_guess), 3)
+glu |>
+  summarise(SSR  = sum(squared),
+            MSE  = mean(squared),
+            RMSE = sqrt(mean(squared)),
+            MAE  = mean(absolute)) |>
+  round(2)
 ```
 
-The hand-drawn line scores SSR 90868, MSE 1135.9, RMSE 33.7 and MAE 28.7.
-RMSE and MAE are both in mg/dL and the RMSE is the larger of the two, which is
-not an accident: squaring weights the worst patients more heavily, so any
-summary built from squares sits above the plain average error whenever the
-residuals are unequal.
+Four names for four lines of that summary:
+
+| | What it is | On this line |
+|---|---|---|
+| **SSR** | sum of squared residuals | 90,868 |
+| **MSE** | the same, divided by the 80 patients | 1,135.9 |
+| **RMSE** | the square root of the MSE, back in mg/dL | 33.7 |
+| **MAE** | the average size of an error, in mg/dL | 28.7 |
+
+: {tbl-colwidths="[14,54,32]"}
+
+Squaring is the L2 loss; taking the absolute value is the L1 loss. Dividing by
+the number of patients is what stops the score growing simply because the
+dataset is larger. RMSE and MAE are both in mg/dL and the RMSE is the larger of
+the two, which is not an accident: squaring weights the worst patients more
+heavily, so any summary built from squares sits above the plain average error
+whenever the residuals are unequal.
 
 ### Task 1 — Score the fitted line against the hand-drawn one
 
-Fit the least-squares line, compute its residuals, and put them through
-`loss_table()`.
+Fit the least-squares line, add its predictions and residuals as two more
+columns, and summarise them the same way.
 
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-fit_ols   <- lm(glucose ~ age, data = glu)
-resid_ols <- ______                     # the residuals of the fitted line
-losses    <- loss_table(resid_ols)
-round(losses, 3)
-```
+fit_ols <- lm(glucose ~ age, data = glu)
 
-::: {.callout-tip collapse="true"}
-## Stuck?
-`lm()` keeps the residuals for you; `resid()` is the accessor. Subtracting the
-predictions from the outcome by hand gives the same vector, and it is worth
-doing once to satisfy yourself of that.
-:::
+glu <- glu |>
+  mutate(pred_ols  = predict(fit_ols),
+         resid_ols = ______)
+
+glu |>
+  summarise(MSE = mean(resid_ols^2),
+            MAE = mean(abs(resid_ols))) |>
+  round(2)
+```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-fit_ols   <- lm(glucose ~ age, data = glu)
-resid_ols <- resid(fit_ols)
-losses    <- loss_table(resid_ols)
-round(losses, 3)
+fit_ols <- lm(glucose ~ age, data = glu)
+
+glu <- glu |>
+  mutate(pred_ols  = predict(fit_ols),
+         resid_ols = glucose - pred_ols)
+
+glu |>
+  summarise(MSE = mean(resid_ols^2),
+            MAE = mean(abs(resid_ols))) |>
+  round(2)
 ```
 :::
 :::
 
-The fitted line scores MSE 847.5 against the hand-drawn line's 1135.9, and MAE
+::: {.callout-tip collapse="true"}
+## Stuck?
+A residual is the measurement minus the prediction, exactly as it was for the
+hand-drawn line two steps ago. The columns you need are `glucose` and
+`pred_ols`.
+:::
+
+The fitted line scores MSE 847.5 against the hand-drawn line's 1,135.9, and MAE
 22.3 against 28.7. It wins on both. That is reassuring but not guaranteed: the
 fitted line is the best line *for squared error*, and nothing in the procedure
 promises it also has the lowest absolute error. Hold that thought.
 
+------------------------------------------------------------------------
+
 ### Task 2 — Contaminate three readings
 
 Three glucose values are recorded three times too large — a plausible unit or
-transcription error. Multiply rows 1, 3 and 5 by three, refit, and compare.
+transcription error. Multiply patients 1, 3 and 5 by three, fit the line
+again, and compare the two sets of coefficients.
 
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-glu_bad <- glu
-glu_bad$glucose[c(1, 3, 5)] <- glu_bad$glucose[c(1, 3, 5)] * ______
+glu_bad <- glu |>
+  mutate(glucose = if_else(row_number() %in% c(1, 3, 5),
+                           glucose * ______, glucose))
 
 fit_bad <- lm(glucose ~ age, data = ______)
-rbind(clean = coef(fit_ols), contaminated = coef(fit_bad))
+
+rbind(clean        = coef(fit_ols),
+      contaminated = coef(fit_bad))
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-glu_bad <- glu
-glu_bad$glucose[c(1, 3, 5)] <- glu_bad$glucose[c(1, 3, 5)] * 3
+glu_bad <- glu |>
+  mutate(glucose = if_else(row_number() %in% c(1, 3, 5),
+                           glucose * 3, glucose))
 
 fit_bad <- lm(glucose ~ age, data = glu_bad)
-rbind(clean = coef(fit_ols), contaminated = coef(fit_bad))
+
+rbind(clean        = coef(fit_ols),
+      contaminated = coef(fit_bad))
 ```
 :::
 :::
@@ -162,41 +212,49 @@ intercept from 110.3 to 135.3 and turned the slope from +0.289 to −0.136. The
 fitted line now says glucose *falls* with age. Nothing warned you; the fit
 succeeded, as it always does.
 
-### The result that should bother you
+------------------------------------------------------------------------
+
+### Step 3 — Which line is better depends on the loss
 
 The obvious reading is that outliers break regression. They do not. They break
-*this* loss.
+*this loss*.
 
-Fit the same straight line by minimising mean absolute error instead of mean
-squared error. There is no closed form, so hand the loss to a general-purpose
-optimiser.
+You now have two lines: the clean one and the contaminated one. Score both of
+them on the contaminated data, once with squared error and once with absolute
+error.
 
 ```{r}
-fit_lad <- function(data) {
-  loss <- function(p) mean(abs(data$glucose - (p[1] + p[2] * data$age)))
-  optim(c(mean(data$glucose), 0), loss, method = "Nelder-Mead",
-        control = list(maxit = 5000, reltol = 1e-12))$par
-}
+b_clean <- coef(fit_ols)
+b_bad   <- coef(fit_bad)
 
-glu_bad <- glu
-glu_bad$glucose[c(1, 3, 5)] <- glu_bad$glucose[c(1, 3, 5)] * 3
-
-rbind(clean = fit_lad(glu), contaminated = fit_lad(glu_bad))
+glu_bad |>
+  mutate(r_clean = glucose - (b_clean[1] + b_clean[2] * age),
+         r_bad   = glucose - (b_bad[1]   + b_bad[2]   * age)) |>
+  summarise(MSE_clean = mean(r_clean^2),   MSE_bad = mean(r_bad^2),
+            MAE_clean = mean(abs(r_clean)), MAE_bad = mean(abs(r_bad))) |>
+  round(1)
 ```
 
-Three steps of reasoning.
+The two losses disagree about which line is better:
 
-1. The least-absolute-error line is intercept 101.9, slope 0.4375 on the clean
-   data — and intercept 101.9, slope 0.4375 on the contaminated data. To four
-   decimal places, the contamination did not move it at all. Both languages
-   agree, having started from the same guess and minimised the same function.
-2. Squaring is the mechanism. Tripling a glucose of 194 to 582 multiplies its
-   contribution to the MSE by roughly the square of how far out it now is, so
-   the line is dragged towards it; under absolute error that patient contributes
-   its distance and no more, and three votes out of eighty do not carry.
-3. So "the best fit line" is not a property of the data. It is a property of the
-   data *and the loss you chose*, and the choice was made for you by whoever
-   wrote `lm()`.
+| | the clean line | the contaminated line |
+|---|---|---|
+| scored by **MSE** | 4,964 | **4,812** |
+| scored by **MAE** | **32.9** | 36.5 |
+
+: {tbl-colwidths="[34,33,33]"}
+
+By squared error the contaminated line wins, which it must — that is the
+quantity the fitting procedure minimised. By absolute error the clean line
+wins, even on the contaminated data. Tripling a glucose of 194 to 582
+multiplies its contribution to the MSE by roughly the square of how far out it
+now is, so the line is dragged towards it; under absolute error that patient
+contributes its distance and no more, and three votes out of eighty do not
+carry.
+
+So "the best fit line" is not a property of the data. It is a property of the
+data *and the loss you chose*, and the choice was made for you by whoever wrote
+`lm()`.
 
 ::: {.callout-note}
 ## Why squared error anyway
@@ -205,16 +263,18 @@ reasons, and only one of them is about statistics. The squared loss is
 differentiable everywhere, which is what lets @sec-gradient-descent follow a
 gradient and @sec-ols solve for the answer in closed form; absolute error has a
 kink at zero and needs a different class of algorithm. And the mean is the
-minimiser of squared error while the median minimises absolute error, so the two
-losses are answering different questions about the outcome, not the same
+minimiser of squared error while the median minimises absolute error, so the
+two losses are answering different questions about the outcome, not the same
 question with different robustness. Convenience, then interpretation — in that
 order, historically.
 :::
 
-### How the loss changes as the line moves
+------------------------------------------------------------------------
+
+### Step 4 — The loss as a function of the parameters
 
 So far a loss has scored a line someone else supplied. Now treat it as a
-function of the parameters, which is what fitting actually optimises:
+function of the two parameters, which is what fitting actually optimises:
 
 $$\text{MSE}(\hat\beta_0, \hat\beta_1) = \frac{1}{m} \sum_{i=1}^{m}
 \left( y_i - \left( \hat{\beta}_0 + \hat{\beta}_1 x_i \right) \right)^2$$
@@ -226,50 +286,48 @@ are 143, 223 and 133, so
 $$\frac{(194-143)^2 + (129-223)^2 + (132-133)^2}{3}
  = \frac{2601 + 8836 + 1}{3} = 3812.67$$
 
-### Task 3 — The loss as a function of the parameters
+The same three steps as before — predict, subtract, square and average — on the
+first three rows:
 
-Write that formula as a function and check it against the arithmetic above,
-then evaluate it on all 80 rows at two sets of parameters.
+```{r}
+glu |>
+  slice(1:3) |>
+  mutate(pred = 3 + 5 * age,
+         r    = glucose - pred) |>
+  summarise(MSE = mean(r^2))
+```
+
+### Task 3 — Score two candidate lines on all 80 patients
+
+Those two parameter values were picked out of the air. Score them on the whole
+dataset, then score a second pair, $\hat\beta_0 = 4$ and $\hat\beta_1 = 7$.
 
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-mse_of <- function(beta0, beta1, x, y) {
-  mean((y - (______))^2)
-}
-
-first3 <- glu |> slice(1:3)
-mse_of(3, 5, first3$age, first3$glucose)   # the arithmetic above gave 3812.67
-
-c(at_3_5 = mse_of(3, 5, glu$age, glu$glucose),
-  at_4_7 = mse_of(4, 7, glu$age, glu$glucose))
+glu |>
+  mutate(r_3_5 = glucose - (3 + 5 * age),
+         r_4_7 = glucose - (______)) |>
+  summarise(at_3_5 = mean(r_3_5^2),
+            at_4_7 = mean(r_4_7^2)) |>
+  round(1)
 ```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The predicted value for one patient is the intercept plus the slope times that
-patient's age. Everything else — the subtraction, the square, the mean — is
-already written.
-:::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-mse_of <- function(beta0, beta1, x, y) {
-  mean((y - (beta0 + beta1 * x))^2)
-}
-
-first3 <- glu |> slice(1:3)
-mse_of(3, 5, first3$age, first3$glucose)   # the arithmetic above gave 3812.67
-
-c(at_3_5 = mse_of(3, 5, glu$age, glu$glucose),
-  at_4_7 = mse_of(4, 7, glu$age, glu$glucose))
+glu |>
+  mutate(r_3_5 = glucose - (3 + 5 * age),
+         r_4_7 = glucose - (4 + 7 * age)) |>
+  summarise(at_3_5 = mean(r_3_5^2),
+            at_4_7 = mean(r_4_7^2)) |>
+  round(1)
 ```
 :::
 :::
 
-On all 80 rows those two candidates score 7462 and 22991 against the fitted
+On all 80 rows those two candidates score 7,462 and 22,991 against the fitted
 line's 847.5. Both are terrible, and the first is better than the second, which
 is all a loss is for: ranking candidates.
 
@@ -281,23 +339,36 @@ scored, and the plot will look convincing. `geom_abline()` takes `slope` and
 `intercept` by name for exactly this reason. Name both arguments, every time.
 :::
 
-### The whole surface at once
+------------------------------------------------------------------------
 
-Evaluate the MSE over a grid of candidate parameter values — 101 intercepts
-between 60 and 160, 151 slopes between −1 and 2, 15,251 lines in total — and
-draw the result. The red point is what `lm()` returned.
+### Step 5 — Every candidate line at once
+
+Ranking two candidates is a loss doing its job. Fitting is the same idea with
+far more candidates. Build a grid of them — 101 intercepts between 60 and 160,
+151 slopes between −1 and 2, 15,251 lines in total — pair every candidate with
+every patient, and score each candidate under both losses.
 
 ```{r}
-mse_of  <- function(beta0, beta1, x, y) mean((y - (beta0 + beta1 * x))^2)
-fit_ols <- lm(glucose ~ age, data = glu)
+candidates <- expand_grid(b0 = seq(60, 160, by = 1),
+                          b1 = seq(-1, 2, by = 0.02))
 
-grid <- expand_grid(b0 = seq(60, 160, by = 1),
-                    b1 = seq(-1, 2, by = 0.02)) |>
-  mutate(MSE = map2_dbl(b0, b1, ~ mse_of(.x, .y, glu$age, glu$glucose)))
+scores <- candidates |>
+  cross_join(glu |> select(age, glucose)) |>
+  mutate(r = glucose - (b0 + b1 * age)) |>
+  summarise(MSE = mean(r^2),
+            MAE = mean(abs(r)), .by = c(b0, b1))
 
-ggplot(grid, aes(x = b0, y = b1)) +
+scores
+```
+
+One row per candidate line, with its score under each loss. Draw the MSE
+column as a surface, with the line `lm()` returned marked in red.
+
+```{r}
+ggplot(scores, aes(x = b0, y = b1)) +
   geom_raster(aes(fill = log10(MSE))) +
-  geom_contour(aes(z = log10(MSE)), colour = "white", alpha = 0.4, bins = 12) +
+  geom_contour(aes(z = log10(MSE)), colour = "white",
+               alpha = 0.4, bins = 12) +
   annotate("point", x = coef(fit_ols)[[1]], y = coef(fit_ols)[[2]],
            colour = "red", size = 3) +
   scale_fill_viridis_c(option = "magma") +
@@ -307,46 +378,72 @@ ggplot(grid, aes(x = b0, y = b1)) +
 
 Two features of that picture matter for the next exercise. The surface is a
 bowl: it has one lowest point and no others, which is why least squares has a
-single answer. And the bowl is a long diagonal trough rather than a round basin,
-because the intercept and the slope trade off against each other — raise the
-slope and you can compensate by lowering the intercept. @sec-gradient-descent
-walks downhill on this exact surface, and the shape of the trough is what makes
-that harder than it sounds.
+single answer. And the bowl is a long diagonal trough rather than a round
+basin, because the intercept and the slope trade off against each other — raise
+the slope and you can compensate by lowering the intercept.
+@sec-gradient-descent walks downhill on this exact surface, and the shape of
+the trough is what makes that harder than it sounds.
 
-### Task 4 — Find the minimum by brute force
+### Task 4 — Find the best candidate under each loss
 
-Pull the lowest cell out of the grid you just built and compare it with the
-fitted line.
+Pull the lowest-scoring row out of the grid, first by MSE and then by MAE.
 
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-best <- grid |> slice_min(______, n = 1)
-best
+scores |> slice_min(______, n = 1)
+scores |> slice_min(MAE, n = 1)
 
 coef(fit_ols)   # the fitted line, to compare
 ```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-`slice_min()` takes the name of the column to minimise, unquoted.
-:::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-best <- grid |> slice_min(MSE, n = 1)
-best
+scores |> slice_min(MSE, n = 1)
+scores |> slice_min(MAE, n = 1)
 
 coef(fit_ols)   # the fitted line, to compare
 ```
 :::
 :::
 
-The grid's best cell is intercept 110, slope 0.30, with an MSE of 847.55 —
+The best candidate under MSE is intercept 110, slope 0.30, scoring 847.55 —
 against `lm()`'s 110.298, 0.2887 and 847.52. The difference is the spacing of
-the grid and nothing else.
+the grid and nothing else. Under MAE the best candidate is a different line:
+intercept 99, slope 0.50.
+
+Now do the same on the contaminated data, and watch which of the two losses
+changes its mind.
+
+```{r}
+scores_bad <- candidates |>
+  cross_join(glu_bad |> select(age, glucose)) |>
+  mutate(r = glucose - (b0 + b1 * age)) |>
+  summarise(MSE = mean(r^2),
+            MAE = mean(abs(r)), .by = c(b0, b1))
+
+bind_rows(
+  clean_MSE        = scores     |> slice_min(MSE, n = 1) |> select(b0, b1),
+  contaminated_MSE = scores_bad |> slice_min(MSE, n = 1) |> select(b0, b1),
+  clean_MAE        = scores     |> slice_min(MAE, n = 1) |> select(b0, b1),
+  contaminated_MAE = scores_bad |> slice_min(MAE, n = 1) |> select(b0, b1),
+  .id = "best_under")
+```
+
+| best candidate | intercept | slope |
+|---|---|---|
+| clean data, by MSE | 110 | **+0.30** |
+| contaminated data, by MSE | 136 | **−0.16** |
+| clean data, by MAE | 99 | **+0.50** |
+| contaminated data, by MAE | 103 | **+0.40** |
+
+: {tbl-colwidths="[46,27,27]"}
+
+Squared error reverses the sign of the slope. Absolute error, given the same
+three corrupted patients, still says glucose rises with age. Same data, same
+grid of candidates, same arithmetic — only the loss is different.
 
 ::: {.callout-note}
 ## Why not just use the grid
@@ -359,89 +456,113 @@ search is a teaching device here, not a method.
 
 ## Python
 
-### The same 80 rows
+### The data
 
-Each chapter is a fresh session, so load the data again.
+A loss function needs something to score, so start from the 80 patients and a
+line somebody drew by hand.
 
 ```{python}
 import pandas as pd
 import numpy as np
 
-diab = pd.read_csv("data/diabetes.csv")
-glu = (diab.loc[diab["glucose"] > 0, ["age", "glucose"]]
-           .head(80)
-           .reset_index(drop=True))
+glu = pd.read_csv("data/glucose_study.csv")
+
+glu.head()
 ```
 
-### One point, one residual
+### Step 1 — One patient, one residual
 
 A residual is what the model got wrong for one patient:
 
 $$r_i = y_i - \hat{y}_i$$
 
 Take a line nobody fitted — $\widehat{\text{glucose}} = 120 + 0.5 \times
-\text{age}$, invented by hand — and find the patient it serves worst.
+\text{age}$, invented by hand. Add two columns: what that line predicts, and
+how far each patient is from it.
 
 ```{python}
-glu["pred_guess"] = 120 + 0.5 * glu["age"]
+glu["pred_guess"]  = 120 + 0.5 * glu["age"]
 glu["resid_guess"] = glu["glucose"] - glu["pred_guess"]
 
-worst = glu.loc[[glu["resid_guess"].abs().idxmax()]]
-worst
+glu.head()
+```
+
+Now find the patient the line serves worst — the largest residual, in either
+direction.
+
+```{python}
+glu.loc[[glu["resid_guess"].abs().idxmax()]]
 ```
 
 That patient is 58, their measured glucose is 72, the hand-drawn line predicts
 149, and the residual is −77 mg/dL — an error larger than the measurement
 itself.
 
+The red segments below are the residuals, one per patient. A loss function is
+a rule for turning all 80 of them into a single number.
+
 ```{python}
 import matplotlib.pyplot as plt
+
 fig, ax = plt.subplots()
 ax.scatter(glu["age"], glu["glucose"], alpha=0.6)
-ax.vlines(glu["age"], glu["pred_guess"], glu["glucose"], color="red", alpha=0.3)
 ax.plot(glu["age"], glu["pred_guess"], color="darkorange")
-ax.set_xlabel("Age (years)"); ax.set_ylabel("Glucose (mg/dL)")
+ax.vlines(glu["age"], glu["pred_guess"], glu["glucose"],
+          color="red", alpha=0.3)
+ax.set_xlabel("Age (years)")
+ax.set_ylabel("Glucose (mg/dL)")
 plt.show()
 ```
 
-The red segments are the residuals. A loss function is a rule for turning all
-80 of them into one number.
+### Step 2 — From 80 residuals to one number
 
-### Four ways to add up 80 mistakes
+Residuals are positive and negative, so adding them up cancels most of the
+error away. Two repairs are in common use, and they are not the same.
 
-Residuals are positive and negative, so adding them cancels most of the error
-away. Two repairs are in common use, and they are not equivalent.
+Square each residual, or take its size and ignore the sign:
+
+```{python}
+glu["squared"]  = glu["resid_guess"] ** 2
+glu["absolute"] = glu["resid_guess"].abs()
+
+glu[["age", "glucose", "resid_guess", "squared", "absolute"]].head()
+```
+
+Then add them up, or average them:
 
 $$\text{SSR} = \sum_{i=1}^{m} r_i^2 \qquad
 \text{MSE} = \frac{1}{m}\sum_{i=1}^{m} r_i^2 \qquad
 \text{MAE} = \frac{1}{m}\sum_{i=1}^{m} \left| r_i \right|$$
 
-Squaring is the L2 loss; taking the absolute value is the L1 loss. The mean
-squared error is the sum of squared residuals divided by the number of rows, so
-it does not grow simply because the dataset is larger. The root of the MSE —
-RMSE — is back in the outcome's units and is easier to quote.
-
 ```{python}
-def loss_table(residuals):
-    residuals = np.asarray(residuals)
-    m = len(residuals)
-    ssr = np.sum(residuals**2)
-    return {"SSR": ssr, "MSE": ssr / m, "RMSE": np.sqrt(ssr / m),
-            "MAE": np.mean(np.abs(residuals))}
-
-{k: round(v, 3) for k, v in loss_table(glu["resid_guess"]).items()}
+pd.Series({"SSR":  glu["squared"].sum(),
+           "MSE":  glu["squared"].mean(),
+           "RMSE": np.sqrt(glu["squared"].mean()),
+           "MAE":  glu["absolute"].mean()}).round(2)
 ```
 
-The hand-drawn line scores SSR 90868, MSE 1135.9, RMSE 33.7 and MAE 28.7.
-RMSE and MAE are both in mg/dL and the RMSE is the larger of the two, which is
-not an accident: squaring weights the worst patients more heavily, so any
-summary built from squares sits above the plain average error whenever the
-residuals are unequal.
+Four names for four lines of that summary:
+
+| | What it is | On this line |
+|---|---|---|
+| **SSR** | sum of squared residuals | 90,868 |
+| **MSE** | the same, divided by the 80 patients | 1,135.9 |
+| **RMSE** | the square root of the MSE, back in mg/dL | 33.7 |
+| **MAE** | the average size of an error, in mg/dL | 28.7 |
+
+: {tbl-colwidths="[14,54,32]"}
+
+Squaring is the L2 loss; taking the absolute value is the L1 loss. Dividing by
+the number of patients is what stops the score growing simply because the
+dataset is larger. RMSE and MAE are both in mg/dL and the RMSE is the larger of
+the two, which is not an accident: squaring weights the worst patients more
+heavily, so any summary built from squares sits above the plain average error
+whenever the residuals are unequal.
 
 ### Task 1 — Score the fitted line against the hand-drawn one
 
-Fit the least-squares line, compute its residuals, and put them through
-`loss_table()`.
+Fit the least-squares line, add its predictions and residuals as two more
+columns, and summarise them the same way.
 
 ```{python}
 #| eval: false
@@ -449,10 +570,13 @@ Fit the least-squares line, compute its residuals, and put them through
 from sklearn.linear_model import LinearRegression
 
 X, y = glu[["age"]], glu["glucose"]
-fit_ols   = LinearRegression().fit(X, y)
-resid_ols = ______                      # the residuals of the fitted line
-losses    = loss_table(resid_ols)
-print({k: round(v, 3) for k, v in losses.items()})
+fit_ols = LinearRegression().fit(X, y)
+
+glu["pred_ols"]  = fit_ols.predict(X)
+glu["resid_ols"] = ______
+
+pd.Series({"MSE": (glu["resid_ols"] ** 2).mean(),
+           "MAE": glu["resid_ols"].abs().mean()}).round(2)
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
@@ -462,52 +586,62 @@ print({k: round(v, 3) for k, v in losses.items()})
 from sklearn.linear_model import LinearRegression
 
 X, y = glu[["age"]], glu["glucose"]
-fit_ols   = LinearRegression().fit(X, y)
-resid_ols = y - fit_ols.predict(X)
-losses    = loss_table(resid_ols)
-print({k: round(v, 3) for k, v in losses.items()})
+fit_ols = LinearRegression().fit(X, y)
+
+glu["pred_ols"]  = fit_ols.predict(X)
+glu["resid_ols"] = glu["glucose"] - glu["pred_ols"]
+
+pd.Series({"MSE": (glu["resid_ols"] ** 2).mean(),
+           "MAE": glu["resid_ols"].abs().mean()}).round(2)
 ```
 :::
 :::
 
-The fitted line scores MSE 847.5 against the hand-drawn line's 1135.9, and MAE
+::: {.callout-tip collapse="true"}
+## Stuck?
+A residual is the measurement minus the prediction, exactly as it was for the
+hand-drawn line two steps ago. The columns you need are `glucose` and
+`pred_ols`.
+:::
+
+The fitted line scores MSE 847.5 against the hand-drawn line's 1,135.9, and MAE
 22.3 against 28.7. It wins on both. That is reassuring but not guaranteed: the
 fitted line is the best line *for squared error*, and nothing in the procedure
 promises it also has the lowest absolute error. Hold that thought.
 
+------------------------------------------------------------------------
+
 ### Task 2 — Contaminate three readings
 
 Three glucose values are recorded three times too large — a plausible unit or
-transcription error. Multiply rows 1, 3 and 5 by three, refit, and compare.
+transcription error. Multiply patients 1, 3 and 5 by three, fit the line
+again, and compare the two sets of coefficients.
 
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
 glu_bad = glu.copy()
-glu_bad.loc[[0, 2, 4], "glucose"] = glu_bad.loc[[0, 2, 4], "glucose"] * ______
+glu_bad.loc[[0, 2, 4], "glucose"] *= ______
 
-fit_bad = LinearRegression().fit(glu_bad[["age"]], ______)
-{"clean": (fit_ols.intercept_, fit_ols.coef_[0]),
- "contaminated": (fit_bad.intercept_, fit_bad.coef_[0])}
+fit_bad = LinearRegression().fit(______[["age"]], ______["glucose"])
+
+pd.DataFrame({"intercept": [fit_ols.intercept_, fit_bad.intercept_],
+              "slope":     [fit_ols.coef_[0],   fit_bad.coef_[0]]},
+             index=["clean", "contaminated"])
 ```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-R counts rows from 1 and pandas from 0, so rows 1, 3 and 5 are `[0, 2, 4]` in
-Python. This is the one indexing difference that silently changes a result
-rather than raising an error.
-:::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
 glu_bad = glu.copy()
-glu_bad.loc[[0, 2, 4], "glucose"] = glu_bad.loc[[0, 2, 4], "glucose"] * 3
+glu_bad.loc[[0, 2, 4], "glucose"] *= 3
 
 fit_bad = LinearRegression().fit(glu_bad[["age"]], glu_bad["glucose"])
-{"clean": (fit_ols.intercept_, fit_ols.coef_[0]),
- "contaminated": (fit_bad.intercept_, fit_bad.coef_[0])}
+
+pd.DataFrame({"intercept": [fit_ols.intercept_, fit_bad.intercept_],
+              "slope":     [fit_ols.coef_[0],   fit_bad.coef_[0]]},
+             index=["clean", "contaminated"])
 ```
 :::
 :::
@@ -517,42 +651,50 @@ intercept from 110.3 to 135.3 and turned the slope from +0.289 to −0.136. The
 fitted line now says glucose *falls* with age. Nothing warned you; the fit
 succeeded, as it always does.
 
-### The result that should bother you
+------------------------------------------------------------------------
+
+### Step 3 — Which line is better depends on the loss
 
 The obvious reading is that outliers break regression. They do not. They break
-*this* loss.
+*this loss*.
 
-Fit the same straight line by minimising mean absolute error instead of mean
-squared error. There is no closed form, so hand the loss to a general-purpose
-optimiser.
+You now have two lines: the clean one and the contaminated one. Score both of
+them on the contaminated data, once with squared error and once with absolute
+error.
 
 ```{python}
-from scipy.optimize import minimize
+r_clean = glu_bad["glucose"] - fit_ols.predict(glu_bad[["age"]])
+r_bad   = glu_bad["glucose"] - fit_bad.predict(glu_bad[["age"]])
 
-def fit_lad(data):
-    loss = lambda p: np.mean(np.abs(data["glucose"] - (p[0] + p[1] * data["age"])))
-    return minimize(loss, [data["glucose"].mean(), 0.0], method="Nelder-Mead",
-                    options={"maxiter": 5000, "fatol": 1e-12, "xatol": 1e-10}).x
-
-glu_bad = glu.copy()
-glu_bad.loc[[0, 2, 4], "glucose"] = glu_bad.loc[[0, 2, 4], "glucose"] * 3
-
-{"clean": fit_lad(glu), "contaminated": fit_lad(glu_bad)}
+pd.Series({"MSE_clean": (r_clean ** 2).mean(),
+           "MSE_bad":   (r_bad ** 2).mean(),
+           "MAE_clean": r_clean.abs().mean(),
+           "MAE_bad":   r_bad.abs().mean()}).round(1)
 ```
 
-Three steps of reasoning.
+The two losses disagree about which line is better:
 
-1. The least-absolute-error line is intercept 101.9, slope 0.4375 on the clean
-   data — and intercept 101.9, slope 0.4375 on the contaminated data. To four
-   decimal places, the contamination did not move it at all. Both languages
-   agree, having started from the same guess and minimised the same function.
-2. Squaring is the mechanism. Tripling a glucose of 194 to 582 multiplies its
-   contribution to the MSE by roughly the square of how far out it now is, so
-   the line is dragged towards it; under absolute error that patient contributes
-   its distance and no more, and three votes out of eighty do not carry.
-3. So "the best fit line" is not a property of the data. It is a property of the
-   data *and the loss you chose*, and the choice was made for you by whoever
-   wrote `LinearRegression`.
+| | the clean line | the contaminated line |
+|---|---|---|
+| scored by **MSE** | 4,964 | **4,812** |
+| scored by **MAE** | **32.9** | 36.5 |
+
+: {tbl-colwidths="[34,33,33]"}
+
+By squared error the contaminated line wins, which it must — that is the
+quantity the fitting procedure minimised. By absolute error the clean line
+wins, even on the contaminated data. Tripling a glucose of 194 to 582
+multiplies its contribution to the MSE by roughly the square of how far out it
+now is, so the line is dragged towards it; under absolute error that patient
+contributes its distance and no more, and three votes out of eighty do not
+carry.
+
+So "the best fit line" is not a property of the data. It is a property of the
+data *and the loss you chose*, and the choice was made for you by whoever wrote
+`lm()`.
+
+Read the last sentence as `LinearRegression` rather than `lm()`: both minimise
+squared error, and neither asks you first.
 
 ::: {.callout-note}
 ## Why squared error anyway
@@ -561,16 +703,18 @@ reasons, and only one of them is about statistics. The squared loss is
 differentiable everywhere, which is what lets @sec-gradient-descent follow a
 gradient and @sec-ols solve for the answer in closed form; absolute error has a
 kink at zero and needs a different class of algorithm. And the mean is the
-minimiser of squared error while the median minimises absolute error, so the two
-losses are answering different questions about the outcome, not the same
+minimiser of squared error while the median minimises absolute error, so the
+two losses are answering different questions about the outcome, not the same
 question with different robustness. Convenience, then interpretation — in that
 order, historically.
 :::
 
-### How the loss changes as the line moves
+------------------------------------------------------------------------
+
+### Step 4 — The loss as a function of the parameters
 
 So far a loss has scored a line someone else supplied. Now treat it as a
-function of the parameters, which is what fitting actually optimises:
+function of the two parameters, which is what fitting actually optimises:
 
 $$\text{MSE}(\hat\beta_0, \hat\beta_1) = \frac{1}{m} \sum_{i=1}^{m}
 \left( y_i - \left( \hat{\beta}_0 + \hat{\beta}_1 x_i \right) \right)^2$$
@@ -582,115 +726,165 @@ are 143, 223 and 133, so
 $$\frac{(194-143)^2 + (129-223)^2 + (132-133)^2}{3}
  = \frac{2601 + 8836 + 1}{3} = 3812.67$$
 
-### Task 3 — The loss as a function of the parameters
+The same three steps as before — predict, subtract, square and average — on the
+first three rows:
 
-Write that formula as a function and check it against the arithmetic above,
-then evaluate it on all 80 rows at two sets of parameters.
+```{python}
+first3 = glu.head(3).copy()
+first3["pred"] = 3 + 5 * first3["age"]
+first3["r"]    = first3["glucose"] - first3["pred"]
+
+(first3["r"] ** 2).mean()
+```
+
+### Task 3 — Score two candidate lines on all 80 patients
+
+Those two parameter values were picked out of the air. Score them on the whole
+dataset, then score a second pair, $\hat\beta_0 = 4$ and $\hat\beta_1 = 7$.
 
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-def mse_of(beta0, beta1, x, y):
-    return np.mean((y - (______))**2)
+r_3_5 = glu["glucose"] - (3 + 5 * glu["age"])
+r_4_7 = glu["glucose"] - (______)
 
-first3 = glu.head(3)
-print(round(mse_of(3, 5, first3["age"], first3["glucose"]), 2))   # the arithmetic above gave 3812.67
-
-{"at_3_5": mse_of(3, 5, glu["age"], glu["glucose"]),
- "at_4_7": mse_of(4, 7, glu["age"], glu["glucose"])}
+pd.Series({"at_3_5": (r_3_5 ** 2).mean(),
+           "at_4_7": (r_4_7 ** 2).mean()}).round(1)
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-def mse_of(beta0, beta1, x, y):
-    return np.mean((y - (beta0 + beta1 * x))**2)
+r_3_5 = glu["glucose"] - (3 + 5 * glu["age"])
+r_4_7 = glu["glucose"] - (4 + 7 * glu["age"])
 
-first3 = glu.head(3)
-print(round(mse_of(3, 5, first3["age"], first3["glucose"]), 2))   # the arithmetic above gave 3812.67
-
-{"at_3_5": mse_of(3, 5, glu["age"], glu["glucose"]),
- "at_4_7": mse_of(4, 7, glu["age"], glu["glucose"])}
+pd.Series({"at_3_5": (r_3_5 ** 2).mean(),
+           "at_4_7": (r_4_7 ** 2).mean()}).round(1)
 ```
 :::
 :::
 
-On all 80 rows those two candidates score 7462 and 22991 against the fitted
+On all 80 rows those two candidates score 7,462 and 22,991 against the fitted
 line's 847.5. Both are terrible, and the first is better than the second, which
 is all a loss is for: ranking candidates.
 
-### The whole surface at once
+------------------------------------------------------------------------
 
-Evaluate the MSE over a grid of candidate parameter values — 101 intercepts
-between 60 and 160, 151 slopes between −1 and 2, 15,251 lines in total — and
-draw the result. The red point is what `LinearRegression` returned.
+### Step 5 — Every candidate line at once
+
+Ranking two candidates is a loss doing its job. Fitting is the same idea with
+far more candidates. Build a grid of them — 101 intercepts between 60 and 160,
+151 slopes between −1 and 2, 15,251 lines in total — pair every candidate with
+every patient, and score each candidate under both losses.
 
 ```{python}
-from sklearn.linear_model import LinearRegression
-fit_ols = LinearRegression().fit(glu[["age"]], glu["glucose"])
+b0s = np.arange(60, 161, 1)
+b1s = np.round(np.arange(-1, 2.001, 0.02), 2)
 
-def mse_of(beta0, beta1, x, y):
-    return np.mean((y - (beta0 + beta1 * x))**2)
+candidates = pd.MultiIndex.from_product(
+    [b0s, b1s], names=["b0", "b1"]).to_frame(index=False)
 
-b0_vals = np.arange(60, 160.001, 1.0)
-b1_vals = np.arange(-1, 2.0001, 0.02)
-B0, B1 = np.meshgrid(b0_vals, b1_vals, indexing="ij")
-resid_grid = glu["glucose"].values - (B0[..., None] + B1[..., None] * glu["age"].values)
-MSE = (resid_grid**2).mean(axis=-1)       # average over patients, not parameters
+scores = candidates.merge(glu[["age", "glucose"]], how="cross")
+scores["r"] = scores["glucose"] - (scores["b0"] + scores["b1"] * scores["age"])
+scores = (scores.assign(sq=lambda d: d["r"] ** 2,
+                        ab=lambda d: d["r"].abs())
+                .groupby(["b0", "b1"], as_index=False)
+                .agg(MSE=("sq", "mean"), MAE=("ab", "mean")))
+
+scores.head()
+```
+
+One row per candidate line, with its score under each loss. Draw the MSE
+column as a surface, with the line `lm()` returned marked in red.
+
+(The red point is what `LinearRegression` returned.)
+
+```{python}
+surface = scores.pivot(index="b1", columns="b0", values="MSE")
 
 fig, ax = plt.subplots()
-cs = ax.contourf(B0, B1, np.log10(MSE), levels=20, cmap="magma")
+cs = ax.contourf(surface.columns, surface.index,
+                 np.log10(surface.values), levels=20, cmap="magma")
 ax.scatter([fit_ols.intercept_], [fit_ols.coef_[0]], color="red", zorder=3)
 cbar = fig.colorbar(cs, ax=ax, label="log10(MSE)")
-ax.set_xlabel(r"$\hat\beta_0$"); ax.set_ylabel(r"$\hat\beta_1$")
+ax.set_xlabel(r"$\hat\beta_0$")
+ax.set_ylabel(r"$\hat\beta_1$")
 plt.show()
 ```
 
 Two features of that picture matter for the next exercise. The surface is a
 bowl: it has one lowest point and no others, which is why least squares has a
-single answer. And the bowl is a long diagonal trough rather than a round basin,
-because the intercept and the slope trade off against each other — raise the
-slope and you can compensate by lowering the intercept. @sec-gradient-descent
-walks downhill on this exact surface, and the shape of the trough is what makes
-that harder than it sounds.
+single answer. And the bowl is a long diagonal trough rather than a round
+basin, because the intercept and the slope trade off against each other — raise
+the slope and you can compensate by lowering the intercept.
+@sec-gradient-descent walks downhill on this exact surface, and the shape of
+the trough is what makes that harder than it sounds.
 
-### Task 4 — Find the minimum by brute force
+### Task 4 — Find the best candidate under each loss
 
-Pull the lowest cell out of the grid you just built and compare it with the
-fitted line.
+Pull the lowest-scoring row out of the grid, first by MSE and then by MAE.
 
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-i, j = np.unravel_index(MSE.______(), MSE.shape)
-print(b0_vals[i], b1_vals[j], MSE[i, j])
+print(scores.nsmallest(1, ______))
+print(scores.nsmallest(1, "MAE"))
 
-print(round(fit_ols.intercept_, 3), round(fit_ols.coef_[0], 4))   # the fitted line, to compare
+print(fit_ols.intercept_, fit_ols.coef_[0])   # the fitted line, to compare
 ```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-You want the position of the smallest value in a 2-D array, which numpy gives
-you as a flat index; `unravel_index` is already there to turn it back into a
-row and a column.
-:::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-i, j = np.unravel_index(MSE.argmin(), MSE.shape)
-print(b0_vals[i], b1_vals[j], MSE[i, j])
+print(scores.nsmallest(1, "MSE"))
+print(scores.nsmallest(1, "MAE"))
 
-print(round(fit_ols.intercept_, 3), round(fit_ols.coef_[0], 4))   # the fitted line, to compare
+print(fit_ols.intercept_, fit_ols.coef_[0])   # the fitted line, to compare
 ```
 :::
 :::
 
-The grid's best cell is intercept 110, slope 0.30, with an MSE of 847.55 —
-against `LinearRegression`'s 110.298, 0.2887 and 847.52. The difference is the spacing of
-the grid and nothing else.
+The best candidate under MSE is intercept 110, slope 0.30, scoring 847.55 —
+against `lm()`'s 110.298, 0.2887 and 847.52. The difference is the spacing of
+the grid and nothing else. Under MAE the best candidate is a different line:
+intercept 99, slope 0.50.
+
+Now do the same on the contaminated data, and watch which of the two losses
+changes its mind.
+
+Read "`lm()`" above as `LinearRegression`: the comparison is the same.
+
+```{python}
+scores_bad = candidates.merge(glu_bad[["age", "glucose"]], how="cross")
+scores_bad["r"] = (scores_bad["glucose"]
+                   - (scores_bad["b0"] + scores_bad["b1"] * scores_bad["age"]))
+scores_bad = (scores_bad.assign(sq=lambda d: d["r"] ** 2,
+                                ab=lambda d: d["r"].abs())
+                        .groupby(["b0", "b1"], as_index=False)
+                        .agg(MSE=("sq", "mean"), MAE=("ab", "mean")))
+
+pd.DataFrame(
+    [scores.nsmallest(1, "MSE")[["b0", "b1"]].iloc[0],
+     scores_bad.nsmallest(1, "MSE")[["b0", "b1"]].iloc[0],
+     scores.nsmallest(1, "MAE")[["b0", "b1"]].iloc[0],
+     scores_bad.nsmallest(1, "MAE")[["b0", "b1"]].iloc[0]],
+    index=["clean_MSE", "contaminated_MSE", "clean_MAE", "contaminated_MAE"])
+```
+
+| best candidate | intercept | slope |
+|---|---|---|
+| clean data, by MSE | 110 | **+0.30** |
+| contaminated data, by MSE | 136 | **−0.16** |
+| clean data, by MAE | 99 | **+0.50** |
+| contaminated data, by MAE | 103 | **+0.40** |
+
+: {tbl-colwidths="[46,27,27]"}
+
+Squared error reverses the sign of the slope. Absolute error, given the same
+three corrupted patients, still says glucose rises with age. Same data, same
+grid of candidates, same arithmetic — only the loss is different.
 
 ::: {.callout-note}
 ## Why not just use the grid
@@ -725,27 +919,30 @@ cancellation. The defensible answer names the decision, not the formula.
 **Expected values** (regenerated data varies in the last digit). Hand-drawn line
 $120 + 0.5x$: SSR ≈ 90,000–91,000, MSE ≈ 1130–1140, MAE ≈ 28–29. Fitted line:
 MSE ≈ 845–850, MAE ≈ 22–23. Contaminated fit: intercept ≈ 134–136, slope ≈ −0.14
-(the sign flip is the point). Least-absolute-error fit: ≈ 101.9 and ≈ 0.44, the
-same to four decimals before and after contamination. Grid minimum: intercept
-110, slope 0.30, MSE ≈ 847.6.
+(the sign flip is the point). Scored on the contaminated data, the clean line
+beats the contaminated one on MAE (≈ 33 against ≈ 36) and loses on MSE
+(≈ 4,960 against ≈ 4,810). Best candidate on the grid: by MSE, intercept 110 and
+slope 0.30 on the clean data, 136 and −0.16 on the contaminated; by MAE, 99 and
+0.50 on the clean data, 103 and 0.40 on the contaminated.
 
-**Common failures.** (1) Using row indices 1, 3, 5 in pandas, which contaminates
-different patients and gives different coefficients — worth letting them hit,
-then asking why the two languages disagree. (2) Dividing the SSR by a hard-coded
-80 rather than by `length(residuals)`, which is silently wrong the moment the
-function is reused; the original version of this material had exactly that bug.
-(3) Expecting the optimiser to return the same two decimals every time — it is
-Nelder-Mead, and the answer here happens to be stable, but say that it is not
-guaranteed.
+**Common failures.** (1) Using row numbers 1, 3, 5 in pandas, where the first
+row is 0 — the R tab contaminates patients 1, 3 and 5 and the Python tab rows
+0, 2 and 4, which are the same three people. Worth letting them get it wrong,
+then asking why the two languages disagreed. (2) Writing the residual the wrong
+way round, prediction minus measurement, which leaves the MSE unchanged and the
+plot upside down. (3) Reading the grid's intercept of 110 as a more accurate
+answer than `lm()`'s 110.298; it is the same answer, rounded to the spacing of
+the grid.
 
 **Plenary.** Put the clean and contaminated coefficient tables side by side and
-ask which line a clinician should be shown. Then reveal the
-least-absolute-error numbers. The reaction to the slope not moving at all is the
-moment the day's argument lands.
+ask which line a clinician should be shown. Then put up the four-row table at
+the end: squared error reverses the sign of the slope and absolute error does
+not. That reversal is the moment the day's argument lands.
 
-**Timing.** Task 4's grid takes a few seconds to evaluate in R. If you are
-short, show the surface plot and discuss it rather than having everyone build
-the grid; the plot is the part they remember.
+**Timing.** The two grids take a second or two each, and 15,251 candidates
+paired with 80 patients is 1.2 million rows, so expect a pause rather than an
+instant answer. If you are short, show the surface plot and discuss it rather
+than having everyone build the grid; the plot is the part they remember.
 :::
 :::
 
@@ -761,10 +958,11 @@ is no size of error at which squared loss decides to ignore a point.
 
 ::: {.callout-note appearance="simple"}
 ## Stretch 2 — A loss that is neither
-Huber loss is squared for small residuals and absolute for large ones. Write it,
-minimise it with `optim()` or `minimize()` on the contaminated data, and find
-the value of its cut-off at which the fitted slope flips back to positive. That
-number is the amount of contamination you have implicitly assumed.
+Huber loss is squared for residuals smaller than some cut-off and absolute for
+the larger ones. Add a third score to the grid for a cut-off you choose, find
+its best candidate on the contaminated data, and then find the cut-off at which
+the best slope flips back to positive. That number is the amount of
+contamination you have implicitly assumed.
 :::
 
 ## What you can and cannot now claim

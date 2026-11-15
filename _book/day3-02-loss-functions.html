@@ -2,13 +2,16 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.8.27">
+<meta name="generator" content="quarto-1.9.38">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
 <title>Exercise 3.2 — Loss functions – Statistical Machine Learning &amp; Data Analytics</title>
 <style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
 div.columns{display: flex; gap: min(4vw, 1.5em);}
@@ -69,15 +72,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="./day3-01-supervised-learning.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-858c91a982f22841b60e7d9947849be3.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-68d006cd884444a66203cf37d1af94b0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
@@ -107,7 +109,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 }</script>
 
   <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
 
 <script type="text/javascript">
 const typesetMath = (el) => {
@@ -251,7 +253,7 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./day3-01-supervised-learning.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Overview</span></a>
+  <a href="./day3-01-supervised-learning.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Exercise 3.1 — Supervised learning</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -317,27 +319,65 @@ window.Quarto = {
 <ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true" href="">R</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false" href="">Python</a></li></ul>
 <div class="tab-content" data-group="language">
 <div id="tabset-1-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-1-1-tab">
-<section id="the-same-80-rows" class="level3">
-<h3 class="anchored" data-anchor-id="the-same-80-rows">The same 80 rows</h3>
+<section id="the-data" class="level3">
+<h3 class="anchored" data-anchor-id="the-data">The data</h3>
+<p>A loss function needs something to score, so start from the 80 patients and a line somebody drew by hand.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>diab <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/diabetes.csv"</span>)</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>glu  <span class="ot">&lt;-</span> diab <span class="sc">|&gt;</span> <span class="fu">filter</span>(glucose <span class="sc">&gt;</span> <span class="dv">0</span>) <span class="sc">|&gt;</span> <span class="fu">slice</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">80</span>) <span class="sc">|&gt;</span> <span class="fu">select</span>(age, glucose) <span class="co">#lets take out the 0s</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>glu <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/glucose_study.csv"</span>)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>glu</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 80 × 2
+#&gt;      age glucose
+#&gt;    &lt;dbl&gt;   &lt;dbl&gt;
+#&gt;  1    28     194
+#&gt;  2    44     129
+#&gt;  3    26     132
+#&gt;  4    39     184
+#&gt;  5    22     108
+#&gt;  6    58     117
+#&gt;  7    33     100
+#&gt;  8    22      88
+#&gt;  9    33      73
+#&gt; 10    46     126
+#&gt; # ℹ 70 more rows</code></pre>
+</div>
 </div>
 </section>
-<section id="one-point-one-residual" class="level3">
-<h3 class="anchored" data-anchor-id="one-point-one-residual">One point, one residual</h3>
+<section id="step-1-one-patient-one-residual" class="level3">
+<h3 class="anchored" data-anchor-id="step-1-one-patient-one-residual">Step 1 — One patient, one residual</h3>
 <p>A residual is what the model got wrong for one patient:</p>
 <p><span class="math display">\[r_i = y_i - \hat{y}_i\]</span></p>
-<p>Take a random predictive model — <span class="math inline">\(\widehat{\text{glucose}} = 120 + 0.5 \times
-\text{age}\)</span>, - and find the patient with the highest error.</p>
+<p>Take a line nobody fitted — <span class="math inline">\(\widehat{\text{glucose}} = 120 + 0.5 \times
+\text{age}\)</span>, invented by hand. Add two columns: what that line predicts, and how far each patient is from it.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>glu <span class="ot">&lt;-</span> glu <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="at">pred_guess =</span> <span class="dv">120</span> <span class="sc">+</span> <span class="fl">0.5</span> <span class="sc">*</span> age,</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>                     <span class="at">resid_guess =</span> glucose <span class="sc">-</span> pred_guess)</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>worst <span class="ot">&lt;-</span> glu <span class="sc">|&gt;</span> <span class="fu">slice_max</span>(<span class="fu">abs</span>(resid_guess), <span class="at">n =</span> <span class="dv">1</span>)</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>worst</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>glu <span class="ot">&lt;-</span> glu <span class="sc">|&gt;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">pred_guess  =</span> <span class="dv">120</span> <span class="sc">+</span> <span class="fl">0.5</span> <span class="sc">*</span> age,</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">resid_guess =</span> glucose <span class="sc">-</span> pred_guess)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>glu</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 80 × 4
+#&gt;      age glucose pred_guess resid_guess
+#&gt;    &lt;dbl&gt;   &lt;dbl&gt;      &lt;dbl&gt;       &lt;dbl&gt;
+#&gt;  1    28     194       134         60  
+#&gt;  2    44     129       142        -13  
+#&gt;  3    26     132       133         -1  
+#&gt;  4    39     184       140.        44.5
+#&gt;  5    22     108       131        -23  
+#&gt;  6    58     117       149        -32  
+#&gt;  7    33     100       136.       -36.5
+#&gt;  8    22      88       131        -43  
+#&gt;  9    33      73       136.       -63.5
+#&gt; 10    46     126       143        -17  
+#&gt; # ℹ 70 more rows</code></pre>
+</div>
+</div>
+<p>Now find the patient the line serves worst — the largest residual, in either direction.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>glu <span class="sc">|&gt;</span> <span class="fu">slice_max</span>(<span class="fu">abs</span>(resid_guess), <span class="at">n =</span> <span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 1 × 4
 #&gt;     age glucose pred_guess resid_guess
@@ -346,54 +386,123 @@ window.Quarto = {
 </div>
 </div>
 <p>That patient is 58, their measured glucose is 72, the hand-drawn line predicts 149, and the residual is −77 mg/dL — an error larger than the measurement itself.</p>
+<p>The red segments below are the residuals, one per patient. A loss function is a rule for turning all 80 of them into a single number.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(glu, <span class="fu">aes</span>(<span class="at">x =</span> age, <span class="at">y =</span> glucose)) <span class="sc">+</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_abline</span>(<span class="at">intercept =</span> <span class="dv">120</span>, <span class="at">slope =</span> <span class="fl">0.5</span>, <span class="at">colour =</span> <span class="st">"darkorange"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_segment</span>(<span class="fu">aes</span>(<span class="at">xend =</span> age, <span class="at">yend =</span> pred_guess), <span class="at">colour =</span> <span class="st">"red"</span>, <span class="at">alpha =</span> <span class="fl">0.3</span>) <span class="sc">+</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Age (years)"</span>, <span class="at">y =</span> <span class="st">"Glucose (mg/dL)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(glu, <span class="fu">aes</span>(<span class="at">x =</span> age, <span class="at">y =</span> glucose)) <span class="sc">+</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_abline</span>(<span class="at">intercept =</span> <span class="dv">120</span>, <span class="at">slope =</span> <span class="fl">0.5</span>,</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>              <span class="at">colour =</span> <span class="st">"darkorange"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_segment</span>(<span class="fu">aes</span>(<span class="at">xend =</span> age, <span class="at">yend =</span> pred_guess),</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>               <span class="at">colour =</span> <span class="st">"red"</span>, <span class="at">alpha =</span> <span class="fl">0.3</span>) <span class="sc">+</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Age (years)"</span>, <span class="at">y =</span> <span class="st">"Glucose (mg/dL)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day3-02-loss-functions_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+<p><img src="day3-02-loss-functions_files/figure-html/unnamed-chunk-5-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
 </figure>
 </div>
 </div>
 </div>
-<p>The red segments are the residuals. A loss function is a rule for turning all 80 of them into one number.</p>
 </section>
-<section id="four-ways-to-add-up-80-mistakes" class="level3">
-<h3 class="anchored" data-anchor-id="four-ways-to-add-up-80-mistakes">Four ways to add up 80 mistakes</h3>
-<p>Residuals are positive and negative, so adding them cancels most of the error away. Two repairs are in common use, and they are not equivalent.</p>
+<section id="step-2-from-80-residuals-to-one-number" class="level3">
+<h3 class="anchored" data-anchor-id="step-2-from-80-residuals-to-one-number">Step 2 — From 80 residuals to one number</h3>
+<p>Residuals are positive and negative, so adding them up cancels most of the error away. Two repairs are in common use, and they are not the same.</p>
+<p>Square each residual, or take its size and ignore the sign:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>glu <span class="ot">&lt;-</span> glu <span class="sc">|&gt;</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">squared  =</span> resid_guess<span class="sc">^</span><span class="dv">2</span>,</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">absolute =</span> <span class="fu">abs</span>(resid_guess))</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>glu <span class="sc">|&gt;</span> <span class="fu">select</span>(age, glucose, resid_guess, squared, absolute)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 80 × 5
+#&gt;      age glucose resid_guess squared absolute
+#&gt;    &lt;dbl&gt;   &lt;dbl&gt;       &lt;dbl&gt;   &lt;dbl&gt;    &lt;dbl&gt;
+#&gt;  1    28     194        60     3600      60  
+#&gt;  2    44     129       -13      169      13  
+#&gt;  3    26     132        -1        1       1  
+#&gt;  4    39     184        44.5   1980.     44.5
+#&gt;  5    22     108       -23      529      23  
+#&gt;  6    58     117       -32     1024      32  
+#&gt;  7    33     100       -36.5   1332.     36.5
+#&gt;  8    22      88       -43     1849      43  
+#&gt;  9    33      73       -63.5   4032.     63.5
+#&gt; 10    46     126       -17      289      17  
+#&gt; # ℹ 70 more rows</code></pre>
+</div>
+</div>
+<p>Then add them up, or average them:</p>
 <p><span class="math display">\[\text{SSR} = \sum_{i=1}^{m} r_i^2 \qquad
 \text{MSE} = \frac{1}{m}\sum_{i=1}^{m} r_i^2 \qquad
 \text{MAE} = \frac{1}{m}\sum_{i=1}^{m} \left| r_i \right|\]</span></p>
-<p>Squaring is the L2 loss; taking the absolute value is the L1 loss. The mean squared error is the sum of squared residuals divided by the number of rows, so it does not grow simply because the dataset is larger. The root of the MSE — RMSE — is back in the outcome’s units and is easier to quote.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>loss_table <span class="ot">&lt;-</span> <span class="cf">function</span>(residuals) {</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  m <span class="ot">&lt;-</span> <span class="fu">length</span>(residuals)              <span class="co"># the number of residuals passed in,</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  ssr <span class="ot">&lt;-</span> <span class="fu">sum</span>(residuals<span class="sc">^</span><span class="dv">2</span>)             <span class="co"># not the size of some data frame</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(<span class="at">SSR =</span> ssr, <span class="at">MSE =</span> ssr <span class="sc">/</span> m, <span class="at">RMSE =</span> <span class="fu">sqrt</span>(ssr <span class="sc">/</span> m),</span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">MAE =</span> <span class="fu">mean</span>(<span class="fu">abs</span>(residuals)))</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">loss_table</span>(glu<span class="sc">$</span>resid_guess), <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>glu <span class="sc">|&gt;</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">SSR  =</span> <span class="fu">sum</span>(squared),</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">MSE  =</span> <span class="fu">mean</span>(squared),</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">RMSE =</span> <span class="fu">sqrt</span>(<span class="fu">mean</span>(squared)),</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">MAE  =</span> <span class="fu">mean</span>(absolute)) <span class="sc">|&gt;</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">round</span>(<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;       SSR       MSE      RMSE       MAE 
-#&gt; 90868.250  1135.853    33.702    28.656</code></pre>
+<pre><code>#&gt; # A tibble: 1 × 4
+#&gt;      SSR   MSE  RMSE   MAE
+#&gt;    &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+#&gt; 1 90868. 1136.  33.7  28.7</code></pre>
 </div>
 </div>
-<p>The hand-drawn line scores SSR 90868, MSE 1135.9, RMSE 33.7 and MAE 28.7. RMSE and MAE are both in mg/dL and the RMSE is the larger of the two, which is not an accident: squaring weights the worst patients more heavily, so any summary built from squares sits above the plain average error whenever the residuals are unequal.</p>
+<p>Four names for four lines of that summary:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 14%">
+<col style="width: 54%">
+<col style="width: 32%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>What it is</th>
+<th>On this line</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>SSR</strong></td>
+<td>sum of squared residuals</td>
+<td>90,868</td>
+</tr>
+<tr class="even">
+<td><strong>MSE</strong></td>
+<td>the same, divided by the 80 patients</td>
+<td>1,135.9</td>
+</tr>
+<tr class="odd">
+<td><strong>RMSE</strong></td>
+<td>the square root of the MSE, back in mg/dL</td>
+<td>33.7</td>
+</tr>
+<tr class="even">
+<td><strong>MAE</strong></td>
+<td>the average size of an error, in mg/dL</td>
+<td>28.7</td>
+</tr>
+</tbody>
+</table>
+<p>Squaring is the L2 loss; taking the absolute value is the L1 loss. Dividing by the number of patients is what stops the score growing simply because the dataset is larger. RMSE and MAE are both in mg/dL and the RMSE is the larger of the two, which is not an accident: squaring weights the worst patients more heavily, so any summary built from squares sits above the plain average error whenever the residuals are unequal.</p>
 </section>
 <section id="task-1-score-the-fitted-line-against-the-hand-drawn-one" class="level3">
 <h3 class="anchored" data-anchor-id="task-1-score-the-fitted-line-against-the-hand-drawn-one">Task 1 — Score the fitted line against the hand-drawn one</h3>
-<p>Fit the least-squares line, compute its residuals, and put them through <code>loss_table()</code>.</p>
+<p>Fit the least-squares line, add its predictions and residuals as two more columns, and summarise them the same way.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>fit_ols   <span class="ot">&lt;-</span> <span class="fu">lm</span>(glucose <span class="sc">~</span> age, <span class="at">data =</span> glu)</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>resid_ols <span class="ot">&lt;-</span> ______                     <span class="co"># the residuals of the fitted line</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>losses    <span class="ot">&lt;-</span> <span class="fu">loss_table</span>(resid_ols)</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(losses, <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>fit_ols <span class="ot">&lt;-</span> <span class="fu">lm</span>(glucose <span class="sc">~</span> age, <span class="at">data =</span> glu)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>glu <span class="ot">&lt;-</span> glu <span class="sc">|&gt;</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">pred_ols  =</span> <span class="fu">predict</span>(fit_ols),</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>         <span class="at">resid_ols =</span> ______)</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>glu <span class="sc">|&gt;</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">MSE =</span> <span class="fu">mean</span>(resid_ols<span class="sc">^</span><span class="dv">2</span>),</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>            <span class="at">MAE =</span> <span class="fu">mean</span>(<span class="fu">abs</span>(resid_ols))) <span class="sc">|&gt;</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">round</span>(<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="false" aria-label="Toggle callout">
@@ -407,52 +516,80 @@ window.Quarto = {
 </div>
 <div id="callout-1" class="callout-1-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p><code>lm()</code> keeps the residuals for you; <code>resid()</code> is the accessor. Subtracting the predictions from the outcome by hand gives the same vector, and it is worth doing once to satisfy yourself of that.</p>
+<p>A residual is the measurement minus the prediction, exactly as it was for the hand-drawn line two steps ago. The columns you need are <code>glucose</code> and <code>pred_ols</code>.</p>
 </div>
 </div>
 </div>
-<p>The fitted line scores MSE 847.5 against the hand-drawn line’s 1135.9, and MAE 22.3 against 28.7. It wins on both. That is reassuring but not guaranteed: the fitted line is the best line <em>for squared error</em>, and nothing in the procedure promises it also has the lowest absolute error. Hold that thought.</p>
+<p>The fitted line scores MSE 847.5 against the hand-drawn line’s 1,135.9, and MAE 22.3 against 28.7. It wins on both. That is reassuring but not guaranteed: the fitted line is the best line <em>for squared error</em>, and nothing in the procedure promises it also has the lowest absolute error. Hold that thought.</p>
+<hr>
 </section>
 <section id="task-2-contaminate-three-readings" class="level3">
 <h3 class="anchored" data-anchor-id="task-2-contaminate-three-readings">Task 2 — Contaminate three readings</h3>
-<p>Three glucose values are recorded three times too large — a plausible unit or transcription error. Multiply rows 1, 3 and 5 by three, refit, and compare.</p>
+<p>Three glucose values are recorded three times too large — a plausible unit or transcription error. Multiply patients 1, 3 and 5 by three, fit the line again, and compare the two sets of coefficients.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>glu_bad <span class="ot">&lt;-</span> glu</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>glu_bad<span class="sc">$</span>glucose[<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">5</span>)] <span class="ot">&lt;-</span> glu_bad<span class="sc">$</span>glucose[<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">5</span>)] <span class="sc">*</span> ______</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>fit_bad <span class="ot">&lt;-</span> <span class="fu">lm</span>(glucose <span class="sc">~</span> age, <span class="at">data =</span> ______)</span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="fu">rbind</span>(<span class="at">clean =</span> <span class="fu">coef</span>(fit_ols), <span class="at">contaminated =</span> <span class="fu">coef</span>(fit_bad))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>glu_bad <span class="ot">&lt;-</span> glu <span class="sc">|&gt;</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">glucose =</span> <span class="fu">if_else</span>(<span class="fu">row_number</span>() <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">5</span>),</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>                           glucose <span class="sc">*</span> ______, glucose))</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>fit_bad <span class="ot">&lt;-</span> <span class="fu">lm</span>(glucose <span class="sc">~</span> age, <span class="at">data =</span> ______)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="fu">rbind</span>(<span class="at">clean        =</span> <span class="fu">coef</span>(fit_ols),</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>      <span class="at">contaminated =</span> <span class="fu">coef</span>(fit_bad))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>Three rows out of eighty — under four per cent of the data — moved the intercept from 110.3 to 135.3 and turned the slope from +0.289 to −0.136. The fitted line now says glucose <em>falls</em> with age. Nothing warned you; the fit succeeded, as it always does.</p>
+<hr>
 </section>
-<section id="the-result-that-should-bother-you" class="level3">
-<h3 class="anchored" data-anchor-id="the-result-that-should-bother-you">The result that should bother you</h3>
-<p>The obvious reading is that outliers break regression. They do not. They break <em>this</em> loss.</p>
-<p>Fit the same straight line by minimising mean absolute error instead of mean squared error. There is no closed form, so hand the loss to a general-purpose optimiser.</p>
+<section id="step-3-which-line-is-better-depends-on-the-loss" class="level3">
+<h3 class="anchored" data-anchor-id="step-3-which-line-is-better-depends-on-the-loss">Step 3 — Which line is better depends on the loss</h3>
+<p>The obvious reading is that outliers break regression. They do not. They break <em>this loss</em>.</p>
+<p>You now have two lines: the clean one and the contaminated one. Score both of them on the contaminated data, once with squared error and once with absolute error.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>fit_lad <span class="ot">&lt;-</span> <span class="cf">function</span>(data) {</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  loss <span class="ot">&lt;-</span> <span class="cf">function</span>(p) <span class="fu">mean</span>(<span class="fu">abs</span>(data<span class="sc">$</span>glucose <span class="sc">-</span> (p[<span class="dv">1</span>] <span class="sc">+</span> p[<span class="dv">2</span>] <span class="sc">*</span> data<span class="sc">$</span>age)))</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">optim</span>(<span class="fu">c</span>(<span class="fu">mean</span>(data<span class="sc">$</span>glucose), <span class="dv">0</span>), loss, <span class="at">method =</span> <span class="st">"Nelder-Mead"</span>,</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>        <span class="at">control =</span> <span class="fu">list</span>(<span class="at">maxit =</span> <span class="dv">5000</span>, <span class="at">reltol =</span> <span class="fl">1e-12</span>))<span class="sc">$</span>par</span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>glu_bad <span class="ot">&lt;-</span> glu</span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>glu_bad<span class="sc">$</span>glucose[<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">5</span>)] <span class="ot">&lt;-</span> glu_bad<span class="sc">$</span>glucose[<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">5</span>)] <span class="sc">*</span> <span class="dv">3</span></span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="fu">rbind</span>(<span class="at">clean =</span> <span class="fu">fit_lad</span>(glu), <span class="at">contaminated =</span> <span class="fu">fit_lad</span>(glu_bad))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>b_clean <span class="ot">&lt;-</span> <span class="fu">coef</span>(fit_ols)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>b_bad   <span class="ot">&lt;-</span> <span class="fu">coef</span>(fit_bad)</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>glu_bad <span class="sc">|&gt;</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">r_clean =</span> glucose <span class="sc">-</span> (b_clean[<span class="dv">1</span>] <span class="sc">+</span> b_clean[<span class="dv">2</span>] <span class="sc">*</span> age),</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>         <span class="at">r_bad   =</span> glucose <span class="sc">-</span> (b_bad[<span class="dv">1</span>]   <span class="sc">+</span> b_bad[<span class="dv">2</span>]   <span class="sc">*</span> age)) <span class="sc">|&gt;</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">MSE_clean =</span> <span class="fu">mean</span>(r_clean<span class="sc">^</span><span class="dv">2</span>),   <span class="at">MSE_bad =</span> <span class="fu">mean</span>(r_bad<span class="sc">^</span><span class="dv">2</span>),</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">MAE_clean =</span> <span class="fu">mean</span>(<span class="fu">abs</span>(r_clean)), <span class="at">MAE_bad =</span> <span class="fu">mean</span>(<span class="fu">abs</span>(r_bad))) <span class="sc">|&gt;</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">round</span>(<span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;                 [,1]   [,2]
-#&gt; clean        101.875 0.4375
-#&gt; contaminated 101.875 0.4375</code></pre>
+<pre><code>#&gt; # A tibble: 1 × 4
+#&gt;   MSE_clean MSE_bad MAE_clean MAE_bad
+#&gt;       &lt;dbl&gt;   &lt;dbl&gt;     &lt;dbl&gt;   &lt;dbl&gt;
+#&gt; 1     4964.   4812.      32.9    36.5</code></pre>
 </div>
 </div>
-<p>Three steps of reasoning.</p>
-<ol type="1">
-<li>The least-absolute-error line is intercept 101.9, slope 0.4375 on the clean data — and intercept 101.9, slope 0.4375 on the contaminated data. To four decimal places, the contamination did not move it at all. Both languages agree, having started from the same guess and minimised the same function.</li>
-<li>Squaring is the mechanism. Tripling a glucose of 194 to 582 multiplies its contribution to the MSE by roughly the square of how far out it now is, so the line is dragged towards it; under absolute error that patient contributes its distance and no more, and three votes out of eighty do not carry.</li>
-<li>So “the best fit line” is not a property of the data. It is a property of the data <em>and the loss you chose</em>, and the choice was made for you by whoever wrote <code>lm()</code>.</li>
-</ol>
+<p>The two losses disagree about which line is better:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 34%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>the clean line</th>
+<th>the contaminated line</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>scored by <strong>MSE</strong></td>
+<td>4,964</td>
+<td><strong>4,812</strong></td>
+</tr>
+<tr class="even">
+<td>scored by <strong>MAE</strong></td>
+<td><strong>32.9</strong></td>
+<td>36.5</td>
+</tr>
+</tbody>
+</table>
+<p>By squared error the contaminated line wins, which it must — that is the quantity the fitting procedure minimised. By absolute error the clean line wins, even on the contaminated data. Tripling a glucose of 194 to 582 multiplies its contribution to the MSE by roughly the square of how far out it now is, so the line is dragged towards it; under absolute error that patient contributes its distance and no more, and three votes out of eighty do not carry.</p>
+<p>So “the best fit line” is not a property of the data. It is a property of the data <em>and the loss you chose</em>, and the choice was made for you by whoever wrote <code>lm()</code>.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -466,48 +603,44 @@ window.Quarto = {
 <p>If absolute error is this much more robust, why is every default squared? Two reasons, and only one of them is about statistics. The squared loss is differentiable everywhere, which is what lets <a href="day3-03-gradient-descent.html" class="quarto-xref"><span>Exercise 3.3 — Gradient descent</span></a> follow a gradient and <a href="day3-04-ols.html" class="quarto-xref"><span>Exercise 3.4 — Ordinary least squares, in closed form</span></a> solve for the answer in closed form; absolute error has a kink at zero and needs a different class of algorithm. And the mean is the minimiser of squared error while the median minimises absolute error, so the two losses are answering different questions about the outcome, not the same question with different robustness. Convenience, then interpretation — in that order, historically.</p>
 </div>
 </div>
+<hr>
 </section>
-<section id="how-the-loss-changes-as-the-line-moves" class="level3">
-<h3 class="anchored" data-anchor-id="how-the-loss-changes-as-the-line-moves">How the loss changes as the line moves</h3>
-<p>So far a loss has scored a line someone else supplied. Now treat it as a function of the parameters, which is what fitting actually optimises:</p>
+<section id="step-4-the-loss-as-a-function-of-the-parameters" class="level3">
+<h3 class="anchored" data-anchor-id="step-4-the-loss-as-a-function-of-the-parameters">Step 4 — The loss as a function of the parameters</h3>
+<p>So far a loss has scored a line someone else supplied. Now treat it as a function of the two parameters, which is what fitting actually optimises:</p>
 <p><span class="math display">\[\text{MSE}(\hat\beta_0, \hat\beta_1) = \frac{1}{m} \sum_{i=1}^{m}
 \left( y_i - \left( \hat{\beta}_0 + \hat{\beta}_1 x_i \right) \right)^2\]</span></p>
 <p>Start by hand with the first three patients, aged 28, 44 and 26, with glucose 194, 129 and 132. For <span class="math inline">\(\hat\beta_0 = 3\)</span> and <span class="math inline">\(\hat\beta_1 = 5\)</span> the predictions are 143, 223 and 133, so</p>
 <p><span class="math display">\[\frac{(194-143)^2 + (129-223)^2 + (132-133)^2}{3}
 = \frac{2601 + 8836 + 1}{3} = 3812.67\]</span></p>
-</section>
-<section id="task-3-the-loss-as-a-function-of-the-parameters" class="level3">
-<h3 class="anchored" data-anchor-id="task-3-the-loss-as-a-function-of-the-parameters">Task 3 — The loss as a function of the parameters</h3>
-<p>Write that formula as a function and check it against the arithmetic above, then evaluate it on all 80 rows at two sets of parameters.</p>
+<p>The same three steps as before — predict, subtract, square and average — on the first three rows:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>mse_of <span class="ot">&lt;-</span> <span class="cf">function</span>(beta0, beta1, x, y) {</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mean</span>((y <span class="sc">-</span> (______))<span class="sc">^</span><span class="dv">2</span>)</span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>first3 <span class="ot">&lt;-</span> glu <span class="sc">|&gt;</span> <span class="fu">slice</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>)</span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="fu">mse_of</span>(<span class="dv">3</span>, <span class="dv">5</span>, first3<span class="sc">$</span>age, first3<span class="sc">$</span>glucose)   <span class="co"># the arithmetic above gave 3812.67</span></span>
-<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">at_3_5 =</span> <span class="fu">mse_of</span>(<span class="dv">3</span>, <span class="dv">5</span>, glu<span class="sc">$</span>age, glu<span class="sc">$</span>glucose),</span>
-<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">at_4_7 =</span> <span class="fu">mse_of</span>(<span class="dv">4</span>, <span class="dv">7</span>, glu<span class="sc">$</span>age, glu<span class="sc">$</span>glucose))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-3-contents" aria-controls="callout-3" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Tip</span>Stuck?
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-3" class="callout-3-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
-<p>The predicted value for one patient is the intercept plus the slope times that patient’s age. Everything else — the subtraction, the square, the mean — is already written.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>glu <span class="sc">|&gt;</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>) <span class="sc">|&gt;</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">pred =</span> <span class="dv">3</span> <span class="sc">+</span> <span class="dv">5</span> <span class="sc">*</span> age,</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>         <span class="at">r    =</span> glucose <span class="sc">-</span> pred) <span class="sc">|&gt;</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">MSE =</span> <span class="fu">mean</span>(r<span class="sc">^</span><span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 1 × 1
+#&gt;     MSE
+#&gt;   &lt;dbl&gt;
+#&gt; 1 3813.</code></pre>
 </div>
 </div>
+</section>
+<section id="task-3-score-two-candidate-lines-on-all-80-patients" class="level3">
+<h3 class="anchored" data-anchor-id="task-3-score-two-candidate-lines-on-all-80-patients">Task 3 — Score two candidate lines on all 80 patients</h3>
+<p>Those two parameter values were picked out of the air. Score them on the whole dataset, then score a second pair, <span class="math inline">\(\hat\beta_0 = 4\)</span> and <span class="math inline">\(\hat\beta_1 = 7\)</span>.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>glu <span class="sc">|&gt;</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">r_3_5 =</span> glucose <span class="sc">-</span> (<span class="dv">3</span> <span class="sc">+</span> <span class="dv">5</span> <span class="sc">*</span> age),</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>         <span class="at">r_4_7 =</span> glucose <span class="sc">-</span> (______)) <span class="sc">|&gt;</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">at_3_5 =</span> <span class="fu">mean</span>(r_3_5<span class="sc">^</span><span class="dv">2</span>),</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>            <span class="at">at_4_7 =</span> <span class="fu">mean</span>(r_4_7<span class="sc">^</span><span class="dv">2</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">round</span>(<span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>On all 80 rows those two candidates score 7462 and 22991 against the fitted line’s 847.5. Both are terrible, and the first is better than the second, which is all a loss is for: ranking candidates.</p>
+<p>On all 80 rows those two candidates score 7,462 and 22,991 against the fitted line’s 847.5. Both are terrible, and the first is better than the second, which is all a loss is for: ranking candidates.</p>
 <div class="callout callout-style-default callout-warning callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -521,63 +654,132 @@ window.Quarto = {
 <p>Writing <span class="math inline">\(\hat\beta_0 = 3\)</span>, <span class="math inline">\(\hat\beta_1 = 5\)</span> and then drawing <code>geom_abline(slope = 3, intercept = 5)</code> plots a different line from the one you scored, and the plot will look convincing. <code>geom_abline()</code> takes <code>slope</code> and <code>intercept</code> by name for exactly this reason. Name both arguments, every time.</p>
 </div>
 </div>
+<hr>
 </section>
-<section id="the-whole-surface-at-once" class="level3">
-<h3 class="anchored" data-anchor-id="the-whole-surface-at-once">The whole surface at once</h3>
-<p>Evaluate the MSE over a grid of candidate parameter values — 101 intercepts between 60 and 160, 151 slopes between −1 and 2, 15,251 lines in total — and draw the result. The red point is what <code>lm()</code> returned.</p>
+<section id="step-5-every-candidate-line-at-once" class="level3">
+<h3 class="anchored" data-anchor-id="step-5-every-candidate-line-at-once">Step 5 — Every candidate line at once</h3>
+<p>Ranking two candidates is a loss doing its job. Fitting is the same idea with far more candidates. Build a grid of them — 101 intercepts between 60 and 160, 151 slopes between −1 and 2, 15,251 lines in total — pair every candidate with every patient, and score each candidate under both losses.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>mse_of  <span class="ot">&lt;-</span> <span class="cf">function</span>(beta0, beta1, x, y) <span class="fu">mean</span>((y <span class="sc">-</span> (beta0 <span class="sc">+</span> beta1 <span class="sc">*</span> x))<span class="sc">^</span><span class="dv">2</span>)</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>fit_ols <span class="ot">&lt;-</span> <span class="fu">lm</span>(glucose <span class="sc">~</span> age, <span class="at">data =</span> glu)</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>grid <span class="ot">&lt;-</span> <span class="fu">expand_grid</span>(<span class="at">b0 =</span> <span class="fu">seq</span>(<span class="dv">60</span>, <span class="dv">160</span>, <span class="at">by =</span> <span class="dv">1</span>),</span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>                    <span class="at">b1 =</span> <span class="fu">seq</span>(<span class="sc">-</span><span class="dv">1</span>, <span class="dv">2</span>, <span class="at">by =</span> <span class="fl">0.02</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">MSE =</span> <span class="fu">map2_dbl</span>(b0, b1, <span class="sc">~</span> <span class="fu">mse_of</span>(.x, .y, glu<span class="sc">$</span>age, glu<span class="sc">$</span>glucose)))</span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(grid, <span class="fu">aes</span>(<span class="at">x =</span> b0, <span class="at">y =</span> b1)) <span class="sc">+</span></span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_raster</span>(<span class="fu">aes</span>(<span class="at">fill =</span> <span class="fu">log10</span>(MSE))) <span class="sc">+</span></span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_contour</span>(<span class="fu">aes</span>(<span class="at">z =</span> <span class="fu">log10</span>(MSE)), <span class="at">colour =</span> <span class="st">"white"</span>, <span class="at">alpha =</span> <span class="fl">0.4</span>, <span class="at">bins =</span> <span class="dv">12</span>) <span class="sc">+</span></span>
-<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"point"</span>, <span class="at">x =</span> <span class="fu">coef</span>(fit_ols)[[<span class="dv">1</span>]], <span class="at">y =</span> <span class="fu">coef</span>(fit_ols)[[<span class="dv">2</span>]],</span>
-<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>           <span class="at">colour =</span> <span class="st">"red"</span>, <span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
-<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_viridis_c</span>(<span class="at">option =</span> <span class="st">"magma"</span>) <span class="sc">+</span></span>
-<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="fu">expression</span>(<span class="fu">hat</span>(beta)[<span class="dv">0</span>]), <span class="at">y =</span> <span class="fu">expression</span>(<span class="fu">hat</span>(beta)[<span class="dv">1</span>]),</span>
-<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>       <span class="at">fill =</span> <span class="st">"log10(MSE)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>candidates <span class="ot">&lt;-</span> <span class="fu">expand_grid</span>(<span class="at">b0 =</span> <span class="fu">seq</span>(<span class="dv">60</span>, <span class="dv">160</span>, <span class="at">by =</span> <span class="dv">1</span>),</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>                          <span class="at">b1 =</span> <span class="fu">seq</span>(<span class="sc">-</span><span class="dv">1</span>, <span class="dv">2</span>, <span class="at">by =</span> <span class="fl">0.02</span>))</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>scores <span class="ot">&lt;-</span> candidates <span class="sc">|&gt;</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cross_join</span>(glu <span class="sc">|&gt;</span> <span class="fu">select</span>(age, glucose)) <span class="sc">|&gt;</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">r =</span> glucose <span class="sc">-</span> (b0 <span class="sc">+</span> b1 <span class="sc">*</span> age)) <span class="sc">|&gt;</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">MSE =</span> <span class="fu">mean</span>(r<span class="sc">^</span><span class="dv">2</span>),</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">MAE =</span> <span class="fu">mean</span>(<span class="fu">abs</span>(r)), <span class="at">.by =</span> <span class="fu">c</span>(b0, b1))</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>scores</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 15,251 × 4
+#&gt;       b0    b1   MSE   MAE
+#&gt;    &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+#&gt;  1    60 -1    9839.  93.2
+#&gt;  2    60 -0.98 9706.  92.5
+#&gt;  3    60 -0.96 9574.  91.8
+#&gt;  4    60 -0.94 9443.  91.2
+#&gt;  5    60 -0.92 9313.  90.5
+#&gt;  6    60 -0.9  9184.  89.8
+#&gt;  7    60 -0.88 9056.  89.2
+#&gt;  8    60 -0.86 8929.  88.5
+#&gt;  9    60 -0.84 8803.  87.8
+#&gt; 10    60 -0.82 8678.  87.2
+#&gt; # ℹ 15,241 more rows</code></pre>
+</div>
+</div>
+<p>One row per candidate line, with its score under each loss. Draw the MSE column as a surface, with the line <code>lm()</code> returned marked in red.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(scores, <span class="fu">aes</span>(<span class="at">x =</span> b0, <span class="at">y =</span> b1)) <span class="sc">+</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_raster</span>(<span class="fu">aes</span>(<span class="at">fill =</span> <span class="fu">log10</span>(MSE))) <span class="sc">+</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_contour</span>(<span class="fu">aes</span>(<span class="at">z =</span> <span class="fu">log10</span>(MSE)), <span class="at">colour =</span> <span class="st">"white"</span>,</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>               <span class="at">alpha =</span> <span class="fl">0.4</span>, <span class="at">bins =</span> <span class="dv">12</span>) <span class="sc">+</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"point"</span>, <span class="at">x =</span> <span class="fu">coef</span>(fit_ols)[[<span class="dv">1</span>]], <span class="at">y =</span> <span class="fu">coef</span>(fit_ols)[[<span class="dv">2</span>]],</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>           <span class="at">colour =</span> <span class="st">"red"</span>, <span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_viridis_c</span>(<span class="at">option =</span> <span class="st">"magma"</span>) <span class="sc">+</span></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="fu">expression</span>(<span class="fu">hat</span>(beta)[<span class="dv">0</span>]), <span class="at">y =</span> <span class="fu">expression</span>(<span class="fu">hat</span>(beta)[<span class="dv">1</span>]),</span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>       <span class="at">fill =</span> <span class="st">"log10(MSE)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day3-02-loss-functions_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+<p><img src="day3-02-loss-functions_files/figure-html/unnamed-chunk-17-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
 </figure>
 </div>
 </div>
 </div>
 <p>Two features of that picture matter for the next exercise. The surface is a bowl: it has one lowest point and no others, which is why least squares has a single answer. And the bowl is a long diagonal trough rather than a round basin, because the intercept and the slope trade off against each other — raise the slope and you can compensate by lowering the intercept. <a href="day3-03-gradient-descent.html" class="quarto-xref"><span>Exercise 3.3 — Gradient descent</span></a> walks downhill on this exact surface, and the shape of the trough is what makes that harder than it sounds.</p>
 </section>
-<section id="task-4-find-the-minimum-by-brute-force" class="level3">
-<h3 class="anchored" data-anchor-id="task-4-find-the-minimum-by-brute-force">Task 4 — Find the minimum by brute force</h3>
-<p>Pull the lowest cell out of the grid you just built and compare it with the fitted line.</p>
+<section id="task-4-find-the-best-candidate-under-each-loss" class="level3">
+<h3 class="anchored" data-anchor-id="task-4-find-the-best-candidate-under-each-loss">Task 4 — Find the best candidate under each loss</h3>
+<p>Pull the lowest-scoring row out of the grid, first by MSE and then by MAE.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>best <span class="ot">&lt;-</span> grid <span class="sc">|&gt;</span> <span class="fu">slice_min</span>(______, <span class="at">n =</span> <span class="dv">1</span>)</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>best</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="fu">coef</span>(fit_ols)   <span class="co"># the fitted line, to compare</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>scores <span class="sc">|&gt;</span> <span class="fu">slice_min</span>(______, <span class="at">n =</span> <span class="dv">1</span>)</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>scores <span class="sc">|&gt;</span> <span class="fu">slice_min</span>(MAE, <span class="at">n =</span> <span class="dv">1</span>)</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="fu">coef</span>(fit_ols)   <span class="co"># the fitted line, to compare</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-5-contents" aria-controls="callout-5" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
+<p>The best candidate under MSE is intercept 110, slope 0.30, scoring 847.55 — against <code>lm()</code>’s 110.298, 0.2887 and 847.52. The difference is the spacing of the grid and nothing else. Under MAE the best candidate is a different line: intercept 99, slope 0.50.</p>
+<p>Now do the same on the contaminated data, and watch which of the two losses changes its mind.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>scores_bad <span class="ot">&lt;-</span> candidates <span class="sc">|&gt;</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cross_join</span>(glu_bad <span class="sc">|&gt;</span> <span class="fu">select</span>(age, glucose)) <span class="sc">|&gt;</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">r =</span> glucose <span class="sc">-</span> (b0 <span class="sc">+</span> b1 <span class="sc">*</span> age)) <span class="sc">|&gt;</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">MSE =</span> <span class="fu">mean</span>(r<span class="sc">^</span><span class="dv">2</span>),</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">MAE =</span> <span class="fu">mean</span>(<span class="fu">abs</span>(r)), <span class="at">.by =</span> <span class="fu">c</span>(b0, b1))</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_rows</span>(</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">clean_MSE        =</span> scores     <span class="sc">|&gt;</span> <span class="fu">slice_min</span>(MSE, <span class="at">n =</span> <span class="dv">1</span>) <span class="sc">|&gt;</span> <span class="fu">select</span>(b0, b1),</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">contaminated_MSE =</span> scores_bad <span class="sc">|&gt;</span> <span class="fu">slice_min</span>(MSE, <span class="at">n =</span> <span class="dv">1</span>) <span class="sc">|&gt;</span> <span class="fu">select</span>(b0, b1),</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">clean_MAE        =</span> scores     <span class="sc">|&gt;</span> <span class="fu">slice_min</span>(MAE, <span class="at">n =</span> <span class="dv">1</span>) <span class="sc">|&gt;</span> <span class="fu">select</span>(b0, b1),</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">contaminated_MAE =</span> scores_bad <span class="sc">|&gt;</span> <span class="fu">slice_min</span>(MAE, <span class="at">n =</span> <span class="dv">1</span>) <span class="sc">|&gt;</span> <span class="fu">select</span>(b0, b1),</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">.id =</span> <span class="st">"best_under"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 4 × 3
+#&gt;   best_under          b0    b1
+#&gt;   &lt;chr&gt;            &lt;dbl&gt; &lt;dbl&gt;
+#&gt; 1 clean_MSE          110  0.3 
+#&gt; 2 contaminated_MSE   136 -0.16
+#&gt; 3 clean_MAE           99  0.5 
+#&gt; 4 contaminated_MAE   103  0.4</code></pre>
 </div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Tip</span>Stuck?
 </div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-5" class="callout-5-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
-<p><code>slice_min()</code> takes the name of the column to minimise, unquoted.</p>
-</div>
-</div>
-</div>
-<p>The grid’s best cell is intercept 110, slope 0.30, with an MSE of 847.55 — against <code>lm()</code>’s 110.298, 0.2887 and 847.52. The difference is the spacing of the grid and nothing else.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 46%">
+<col style="width: 27%">
+<col style="width: 27%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>best candidate</th>
+<th>intercept</th>
+<th>slope</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>clean data, by MSE</td>
+<td>110</td>
+<td><strong>+0.30</strong></td>
+</tr>
+<tr class="even">
+<td>contaminated data, by MSE</td>
+<td>136</td>
+<td><strong>−0.16</strong></td>
+</tr>
+<tr class="odd">
+<td>clean data, by MAE</td>
+<td>99</td>
+<td><strong>+0.50</strong></td>
+</tr>
+<tr class="even">
+<td>contaminated data, by MAE</td>
+<td>103</td>
+<td><strong>+0.40</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Squared error reverses the sign of the slope. Absolute error, given the same three corrupted patients, still says glucose rises with age. Same data, same grid of candidates, same arithmetic — only the loss is different.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -594,129 +796,168 @@ window.Quarto = {
 </section>
 </div>
 <div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
-<section id="the-same-80-rows-1" class="level3">
-<h3 class="anchored" data-anchor-id="the-same-80-rows-1">The same 80 rows</h3>
-<p>Each chapter is a fresh session, so load the data again.</p>
+<section id="the-data-1" class="level3">
+<h3 class="anchored" data-anchor-id="the-data-1">The data</h3>
+<p>A loss function needs something to score, so start from the 80 patients and a line somebody drew by hand.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>diab <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes.csv"</span>)</span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>glu <span class="op">=</span> (diab.loc[diab[<span class="st">"glucose"</span>] <span class="op">&gt;</span> <span class="dv">0</span>, [<span class="st">"age"</span>, <span class="st">"glucose"</span>]]</span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>           .head(<span class="dv">80</span>)</span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>           .reset_index(drop<span class="op">=</span><span class="va">True</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>glu <span class="op">=</span> pd.read_csv(<span class="st">"data/glucose_study.csv"</span>)</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>glu.head()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;    age  glucose
+#&gt; 0   28      194
+#&gt; 1   44      129
+#&gt; 2   26      132
+#&gt; 3   39      184
+#&gt; 4   22      108</code></pre>
+</div>
 </div>
 </section>
-<section id="one-point-one-residual-1" class="level3">
-<h3 class="anchored" data-anchor-id="one-point-one-residual-1">One point, one residual</h3>
+<section id="step-1-one-patient-one-residual-1" class="level3">
+<h3 class="anchored" data-anchor-id="step-1-one-patient-one-residual-1">Step 1 — One patient, one residual</h3>
 <p>A residual is what the model got wrong for one patient:</p>
 <p><span class="math display">\[r_i = y_i - \hat{y}_i\]</span></p>
 <p>Take a line nobody fitted — <span class="math inline">\(\widehat{\text{glucose}} = 120 + 0.5 \times
-\text{age}\)</span>, invented by hand — and find the patient it serves worst.</p>
+\text{age}\)</span>, invented by hand. Add two columns: what that line predicts, and how far each patient is from it.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>glu[<span class="st">"pred_guess"</span>] <span class="op">=</span> <span class="dv">120</span> <span class="op">+</span> <span class="fl">0.5</span> <span class="op">*</span> glu[<span class="st">"age"</span>]</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>glu[<span class="st">"resid_guess"</span>] <span class="op">=</span> glu[<span class="st">"glucose"</span>] <span class="op">-</span> glu[<span class="st">"pred_guess"</span>]</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>worst <span class="op">=</span> glu.loc[[glu[<span class="st">"resid_guess"</span>].<span class="bu">abs</span>().idxmax()]]</span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>worst</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output-display">
-<div>
-
-
-<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
-<thead>
-<tr class="header">
-<th data-quarto-table-cell-role="th"></th>
-<th data-quarto-table-cell-role="th">age</th>
-<th data-quarto-table-cell-role="th">glucose</th>
-<th data-quarto-table-cell-role="th">pred_guess</th>
-<th data-quarto-table-cell-role="th">resid_guess</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<th data-quarto-table-cell-role="th">41</th>
-<td>58</td>
-<td>72</td>
-<td>149.0</td>
-<td>-77.0</td>
-</tr>
-</tbody>
-</table>
-
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>glu[<span class="st">"pred_guess"</span>]  <span class="op">=</span> <span class="dv">120</span> <span class="op">+</span> <span class="fl">0.5</span> <span class="op">*</span> glu[<span class="st">"age"</span>]</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>glu[<span class="st">"resid_guess"</span>] <span class="op">=</span> glu[<span class="st">"glucose"</span>] <span class="op">-</span> glu[<span class="st">"pred_guess"</span>]</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>glu.head()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;    age  glucose  pred_guess  resid_guess
+#&gt; 0   28      194       134.0         60.0
+#&gt; 1   44      129       142.0        -13.0
+#&gt; 2   26      132       133.0         -1.0
+#&gt; 3   39      184       139.5         44.5
+#&gt; 4   22      108       131.0        -23.0</code></pre>
 </div>
+</div>
+<p>Now find the patient the line serves worst — the largest residual, in either direction.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>glu.loc[[glu[<span class="st">"resid_guess"</span>].<span class="bu">abs</span>().idxmax()]]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;     age  glucose  pred_guess  resid_guess
+#&gt; 41   58       72       149.0        -77.0</code></pre>
 </div>
 </div>
 <p>That patient is 58, their measured glucose is 72, the hand-drawn line predicts 149, and the residual is −77 mg/dL — an error larger than the measurement itself.</p>
+<p>The red segments below are the residuals, one per patient. A loss function is a rule for turning all 80 of them into a single number.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>ax.scatter(glu[<span class="st">"age"</span>], glu[<span class="st">"glucose"</span>], alpha<span class="op">=</span><span class="fl">0.6</span>)</span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>ax.vlines(glu[<span class="st">"age"</span>], glu[<span class="st">"pred_guess"</span>], glu[<span class="st">"glucose"</span>], color<span class="op">=</span><span class="st">"red"</span>, alpha<span class="op">=</span><span class="fl">0.3</span>)</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>ax.plot(glu[<span class="st">"age"</span>], glu[<span class="st">"pred_guess"</span>], color<span class="op">=</span><span class="st">"darkorange"</span>)</span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Age (years)"</span>)<span class="op">;</span> ax.set_ylabel(<span class="st">"Glucose (mg/dL)"</span>)</span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>ax.scatter(glu[<span class="st">"age"</span>], glu[<span class="st">"glucose"</span>], alpha<span class="op">=</span><span class="fl">0.6</span>)</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>ax.plot(glu[<span class="st">"age"</span>], glu[<span class="st">"pred_guess"</span>], color<span class="op">=</span><span class="st">"darkorange"</span>)</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>ax.vlines(glu[<span class="st">"age"</span>], glu[<span class="st">"pred_guess"</span>], glu[<span class="st">"glucose"</span>],</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>          color<span class="op">=</span><span class="st">"red"</span>, alpha<span class="op">=</span><span class="fl">0.3</span>)</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Age (years)"</span>)</span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Glucose (mg/dL)"</span>)</span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day3-02-loss-functions_files/figure-html/unnamed-chunk-18-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="672"></p>
+<p><img src="day3-02-loss-functions_files/figure-html/unnamed-chunk-24-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="672"></p>
 </figure>
 </div>
 </div>
 </div>
-<p>The red segments are the residuals. A loss function is a rule for turning all 80 of them into one number.</p>
 </section>
-<section id="four-ways-to-add-up-80-mistakes-1" class="level3">
-<h3 class="anchored" data-anchor-id="four-ways-to-add-up-80-mistakes-1">Four ways to add up 80 mistakes</h3>
-<p>Residuals are positive and negative, so adding them cancels most of the error away. Two repairs are in common use, and they are not equivalent.</p>
+<section id="step-2-from-80-residuals-to-one-number-1" class="level3">
+<h3 class="anchored" data-anchor-id="step-2-from-80-residuals-to-one-number-1">Step 2 — From 80 residuals to one number</h3>
+<p>Residuals are positive and negative, so adding them up cancels most of the error away. Two repairs are in common use, and they are not the same.</p>
+<p>Square each residual, or take its size and ignore the sign:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>glu[<span class="st">"squared"</span>]  <span class="op">=</span> glu[<span class="st">"resid_guess"</span>] <span class="op">**</span> <span class="dv">2</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>glu[<span class="st">"absolute"</span>] <span class="op">=</span> glu[<span class="st">"resid_guess"</span>].<span class="bu">abs</span>()</span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>glu[[<span class="st">"age"</span>, <span class="st">"glucose"</span>, <span class="st">"resid_guess"</span>, <span class="st">"squared"</span>, <span class="st">"absolute"</span>]].head()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;    age  glucose  resid_guess  squared  absolute
+#&gt; 0   28      194         60.0  3600.00      60.0
+#&gt; 1   44      129        -13.0   169.00      13.0
+#&gt; 2   26      132         -1.0     1.00       1.0
+#&gt; 3   39      184         44.5  1980.25      44.5
+#&gt; 4   22      108        -23.0   529.00      23.0</code></pre>
+</div>
+</div>
+<p>Then add them up, or average them:</p>
 <p><span class="math display">\[\text{SSR} = \sum_{i=1}^{m} r_i^2 \qquad
 \text{MSE} = \frac{1}{m}\sum_{i=1}^{m} r_i^2 \qquad
 \text{MAE} = \frac{1}{m}\sum_{i=1}^{m} \left| r_i \right|\]</span></p>
-<p>Squaring is the L2 loss; taking the absolute value is the L1 loss. The mean squared error is the sum of squared residuals divided by the number of rows, so it does not grow simply because the dataset is larger. The root of the MSE — RMSE — is back in the outcome’s units and is easier to quote.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> loss_table(residuals):</span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    residuals <span class="op">=</span> np.asarray(residuals)</span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    m <span class="op">=</span> <span class="bu">len</span>(residuals)</span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    ssr <span class="op">=</span> np.<span class="bu">sum</span>(residuals<span class="op">**</span><span class="dv">2</span>)</span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">"SSR"</span>: ssr, <span class="st">"MSE"</span>: ssr <span class="op">/</span> m, <span class="st">"RMSE"</span>: np.sqrt(ssr <span class="op">/</span> m),</span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>            <span class="st">"MAE"</span>: np.mean(np.<span class="bu">abs</span>(residuals))}</span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>{k: <span class="bu">round</span>(v, <span class="dv">3</span>) <span class="cf">for</span> k, v <span class="kw">in</span> loss_table(glu[<span class="st">"resid_guess"</span>]).items()}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>pd.Series({<span class="st">"SSR"</span>:  glu[<span class="st">"squared"</span>].<span class="bu">sum</span>(),</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>           <span class="st">"MSE"</span>:  glu[<span class="st">"squared"</span>].mean(),</span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>           <span class="st">"RMSE"</span>: np.sqrt(glu[<span class="st">"squared"</span>].mean()),</span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>           <span class="st">"MAE"</span>:  glu[<span class="st">"absolute"</span>].mean()}).<span class="bu">round</span>(<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; {'SSR': np.float64(90868.25), 'MSE': np.float64(1135.853), 'RMSE': np.float64(33.702), 'MAE': np.float64(28.656)}</code></pre>
+<pre><code>#&gt; SSR     90868.25
+#&gt; MSE      1135.85
+#&gt; RMSE       33.70
+#&gt; MAE        28.66
+#&gt; dtype: float64</code></pre>
 </div>
 </div>
-<p>The hand-drawn line scores SSR 90868, MSE 1135.9, RMSE 33.7 and MAE 28.7. RMSE and MAE are both in mg/dL and the RMSE is the larger of the two, which is not an accident: squaring weights the worst patients more heavily, so any summary built from squares sits above the plain average error whenever the residuals are unequal.</p>
+<p>Four names for four lines of that summary:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 14%">
+<col style="width: 54%">
+<col style="width: 32%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>What it is</th>
+<th>On this line</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>SSR</strong></td>
+<td>sum of squared residuals</td>
+<td>90,868</td>
+</tr>
+<tr class="even">
+<td><strong>MSE</strong></td>
+<td>the same, divided by the 80 patients</td>
+<td>1,135.9</td>
+</tr>
+<tr class="odd">
+<td><strong>RMSE</strong></td>
+<td>the square root of the MSE, back in mg/dL</td>
+<td>33.7</td>
+</tr>
+<tr class="even">
+<td><strong>MAE</strong></td>
+<td>the average size of an error, in mg/dL</td>
+<td>28.7</td>
+</tr>
+</tbody>
+</table>
+<p>Squaring is the L2 loss; taking the absolute value is the L1 loss. Dividing by the number of patients is what stops the score growing simply because the dataset is larger. RMSE and MAE are both in mg/dL and the RMSE is the larger of the two, which is not an accident: squaring weights the worst patients more heavily, so any summary built from squares sits above the plain average error whenever the residuals are unequal.</p>
 </section>
 <section id="task-1-score-the-fitted-line-against-the-hand-drawn-one-1" class="level3">
 <h3 class="anchored" data-anchor-id="task-1-score-the-fitted-line-against-the-hand-drawn-one-1">Task 1 — Score the fitted line against the hand-drawn one</h3>
-<p>Fit the least-squares line, compute its residuals, and put them through <code>loss_table()</code>.</p>
+<p>Fit the least-squares line, add its predictions and residuals as two more columns, and summarise them the same way.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> LinearRegression</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>X, y <span class="op">=</span> glu[[<span class="st">"age"</span>]], glu[<span class="st">"glucose"</span>]</span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>fit_ols   <span class="op">=</span> LinearRegression().fit(X, y)</span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>resid_ols <span class="op">=</span> ______                      <span class="co"># the residuals of the fitted line</span></span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>losses    <span class="op">=</span> loss_table(resid_ols)</span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>({k: <span class="bu">round</span>(v, <span class="dv">3</span>) <span class="cf">for</span> k, v <span class="kw">in</span> losses.items()})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-<p>The fitted line scores MSE 847.5 against the hand-drawn line’s 1135.9, and MAE 22.3 against 28.7. It wins on both. That is reassuring but not guaranteed: the fitted line is the best line <em>for squared error</em>, and nothing in the procedure promises it also has the lowest absolute error. Hold that thought.</p>
-</section>
-<section id="task-2-contaminate-three-readings-1" class="level3">
-<h3 class="anchored" data-anchor-id="task-2-contaminate-three-readings-1">Task 2 — Contaminate three readings</h3>
-<p>Three glucose values are recorded three times too large — a plausible unit or transcription error. Multiply rows 1, 3 and 5 by three, refit, and compare.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>glu_bad <span class="op">=</span> glu.copy()</span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>glu_bad.loc[[<span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">4</span>], <span class="st">"glucose"</span>] <span class="op">=</span> glu_bad.loc[[<span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">4</span>], <span class="st">"glucose"</span>] <span class="op">*</span> ______</span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>fit_bad <span class="op">=</span> LinearRegression().fit(glu_bad[[<span class="st">"age"</span>]], ______)</span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>{<span class="st">"clean"</span>: (fit_ols.intercept_, fit_ols.coef_[<span class="dv">0</span>]),</span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a> <span class="st">"contaminated"</span>: (fit_bad.intercept_, fit_bad.coef_[<span class="dv">0</span>])}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> LinearRegression</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>X, y <span class="op">=</span> glu[[<span class="st">"age"</span>]], glu[<span class="st">"glucose"</span>]</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>fit_ols <span class="op">=</span> LinearRegression().fit(X, y)</span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>glu[<span class="st">"pred_ols"</span>]  <span class="op">=</span> fit_ols.predict(X)</span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>glu[<span class="st">"resid_ols"</span>] <span class="op">=</span> ______</span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>pd.Series({<span class="st">"MSE"</span>: (glu[<span class="st">"resid_ols"</span>] <span class="op">**</span> <span class="dv">2</span>).mean(),</span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>           <span class="st">"MAE"</span>: glu[<span class="st">"resid_ols"</span>].<span class="bu">abs</span>().mean()}).<span class="bu">round</span>(<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-7-contents" aria-controls="callout-7" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-5-contents" aria-controls="callout-5" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -725,40 +966,82 @@ window.Quarto = {
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-7" class="callout-7-contents callout-collapse collapse">
+<div id="callout-5" class="callout-5-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p>R counts rows from 1 and pandas from 0, so rows 1, 3 and 5 are <code>[0, 2, 4]</code> in Python. This is the one indexing difference that silently changes a result rather than raising an error.</p>
+<p>A residual is the measurement minus the prediction, exactly as it was for the hand-drawn line two steps ago. The columns you need are <code>glucose</code> and <code>pred_ols</code>.</p>
 </div>
 </div>
+</div>
+<p>The fitted line scores MSE 847.5 against the hand-drawn line’s 1,135.9, and MAE 22.3 against 28.7. It wins on both. That is reassuring but not guaranteed: the fitted line is the best line <em>for squared error</em>, and nothing in the procedure promises it also has the lowest absolute error. Hold that thought.</p>
+<hr>
+</section>
+<section id="task-2-contaminate-three-readings-1" class="level3">
+<h3 class="anchored" data-anchor-id="task-2-contaminate-three-readings-1">Task 2 — Contaminate three readings</h3>
+<p>Three glucose values are recorded three times too large — a plausible unit or transcription error. Multiply patients 1, 3 and 5 by three, fit the line again, and compare the two sets of coefficients.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>glu_bad <span class="op">=</span> glu.copy()</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>glu_bad.loc[[<span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">4</span>], <span class="st">"glucose"</span>] <span class="op">*=</span> ______</span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a>fit_bad <span class="op">=</span> LinearRegression().fit(______[[<span class="st">"age"</span>]], ______[<span class="st">"glucose"</span>])</span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>pd.DataFrame({<span class="st">"intercept"</span>: [fit_ols.intercept_, fit_bad.intercept_],</span>
+<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a>              <span class="st">"slope"</span>:     [fit_ols.coef_[<span class="dv">0</span>],   fit_bad.coef_[<span class="dv">0</span>]]},</span>
+<span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a>             index<span class="op">=</span>[<span class="st">"clean"</span>, <span class="st">"contaminated"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>Three rows out of eighty — under four per cent of the data — moved the intercept from 110.3 to 135.3 and turned the slope from +0.289 to −0.136. The fitted line now says glucose <em>falls</em> with age. Nothing warned you; the fit succeeded, as it always does.</p>
+<hr>
 </section>
-<section id="the-result-that-should-bother-you-1" class="level3">
-<h3 class="anchored" data-anchor-id="the-result-that-should-bother-you-1">The result that should bother you</h3>
-<p>The obvious reading is that outliers break regression. They do not. They break <em>this</em> loss.</p>
-<p>Fit the same straight line by minimising mean absolute error instead of mean squared error. There is no closed form, so hand the loss to a general-purpose optimiser.</p>
+<section id="step-3-which-line-is-better-depends-on-the-loss-1" class="level3">
+<h3 class="anchored" data-anchor-id="step-3-which-line-is-better-depends-on-the-loss-1">Step 3 — Which line is better depends on the loss</h3>
+<p>The obvious reading is that outliers break regression. They do not. They break <em>this loss</em>.</p>
+<p>You now have two lines: the clean one and the contaminated one. Score both of them on the contaminated data, once with squared error and once with absolute error.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> scipy.optimize <span class="im">import</span> minimize</span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> fit_lad(data):</span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>    loss <span class="op">=</span> <span class="kw">lambda</span> p: np.mean(np.<span class="bu">abs</span>(data[<span class="st">"glucose"</span>] <span class="op">-</span> (p[<span class="dv">0</span>] <span class="op">+</span> p[<span class="dv">1</span>] <span class="op">*</span> data[<span class="st">"age"</span>])))</span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> minimize(loss, [data[<span class="st">"glucose"</span>].mean(), <span class="fl">0.0</span>], method<span class="op">=</span><span class="st">"Nelder-Mead"</span>,</span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>                    options<span class="op">=</span>{<span class="st">"maxiter"</span>: <span class="dv">5000</span>, <span class="st">"fatol"</span>: <span class="fl">1e-12</span>, <span class="st">"xatol"</span>: <span class="fl">1e-10</span>}).x</span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>glu_bad <span class="op">=</span> glu.copy()</span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>glu_bad.loc[[<span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">4</span>], <span class="st">"glucose"</span>] <span class="op">=</span> glu_bad.loc[[<span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">4</span>], <span class="st">"glucose"</span>] <span class="op">*</span> <span class="dv">3</span></span>
-<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>{<span class="st">"clean"</span>: fit_lad(glu), <span class="st">"contaminated"</span>: fit_lad(glu_bad)}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>r_clean <span class="op">=</span> glu_bad[<span class="st">"glucose"</span>] <span class="op">-</span> fit_ols.predict(glu_bad[[<span class="st">"age"</span>]])</span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>r_bad   <span class="op">=</span> glu_bad[<span class="st">"glucose"</span>] <span class="op">-</span> fit_bad.predict(glu_bad[[<span class="st">"age"</span>]])</span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>pd.Series({<span class="st">"MSE_clean"</span>: (r_clean <span class="op">**</span> <span class="dv">2</span>).mean(),</span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>           <span class="st">"MSE_bad"</span>:   (r_bad <span class="op">**</span> <span class="dv">2</span>).mean(),</span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>           <span class="st">"MAE_clean"</span>: r_clean.<span class="bu">abs</span>().mean(),</span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a>           <span class="st">"MAE_bad"</span>:   r_bad.<span class="bu">abs</span>().mean()}).<span class="bu">round</span>(<span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; {'clean': array([101.875 ,   0.4375]), 'contaminated': array([101.875 ,   0.4375])}</code></pre>
+<pre><code>#&gt; MSE_clean    4964.2
+#&gt; MSE_bad      4812.5
+#&gt; MAE_clean      32.9
+#&gt; MAE_bad        36.5
+#&gt; dtype: float64</code></pre>
 </div>
 </div>
-<p>Three steps of reasoning.</p>
-<ol type="1">
-<li>The least-absolute-error line is intercept 101.9, slope 0.4375 on the clean data — and intercept 101.9, slope 0.4375 on the contaminated data. To four decimal places, the contamination did not move it at all. Both languages agree, having started from the same guess and minimised the same function.</li>
-<li>Squaring is the mechanism. Tripling a glucose of 194 to 582 multiplies its contribution to the MSE by roughly the square of how far out it now is, so the line is dragged towards it; under absolute error that patient contributes its distance and no more, and three votes out of eighty do not carry.</li>
-<li>So “the best fit line” is not a property of the data. It is a property of the data <em>and the loss you chose</em>, and the choice was made for you by whoever wrote <code>LinearRegression</code>.</li>
-</ol>
+<p>The two losses disagree about which line is better:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 34%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>the clean line</th>
+<th>the contaminated line</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>scored by <strong>MSE</strong></td>
+<td>4,964</td>
+<td><strong>4,812</strong></td>
+</tr>
+<tr class="even">
+<td>scored by <strong>MAE</strong></td>
+<td><strong>32.9</strong></td>
+<td>36.5</td>
+</tr>
+</tbody>
+</table>
+<p>By squared error the contaminated line wins, which it must — that is the quantity the fitting procedure minimised. By absolute error the clean line wins, even on the contaminated data. Tripling a glucose of 194 to 582 multiplies its contribution to the MSE by roughly the square of how far out it now is, so the line is dragged towards it; under absolute error that patient contributes its distance and no more, and three votes out of eighty do not carry.</p>
+<p>So “the best fit line” is not a property of the data. It is a property of the data <em>and the loss you chose</em>, and the choice was made for you by whoever wrote <code>lm()</code>.</p>
+<p>Read the last sentence as <code>LinearRegression</code> rather than <code>lm()</code>: both minimise squared error, and neither asks you first.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -772,91 +1055,165 @@ window.Quarto = {
 <p>If absolute error is this much more robust, why is every default squared? Two reasons, and only one of them is about statistics. The squared loss is differentiable everywhere, which is what lets <a href="day3-03-gradient-descent.html" class="quarto-xref"><span>Exercise 3.3 — Gradient descent</span></a> follow a gradient and <a href="day3-04-ols.html" class="quarto-xref"><span>Exercise 3.4 — Ordinary least squares, in closed form</span></a> solve for the answer in closed form; absolute error has a kink at zero and needs a different class of algorithm. And the mean is the minimiser of squared error while the median minimises absolute error, so the two losses are answering different questions about the outcome, not the same question with different robustness. Convenience, then interpretation — in that order, historically.</p>
 </div>
 </div>
+<hr>
 </section>
-<section id="how-the-loss-changes-as-the-line-moves-1" class="level3">
-<h3 class="anchored" data-anchor-id="how-the-loss-changes-as-the-line-moves-1">How the loss changes as the line moves</h3>
-<p>So far a loss has scored a line someone else supplied. Now treat it as a function of the parameters, which is what fitting actually optimises:</p>
+<section id="step-4-the-loss-as-a-function-of-the-parameters-1" class="level3">
+<h3 class="anchored" data-anchor-id="step-4-the-loss-as-a-function-of-the-parameters-1">Step 4 — The loss as a function of the parameters</h3>
+<p>So far a loss has scored a line someone else supplied. Now treat it as a function of the two parameters, which is what fitting actually optimises:</p>
 <p><span class="math display">\[\text{MSE}(\hat\beta_0, \hat\beta_1) = \frac{1}{m} \sum_{i=1}^{m}
 \left( y_i - \left( \hat{\beta}_0 + \hat{\beta}_1 x_i \right) \right)^2\]</span></p>
 <p>Start by hand with the first three patients, aged 28, 44 and 26, with glucose 194, 129 and 132. For <span class="math inline">\(\hat\beta_0 = 3\)</span> and <span class="math inline">\(\hat\beta_1 = 5\)</span> the predictions are 143, 223 and 133, so</p>
 <p><span class="math display">\[\frac{(194-143)^2 + (129-223)^2 + (132-133)^2}{3}
 = \frac{2601 + 8836 + 1}{3} = 3812.67\]</span></p>
-</section>
-<section id="task-3-the-loss-as-a-function-of-the-parameters-1" class="level3">
-<h3 class="anchored" data-anchor-id="task-3-the-loss-as-a-function-of-the-parameters-1">Task 3 — The loss as a function of the parameters</h3>
-<p>Write that formula as a function and check it against the arithmetic above, then evaluate it on all 80 rows at two sets of parameters.</p>
+<p>The same three steps as before — predict, subtract, square and average — on the first three rows:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mse_of(beta0, beta1, x, y):</span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> np.mean((y <span class="op">-</span> (______))<span class="op">**</span><span class="dv">2</span>)</span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>first3 <span class="op">=</span> glu.head(<span class="dv">3</span>)</span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">round</span>(mse_of(<span class="dv">3</span>, <span class="dv">5</span>, first3[<span class="st">"age"</span>], first3[<span class="st">"glucose"</span>]), <span class="dv">2</span>))   <span class="co"># the arithmetic above gave 3812.67</span></span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>{<span class="st">"at_3_5"</span>: mse_of(<span class="dv">3</span>, <span class="dv">5</span>, glu[<span class="st">"age"</span>], glu[<span class="st">"glucose"</span>]),</span>
-<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a> <span class="st">"at_4_7"</span>: mse_of(<span class="dv">4</span>, <span class="dv">7</span>, glu[<span class="st">"age"</span>], glu[<span class="st">"glucose"</span>])}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>first3 <span class="op">=</span> glu.head(<span class="dv">3</span>).copy()</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>first3[<span class="st">"pred"</span>] <span class="op">=</span> <span class="dv">3</span> <span class="op">+</span> <span class="dv">5</span> <span class="op">*</span> first3[<span class="st">"age"</span>]</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>first3[<span class="st">"r"</span>]    <span class="op">=</span> first3[<span class="st">"glucose"</span>] <span class="op">-</span> first3[<span class="st">"pred"</span>]</span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>(first3[<span class="st">"r"</span>] <span class="op">**</span> <span class="dv">2</span>).mean()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; np.float64(3812.6666666666665)</code></pre>
 </div>
-<p>On all 80 rows those two candidates score 7462 and 22991 against the fitted line’s 847.5. Both are terrible, and the first is better than the second, which is all a loss is for: ranking candidates.</p>
+</div>
 </section>
-<section id="the-whole-surface-at-once-1" class="level3">
-<h3 class="anchored" data-anchor-id="the-whole-surface-at-once-1">The whole surface at once</h3>
-<p>Evaluate the MSE over a grid of candidate parameter values — 101 intercepts between 60 and 160, 151 slopes between −1 and 2, 15,251 lines in total — and draw the result. The red point is what <code>LinearRegression</code> returned.</p>
+<section id="task-3-score-two-candidate-lines-on-all-80-patients-1" class="level3">
+<h3 class="anchored" data-anchor-id="task-3-score-two-candidate-lines-on-all-80-patients-1">Task 3 — Score two candidate lines on all 80 patients</h3>
+<p>Those two parameter values were picked out of the air. Score them on the whole dataset, then score a second pair, <span class="math inline">\(\hat\beta_0 = 4\)</span> and <span class="math inline">\(\hat\beta_1 = 7\)</span>.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> LinearRegression</span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>fit_ols <span class="op">=</span> LinearRegression().fit(glu[[<span class="st">"age"</span>]], glu[<span class="st">"glucose"</span>])</span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mse_of(beta0, beta1, x, y):</span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> np.mean((y <span class="op">-</span> (beta0 <span class="op">+</span> beta1 <span class="op">*</span> x))<span class="op">**</span><span class="dv">2</span>)</span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>b0_vals <span class="op">=</span> np.arange(<span class="dv">60</span>, <span class="fl">160.001</span>, <span class="fl">1.0</span>)</span>
-<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>b1_vals <span class="op">=</span> np.arange(<span class="op">-</span><span class="dv">1</span>, <span class="fl">2.0001</span>, <span class="fl">0.02</span>)</span>
-<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>B0, B1 <span class="op">=</span> np.meshgrid(b0_vals, b1_vals, indexing<span class="op">=</span><span class="st">"ij"</span>)</span>
-<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>resid_grid <span class="op">=</span> glu[<span class="st">"glucose"</span>].values <span class="op">-</span> (B0[..., <span class="va">None</span>] <span class="op">+</span> B1[..., <span class="va">None</span>] <span class="op">*</span> glu[<span class="st">"age"</span>].values)</span>
-<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>MSE <span class="op">=</span> (resid_grid<span class="op">**</span><span class="dv">2</span>).mean(axis<span class="op">=-</span><span class="dv">1</span>)       <span class="co"># average over patients, not parameters</span></span>
-<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
-<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>cs <span class="op">=</span> ax.contourf(B0, B1, np.log10(MSE), levels<span class="op">=</span><span class="dv">20</span>, cmap<span class="op">=</span><span class="st">"magma"</span>)</span>
-<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a>ax.scatter([fit_ols.intercept_], [fit_ols.coef_[<span class="dv">0</span>]], color<span class="op">=</span><span class="st">"red"</span>, zorder<span class="op">=</span><span class="dv">3</span>)</span>
-<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a>cbar <span class="op">=</span> fig.colorbar(cs, ax<span class="op">=</span>ax, label<span class="op">=</span><span class="st">"log10(MSE)"</span>)</span>
-<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="vs">r"</span><span class="dv">$</span><span class="er">\</span><span class="vs">hat</span><span class="dv">\b</span><span class="vs">eta_0</span><span class="dv">$</span><span class="vs">"</span>)<span class="op">;</span> ax.set_ylabel(<span class="vs">r"</span><span class="dv">$</span><span class="er">\</span><span class="vs">hat</span><span class="dv">\b</span><span class="vs">eta_1</span><span class="dv">$</span><span class="vs">"</span>)</span>
-<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>r_3_5 <span class="op">=</span> glu[<span class="st">"glucose"</span>] <span class="op">-</span> (<span class="dv">3</span> <span class="op">+</span> <span class="dv">5</span> <span class="op">*</span> glu[<span class="st">"age"</span>])</span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>r_4_7 <span class="op">=</span> glu[<span class="st">"glucose"</span>] <span class="op">-</span> (______)</span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a>pd.Series({<span class="st">"at_3_5"</span>: (r_3_5 <span class="op">**</span> <span class="dv">2</span>).mean(),</span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>           <span class="st">"at_4_7"</span>: (r_4_7 <span class="op">**</span> <span class="dv">2</span>).mean()}).<span class="bu">round</span>(<span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>On all 80 rows those two candidates score 7,462 and 22,991 against the fitted line’s 847.5. Both are terrible, and the first is better than the second, which is all a loss is for: ranking candidates.</p>
+<hr>
+</section>
+<section id="step-5-every-candidate-line-at-once-1" class="level3">
+<h3 class="anchored" data-anchor-id="step-5-every-candidate-line-at-once-1">Step 5 — Every candidate line at once</h3>
+<p>Ranking two candidates is a loss doing its job. Fitting is the same idea with far more candidates. Build a grid of them — 101 intercepts between 60 and 160, 151 slopes between −1 and 2, 15,251 lines in total — pair every candidate with every patient, and score each candidate under both losses.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>b0s <span class="op">=</span> np.arange(<span class="dv">60</span>, <span class="dv">161</span>, <span class="dv">1</span>)</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>b1s <span class="op">=</span> np.<span class="bu">round</span>(np.arange(<span class="op">-</span><span class="dv">1</span>, <span class="fl">2.001</span>, <span class="fl">0.02</span>), <span class="dv">2</span>)</span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>candidates <span class="op">=</span> pd.MultiIndex.from_product(</span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>    [b0s, b1s], names<span class="op">=</span>[<span class="st">"b0"</span>, <span class="st">"b1"</span>]).to_frame(index<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>scores <span class="op">=</span> candidates.merge(glu[[<span class="st">"age"</span>, <span class="st">"glucose"</span>]], how<span class="op">=</span><span class="st">"cross"</span>)</span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>scores[<span class="st">"r"</span>] <span class="op">=</span> scores[<span class="st">"glucose"</span>] <span class="op">-</span> (scores[<span class="st">"b0"</span>] <span class="op">+</span> scores[<span class="st">"b1"</span>] <span class="op">*</span> scores[<span class="st">"age"</span>])</span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a>scores <span class="op">=</span> (scores.assign(sq<span class="op">=</span><span class="kw">lambda</span> d: d[<span class="st">"r"</span>] <span class="op">**</span> <span class="dv">2</span>,</span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a>                        ab<span class="op">=</span><span class="kw">lambda</span> d: d[<span class="st">"r"</span>].<span class="bu">abs</span>())</span>
+<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a>                .groupby([<span class="st">"b0"</span>, <span class="st">"b1"</span>], as_index<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb43-12"><a href="#cb43-12" aria-hidden="true" tabindex="-1"></a>                .agg(MSE<span class="op">=</span>(<span class="st">"sq"</span>, <span class="st">"mean"</span>), MAE<span class="op">=</span>(<span class="st">"ab"</span>, <span class="st">"mean"</span>)))</span>
+<span id="cb43-13"><a href="#cb43-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-14"><a href="#cb43-14" aria-hidden="true" tabindex="-1"></a>scores.head()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;    b0    b1          MSE       MAE
+#&gt; 0  60 -1.00  9839.012500  93.16250
+#&gt; 1  60 -0.98  9705.885765  92.49725
+#&gt; 2  60 -0.96  9573.794560  91.83200
+#&gt; 3  60 -0.94  9442.738885  91.16675
+#&gt; 4  60 -0.92  9312.718740  90.50150</code></pre>
+</div>
+</div>
+<p>One row per candidate line, with its score under each loss. Draw the MSE column as a surface, with the line <code>lm()</code> returned marked in red.</p>
+<p>(The red point is what <code>LinearRegression</code> returned.)</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>surface <span class="op">=</span> scores.pivot(index<span class="op">=</span><span class="st">"b1"</span>, columns<span class="op">=</span><span class="st">"b0"</span>, values<span class="op">=</span><span class="st">"MSE"</span>)</span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>cs <span class="op">=</span> ax.contourf(surface.columns, surface.index,</span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a>                 np.log10(surface.values), levels<span class="op">=</span><span class="dv">20</span>, cmap<span class="op">=</span><span class="st">"magma"</span>)</span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a>ax.scatter([fit_ols.intercept_], [fit_ols.coef_[<span class="dv">0</span>]], color<span class="op">=</span><span class="st">"red"</span>, zorder<span class="op">=</span><span class="dv">3</span>)</span>
+<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a>cbar <span class="op">=</span> fig.colorbar(cs, ax<span class="op">=</span>ax, label<span class="op">=</span><span class="st">"log10(MSE)"</span>)</span>
+<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="vs">r"</span><span class="dv">$</span><span class="er">\</span><span class="vs">hat</span><span class="dv">\b</span><span class="vs">eta_0</span><span class="dv">$</span><span class="vs">"</span>)</span>
+<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="vs">r"</span><span class="dv">$</span><span class="er">\</span><span class="vs">hat</span><span class="dv">\b</span><span class="vs">eta_1</span><span class="dv">$</span><span class="vs">"</span>)</span>
+<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day3-02-loss-functions_files/figure-html/unnamed-chunk-27-3.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="672"></p>
+<p><img src="day3-02-loss-functions_files/figure-html/unnamed-chunk-36-3.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="672"></p>
 </figure>
 </div>
 </div>
 </div>
 <p>Two features of that picture matter for the next exercise. The surface is a bowl: it has one lowest point and no others, which is why least squares has a single answer. And the bowl is a long diagonal trough rather than a round basin, because the intercept and the slope trade off against each other — raise the slope and you can compensate by lowering the intercept. <a href="day3-03-gradient-descent.html" class="quarto-xref"><span>Exercise 3.3 — Gradient descent</span></a> walks downhill on this exact surface, and the shape of the trough is what makes that harder than it sounds.</p>
 </section>
-<section id="task-4-find-the-minimum-by-brute-force-1" class="level3">
-<h3 class="anchored" data-anchor-id="task-4-find-the-minimum-by-brute-force-1">Task 4 — Find the minimum by brute force</h3>
-<p>Pull the lowest cell out of the grid you just built and compare it with the fitted line.</p>
+<section id="task-4-find-the-best-candidate-under-each-loss-1" class="level3">
+<h3 class="anchored" data-anchor-id="task-4-find-the-best-candidate-under-each-loss-1">Task 4 — Find the best candidate under each loss</h3>
+<p>Pull the lowest-scoring row out of the grid, first by MSE and then by MAE.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>i, j <span class="op">=</span> np.unravel_index(MSE.______(), MSE.shape)</span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(b0_vals[i], b1_vals[j], MSE[i, j])</span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">round</span>(fit_ols.intercept_, <span class="dv">3</span>), <span class="bu">round</span>(fit_ols.coef_[<span class="dv">0</span>], <span class="dv">4</span>))   <span class="co"># the fitted line, to compare</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(scores.nsmallest(<span class="dv">1</span>, ______))</span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(scores.nsmallest(<span class="dv">1</span>, <span class="st">"MAE"</span>))</span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(fit_ols.intercept_, fit_ols.coef_[<span class="dv">0</span>])   <span class="co"># the fitted line, to compare</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-9-contents" aria-controls="callout-9" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
+<p>The best candidate under MSE is intercept 110, slope 0.30, scoring 847.55 — against <code>lm()</code>’s 110.298, 0.2887 and 847.52. The difference is the spacing of the grid and nothing else. Under MAE the best candidate is a different line: intercept 99, slope 0.50.</p>
+<p>Now do the same on the contaminated data, and watch which of the two losses changes its mind.</p>
+<p>Read “<code>lm()</code>” above as <code>LinearRegression</code>: the comparison is the same.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>scores_bad <span class="op">=</span> candidates.merge(glu_bad[[<span class="st">"age"</span>, <span class="st">"glucose"</span>]], how<span class="op">=</span><span class="st">"cross"</span>)</span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>scores_bad[<span class="st">"r"</span>] <span class="op">=</span> (scores_bad[<span class="st">"glucose"</span>]</span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>                   <span class="op">-</span> (scores_bad[<span class="st">"b0"</span>] <span class="op">+</span> scores_bad[<span class="st">"b1"</span>] <span class="op">*</span> scores_bad[<span class="st">"age"</span>]))</span>
+<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a>scores_bad <span class="op">=</span> (scores_bad.assign(sq<span class="op">=</span><span class="kw">lambda</span> d: d[<span class="st">"r"</span>] <span class="op">**</span> <span class="dv">2</span>,</span>
+<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a>                                ab<span class="op">=</span><span class="kw">lambda</span> d: d[<span class="st">"r"</span>].<span class="bu">abs</span>())</span>
+<span id="cb47-6"><a href="#cb47-6" aria-hidden="true" tabindex="-1"></a>                        .groupby([<span class="st">"b0"</span>, <span class="st">"b1"</span>], as_index<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb47-7"><a href="#cb47-7" aria-hidden="true" tabindex="-1"></a>                        .agg(MSE<span class="op">=</span>(<span class="st">"sq"</span>, <span class="st">"mean"</span>), MAE<span class="op">=</span>(<span class="st">"ab"</span>, <span class="st">"mean"</span>)))</span>
+<span id="cb47-8"><a href="#cb47-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb47-9"><a href="#cb47-9" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(</span>
+<span id="cb47-10"><a href="#cb47-10" aria-hidden="true" tabindex="-1"></a>    [scores.nsmallest(<span class="dv">1</span>, <span class="st">"MSE"</span>)[[<span class="st">"b0"</span>, <span class="st">"b1"</span>]].iloc[<span class="dv">0</span>],</span>
+<span id="cb47-11"><a href="#cb47-11" aria-hidden="true" tabindex="-1"></a>     scores_bad.nsmallest(<span class="dv">1</span>, <span class="st">"MSE"</span>)[[<span class="st">"b0"</span>, <span class="st">"b1"</span>]].iloc[<span class="dv">0</span>],</span>
+<span id="cb47-12"><a href="#cb47-12" aria-hidden="true" tabindex="-1"></a>     scores.nsmallest(<span class="dv">1</span>, <span class="st">"MAE"</span>)[[<span class="st">"b0"</span>, <span class="st">"b1"</span>]].iloc[<span class="dv">0</span>],</span>
+<span id="cb47-13"><a href="#cb47-13" aria-hidden="true" tabindex="-1"></a>     scores_bad.nsmallest(<span class="dv">1</span>, <span class="st">"MAE"</span>)[[<span class="st">"b0"</span>, <span class="st">"b1"</span>]].iloc[<span class="dv">0</span>]],</span>
+<span id="cb47-14"><a href="#cb47-14" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>[<span class="st">"clean_MSE"</span>, <span class="st">"contaminated_MSE"</span>, <span class="st">"clean_MAE"</span>, <span class="st">"contaminated_MAE"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;                      b0    b1
+#&gt; clean_MSE         110.0  0.30
+#&gt; contaminated_MSE  136.0 -0.16
+#&gt; clean_MAE          99.0  0.50
+#&gt; contaminated_MAE  103.0  0.40</code></pre>
 </div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Tip</span>Stuck?
 </div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-9" class="callout-9-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
-<p>You want the position of the smallest value in a 2-D array, which numpy gives you as a flat index; <code>unravel_index</code> is already there to turn it back into a row and a column.</p>
-</div>
-</div>
-</div>
-<p>The grid’s best cell is intercept 110, slope 0.30, with an MSE of 847.55 — against <code>LinearRegression</code>’s 110.298, 0.2887 and 847.52. The difference is the spacing of the grid and nothing else.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 46%">
+<col style="width: 27%">
+<col style="width: 27%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>best candidate</th>
+<th>intercept</th>
+<th>slope</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>clean data, by MSE</td>
+<td>110</td>
+<td><strong>+0.30</strong></td>
+</tr>
+<tr class="even">
+<td>contaminated data, by MSE</td>
+<td>136</td>
+<td><strong>−0.16</strong></td>
+</tr>
+<tr class="odd">
+<td>clean data, by MAE</td>
+<td>99</td>
+<td><strong>+0.50</strong></td>
+</tr>
+<tr class="even">
+<td>contaminated data, by MAE</td>
+<td>103</td>
+<td><strong>+0.40</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Squared error reverses the sign of the slope. Absolute error, given the same three corrupted patients, still says glucose rises with age. Same data, same grid of candidates, same arithmetic — only the loss is different.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -907,7 +1264,7 @@ window.Quarto = {
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>Huber loss is squared for small residuals and absolute for large ones. Write it, minimise it with <code>optim()</code> or <code>minimize()</code> on the contaminated data, and find the value of its cut-off at which the fitted slope flips back to positive. That number is the amount of contamination you have implicitly assumed.</p>
+<p>Huber loss is squared for residuals smaller than some cut-off and absolute for the larger ones. Add a third score to the grid for a cut-off you choose, find its best candidate on the contaminated data, and then find the cut-off at which the best slope flips back to positive. That number is the amount of contamination you have implicitly assumed.</p>
 </div>
 </div>
 </section>
@@ -1327,8 +1684,8 @@ window.Quarto = {
   </script>
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
-      <a href="./day3-01-supervised-learning.html" class="pagination-link" aria-label="Overview">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-title">Overview</span></span>
+      <a href="./day3-01-supervised-learning.html" class="pagination-link" aria-label="Exercise 3.1 — Supervised learning">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-title">Exercise 3.1 — Supervised learning</span></span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">

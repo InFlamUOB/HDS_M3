@@ -413,3 +413,20 @@ readr::write_csv(hospital, "data/hospital_admissions.csv", na = "")
 readr::write_csv(creatinine_truth, "data/creatinine_truth.csv")
 message("wrote hospital_admissions.csv: ", nrow(hospital), " rows; ",
         "creatinine_truth.csv: ", nrow(creatinine_truth), " rows")
+
+# ---------------------------------------------------------------------------
+# data/glucose_study.csv  - the Day 3 case study
+#
+# Age and glucose for 80 screened adults, taken straight from diabetes.csv:
+# the five impossible glucose readings of 0 dropped, then the first 80 rows.
+# No RNG, so this is a deterministic view of a file written above. Day 3 reads
+# it in four chapters, which is why it is a file rather than three lines of
+# filtering repeated in each.
+# ---------------------------------------------------------------------------
+if (file.exists("data/diabetes.csv")) {
+  glucose_study <- readr::read_csv("data/diabetes.csv", show_col_types = FALSE)
+  glucose_study <- glucose_study[glucose_study$glucose > 0, c("age", "glucose")]
+  glucose_study <- head(glucose_study, 80)
+  readr::write_csv(glucose_study, "data/glucose_study.csv")
+  message("wrote glucose_study.csv: ", nrow(glucose_study), " rows")
+}
