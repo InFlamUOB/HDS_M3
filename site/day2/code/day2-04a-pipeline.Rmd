@@ -160,13 +160,18 @@ rec <- recipe(
     -starts_with("smoking_status_")
   )
 
-model <- workflow() |>
-  add_recipe(rec) |>
-  add_model(
-    linear_reg() |> set_engine("lm")
-  )
+# The model: as in Exercise 1.2
+los_model <- linear_reg() |>
+  set_engine("lm")
 
-fitted_model <- fit(model, data = train)
+# The pipeline: recipe + model
+los_workflow <- workflow() |>
+  add_recipe(rec) |>
+  add_model(los_model)
+
+# Fit on the training patients
+los_fit <- los_workflow |>
+  fit(data = train)
 ```
 
 *For comparison, the same step in Python (not run here):*
@@ -220,19 +225,32 @@ model.fit(X_train, y_train)
 >    the dummy columns whose names start with `admission_type_` or
 >    `smoking_status_`, keeping their values as 0 and 1.
 >
-> 6. **`workflow()`** brings the preprocessing recipe and regression
->    model together. `set_engine("lm")` specifies the R function used
->    to fit the linear regression.
+> 6. **`los_model <- linear_reg() |> set_engine("lm")`** is the model,
+>    written exactly as in Exercise 1.2: *linear regression, computed by
+>    `lm`*. It fits nothing yet and mentions no data.
 >
-> 7. **`fit(model, data = train)`** learns the preprocessing values from
->    the training patients, applies the steps and fits the regression.
+> 7. **`los_workflow <- workflow() |> add_recipe(rec) |> add_model(los_model)`**
+>    puts the two pieces together: first the recipe (the preprocessing),
+>    then the model. This is the new step compared with Exercise 1.2, and
+>    the R counterpart of Python's `Pipeline`. We need it because the
+>    recipe and the model must be fitted together: otherwise we would have
+>    to learn the preprocessing and apply it by hand before every fit and
+>    every prediction.
 >
-> **The recipe defines the instructions; `fit()` learns from the
-> training data.**
+> 8. **`los_fit <- los_workflow |> fit(data = train)`** is the same call as
+>    in Exercise 1.2, with the workflow in place of the model. It learns the
+>    preprocessing values (medians, most frequent categories, means and
+>    standard deviations) from the training patients, applies the steps and
+>    fits the regression. There is no formula in `fit()` this time: the
+>    formula, `length_of_stay ~ .`, is already in the recipe.
 >
-> When we later call `predict(fitted_model, new_data = test)`, the fitted
-> workflow applies the same preprocessing using the values learned from
-> training, then predicts length of stay.
+> **The recipe and the workflow set out the instructions; `fit()` learns
+> from the training data.**
+>
+> When we later call `predict(los_fit, new_data = test)`, exactly as in
+> Exercise 1.2, the fitted workflow applies the same preprocessing using
+> the values learned from training, then predicts length of stay. Nothing
+> is recalculated from the test patients.
 
 The same pipeline, read across the two columns:
 
@@ -267,7 +285,7 @@ median(test$creatinine, na.rm = TRUE)
 
 # the recipe fitted inside the workflow
 trained_rec <- extract_recipe(
-  fitted_model, estimated = TRUE
+  los_fit, estimated = TRUE
 )
 
 # step 1 is the median imputation
@@ -432,7 +450,7 @@ patients.
 
 ```{r}
 predictions <- predict(
-  fitted_model, test
+  los_fit, test
 )
 
 head(predictions, 5)
