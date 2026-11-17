@@ -2757,13 +2757,18 @@ forceTheme('sk-container-id-1');</script>
 <span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>    <span class="sc">-</span><span class="fu">starts_with</span>(<span class="st">"smoking_status_"</span>)</span>
 <span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>  )</span>
 <span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>model <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">|&gt;</span></span>
-<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_recipe</span>(rec) <span class="sc">|&gt;</span></span>
-<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(</span>
-<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>    <span class="fu">linear_reg</span>() <span class="sc">|&gt;</span> <span class="fu">set_engine</span>(<span class="st">"lm"</span>)</span>
-<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>fitted_model <span class="ot">&lt;-</span> <span class="fu">fit</span>(model, <span class="at">data =</span> train)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a><span class="co"># The model: as in Exercise 1.2</span></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>los_model <span class="ot">&lt;-</span> <span class="fu">linear_reg</span>() <span class="sc">|&gt;</span></span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"lm"</span>)</span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a><span class="co"># The pipeline: recipe + model</span></span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>los_workflow <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">|&gt;</span></span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_recipe</span>(rec) <span class="sc">|&gt;</span></span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(los_model)</span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a><span class="co"># Fit on the training patients</span></span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a>los_fit <span class="ot">&lt;-</span> los_workflow <span class="sc">|&gt;</span></span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(<span class="at">data =</span> train)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div>
 </div>
@@ -2805,11 +2810,12 @@ forceTheme('sk-container-id-1');</script>
 <li><p><strong><code>step_impute_mode()</code></strong> replaces missing categorical values with the most frequent category.</p></li>
 <li><p><strong><code>step_dummy()</code></strong> converts categorical variables into numerical indicator columns. By default, one category is left out as the reference category for linear regression.</p></li>
 <li><p><strong><code>step_normalize()</code></strong> centres numerical predictors on their mean and divides by their standard deviation. The minus signs exclude the dummy columns whose names start with <code>admission_type_</code> or <code>smoking_status_</code>, keeping their values as 0 and 1.</p></li>
-<li><p><strong><code>workflow()</code></strong> brings the preprocessing recipe and regression model together. <code>set_engine("lm")</code> specifies the R function used to fit the linear regression.</p></li>
-<li><p><strong><code>fit(model, data = train)</code></strong> learns the preprocessing values from the training patients, applies the steps and fits the regression.</p></li>
+<li><p><strong><code>los_model &lt;- linear_reg() |&gt; set_engine("lm")</code></strong> is the model, written exactly as in Exercise 1.2: <em>linear regression, computed by <code>lm</code></em>. It fits nothing yet and mentions no data.</p></li>
+<li><p><strong><code>los_workflow &lt;- workflow() |&gt; add_recipe(rec) |&gt; add_model(los_model)</code></strong> puts the two pieces together: first the recipe (the preprocessing), then the model. This is the new step compared with Exercise 1.2, and the R counterpart of Python’s <code>Pipeline</code>. We need it because the recipe and the model must be fitted together: otherwise we would have to learn the preprocessing and apply it by hand before every fit and every prediction.</p></li>
+<li><p><strong><code>los_fit &lt;- los_workflow |&gt; fit(data = train)</code></strong> is the same call as in Exercise 1.2, with the workflow in place of the model. It learns the preprocessing values (medians, most frequent categories, means and standard deviations) from the training patients, applies the steps and fits the regression. There is no formula in <code>fit()</code> this time: the formula, <code>length_of_stay ~ .</code>, is already in the recipe.</p></li>
 </ol>
-<p><strong>The recipe defines the instructions; <code>fit()</code> learns from the training data.</strong></p>
-<p>When we later call <code>predict(fitted_model, new_data = test)</code>, the fitted workflow applies the same preprocessing using the values learned from training, then predicts length of stay.</p>
+<p><strong>The recipe and the workflow set out the instructions; <code>fit()</code> learns from the training data.</strong></p>
+<p>When we later call <code>predict(los_fit, new_data = test)</code>, exactly as in Exercise 1.2, the fitted workflow applies the same preprocessing using the values learned from training, then predicts length of stay. Nothing is recalculated from the test patients.</p>
 </div>
 </div>
 <p>The same pipeline, read across the two columns:</p>
@@ -2930,7 +2936,7 @@ forceTheme('sk-container-id-1');</script>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the recipe fitted inside the workflow</span></span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>trained_rec <span class="ot">&lt;-</span> <span class="fu">extract_recipe</span>(</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  fitted_model, <span class="at">estimated =</span> <span class="cn">TRUE</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  los_fit, <span class="at">estimated =</span> <span class="cn">TRUE</span></span>
 <span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="co"># step 1 is the median imputation</span></span>
@@ -3196,7 +3202,7 @@ forceTheme('sk-container-id-1');</script>
 <p><strong>R</strong></p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(</span>
-<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>  fitted_model, test</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>  los_fit, test</span>
 <span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(predictions, <span class="dv">5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
