@@ -280,6 +280,11 @@ def callout(attrs, children, lang, test, quote):
                 title = clean_md(m.group(1))
                 kids = kids[:k] + kids[k + 1:]
             break
+    # A box titled for one language ("How to read this code: Python") belongs
+    # only in that language's notebook.
+    m = re.search(r":\s*(R|Python)\s*$", title or "")
+    if m and m.group(1) != LABEL[lang]:
+        return []
     folded = any(n[0] == "text" and "folded away" in n[1] for n in kids)
     if title == "The plots are for looking at" or folded:
         body = [("md", "The code for every plot is included, so that you can run "

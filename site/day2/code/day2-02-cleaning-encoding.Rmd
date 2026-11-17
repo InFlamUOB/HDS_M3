@@ -64,7 +64,7 @@ gp <- gp |>
   mutate(
     height_cm = na_if(height_cm, "unknown"), #what is this function doing? Check it out!!  https://dplyr.tidyverse.org/reference/na_if.html
     height_cm = as.numeric(height_cm), # why do we have to have this after the NA has been corrected? 
-    height_cm = if_else(!is.na(height_cm) & height_cm < 3, # what re we doing here?  
+    height_cm = if_else(!is.na(height_cm) & height_cm < 3, # what are we doing here?  
                         height_cm * 100,
                         height_cm)
   )
@@ -76,7 +76,20 @@ Heights now run from 155 to 183 cm, with one missing.
 
 > **Important**
 >
-> This process of turning messy data into clean structured format is called *data wrangling* and the best way to get better at it is lots of practice. Tidyverse has developed a language to help you do this in a consistent way. Practice and explore the functions available to you. The more you use them, the more you will understand how to use them effectively. To discover what is available explore, for example here are amazing examples of data wrnagling at their best by the same people that develop tidyverse  [Tidy Tuesday](https://www.youtube.com/playlist?list=PL19ev-r1GBwkuyiwnxoHTRC8TTqP8OEi8)
+> This process of turning messy data into clean structured format is called *data wrangling* and the best way to get better at it is lots of practice. Tidyverse has developed a language to help you do this in a consistent way. Practice and explore the functions available to you. The more you use them, the more you will understand how to use them effectively. To discover what is available explore, for example here are amazing examples of data wrangling at their best by the same people that develop tidyverse  [Tidy Tuesday](https://www.youtube.com/playlist?list=PL19ev-r1GBwkuyiwnxoHTRC8TTqP8OEi8)
+
+One key function to explore is `mutate()` which allows you to create new variables or modify existing ones. In the example above we used it to clean the height variable, and you can also create new variables based on existing ones. For example, we could create a new variable that categorizes patients as "short", "average", or "tall" based on their height. Or maybe I just want to create an extra variable with just 1s in all values. Have more examples [here](https://bookdown.org/yih_huynh/Guide-to-R-Book/mutate.html)
+
+```{r}
+gp_with_extra_var <- gp |>
+  mutate(
+    height_cat = height_cm %>%
+      cut(breaks = c(-Inf, 160, 180, Inf), labels = c("short", "average", "tall")), 
+    JustOne = 1
+  )
+
+#View(gp_with_extra_var)
+```
 
 Lets continue. 
 
@@ -95,7 +108,7 @@ With the following filter we can set implausible values to `NA`
 
 ```{r}
 gp <- gp |>
-  mutate(age = if_else(age < 0 | age > 110, NA_real_, as.numeric(age)))
+  mutate(age = if_else(age < 0 | age > 110, NA, as.numeric(age)))
 
 sum(is.na(gp$age))
 ```
@@ -142,13 +155,13 @@ levels(gp$GP_practice)
 ```{r}
 #| fig-height: 2.6
 gp |>
-  ggplot(aes(x = fct_infreq(GP_practice))) +
+  ggplot(aes(x = GP_practice)) +
   geom_bar(fill = "steelblue") +
   coord_flip() +
   labs(x = "GP practice", y = "Number of patients")
 ```
 
-Three practices have a single patient. Difficult to establish any association with it (cannot find a pattern if just one sample! )so lets combine anything with fewer than three patients into an `Other` category:
+Three practices have a single patient. Difficult to establish any association with it (cannot find a pattern if just one sample! )so lets combine anything with fewer than three patients into an `Other` category. You can do it in many different ways, but tidyverse has a function that does it in one line: `fct_lump_min()` from the `forcats` package:
 
 ```{r}
 gp <- gp |>
@@ -179,7 +192,7 @@ gp |> count(smoking_status, sort = TRUE)
 ```{r}
 #| fig-height: 2.6
 gp |>
-  ggplot(aes(x = fct_infreq(smoking_status))) +
+  ggplot(aes(x = smoking_status)) +
   geom_bar(fill = "steelblue") +
   coord_flip() +
   labs(x = "Smoking status", y = "Patients")
