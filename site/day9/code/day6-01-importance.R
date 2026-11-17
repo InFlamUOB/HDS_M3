@@ -1,6 +1,6 @@
 # Exercise 9.1 — Variable importance, and a column of pure noise
 # HDS MSc · Module 3 · exercise booklet
-# https://inflamuob.github.io/HDS_M3/day6/day6-01-importance.html
+# https://inflamuob.github.io/HDS_M3/day9/day6-01-importance.html
 #
 # The R code from the chapter, in page order, for you to copy and run.
 # Lines with ______ are blanks to fill in, so this file is a worksheet:
@@ -13,6 +13,9 @@
 # --------------------------------------------------------------------
 # Packages and data
 # --------------------------------------------------------------------
+
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "ranger", "vip"))
 
 library(tidyverse)
 library(tidymodels)

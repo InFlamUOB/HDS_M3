@@ -29,6 +29,9 @@ r_guess  <- y - (120 + 0.5 * x)        # residuals of the hand-drawn line
 rbind(fitted = c(sum_r = sum(r_fitted), sum_xr = sum(x * r_fitted)),
       guess  = c(sum_r = sum(r_guess),  sum_xr = sum(x * r_guess)))
 
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse"))
+
 bands <- list(c(21, 25), c(21, 30), c(21, 40), c(21, 81))
 
 do.call(rbind, lapply(bands, function(b) {

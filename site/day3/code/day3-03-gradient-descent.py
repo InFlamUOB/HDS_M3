@@ -14,6 +14,10 @@
 # Minimising $f(x) = x^2$
 # --------------------------------------------------------------------
 
+# Packages for this exercise. If one is missing, install it once from a terminal
+# (in a Jupyter notebook, type %pip instead of pip):
+# pip install pandas numpy matplotlib scikit-learn
+
 import numpy as np
 import matplotlib.pyplot as plt
 

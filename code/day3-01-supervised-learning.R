@@ -12,6 +12,9 @@
 # Packages and data
 # --------------------------------------------------------------------
 
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "rpart.plot"))
+
 library(tidyverse)     # data wrangling and plotting (ggplot2 is part of it)
 library(tidymodels)    # modelling
 

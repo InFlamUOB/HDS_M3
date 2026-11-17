@@ -14,6 +14,9 @@
 # Packages and data
 # --------------------------------------------------------------------
 
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "rpart.plot"))
+
 library(tidyverse)
 library(tidymodels)
 library(rpart.plot)            # to draw a fitted rpart tree

@@ -127,8 +127,22 @@ def render(stem, title, lang, chunks):
     c = COMMENT[lang]
     rule = c + " " + "-" * 68
     # Each day is published at its own address: .../HDS_M3/day3/<chapter>.html
-    m = re.match(r"day(\d+)-", stem)
-    day = f"day{m.group(1)}/" if m else ""
+    # The day is the "Day N" part that lists the chapter in _quarto.yml, so the
+    # explainability chapters (files day6-*) point at day9/, where they are published.
+    day = ""
+    part = None
+    for line in (ROOT / "_quarto.yml").read_text().splitlines():
+        s = line.strip()
+        if s.startswith("#"):
+            continue
+        m = re.match(r'- part:\s*"Day (\d+)\b', s)
+        if m:
+            part = m.group(1)
+        elif part and s == f"- {stem}.qmd":
+            day = f"day{part}/"
+    if not day:
+        m = re.match(r"day(\d+)-", stem)
+        day = f"day{m.group(1)}/" if m else ""
     # Say "fill in the blanks" only when the chapter has blanks.
     blanks = [
         f"{c} Lines with ______ are blanks to fill in, so this file is a worksheet:",

@@ -1,6 +1,6 @@
 # Exercise 9.2 — SHAP values: global and local explanations
 # HDS MSc · Module 3 · exercise booklet
-# https://inflamuob.github.io/HDS_M3/day6/day6-02-shap.html
+# https://inflamuob.github.io/HDS_M3/day9/day6-02-shap.html
 #
 # The Python code from the chapter, in page order, for you to copy and run.
 # Lines with ______ are blanks to fill in, so this file is a worksheet:
@@ -13,6 +13,10 @@
 # --------------------------------------------------------------------
 # Packages and data
 # --------------------------------------------------------------------
+
+# Packages for this exercise. If one is missing, install it once from a terminal
+# (in a Jupyter notebook, type %pip instead of pip):
+# pip install pandas numpy matplotlib scikit-learn shap
 
 import pandas as pd
 import numpy as np
