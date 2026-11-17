@@ -99,7 +99,7 @@ your own machine, where R and Python live.
 
 ```bash
 make release DAY=2             # build Day 2 into site/day2/
-make release DAY=2 ANSWERS=1   # the same, showing that day's worked answers
+make release DAY=2 ANSWERS=1   # the same, showing that day's worked answers and adding the -solutions notebooks
 make day-site DAY=2            # build it to look at, without releasing
 make unrelease DAY=2           # take the day down
 git add site && git commit -m "Release Day 2" && git push

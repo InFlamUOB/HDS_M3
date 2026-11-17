@@ -29,14 +29,15 @@ def check_code_files() -> None:
 
     n = 0
     for chapter in sorted(ROOT.glob("day*.qmd")):
-        dests = [ROOT / "code" / (chapter.stem + ext) for ext in mnb.EXT.values()]
+        dests = [ROOT / "code" / (chapter.stem + sfx + ext)
+                 for sfx in ("", "-solutions") for ext in mnb.EXT.values()]
         if not mnb.offers_download(chapter):
             for dest in dests:
                 if dest.exists():
                     problems.append(f"code/{dest.name} exists but {chapter.name} "
                                     "does not link to it; delete one or the other")
             continue
-        want = mnb.build(chapter)
+        want = mnb.all_files(chapter)
         for dest in dests:
             if dest.name not in want:
                 if dest.exists():

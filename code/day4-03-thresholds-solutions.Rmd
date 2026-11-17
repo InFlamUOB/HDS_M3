@@ -1,0 +1,286 @@
+---
+title: "Exercise 4.3 — The decision threshold (with solutions)"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day4/day4-03-thresholds.html>.*
+
+*Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+
+A logistic regression outputs a probability,
+
+$$\hat{p}(x) = P(Y = 1 \mid x),$$
+
+but a clinic needs a decision: test this person for diabetes, or not. To turn
+the probability into a predicted class we choose a **decision threshold**.
+Usually:
+
+- if $\hat{p}(x) \geq 0.5$, predict 1 (diabetes);
+- if $\hat{p}(x) < 0.5$, predict 0 (no diabetes).
+
+But 0.5 is arbitrary. Changing the threshold changes how many true positives,
+false positives, true negatives and false negatives the model makes, and so
+which mistakes it makes.
+
+**Theory:** decision threshold; confusion table; true and false positives and
+negatives; sensitivity and specificity; the cost of each kind of mistake.
+
+> **The plots are for looking at**
+>
+> The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())          # white background for every plot
+options(pillar.sigfig = 4)     # show four significant figures in tables
+```
+
+The same 750 people and the same split as Exercises 4.1 and 4.2. We add a
+column `diabetes_dummy`, the outcome coded 1 for `pos` and 0 for `neg`, which
+makes the counting below easier to read.
+
+```{r}
+diabetes <- read_csv("data/diabetes.csv") |>
+  select(glucose, mass, age, diabetes) |>
+  filter(glucose > 0, mass > 0) |>              # remove the impossible zeros
+  mutate(diabetes       = factor(diabetes, levels = c("neg", "pos")),
+         diabetes_dummy = if_else(diabetes == "pos", 1, 0))
+
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+test  <- diabetes[test_rows, ]
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — From a probability to a predicted class
+
+Fit the logistic regression from Exercise 4.2 on the training rows:
+
+```{r}
+log_fit <- logistic_reg(mode = "classification") |>
+  set_engine("glm") |>
+  fit(diabetes ~ glucose, data = train)
+
+tidy(log_fit)
+```
+
+To make it easy to follow, predict the probability of diabetes for 15 people
+from the test set only: the patients in rows 26 to 40.
+
+```{r}
+patients15 <- test |>
+  slice(26:40)
+
+prediction_15 <- predict(log_fit, new_data = patients15, type = "prob") |>
+  rename(prob = .pred_pos) |>
+  select(prob) |>
+  bind_cols(patients15)
+
+prediction_15 |>
+  select(glucose, diabetes_dummy, prob)
+```
+
+Now turn each probability into a predicted class at three thresholds: 0.3, 0.5
+and 0.7. A person is predicted to have diabetes (1) when their probability is
+at or above the threshold:
+
+```{r}
+prediction_15 <- prediction_15 |>
+  mutate(class_0.3 = if_else(prob >= 0.3, 1, 0),
+         class_0.5 = if_else(prob >= 0.5, 1, 0),
+         class_0.7 = if_else(prob >= 0.7, 1, 0))
+
+prediction_15 |>
+  select(glucose, diabetes_dummy, prob, class_0.3, class_0.5, class_0.7)
+```
+
+Here are the 15 predicted probabilities, coloured by what is actually true, with
+the three thresholds as dashed lines. Everyone above a line is predicted to have
+diabetes at that threshold. The points follow the sigmoid curve from
+Exercise 4.2.
+
+```{r}
+prediction_15 |>
+  mutate(truth = if_else(diabetes_dummy == 1, "diabetes (1)", "no diabetes (0)")) |>
+  ggplot(aes(x = glucose, y = prob, colour = truth)) +
+  geom_point(size = 3, alpha = 0.8) +
+  geom_hline(yintercept = 0.3, colour = "blue",   linetype = "dashed") +
+  geom_hline(yintercept = 0.5, colour = "red",    linetype = "dashed") +
+  geom_hline(yintercept = 0.7, colour = "purple", linetype = "dashed") +
+  scale_colour_manual(values = c("darkorange", "grey40")) +
+  labs(x = "Glucose (mg/dL)", y = "Predicted probability of diabetes",
+       colour = "What is true",
+       title = "Predicted probabilities with the thresholds 0.3, 0.5 and 0.7")
+```
+
+> **Learning points**
+>
+> - A classifier gives a probability; a threshold turns it into a predicted class.
+> - The threshold is a choice, not part of the model. 0.5 is only a convention.
+> - Lowering the threshold predicts diabetes for more people; raising it, for fewer.
+
+------------------------------------------------------------------------
+
+### Part 2 — Confusion tables, sensitivity and specificity
+
+Each person ends up in one of four boxes, depending on what is true and what the
+model predicted:
+
+| | Predicted 1 (diabetes) | Predicted 0 (no diabetes) |
+|---|:-:|:-:|
+| **Truly 1** | True positive (**TP**) | False negative (**FN**): a case missed |
+| **Truly 0** | False positive (**FP**): a false alarm | True negative (**TN**) |
+
+This is the **confusion table**. **On paper first:** use the table of 15 people
+above to count TP, FP, FN and TN at the threshold 0.5. Then check with code.
+
+```{r}
+table(True = prediction_15$diabetes_dummy, Predicted = prediction_15$class_0.5)
+```
+
+At 0.5 there are 4 true positives, 1 false positive, 3 false negatives and 7
+true negatives. Now count all four boxes for the three thresholds side by side.
+Two summaries of the table are used everywhere in medicine:
+
+$$\text{Sensitivity} = \frac{TP}{TP + FN} \qquad\qquad
+\text{Specificity} = \frac{TN}{TN + FP}$$
+
+- **Sensitivity**: of the people who really have diabetes, the proportion the
+  model catches.
+- **Specificity**: of the people who really do not, the proportion the model
+  correctly leaves alone.
+
+Complete the code so that it counts the false negatives and computes the
+specificity:
+
+> **Stuck?**
+>
+> A false negative is a person who truly has diabetes (`diabetes_dummy == 1`) but
+> was predicted not to (`predicted == 0`). Specificity uses TN and FP, in the
+> same way as sensitivity uses TP and FN.
+
+> **Worked answer**
+
+```{r}
+threshold_compare <- prediction_15 |>
+  pivot_longer(c(class_0.3, class_0.5, class_0.7),
+               names_to = "threshold", values_to = "predicted") |>
+  group_by(threshold) |>
+  summarise(TP = sum(diabetes_dummy == 1 & predicted == 1),
+            FP = sum(diabetes_dummy == 0 & predicted == 1),
+            FN = sum(diabetes_dummy == 1 & predicted == 0),
+            TN = sum(diabetes_dummy == 0 & predicted == 0)) |>
+  mutate(sensitivity = TP / (TP + FN),
+         specificity = TN / (TN + FP))
+
+threshold_compare
+```
+
+> | Threshold | TP | FP | FN | TN | Sensitivity | Specificity |
+> |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+> | 0.3 | 5 | 2 | 2 | 6 | 0.714 | 0.750 |
+> | 0.5 | 4 | 1 | 3 | 7 | 0.571 | 0.875 |
+> | 0.7 | 1 | 0 | 6 | 8 | 0.143 | 1.000 |
+
+Changing the threshold changes the kind of mistakes the model makes. A **low**
+threshold catches more of the people with diabetes (higher sensitivity) at the
+price of more false alarms. A **high** threshold raises fewer false alarms
+(higher specificity) but misses more cases. At 0.7 this model misses six of the
+seven people with diabetes.
+
+> **Learning points**
+>
+> - The confusion table counts true positives, false positives, false negatives and true negatives.
+> - Sensitivity = TP / (TP + FN); specificity = TN / (TN + FP).
+> - Lowering the threshold raises sensitivity and lowers specificity, and the other way round.
+
+------------------------------------------------------------------------
+
+### Part 3 — The packaged version, on all 150 test patients
+
+Fifteen people are enough to count by hand, not to judge a model. Whenever you
+report a classification model you will build a confusion table, and packages
+already do it for you. In tidymodels it is `conf_mat()` from **yardstick**. It
+needs the truth and the predicted class as factors with the same levels:
+
+```{r}
+test_preds <- predict(log_fit, new_data = test, type = "prob") |>
+  bind_cols(test) |>
+  mutate(predicted_0.5 = factor(if_else(.pred_pos >= 0.5, "pos", "neg"),
+                                levels = c("neg", "pos")))
+
+cm <- test_preds |>
+  conf_mat(truth = diabetes, estimate = predicted_0.5)
+
+cm
+```
+
+```{r}
+autoplot(cm, type = "heatmap")
+```
+
+> **Rows and columns are the other way round in Python**
+>
+> `conf_mat()` puts the **prediction** in the rows and the **truth** in the
+> columns. scikit-learn's `confusion_matrix()` does the opposite. The numbers are
+> the same; read the labels before you read the table.
+
+At 0.5 the model finds 24 of the 53 people with diabetes (sensitivity 0.453)
+and correctly leaves alone 90 of the 97 without (specificity 0.928). For a
+screening test, missing more than half the cases is a poor result.
+
+**Putting a price on the two mistakes.** Suppose a missed case (a false
+negative) costs five times as much as an unnecessary test (a false positive):
+the disease goes untreated, while the extra test costs one appointment. Then the
+cost of a threshold is
+
+$$\text{cost} = 5 \times FN + 1 \times FP$$
+
+Work out the cost of every threshold from 0.1 to 0.9 on the test patients, and
+find the cheapest:
+
+> **Worked answer**
+
+```{r}
+thresholds <- tibble(threshold = seq(0.1, 0.9, by = 0.1))
+
+threshold_costs <- thresholds |>
+  cross_join(test_preds) |>
+  group_by(threshold) |>
+  summarise(FN = sum(diabetes == "pos" & .pred_pos <  threshold),
+            FP = sum(diabetes == "neg" & .pred_pos >= threshold)) |>
+  mutate(cost = 5 * FN + 1 * FP)
+
+threshold_costs
+```
+
+> The cheapest threshold is **0.2**, with a cost of 71 (3 missed cases and 56
+> unnecessary tests). The default of 0.5 costs 152. Testing everybody, with no
+> model at all, would cost 97, and testing nobody 265.
+
+**Question!** The cost ratio of five to one was an assumption. Who should decide
+it, and what happens to the best threshold if a missed case costs twenty times
+an unnecessary test instead of five?
+
+> **Learning points**
+>
+> - Packages build the confusion table for you: `conf_mat()` in R, `confusion_matrix()` in Python. Check which way round the rows and columns are.
+> - The best threshold depends on what each kind of mistake costs, which is a clinical decision, not a statistical one.
+> - Report the threshold together with sensitivity and specificity: a threshold on its own says nothing.
+
+## Stretch
+
+> **Stretch — choose the threshold honestly**
+>
+> The cheapest threshold above was chosen by looking at the test patients, and
+> then judged on the same test patients. Choose it on the **training** rows
+> instead, then apply it once to the test patients. Is the cost still 71? Why is
+> this the honest way round?

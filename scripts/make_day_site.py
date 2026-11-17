@@ -205,11 +205,14 @@ def build_day(day, answers=False):
             z.write(ROOT / f, f)
 
     (work / "code").mkdir()
+    # The notebooks with blanks always; the "-solutions" notebooks only when the
+    # day is released with its answers (their links on the pages appear then too).
     for name in chapters:
-        for ext in (".Rmd", ".ipynb"):
-            src = ROOT / "code" / (name[:-4] + ext)
-            if src.exists():
-                shutil.copy2(src, work / "code" / src.name)
+        for sfx in ("", "-solutions") if answers else ("",):
+            for ext in (".Rmd", ".ipynb"):
+                src = ROOT / "code" / (name[:-4] + sfx + ext)
+                if src.exists():
+                    shutil.copy2(src, work / "code" / src.name)
 
     (work / "_quarto.yml").write_text(day_config(part_title, chapters, answers))
     (work / "index.qmd").write_text(day_landing(day, part_title, chapters, data, answers))

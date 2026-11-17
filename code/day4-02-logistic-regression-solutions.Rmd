@@ -1,0 +1,294 @@
+---
+title: "Exercise 4.2 — Fitting a logistic regression model (with solutions)"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day4/day4-02-logistic-regression.html>.*
+
+*Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+
+Linear regression on Day 3 predicted a number, glucose. Logistic regression
+predicts a **probability**: the chance that a person has diabetes, given their
+glucose. A probability must stay between 0 and 1, and a straight line does not.
+The trick is to fit the straight line on a different scale, the **log-odds**,
+and convert back.
+
+**Theory:** probability, odds and log-odds; the logistic (sigmoid) function;
+reading a logistic regression coefficient; from a fitted model to a
+probability.
+
+> **The plots are for looking at**
+>
+> The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())          # white background for every plot
+options(pillar.sigfig = 4)     # show four significant figures in tables
+```
+
+The same 750 people and the same split as Exercise 4.1: every fifth person is
+held back as the test set.
+
+```{r}
+diabetes <- read_csv("data/diabetes.csv") |>
+  select(glucose, mass, age, diabetes) |>
+  filter(glucose > 0, mass > 0) |>              # remove the impossible zeros
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+test  <- diabetes[test_rows, ]
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — Probability, odds and log-odds
+
+Before fitting any model we need to be clear about how three ways of describing
+the same chance are related:
+
+- **Probability** $p$: the chance of the event happening, between 0 and 1.
+- **Odds**: the probability of the event divided by the probability of no event,
+  $$\text{odds} = \frac{p}{1-p}$$
+  between 0 and infinity.
+- **Log-odds**, also called the **logit**: the natural log of the odds,
+  $$\text{logit}(p) = \log\left(\frac{p}{1-p}\right)$$
+  which can be any number, negative or positive.
+
+Start from a probability of 0.8:
+
+```{r}
+prob     <- 0.8
+odds     <- prob / (1 - prob)
+log_odds <- log(odds)
+
+c(probability = prob, odds = odds, log_odds = log_odds)
+```
+
+A probability of 0.8 means odds of 4 ("four to one"), and log-odds of 1.386.
+
+**Complete this table** on paper, using a calculator for the logs. The first row
+is done for you.
+
+| Probability $p$ | Odds $p/(1-p)$ | Log-odds $\log(\text{odds})$ |
+|:-:|:-:|:-:|
+| 0.8 | 4 | 1.386 |
+| 0.5 | | |
+| 0.2 | | |
+| 0.9 | | |
+
+Then check it in code:
+
+> **Worked answer**
+
+```{r}
+tibble(prob = c(0.8, 0.5, 0.2, 0.9)) |>
+  mutate(odds     = prob / (1 - prob),
+         log_odds = log(odds))
+```
+
+> | Probability $p$ | Odds | Log-odds |
+> |:-:|:-:|:-:|
+> | 0.8 | 4 | 1.386 |
+> | 0.5 | 1 | 0 |
+> | 0.2 | 0.25 | −1.386 |
+> | 0.9 | 9 | 2.197 |
+>
+> A probability of 0.5 is odds of 1 ("evens") and log-odds of 0. Probabilities
+> below 0.5 have negative log-odds, and 0.2 and 0.8 sit at the same distance from
+> 0 on either side.
+
+Going back the other way, from log-odds $z$ to probability, is the **logistic**
+(or **sigmoid**) function:
+
+$$p = \frac{1}{1 + e^{-z}}$$
+
+It takes any number and squeezes it into the range 0 to 1:
+
+```{r}
+tibble(log_odds = seq(-6, 6, by = 0.1)) |>
+  mutate(probability = 1 / (1 + exp(-log_odds))) |>
+  ggplot(aes(x = log_odds, y = probability)) +
+  geom_line(colour = "red", linewidth = 1) +
+  geom_hline(yintercept = c(0, 1), linetype = "dashed", colour = "grey50") +
+  labs(x = "Log-odds z", y = "Probability p = 1 / (1 + exp(-z))")
+```
+
+> **Learning points**
+>
+> - Probability lies between 0 and 1, odds between 0 and infinity, log-odds anywhere.
+> - A probability of 0.5 is odds of 1 and log-odds of 0.
+> - Logistic regression is a straight line on the log-odds scale; the sigmoid turns it back into a probability.
+
+------------------------------------------------------------------------
+
+### Part 2 — Fit the model
+
+Check the class balance of the training rows first:
+
+```{r}
+count(train, diabetes)
+```
+
+220 of the 600 have diabetes, 36.7%. The outcome is a factor with the levels
+`neg` then `pos`, and a logistic regression fitted with `glm` predicts the
+probability of the **second** level, so this model is about `pos`.
+
+Specify the model and the engine, and fit it with a formula: predict diabetes
+from glucose only.
+
+```{r}
+logistic_spec <- logistic_reg(mode = "classification") |>
+  set_engine("glm")
+
+logistic_fit_glucose <- logistic_spec |>
+  fit(diabetes ~ glucose, data = train)
+
+tidy(logistic_fit_glucose)
+```
+
+This corresponds to the model
+
+$$\text{logit}\big(P(\text{diabetes} = \text{pos} \mid \text{glucose})\big)
+= \beta_0 + \beta_1 \times \text{glucose}$$
+
+and with the fitted coefficients
+
+$$\text{log-odds of diabetes} = -5.064 + 0.0350 \times \text{glucose}$$
+
+To get the probability for a given glucose, apply the sigmoid:
+
+$$\hat{p} = \frac{1}{1 + \exp\big(-(\beta_0 + \beta_1 \times \text{glucose})\big)}$$
+
+**Reading the slope.** Each extra mg/dL of glucose adds 0.0350 to the log-odds
+of diabetes. Log-odds are hard to picture, so turn it into odds: adding 0.0350
+to the log-odds multiplies the odds by $e^{0.0350} = 1.036$. Ten extra mg/dL
+multiply the odds by $e^{10 \times 0.0350} = 1.42$, an increase of 42%. This
+number, $e^{\beta_1}$, is the **odds ratio**.
+
+> **Learning points**
+>
+> - Logistic regression is linear in the log-odds: $\text{log-odds} = \beta_0 + \beta_1 x$.
+> - The slope is the change in log-odds for one unit of the predictor; $e^{\beta_1}$ is the odds ratio.
+> - In R the model is about the second level of the outcome factor. Check the levels before you read the signs.
+
+------------------------------------------------------------------------
+
+### Part 3 — From the model to odds and probability
+
+What does the model say about a person with a glucose of 120 mg/dL? **By hand
+first**, using the rounded coefficients:
+
+- log-odds: $-5.064 + 0.0350 \times 120 = -0.864$
+- odds: $e^{-0.864} = 0.42$
+- probability: $\dfrac{0.42}{1 + 0.42} = 0.30$
+
+Now in code, with the coefficients unrounded:
+
+```{r}
+b <- logistic_fit_glucose$fit$coefficients    # intercept first, then the slope
+
+glucose_value <- 120
+
+log_odds_120 <- b[1] + b[2] * glucose_value   # the straight line
+odds_120     <- exp(log_odds_120)             # odds
+prob_120     <- 1 / (1 + exp(-log_odds_120))  # probability
+
+round(c(log_odds = unname(log_odds_120), odds = unname(odds_120),
+        probability = unname(prob_120)), 3)
+```
+
+This is the same as asking the model, with `predict()`:
+
+```{r}
+predict(logistic_fit_glucose, new_data = tibble(glucose = 120), type = "prob")
+```
+
+A person with a glucose of 120 has a predicted probability of diabetes of
+0.297: odds of 0.42, or roughly two to five.
+
+**Your turn.** Do the same for a glucose of 160 mg/dL: first by hand, then by
+changing the code.
+
+> **Worked answer**
+
+```{r}
+glucose_value <- 160
+
+log_odds_160 <- b[1] + b[2] * glucose_value
+odds_160     <- exp(log_odds_160)
+prob_160     <- 1 / (1 + exp(-log_odds_160))
+
+round(c(log_odds = unname(log_odds_160), odds = unname(odds_160),
+        probability = unname(prob_160)), 3)
+```
+
+> By hand: $-5.064 + 0.0350 \times 160 = 0.536$, odds $e^{0.536} = 1.71$,
+> probability $1.71 / 2.71 = 0.63$. In code: log-odds 0.540, odds 1.716,
+> probability 0.632. The 40 extra mg/dL multiplied the odds by
+> $1.716 / 0.423 = 4.06$, which is $1.42^4$: four steps of ten mg/dL.
+
+**Predictions for the test set.** `predict()` with `type = "prob"` gives one
+column per class. Join them to the test data:
+
+```{r}
+test_preds <- predict(logistic_fit_glucose, new_data = test, type = "prob") |>
+  rename(prob_pos = .pred_pos, prob_neg = .pred_neg) |>
+  bind_cols(test)
+
+test_preds |>
+  select(glucose, diabetes, prob_pos, prob_neg) |>
+  head()
+```
+
+**Question!** Which of the two probability columns do we want?
+
+The probability of diabetes, `prob_pos`. The two columns always add up to 1, so
+`prob_neg` holds no extra information; but taking the wrong one turns every
+statement about risk upside down, and nothing in the code will warn you.
+
+Here is the fitted curve drawn over the observed outcomes, coded 1 for diabetes
+and 0 for none:
+
+```{r}
+test_preds |>
+  mutate(diabetes_numeric = if_else(diabetes == "pos", 1, 0)) |>
+  ggplot(aes(x = glucose)) +
+  geom_point(aes(y = diabetes_numeric), alpha = 0.4) +
+  geom_line(aes(y = prob_pos), colour = "red", linewidth = 1) +
+  scale_y_continuous(breaks = c(0, 0.5, 1), limits = c(-0.05, 1.05)) +
+  labs(x = "Glucose (mg/dL)",
+       y = "Observed outcome (0/1) and predicted probability")
+```
+
+Most of the people with diabetes (the points at 1) sit where the curve is high,
+and most of those without (at 0) where it is low, but the two groups overlap a
+great deal between about 100 and 160 mg/dL. The curve crosses 0.5 at a glucose
+of about 145.
+
+> **Learning points**
+>
+> - From the fitted line to a probability: compute the log-odds, exponentiate to get the odds, then $p = \text{odds} / (1 + \text{odds})$.
+> - `predict(type = "prob")` and `.predict_proba()` do exactly this calculation for you.
+> - Make sure you take the probability of the class you care about.
+
+## Stretch
+
+> **Stretch — where does the curve cross 0.5?**
+>
+> The predicted probability is 0.5 exactly where the log-odds are 0. Use the two
+> coefficients to find that glucose value without plotting anything, then check
+> it with `predict()` or `.predict_proba()`.
+
+> **Stretch — add BMI and age**
+>
+> Fit `diabetes ~ glucose + mass + age` on the same training rows. Does the
+> coefficient for glucose change? What does it now mean, in words?

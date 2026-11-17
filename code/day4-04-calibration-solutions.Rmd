@@ -1,0 +1,267 @@
+---
+title: "Exercise 4.4 — Is a predicted 0.7 worth 0.7? (with solutions)"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day4/day4-04-calibration.html>.*
+
+*Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+
+> **A suggested addition, not part of the original module**
+>
+> This exercise has no page in the original version of the module. It answers a
+> question Exercise 4.3 leaves open: the threshold there assumed that the
+> predicted probabilities mean what they say. Accept, rewrite or remove it;
+> nothing else depends on it.
+
+Exercise 4.3 chose a threshold of 0.2 because of what each mistake costs. That
+choice assumed something it never checked: that among the people the model
+gives a probability of about 0.2, about 20% really do have diabetes. A model
+whose probabilities match what happens in this way is **calibrated**.
+
+Accuracy, sensitivity and specificity cannot tell you whether a model is
+calibrated, because they throw the probability away at the threshold and only
+look at the predicted classes.
+
+**Theory:** calibration in the large; the calibration table and curve; why
+small groups give noisy rates; the Brier score; a model that ranks people well
+can still give the wrong probabilities.
+
+> **The plots are for looking at**
+>
+> The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())          # white background for every plot
+options(pillar.sigfig = 3)     # show three significant figures in tables
+```
+
+The same people, split and model as Exercise 4.3: `diabetes ~ glucose`, fitted
+on 600 people, with predicted probabilities for both the training rows and the
+150 test patients.
+
+```{r}
+diabetes <- read_csv("data/diabetes.csv") |>
+  select(glucose, mass, age, diabetes) |>
+  filter(glucose > 0, mass > 0) |>              # remove the impossible zeros
+  mutate(diabetes       = factor(diabetes, levels = c("neg", "pos")),
+         diabetes_dummy = if_else(diabetes == "pos", 1, 0))
+
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+test  <- diabetes[test_rows, ]
+
+log_fit <- logistic_reg(mode = "classification") |>
+  set_engine("glm") |>
+  fit(diabetes ~ glucose, data = train)
+
+train_preds <- predict(log_fit, new_data = train, type = "prob") |> bind_cols(train)
+test_preds  <- predict(log_fit, new_data = test,  type = "prob") |> bind_cols(test)
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — Calibration in the large
+
+The simplest check: is the **average** predicted probability equal to the
+proportion of people who actually have diabetes (the **prevalence**)? Do it on
+the training rows and on the test patients:
+
+```{r}
+train_preds |>
+  summarise(mean_predicted = mean(.pred_pos), prevalence = mean(diabetes_dummy))
+
+test_preds |>
+  summarise(mean_predicted = mean(.pred_pos), prevalence = mean(diabetes_dummy))
+```
+
+On the training rows the two numbers are identical, 0.367. That is not evidence
+of anything: a logistic regression with an intercept always makes its average
+fitted probability equal the prevalence of the rows it was fitted on. On the
+test patients the model predicts 0.349 on average, and 0.353 of them have
+diabetes: close.
+
+This is the weakest calibration check there is, one number against one number.
+A model that gave **everybody** a probability of 0.353 would pass it perfectly,
+and be useless.
+
+> **Learning points**
+>
+> - A model is calibrated when, among the people it gives a probability $q$, a proportion of about $q$ have the outcome.
+> - Calibration in the large compares the mean predicted probability with the prevalence. Check it on the test set: on the training rows a logistic regression passes by construction.
+
+------------------------------------------------------------------------
+
+### Part 2 — The calibration table, step by step
+
+To look closer, put the test patients into five groups (**bins**) by their
+predicted probability: 0 to 0.2, 0.2 to 0.4, and so on. In each bin count the
+people, average their predicted probabilities, and compute the proportion who
+actually have diabetes. For a calibrated model the last two numbers are close in
+every bin.
+
+Step 1: give each patient a bin.
+
+```{r}
+test_binned <- test_preds |>
+  mutate(bin = cut(.pred_pos, breaks = seq(0, 1, by = 0.2), include.lowest = TRUE))
+
+test_binned |>
+  select(glucose, diabetes_dummy, .pred_pos, bin) |>
+  head()
+```
+
+Step 2: summarise each bin. Fill in the observed rate, the proportion of people
+in the bin who have diabetes:
+
+> **Stuck?**
+>
+> `diabetes_dummy` is 1 for diabetes and 0 for none, so its mean in a bin is the
+> proportion of the bin with diabetes.
+
+> **Worked answer**
+
+```{r}
+calibration_table <- test_binned |>
+  group_by(bin) |>
+  summarise(n              = n(),
+            mean_predicted = mean(.pred_pos),
+            observed_rate  = mean(diabetes_dummy))
+
+calibration_table
+```
+
+> | Bin | Patients | Mean predicted | Observed rate |
+> |:-:|:-:|:-:|:-:|
+> | 0 to 0.2 | 44 | 0.137 | 0.068 |
+> | 0.2 to 0.4 | 60 | 0.297 | 0.300 |
+> | 0.4 to 0.6 | 22 | 0.482 | 0.591 |
+> | 0.6 to 0.8 | 18 | 0.714 | 0.778 |
+> | 0.8 to 1 | 6 | 0.844 | 0.833 |
+
+The **calibration curve** draws this table: mean predicted against observed
+rate, one point per bin, sized by the number of patients in it. A perfectly
+calibrated model puts every point on the dashed diagonal.
+
+```{r}
+ggplot(calibration_table, aes(x = mean_predicted, y = observed_rate)) +
+  geom_abline(linetype = "dashed", colour = "grey50") +
+  geom_line(colour = "steelblue") +
+  geom_point(aes(size = n), colour = "steelblue") +
+  coord_equal(xlim = c(0, 1), ylim = c(0, 1)) +
+  labs(x = "Mean predicted probability in the bin",
+       y = "Observed rate in the bin", size = "Patients")
+```
+
+The middle of the range is close to the diagonal. In the lowest bin the model
+says 14% on average, and 3 of the 44 patients (7%) have diabetes.
+
+**Is a gap a fault in the model, or just a small bin?** The top bin holds 6
+patients: one more or one fewer person with diabetes moves its observed rate by
+0.17. A gap in a bin of 6 people tells you almost nothing; a gap in a bin of 60
+tells you much more. This is why a calibration table should always show the
+number of patients in each bin, and why you should not read a story into every
+wobble of the curve.
+
+> **Learning points**
+>
+> - The calibration table bins the predicted probabilities and compares the mean prediction with the observed rate in each bin.
+> - On the calibration curve, points on the diagonal mean the probabilities can be taken at face value.
+> - Small bins give noisy observed rates: always report the number of patients per bin.
+
+------------------------------------------------------------------------
+
+### Part 3 — Same order, different numbers
+
+Now break the probabilities on purpose. Squash every prediction two thirds of
+the way towards 0.5:
+
+$$q = 0.5 + \frac{p - 0.5}{3}$$
+
+A probability of 0.05 becomes 0.35, 0.5 stays 0.5, and 0.86 becomes 0.62. The
+patients come out **in exactly the same order**: whoever had the higher
+probability before still has the higher probability after. Only the numbers
+change.
+
+```{r}
+test_preds <- test_preds |>
+  mutate(squashed = 0.5 + (.pred_pos - 0.5) / 3)
+
+test_preds |>
+  summarise(lowest_before  = min(.pred_pos), highest_before = max(.pred_pos),
+            lowest_after   = min(squashed),  highest_after  = max(squashed),
+            same_order     = all(rank(.pred_pos) == rank(squashed)))
+```
+
+**The Brier score** measures how far the probabilities are from what happened.
+For each patient take the squared difference between the predicted probability
+and the outcome coded 0 or 1, then average:
+
+$$\text{Brier} = \frac{1}{m}\sum_{i=1}^{m} (\hat{p}_i - y_i)^2$$
+
+It is the mean squared error from Exercise 3.2, applied to probabilities: 0 is
+perfect, and lower is better. Compute it before and after squashing:
+
+> **Worked answer**
+
+```{r}
+test_preds |>
+  summarise(brier_before = mean((.pred_pos - diabetes_dummy)^2),
+            brier_after  = mean((squashed - diabetes_dummy)^2))
+```
+
+> The Brier score rises from 0.165 to 0.206: the squashed probabilities are
+> further from what happened, even though every patient kept their place in the
+> order.
+
+**Why it matters.** Apply the threshold from Exercise 4.3, 0.2, to both sets of
+probabilities, and count the people sent for a test and the cost (5 for a missed
+case, 1 for an unnecessary test). Then do the same at 0.5:
+
+```{r}
+tibble(threshold = c(0.2, 0.5)) |>
+  cross_join(test_preds) |>
+  group_by(threshold) |>
+  summarise(tested_before = sum(.pred_pos >= threshold),
+            cost_before   = 5 * sum(diabetes == "pos" & .pred_pos < threshold) +
+                                sum(diabetes == "neg" & .pred_pos >= threshold),
+            tested_after  = sum(squashed >= threshold),
+            cost_after    = 5 * sum(diabetes == "pos" & squashed < threshold) +
+                                sum(diabetes == "neg" & squashed >= threshold))
+```
+
+At 0.2 the original probabilities send 106 of the 150 patients for a test, at a
+cost of 71. The squashed probabilities send **all 150**, at a cost of 97:
+exactly what testing everybody without any model would cost. Everything the
+threshold gained has been lost, although the patients are in the same order as
+before.
+
+At 0.5 the two are identical, 31 tested at a cost of 152, because 0.5 is the one
+value the squashing leaves where it was. A team that never moved off the default
+threshold would never notice the problem. Calibration matters the moment a
+probability is compared with a number: a threshold chosen from costs, or a risk
+told to a patient.
+
+> **Learning points**
+>
+> - Two models can put patients in exactly the same order and still give different probabilities.
+> - The Brier score, the mean squared error of the probabilities, notices when the probabilities are wrong.
+> - A threshold chosen from costs is only right if the probabilities are calibrated.
+
+## Stretch
+
+> **Stretch — balance the classes, and watch the probabilities move**
+>
+> 36.7% of the training rows have diabetes. Keep all of them, draw the same
+> number of people without diabetes at random, and refit `diabetes ~ glucose` on
+> this balanced training set. Predict the same 150 test patients. What happens to
+> the mean predicted probability, to the calibration table, and to the cost at
+> the threshold of 0.2? Does the order of the patients change?

@@ -1,0 +1,203 @@
+---
+title: "Exercise 9.4 — For whom is the model worst? (with solutions)"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day9/day6-04-subgroups.html>.*
+
+*Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+
+> **A suggested addition, not part of the original module**
+>
+> This exercise has no page in the original version of the module. It asks a
+> question Exercises 9.1 to 9.3 leave open: they explained the model as a whole
+> and one patient at a time, but not whether it works equally well for
+> different groups of patients. Accept, rewrite or remove it; nothing else
+> depends on it.
+
+A single test AUC describes the model for the 150 test patients as a whole.
+The model can still serve some groups of patients much worse than others,
+and the overall number will not show it. Here we split the test patients by
+age and by BMI and compare.
+
+**Theory:** performance by subgroup; sensitivity and specificity within a
+group; why a model that ranks a group well can still miss most of its cases;
+why small groups give noisy numbers.
+
+> **The plots are for looking at**
+>
+> The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "ranger"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())          # white background for every plot
+options(pillar.sigfig = 3)     # show three significant figures in tables
+```
+
+The same data ([`data/diabetes.csv`](data/diabetes.csv)), split and random
+forest as Exercises 9.1 to 9.3, with the predicted probability and the
+predicted class (threshold 0.5) for each test patient.
+
+```{r}
+diabetes <- read_csv("data/diabetes.csv") |>
+  select(pregnant, glucose, mass, pedigree, age, diabetes) |>
+  filter(glucose > 0, mass > 0) |>              # remove the impossible zeros
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+test  <- diabetes[test_rows, ]
+
+set.seed(1)
+rf_fit <- rand_forest(trees = 500) |>
+  set_engine("ranger") |>
+  set_mode("classification") |>
+  fit(diabetes ~ ., data = train)
+
+test_preds <- predict(rf_fit, new_data = test, type = "prob") |>
+  bind_cols(predict(rf_fit, new_data = test)) |>     # adds .pred_class
+  bind_cols(test)
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — Performance by age group
+
+Put the test patients into three age groups, and count them first:
+
+```{r}
+test_preds <- test_preds |>
+  mutate(age_group = cut(age, breaks = c(20, 29, 39, Inf),
+                         labels = c("21-29", "30-39", "40 and over")))
+
+test_preds |>
+  group_by(age_group) |>
+  summarise(patients = n(), with_diabetes = sum(diabetes == "pos"))
+```
+
+Now three measures in each group: the AUC (how well the model *ranks* the
+patients of that group), and at the threshold of 0.5 the sensitivity (the
+share of the people with diabetes it flags) and the specificity (the share of
+the people without diabetes it clears). yardstick's functions work on grouped
+data, one row per group; `event_level = "second"` because `pos` is the second
+level.
+
+```{r}
+auc_by_age <- test_preds |>
+  group_by(age_group) |>
+  roc_auc(truth = diabetes, .pred_pos, event_level = "second")
+
+sens_by_age <- test_preds |>
+  group_by(age_group) |>
+  sens(truth = diabetes, estimate = .pred_class, event_level = "second")
+
+spec_by_age <- test_preds |>
+  group_by(age_group) |>
+  spec(truth = diabetes, estimate = .pred_class, event_level = "second")
+
+bind_rows(auc_by_age, sens_by_age, spec_by_age) |>
+  select(age_group, .metric, .estimate) |>
+  pivot_wider(names_from = .metric, values_from = .estimate)
+```
+
+The model ranks the youngest patients best (AUC 0.817) but, at the threshold
+of 0.5, flags only 7 of the 21 young people with diabetes (sensitivity
+0.333), against 7 of 9 aged 30-39 and 15 of 23 aged 40 and over. The older
+groups pay for their higher sensitivity with a lower specificity.
+
+The plot shows why: the predicted probabilities for each age group, split by
+whether the patient really has diabetes.
+
+```{r}
+#| fig-height: 3.5
+test_preds |>
+  ggplot(aes(x = age_group, y = .pred_pos, colour = diabetes)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.15, seed = 1), alpha = 0.5) +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  labs(x = "Age group", y = "Predicted probability of diabetes", colour = "Diabetes")
+```
+
+**Question!** The youngest group has the best AUC and the lowest sensitivity.
+How can both be true?
+
+The AUC only asks whether, *within the group*, people with diabetes get higher
+probabilities than people without. They do. But young patients' probabilities
+are low across the board, because the model has learned that diabetes is less
+common in the young, so most of the young people with diabetes still sit
+below 0.5. A model can rank a group well and still miss most of its cases at a
+fixed threshold.
+
+> **Learning points**
+>
+> - One overall AUC can hide large differences between groups of patients.
+> - Ranking within a group (AUC) and catching cases at a threshold (sensitivity) are different questions.
+> - Always report how many patients, and how many with the outcome, each group's numbers rest on.
+
+------------------------------------------------------------------------
+
+### Part 2 — By BMI, and how far to trust a small group
+
+**Your turn.** Do the same with two BMI groups: under 30, and 30 or over (the
+usual cut-off for obesity).
+
+> **Worked answer**
+
+```{r}
+test_preds <- test_preds |>
+  mutate(bmi_group = if_else(mass < 30, "under 30", "30 and over"))
+
+test_preds |>
+  group_by(bmi_group) |>
+  summarise(patients = n(), with_diabetes = sum(diabetes == "pos"))
+
+bind_rows(
+  test_preds |> group_by(bmi_group) |> roc_auc(truth = diabetes, .pred_pos, event_level = "second"),
+  test_preds |> group_by(bmi_group) |> sens(truth = diabetes, estimate = .pred_class, event_level = "second"),
+  test_preds |> group_by(bmi_group) |> spec(truth = diabetes, estimate = .pred_class, event_level = "second")
+) |>
+  select(bmi_group, .metric, .estimate) |>
+  pivot_wider(names_from = .metric, values_from = .estimate)
+```
+
+> R: BMI 30 and over, 108 patients (44 with diabetes), AUC 0.791, sensitivity
+> 0.591, specificity 0.875; under 30, 42 patients (9 with diabetes), AUC 0.909,
+> sensitivity 0.333, specificity 0.909. Python: 0.791, 0.614, 0.828 and 0.904,
+> 0.333, 0.939. The same pattern as age: the lower-risk group is ranked better,
+> but at 0.5 the model catches only 3 of its 9 cases.
+
+**How far can we trust these numbers?** The BMI-under-30 group has only 9 patients with diabetes, and so has the
+30-39 age group. A sensitivity of 0.333 there is 3 patients out of 9: one more
+caught would make it 0.444, one fewer 0.222.
+
+A rough rule: a sensitivity resting on $k$ patients with the outcome moves by
+$1/k$ for each patient caught or missed, and its uncertainty is of the order of
+$\sqrt{p(1-p)/k}$. With $k = 9$ and $p = 0.33$ that is about $\pm 0.16$ for one
+standard error. Differences between small groups have to be large before they
+mean anything, and the test set of a teaching dataset is too small to settle
+questions of fairness; a real audit needs far more patients in each group.
+
+**Question!** Suppose the youngest group's low sensitivity holds up in a large
+data set. What could you do about it: change the model, change the threshold
+for that group, or add a predictor? What would each of these cost?
+
+> **Learning points**
+>
+> - Split the test set by clinically meaningful groups and report the numbers of patients, and of patients with the outcome, beside every metric.
+> - With a handful of patients with the outcome, one patient more or less moves sensitivity a long way; treat differences between small groups as hypotheses, not findings.
+
+## Stretch
+
+> **Stretch — a threshold per group?**
+>
+> In the youngest group, find the threshold that gives a sensitivity of at
+> least 0.7 on the test patients (try 0.2, 0.3, 0.4). How many more of the young
+> people without diabetes are now flagged? Why would you need a separate
+> validation set to choose that threshold honestly?
