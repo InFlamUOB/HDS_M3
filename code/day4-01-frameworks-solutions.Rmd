@@ -1,0 +1,302 @@
+---
+title: "Exercise 4.1 — Unified modelling frameworks in R and Python (with solutions)"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day4/day4-01-frameworks.html>.*
+
+*Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+
+In both R and Python there are many ways to fit a model:
+
+- **R:** `lm()`, `glm()`, `rpart()`, `randomForest()`, `xgboost()`, …
+- **Python:** `statsmodels`, your own NumPy code, or one of the many classes in
+  scikit-learn.
+
+Each function or class tends to have its own syntax, its own argument names and
+its own way of returning a prediction. That becomes a problem as soon as we
+want to:
+
+- swap one model for another,
+- compare models fairly,
+- build a whole pipeline of preprocessing, model and evaluation,
+- tune a model without leaking information from the test data.
+
+Two ecosystems solve this: **tidymodels** in R and **scikit-learn** in Python.
+Both put one consistent interface in front of the models, the preprocessing,
+the pipelines and the tuning.
+
+| The question | tidymodels (R) | scikit-learn (Python) |
+|---|---|---|
+| what kind of model is this? | `logistic_reg()`, `decision_tree()` | the estimator class, `LogisticRegression` |
+| which code actually fits it? | `set_engine("glm")` | the class, plus `solver=` |
+| what happens to the data first? | a `recipe()` of `step_*()` | transformers, e.g. `StandardScaler` |
+| the two joined together | `workflow()` | `Pipeline` |
+| fit it, then use it | `fit()`, `predict()` | `.fit()`, `.predict()` |
+
+**Theory:** model specification and engine; the fit/predict interface;
+predicted probabilities; pipelines that carry their preprocessing with them.
+
+Useful documentation: [Getting started with tidymodels](https://www.tidymodels.org/start/),
+the [parsnip list of models](https://parsnip.tidymodels.org/reference/index.html),
+and the [scikit-learn user guide](https://scikit-learn.org/stable/user_guide.html).
+
+> **The plots are for looking at**
+>
+> The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
+
+### Packages
+
+`library(tidymodels)` loads `parsnip` (the models), `recipes` (the
+preprocessing), `workflows` (the two joined together) and `yardstick` (the
+metrics), as well as the `rsample` functions you used on Day 1.
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "glmnet", "rpart"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())          # white background for every plot
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — What model, and which engine
+
+In tidymodels we separate two things:
+
+- **what kind of model** we want: the *specification*;
+- **how it is fitted**: the *engine*.
+
+We declare the specification with one function per kind of model, and say
+whether it is for classification or regression:
+
+```{r}
+log_spec  <- logistic_reg(mode = "classification")
+tree_spec <- decision_tree(mode = "classification")
+rf_spec   <- rand_forest(mode = "classification")
+knn_spec  <- nearest_neighbor(mode = "classification")
+
+log_spec
+```
+
+```{r}
+tree_spec
+```
+
+This does not fit anything yet. It only says "I want a logistic regression
+classifier", "I want a decision tree for classification", and so on. There is
+no data in it, and no coefficients.
+
+The **engine** is the code that actually fits the model, and we choose it with
+`set_engine()`. Different engines are different algorithms for the same kind of
+model:
+
+```{r}
+log_spec_glm <- logistic_reg(mode = "classification") |>
+  set_engine("glm")       # base R glm() with family = binomial
+
+log_spec_glmnet <- logistic_reg(mode = "classification") |>
+  set_engine("glmnet")    # penalised (regularised) regression
+
+tree_spec_rpart <- decision_tree(mode = "classification") |>
+  set_engine("rpart")     # rpart, the classic tree algorithm
+
+log_spec_glmnet
+```
+
+Writing a specification with `"glmnet"` does not need the `glmnet` package
+installed. You would only need it the moment you fit the model.
+
+> **Learning points**
+>
+> - A **specification** says what kind of model you want; it has not seen any data.
+> - The **engine** (in Python, the estimator and its `solver`) is the code that fits it.
+> - Every model is then used with the same two verbs: fit it, then predict with it.
+
+------------------------------------------------------------------------
+
+### Part 2 — Fit and predict a logistic regression
+
+**The data.** `data/diabetes.csv` holds 768 adults screened for type 2
+diabetes: eight measurements from a single visit, and `diabetes`, which is
+`pos` or `neg`. We keep glucose, BMI (`mass`), age and the outcome, and remove
+the impossible readings of 0 you met on Day 2. That leaves 750 people.
+
+**The split.** We hold back every fifth person as the test set: 600 people to
+fit the models on, and 150 to test them. Splitting by a fixed rule rather than
+at random gives both languages exactly the same 150 people, so the R and the
+Python tabs print the same numbers. Every Day 4 exercise uses this split.
+
+```{r}
+diabetes <- read_csv("data/diabetes.csv") |>
+  select(glucose, mass, age, diabetes) |>
+  filter(glucose > 0, mass > 0) |>              # remove the impossible zeros
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+test  <- diabetes[test_rows, ]
+
+count(train, diabetes)
+```
+
+The outcome is a factor with two levels, `neg` then `pos`. A logistic
+regression fitted with `glm` predicts the probability of the **second** level,
+so writing the levels in this order means the model is about `pos`: having
+diabetes.
+
+Now fit the model, predicting diabetes from glucose only, with `fit()` and a
+formula:
+
+```{r}
+logistic_spec <- logistic_reg(mode = "classification") |>
+  set_engine("glm")
+
+logistic_fit <- logistic_spec |>
+  fit(diabetes ~ glucose, data = train)
+
+logistic_fit
+```
+
+Inspect the coefficients with `tidy()`. They are on the **log-odds** scale,
+which Exercise 4.2 explains:
+
+```{r}
+tidy(logistic_fit)
+```
+
+**Predictions.** Every parsnip model is used with the same `predict()`.
+`type = "prob"` gives one column of probabilities per class, named after the
+levels. Here it is for the test set, with the test data alongside:
+
+```{r}
+test_preds <- predict(logistic_fit, new_data = test, type = "prob") |>
+  bind_cols(test)
+
+head(test_preds)
+```
+
+`.pred_pos` is the predicted probability of diabetes, $\hat{P}(\text{pos})$, and
+`.pred_neg` is $\hat{P}(\text{neg}) = 1 - \hat{P}(\text{pos})$. Plot the
+predicted probability against glucose:
+
+```{r}
+ggplot(test_preds, aes(x = glucose, y = .pred_pos)) +
+  geom_point(alpha = 0.5) +
+  labs(x = "Glucose (mg/dL)", y = "Predicted probability of diabetes")
+```
+
+The points lie on an S-shaped curve: the higher the glucose, the higher the
+predicted probability, but never below 0 or above 1.
+
+> **Learning points**
+>
+> - One interface: the same `fit()` and `predict()` work for every model in the framework.
+> - A classifier can give a predicted **probability** for each class, not only a class.
+> - Check which class the probability is for: in R the second factor level, in Python the column of `classes_`.
+
+------------------------------------------------------------------------
+
+### Part 3 — Pipelines: recipes and workflows
+
+tidymodels also has tools for the steps before the model:
+
+- a **recipe** holds the preprocessing: scaling, imputation, one-hot encoding
+  and so on;
+- a **workflow** joins a recipe and a model into one object.
+
+Here the recipe standardises the three predictors, as on Day 2, and the
+workflow carries it together with the logistic regression:
+
+```{r}
+log_recipe <- recipe(diabetes ~ glucose + mass + age, data = train) |>
+  step_normalize(all_numeric_predictors())
+
+log_workflow <- workflow() |>
+  add_recipe(log_recipe) |>
+  add_model(logistic_spec)
+
+log_workflow_fit <- fit(log_workflow, data = train)
+
+log_workflow_fit
+```
+
+When you open `log_workflow_fit` in the Environment pane you will see that it
+holds the preprocessing as well as the model. That is the point: the
+standardisation was learned from the training rows, and `predict()` applies
+exactly the same standardisation to any new rows before the model sees them.
+
+How often is the workflow right on the 150 test patients? `predict()` without
+`type = "prob"` gives the predicted class, using a cut-off of 0.5. Compare it
+with a "model" that always says `neg`, which is the most common class:
+
+```{r}
+predict(log_workflow_fit, new_data = test) |>
+  bind_cols(test) |>
+  summarise(accuracy        = mean(.pred_class == diabetes),
+            always_says_neg = mean(diabetes == "neg"))
+```
+
+The logistic regression is right for 74.0% of the test patients. Always saying
+`neg` is right for 64.7%, because 97 of the 150 do not have diabetes. Three
+clinical measurements add about nine percentage points over a rule that looks
+at nothing.
+
+**Swap the model, keep everything else.** This is what the frameworks are for.
+Replace the logistic regression with a decision tree and change nothing else:
+the same recipe, the same rows, the same accuracy calculation.
+
+> **Stuck?**
+>
+> The engine for trees in R is the recursive-partitioning package you used in
+> Exercise 3.1. The model you add to the workflow is the specification on the
+> line above.
+
+> **Worked answer**
+
+```{r}
+tree_spec <- decision_tree(mode = "classification") |>
+  set_engine("rpart")
+
+tree_workflow_fit <- workflow() |>
+  add_recipe(log_recipe) |>
+  add_model(tree_spec) |>
+  fit(data = train)
+
+predict(tree_workflow_fit, new_data = test) |>
+  bind_cols(test) |>
+  summarise(accuracy = mean(.pred_class == diabetes))
+```
+
+> The R tree is right for 78.7% of the test patients, the Python tree for 67.3%.
+
+**Question!** The two trees are given the same 600 people and the same three
+predictors, and the word "decision tree" is the same in both languages. Why do
+they disagree by more than ten percentage points?
+
+The defaults differ. `rpart` stops growing the tree when a further split no
+longer pays for itself, and ends with 6 leaves. `DecisionTreeClassifier` keeps
+splitting until every leaf holds only one class, and ends with 171 leaves: it
+has learned the training patients almost one by one, and does worse on new
+ones. Same name, same data, different defaults, and the defaults are the whole
+difference. Always check what a model's defaults are before you compare it with
+anything.
+
+> **Learning points**
+>
+> - A recipe (R) or the steps of a Pipeline (Python) hold the preprocessing; a workflow or Pipeline joins it to the model.
+> - The preprocessing is learned from the training rows only and is reapplied, unchanged, to new rows.
+> - Swapping the model is one line; everything else stays the same, so the comparison is fair.
+> - Compare every model with a baseline that does no learning, such as always predicting the most common class.
+
+## Stretch
+
+> **Stretch — how much of the accuracy is the split?**
+>
+> Change the first row of the test set: hold back every fifth person starting
+> from row 2, then from row 3, 4 and 5, and refit the logistic regression
+> workflow each time. Write down the five accuracies. How far apart are they, and
+> what does that say about quoting an accuracy from a single split of 150 people?

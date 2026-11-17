@@ -1,0 +1,257 @@
+---
+title: "Exercise 5.5 — Regularisation: lasso and ridge logistic regression (with solutions)"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day5/day5-05-regularisation.html>.*
+
+*Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+
+> **A suggested addition, not part of the original module**
+>
+> This exercise has no page in the original version of the module. It covers the
+> "Regularization" in the title of Day 5: the trees of Exercises 5.3 and 5.4 were
+> restrained with hyperparameters, and this is the same idea for a regression
+> model. Accept, rewrite or remove it; nothing else depends on it.
+
+A logistic regression fitted without restraint chooses the coefficients that
+fit the training rows best. **Regularisation** adds a price for large
+coefficients, so that the model fits the training rows a little less closely in
+exchange for being simpler. With predictors standardised, the fitted
+coefficients minimise
+
+$$\underbrace{-\frac{1}{n}\,\text{log-likelihood}}_{\text{misfit}} \;+\;
+\lambda \times \underbrace{\textstyle\sum_j |\beta_j|}_{\text{lasso}}
+\qquad\text{or}\qquad
+\ldots \;+\; \lambda \times \underbrace{\tfrac{1}{2}\textstyle\sum_j \beta_j^2}_{\text{ridge}}$$
+
+The **penalty** $\lambda$ is a hyperparameter: 0 gives the ordinary model, and
+the larger it is, the more the coefficients are pulled towards zero. The
+**lasso** pulls some of them all the way to zero, dropping those predictors;
+**ridge** shrinks all of them but drops none.
+
+**Theory:** penalised regression; lasso and ridge; why the predictors must be
+standardised first; coefficient paths; choosing the penalty by
+cross-validation.
+
+> **The plots are for looking at**
+>
+> The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "glmnet"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())          # white background for every plot
+options(pillar.sigfig = 3)     # show three significant figures in tables
+```
+
+The same people, split and five predictors as Exercises 5.2 to 5.4, from
+[`data/diabetes.csv`](data/diabetes.csv). The recipe standardises the
+predictors: the penalty treats every coefficient alike, which is only fair if
+the predictors are on the same scale.
+
+```{r}
+diabetes <- read_csv("data/diabetes.csv") |>
+  select(pregnant, glucose, mass, pedigree, age, diabetes) |>
+  filter(glucose > 0, mass > 0) |>              # remove the impossible zeros
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+test  <- diabetes[test_rows, ]
+
+norm_rec <- recipe(diabetes ~ ., data = train) |>
+  step_normalize(all_numeric_predictors())
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — Coefficient paths
+
+In tidymodels a penalised logistic regression uses the `glmnet` engine with two
+arguments: `penalty` is $\lambda$, and `mixture` chooses the kind of penalty,
+1 for the lasso and 0 for ridge. glmnet fits the model for a whole sequence of
+penalties at once, the **path**; `path_values` sets that sequence, here 31
+values from 0.001 to 1.
+
+```{r}
+lambdas <- 10^seq(-3, 0, length.out = 31)
+
+lasso_fit <- workflow() |>
+  add_model(logistic_reg(penalty = 0.01, mixture = 1) |>
+              set_engine("glmnet", path_values = lambdas)) |>
+  add_recipe(norm_rec) |>
+  fit(data = train)
+
+lasso_path <- lasso_fit |>
+  extract_fit_engine() |>        # the glmnet fit, with the whole path
+  tidy(return_zeros = TRUE) |>  # keep the coefficients that are exactly zero
+  filter(term != "(Intercept)")
+
+lasso_path |>
+  filter(step == 11)             # the coefficients at one penalty
+```
+
+Step 11 of the path, counted from the largest penalty, is $\lambda = 0.1$: only
+glucose has a coefficient that is not zero. The whole path:
+
+```{r}
+ggplot(lasso_path, aes(x = lambda, y = estimate, colour = term)) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 0, colour = "grey50") +
+  scale_x_log10() +
+  labs(x = "Penalty (log scale)", y = "Coefficient (per standard deviation)",
+       colour = NULL, title = "Lasso: coefficients drop out one by one")
+```
+
+Read the plot from right to left. At the largest penalties every coefficient is
+zero. As the penalty falls, glucose enters first, then body mass, and the
+others follow; at the smallest penalties the coefficients are close to those of
+the ordinary logistic regression in Exercise 5.2. The order in which predictors
+enter is one way of ranking them.
+
+Now draw the same path for **ridge**:
+
+> **Stuck?**
+>
+> `mixture = 1` is the lasso; ridge is the other end of the scale.
+
+> **Worked answer**
+
+```{r}
+ridge_fit <- workflow() |>
+  add_model(logistic_reg(penalty = 0.01, mixture = 0) |>
+              set_engine("glmnet", path_values = lambdas)) |>
+  add_recipe(norm_rec) |>
+  fit(data = train)
+
+ridge_path <- ridge_fit |>
+  extract_fit_engine() |>
+  tidy(return_zeros = TRUE) |>  # keep the coefficients that are exactly zero
+  filter(term != "(Intercept)")
+
+ggplot(ridge_path, aes(x = lambda, y = estimate, colour = term)) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 0, colour = "grey50") +
+  scale_x_log10() +
+  labs(x = "Penalty (log scale)", y = "Coefficient (per standard deviation)",
+       colour = NULL, title = "Ridge: every coefficient shrinks, none drops out")
+```
+
+> No coefficient reaches zero. At the largest penalty, 1, glucose is still about
+> 0.17 and the other four lie between about 0.04 and 0.09: ridge shrinks all the
+> predictors together and keeps every one.
+
+> **Learning points**
+>
+> - The penalty pulls coefficients towards zero; the larger it is, the simpler the model.
+> - The lasso sets coefficients exactly to zero and so selects predictors; ridge shrinks them all and keeps every one.
+> - Standardise the predictors first, or the penalty treats them unequally.
+
+------------------------------------------------------------------------
+
+### Part 2 — Choosing the penalty by cross-validation
+
+The penalty is a hyperparameter, so it is chosen exactly like the tree depth in
+Exercise 5.3: try a grid of values by 5-fold cross-validation on the training
+rows, and keep the one with the best AUC.
+
+```{r}
+lasso_wf <- workflow() |>
+  add_model(logistic_reg(penalty = tune(), mixture = 1) |>
+              set_engine("glmnet", path_values = lambdas)) |>
+  add_recipe(norm_rec)
+
+set.seed(123)
+folds <- vfold_cv(train, v = 5, strata = diabetes)
+
+lasso_res <- tune_grid(
+  lasso_wf,
+  resamples = folds,
+  grid      = tibble(penalty = lambdas),
+  metrics   = metric_set(roc_auc),
+  control   = control_grid(event_level = "second")
+)
+
+show_best(lasso_res, metric = "roc_auc", n = 5)
+```
+
+```{r}
+autoplot(lasso_res) +
+  labs(title = "Cross-validated AUC along the lasso path")
+```
+
+The best penalty is 0.00126 in R (cross-validated AUC 0.805) and 0.0040 in
+Python (`C` = 0.419, AUC 0.802); the folds differ between the languages, so the
+choice differs too. The difference does not matter: the curve is flat at about
+0.80 for every penalty up to about 0.02, falls slowly as predictors drop out,
+and falls to 0.5, guessing, once the penalty (about 0.2 and above) sets every
+coefficient to zero.
+
+> **Learning points**
+>
+> - The penalty is tuned like any other hyperparameter: a grid, cross-validation on the training rows, the best AUC.
+> - A flat curve means the data do not care much about the penalty: then prefer the simpler model it allows.
+
+------------------------------------------------------------------------
+
+### Part 3 — Does the penalty help on the test rows?
+
+Finalise the lasso with the chosen penalty, and fit the unpenalised model of
+Exercise 5.2 for comparison:
+
+```{r}
+best_penalty <- select_best(lasso_res, metric = "roc_auc")
+best_penalty
+
+final_lasso_fit <- finalize_workflow(lasso_wf, best_penalty) |>
+  fit(data = train)
+tidy(final_lasso_fit)
+
+plain_fit <- workflow() |>
+  add_model(logistic_reg() |> set_engine("glm")) |>
+  add_recipe(norm_rec) |>
+  fit(data = train)
+```
+
+Compute the test AUC of both:
+
+> **Worked answer**
+
+```{r}
+predict(final_lasso_fit, new_data = test, type = "prob") |>
+  bind_cols(test) |>
+  roc_auc(truth = diabetes, .pred_pos, event_level = "second")
+
+predict(plain_fit, new_data = test, type = "prob") |>
+  bind_cols(test) |>
+  roc_auc(truth = diabetes, .pred_pos, event_level = "second")
+```
+
+> R: 0.830 for both. Python: 0.829 for the lasso and 0.830 for the unpenalised
+> model. At the chosen penalty the lasso has shrunk the coefficients only a
+> little (glucose 1.01 in R and 0.989 in Python, against 1.02 unpenalised) and
+> dropped none.
+
+**Question!** With 600 people and five predictors the penalty buys little. In
+what kind of data set would you expect it to matter much more?
+
+> **Learning points**
+>
+> - With many people and few predictors, the unpenalised model is already stable and the penalty changes little.
+> - Regularisation pays when there are many predictors for the number of people, as in omics data, where the lasso's variable selection is often the point.
+
+## Stretch
+
+> **Stretch — the noise test**
+>
+> Add five columns of pure random noise to the training and test rows
+> (`rnorm()` in R, `np.random.default_rng(1).normal()` in Python), refit the
+> unpenalised model and the tuned lasso on all ten predictors, and compare. Which
+> model gives the noise columns coefficients, and which test AUC suffers more?

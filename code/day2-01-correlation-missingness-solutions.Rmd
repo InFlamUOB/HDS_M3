@@ -1,0 +1,247 @@
+---
+title: "Exercise 2.2 — Correlation and missingness (with solutions)"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day2/day2-01-correlation-missingness.html>.*
+
+*Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+
+## Overview
+
+This is a showcase of the great amount of resources available in open-source programming languages, where new packages are developed and made available constantly publically. As key insight, **EXPLORE**, probably what you need is already out there for you to use!
+
+------------------------------------------------------------------------
+
+### Correlation
+
+For you to see the breadth of possibilities out there, here is an example of different ways in which to describe and learn about the correlation matrix of your dataset.As you can see different packages have been developed for the same purpose but hold different functions and approaches. 
+
+```{r}
+# Install required libraries (if not already installed)
+
+#install.packages(c("tidyverse", "corrplot", "ggcorrplot", 
+#"PerformanceAnalytics", "GGally", "psych", "corrr"))
+
+# Load necessary libraries
+library(tidyverse)   # ggplot2 is part of the tidyverse
+library(corrplot)
+library(ggcorrplot)
+library(PerformanceAnalytics)
+library(GGally)
+library(psych)
+library(corrr)
+```
+
+To assess the association between two variables, you can produce a scatter plot like below:
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "corrplot", "corrr", "finalfit", "GGally", "ggcorrplot", "mice", "naniar", "PerformanceAnalytics", "psych", "UpSetR"))
+
+set.seed(123)
+x <- rnorm(100)
+y <- x + rnorm(100, sd = 0.5)
+
+ggplot(data = data.frame(x, y), aes(x = x, y = y)) +
+  geom_point(color = "blue", size = 2) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "Correlation Plot with ggplot2",
+       x = "X values", y = "Y values") +
+  theme_minimal()
+```
+
+Now we are going to produce the correlation matrix, where in a go, you get insight of all the association happening in your dataset.For this we are going to use the mtcars data (A built-in dataset that contains measurements on 11 different attributes for 32 different cars). More specifically, the chosen variables are:
+
+-   mpg (Miles per Gallon): Represents the fuel efficiency of the car. Higher values, better efficiency.
+
+-   disp (Displacement): Represents the engine displacement, which is the total volume of all the cylinders in the engine.
+
+-   hp (Horsepower): Represents the power output of the car's engine.
+
+-   wt (Weight): Represents the weight of the car.
+
+```{r}
+data <- mtcars[, c("mpg", "disp", "hp", "wt")]
+```
+
+Can you calculate the correlation between them? Try out at least a pair of functions/packages. Remember there are different ways in which to calculate correlation <https://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r> and you can specify the type in your code `cor(x, y, method = c("pearson", "kendall", "spearman"))`
+
+```{r}
+```
+
+Now that you know what to expect, lets proceed with the correlation matrices (same thing as above, but all in a go!):
+
+#### -----corrplot Correlation Matrix -----
+
+```{r}
+cor_matrix <- cor(data)
+corrplot(cor_matrix, method = "circle", type = "upper", 
+         title = "Correlation Matrix", addCoef.col = "black")
+```
+
+#### -----corrplot Correlation Matrix -----
+
+```{r}
+ggcorrplot(cor_matrix, 
+           method = "square", 
+           type = "lower", 
+           lab = TRUE, 
+           title = "mtcars", 
+           lab_size = 3) +
+  theme_minimal()
+```
+
+#### -----PerformanceAnalytics Pairwise Correlation Plot -----
+
+```{r}
+chart.Correlation(data, histogram = TRUE, pch = 19)
+```
+
+###-----GGally Pairwise Correlation Plot -----
+
+```{r}
+ggpairs(data, 
+        title = "Pairwise Correlation Plot with GGally",
+        lower = list(continuous = wrap("smooth", method = "lm")),
+        upper = list(continuous = wrap("cor", size = 3)))
+```
+
+###----- psych Enhanced Pairwise Correlation Plot -----
+
+```{r}
+pairs.panels(data, 
+             method = "pearson", 
+             hist.col = "lightblue", 
+             density = TRUE, 
+             ellipses = TRUE)
+```
+
+###----- Base R Heatmap -----
+
+```{r}
+# ----- 8. Base R Heatmap -----
+heatmap(cor_matrix, symm = TRUE, 
+        main = "Correlation Heatmap", 
+        col = colorRampPalette(c("red", "white", "blue"))(20))
+```
+
+```{r}
+# ----- 10. corrr Tidy Correlation -----
+cor_matrix_tidy <- correlate(data)
+cor_matrix_tidy %>% 
+  fashion() %>% 
+  print()
+
+# Network-style correlation plot
+cor_matrix_tidy %>% 
+  network_plot(min_cor = 0.3)
+```
+
+What are your insights? Do they make sense? Remember:
+
+-   mpg (Miles per Gallon): Represents the fuel efficiency of the car. Higher values, better efficiency.
+
+-   disp (Displacement): Represents the engine displacement, which is the total volume of all the cylinders in the engine.
+
+-   hp (Horsepower): Represents the power output of the car's engine.
+
+-   wt (Weight): Represents the weight of the car.
+
+------------------------------------------------------------------------
+
+### Missing pipelines
+
+As with the correlation matrices before, there are really good packages to help you understand the missingness structure of your data. This is my recommendation:
+
+```{r}
+#Remember, if you do not have these packages installed, install them first with (install.packages())
+
+library(naniar)
+library(finalfit)
+library(tidyverse)
+library(mice)
+```
+
+Here I will be using the `airquality` dataset (available as default in all R) but can rerun using your own dataset in a future.
+
+```{r}
+summary(airquality)
+```
+
+We can already see with a simple summary, the ammount of missings we have per column. But what is their underlying structure?
+
+```{r}
+YourDataset <- airquality
+```
+
+#### Plot 1
+
+```{r}
+ll <- data.frame(is.na(YourDataset))
+```
+
+Open up this ll object. What are you seeing here? `is.na()` detects all values coded as `NA` and gives a logical output, `TRUE` if truly a missing value and `FALSE` if not
+
+```{r}
+#| eval: false
+View(ll)
+```
+
+```{r}
+cols <- sapply(ll, is.logical)
+ll[, cols] <- lapply(ll[, cols], as.numeric)
+
+Miss1 <- UpSetR::upset(ll,
+                       nsets = 20, number.angles = 10, point.size = 3.5, line.size = 2,
+                       mainbar.y.label = "Missing Values", sets.x.label = "Total Number Missing Values",
+                       text.scale = c(2.3, 2.3, 2, 2, 2, 1.75), order.by = "freq", sets.bar.color = "red3"
+)
+
+
+Miss1
+```
+
+Here we can see common patterns! If missing values were to happen at the same time in different variables, we would see it clearly. Lets store this figure into our own directories so we can then use it for our final research output!
+
+```{r}
+#| eval: false
+pdf("MissingVal1.pdf", 10, 20)
+print(Miss1)
+dev.off()
+```
+
+#### Plot 2
+
+```{r}
+print(vis_miss(YourDataset, warn_large_data = FALSE) + 
+        theme(axis.text.x =  element_text(angle = 90)))
+
+
+# uncomment to have your pdf created
+#pdf("Missing2.pdf", 20, 10)
+#print(vis_miss(YourDataset, warn_large_data = FALSE) + 
+#        theme(axis.text.x =  element_text(angle = 90)))
+#dev.off()
+```
+
+Very clear outline of missingness in the whole dataset. But be careful in big datasets!
+
+#### Plot 3
+
+```{r}
+missing_pattern(YourDataset)
+
+# uncomment to have your pdf created
+
+#pdf("PlotMissing3.pdf", 4,11)
+#
+#print(missing_pattern(YourDataset))
+#
+#dev.off()
+#
+```
+
+Final, very clear overview of patterns per variable. Spend a moment trying to understand these values. This function works great with big datasets too, although sometimes it gets a bit busy with lots of numbers.
+
+Open up your three newly created pdfs! (remember to uncomment the pdf() lines)

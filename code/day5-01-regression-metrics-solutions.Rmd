@@ -1,0 +1,337 @@
+---
+title: "Exercise 5.1 — Evaluating a regression model on training and test data (with solutions)"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day5/day5-01-regression-metrics.html>.*
+
+*Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+
+On Day 3 you fitted a straight line to predict glucose and measured its error
+with a loss function. A model is only useful if it also predicts **people it has
+not seen**. In this exercise we fit a model on the training rows, predict both
+the training and the test rows, and compare the errors. The comparison tells us
+whether the model is **overfitting** (much better on training than on test) or
+**underfitting** (similar on both, but poor on both).
+
+Suppose we believe that the relationship between glucose and age is not a
+straight line but a **cubic**:
+
+$$\widehat{\text{glucose}} = \beta_0 + \beta_1\,\text{age} + \beta_2\,\text{age}^2 + \beta_3\,\text{age}^3$$
+
+**Theory:** polynomial features as a pre-processing step; recipes, workflows
+and pipelines; predictions on training and test data; mean squared error, root
+mean squared error and mean absolute error; overfitting and underfitting.
+
+> **The plots are for looking at**
+>
+> The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())          # white background for every plot
+options(pillar.sigfig = 4)     # show four significant figures in tables
+```
+
+The data are in [`data/diabetes.csv`](data/diabetes.csv). We use the same 750
+people and the same split as on Day 4: the impossible zeros in glucose and body
+mass are removed, and every fifth person is held back as the test set.
+
+```{r}
+diabetes <- read_csv("data/diabetes.csv") |>
+  select(glucose, mass, age, diabetes) |>
+  filter(glucose > 0, mass > 0) |>              # remove the impossible zeros
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+test  <- diabetes[test_rows, ]
+
+dim(diabetes)
+dim(train)
+dim(test)
+```
+
+750 people: 600 for training (80%) and 150 for testing (20%).
+
+------------------------------------------------------------------------
+
+### Part 1 — A cubic model as a pre-processing step
+
+To fit a cubic we do not need a new kind of model. We create new columns from
+age (its square and its cube) and fit an ordinary linear regression on them.
+Creating new columns from old ones is **feature engineering**, so in tidymodels
+it belongs in the **recipe**, alongside the other pre-processing steps you met
+on Day 2. `step_poly()` adds the polynomial columns:
+
+```{r}
+cubic_spec <- linear_reg() |>
+  set_engine("lm")
+
+cubic_rec <- recipe(glucose ~ age, data = train) |>
+  step_poly(age, degree = 3)
+```
+
+Look at what the recipe does to the data. `prep()` works out the transformation
+from the training rows and `bake(new_data = NULL)` applies it to them:
+
+```{r}
+cubic_rec |>
+  prep() |>
+  bake(new_data = NULL)
+```
+
+Age has been replaced by three columns, `age_poly_1` to `age_poly_3`. They are
+not simply age, age² and age³: `step_poly()` makes **orthogonal** polynomials,
+rescaled versions that carry the same information but are uncorrelated with
+each other, which keeps the computer's arithmetic accurate. The fitted curve is
+exactly the same cubic.
+
+Now put the model and the recipe together in a **workflow** and fit it on the
+training rows:
+
+```{r}
+cubic_wf <- workflow() |>
+  add_model(cubic_spec) |>
+  add_recipe(cubic_rec)
+
+model_cubic <- cubic_wf |>
+  fit(data = train)
+
+tidy(model_cubic)
+```
+
+The four coefficients belong to the orthogonal columns, so they are hard to read
+on their own, and they differ from the ones you get in Python, which uses the raw
+powers of age. The **predictions** are identical in both languages, and the
+predictions are what we evaluate.
+
+Here is the fitted cubic on top of the training data:
+
+```{r}
+age_grid <- tibble(age = 21:81)
+curve <- augment(model_cubic, age_grid)
+
+ggplot(train, aes(x = age, y = glucose)) +
+  geom_point(alpha = 0.3) +
+  geom_line(data = curve, aes(y = .pred), colour = "red", linewidth = 1) +
+  labs(x = "Age (years)", y = "Glucose (mg/dL)",
+       title = "Cubic fit of glucose on age, training rows")
+```
+
+> **Learning points**
+>
+> - A polynomial model is a linear regression on new columns made from the predictor.
+> - Making those columns is pre-processing, so it lives in the recipe (R) or the pipeline (Python), together with the model.
+> - R's `step_poly()` uses orthogonal polynomials and Python's `PolynomialFeatures()` uses raw powers: different coefficients, identical predictions.
+
+------------------------------------------------------------------------
+
+### Part 2 — Predictions on the training and the test rows
+
+We want to know whether the model **generalises**: does it predict new people as
+well as the people it was fitted on? So we predict both sets. `predict()` gives
+a column `.pred`:
+
+```{r}
+predict(model_cubic, new_data = train) |>
+  head()
+```
+
+It is easier to keep the predictions next to the data. `augment()` does that in
+one step: it adds the prediction `.pred` and the residual `.resid` (observed
+minus predicted) to each row. Do it for the training rows and the test rows:
+
+```{r}
+train_preds <- augment(model_cubic, new_data = train)
+test_preds  <- augment(model_cubic, new_data = test)
+
+head(test_preds)
+```
+
+The first test person is 28 years old with a glucose of 194, and the model
+predicts 127.4 for them: an error of 66.6 mg/dL, a person the model gets badly
+wrong.
+
+```{r}
+both_sets <- bind_rows(train_preds |> mutate(set = "train (600)"),
+                       test_preds  |> mutate(set = "test (150)")) |>
+  mutate(set = factor(set, levels = c("train (600)", "test (150)")))   # train first
+
+ggplot(both_sets, aes(x = age, y = glucose)) +
+  geom_point(alpha = 0.3) +
+  geom_line(aes(y = .pred), colour = "red", linewidth = 1) +
+  facet_wrap(~ set) +
+  labs(x = "Age (years)", y = "Glucose (mg/dL)",
+       title = "The same fitted cubic, on the training and the test rows")
+```
+
+> **Learning points**
+>
+> - The model is fitted on the training rows only; the test rows are used for predicting, never for fitting.
+> - Keep the predictions next to the data: `augment()` in R, a new column in Python.
+
+------------------------------------------------------------------------
+
+### Part 3 — Measuring the error, by hand and with a package
+
+For a regression model the error of one person is $y_i - \hat{y}_i$, the observed
+glucose minus the predicted glucose. Three summaries of these errors are used
+everywhere; you met them as loss functions on Day 3:
+
+$$\text{MSE} = \frac{1}{n}\sum_{i=1}^{n}(y_i - \hat{y}_i)^2 \qquad
+\text{RMSE} = \sqrt{\text{MSE}} \qquad
+\text{MAE} = \frac{1}{n}\sum_{i=1}^{n}|y_i - \hat{y}_i|$$
+
+RMSE and MAE are in the units of the outcome, mg/dL, so they can be read as
+"the typical size of an error". MSE is in squared units. Compute all three on the
+training rows, one step at a time:
+
+```{r}
+train_preds |>
+  mutate(error = glucose - .pred) |>
+  summarise(MSE  = mean(error^2),
+            RMSE = sqrt(MSE),
+            MAE  = mean(abs(error)))
+```
+
+On the training rows the typical error is about 30 mg/dL (RMSE 30.29, MAE
+24.61). Now do the same for the **test** rows:
+
+> **Stuck?**
+>
+> Copy the training cell and change `train_preds` to `test_preds`. The error is
+> the observed glucose minus the prediction `.pred`, and RMSE is the square root
+> of MSE.
+
+> **Worked answer**
+
+```{r}
+test_preds |>
+  mutate(error = glucose - .pred) |>
+  summarise(MSE  = mean(error^2),
+            RMSE = sqrt(MSE),
+            MAE  = mean(abs(error)))
+```
+
+> | | MSE | RMSE | MAE |
+> |:-|:-:|:-:|:-:|
+> | Training rows | 917.6 | 30.29 | 24.61 |
+> | Test rows | 865.1 | 29.41 | 23.69 |
+>
+> The test error is about the same as the training error, here even slightly
+> smaller.
+
+You will compute these metrics for every model you build, so packages already
+do it. In tidymodels they come from **yardstick**: each metric takes the data,
+the column with the truth and the column with the prediction. `metric_set()`
+bundles several metrics into one function:
+
+```{r}
+rmse(train_preds, truth = glucose, estimate = .pred)
+
+reg_metrics <- metric_set(rmse, mae)
+reg_metrics(train_preds, truth = glucose, estimate = .pred)
+```
+
+The same numbers as by hand. Check the test rows with the package as well:
+
+> **Worked answer**
+
+```{r}
+reg_metrics(test_preds, truth = glucose, estimate = .pred)
+```
+
+> Test RMSE 29.41 and MAE 23.69, the same as your hand calculation.
+
+**Question!** The model is about as good on the test rows as on the training
+rows. Is it overfitting? Is it a good model? A typical error of 30 mg/dL, when
+most glucose values lie between 80 and 180, is large. What would you try next?
+
+The errors are similar on both sets, so there is no sign of **overfitting**. But
+they are large on both, which is **underfitting**: age alone cannot capture what
+drives a person's glucose, whatever the shape of the curve. The natural next step
+is to add predictors, not to make the curve more flexible.
+
+> **Learning points**
+>
+> - MSE, RMSE and MAE summarise the errors $y_i - \hat{y}_i$; RMSE and MAE are in the units of the outcome.
+> - Always compute them on both the training and the test rows, and compare.
+> - Much better on training than on test: overfitting. Similar but poor on both: underfitting.
+
+------------------------------------------------------------------------
+
+### Part 4 — More flexible is not more accurate
+
+Was the cubic the right choice? Fit polynomials of degree 1 (a straight line) up
+to 8, and record the training and test RMSE of each. The code is the same as in
+Part 1 with a different `degree`, repeated in a loop:
+
+```{r}
+degree_results <- tibble()
+
+for (d in 1:8) {
+  poly_wf <- workflow() |>
+    add_model(linear_reg()) |>
+    add_recipe(recipe(glucose ~ age, data = train) |>
+                 step_poly(age, degree = d))
+  poly_fit <- poly_wf |>
+    fit(data = train)
+
+  train_rmse <- augment(poly_fit, new_data = train) |>
+    rmse(truth = glucose, estimate = .pred)
+  test_rmse <- augment(poly_fit, new_data = test) |>
+    rmse(truth = glucose, estimate = .pred)
+
+  degree_results <- bind_rows(degree_results,
+                              tibble(degree     = d,
+                                     train_rmse = train_rmse$.estimate,
+                                     test_rmse  = test_rmse$.estimate))
+}
+
+degree_results
+```
+
+```{r}
+degree_results |>
+  pivot_longer(c(train_rmse, test_rmse), names_to = "set", values_to = "RMSE") |>
+  ggplot(aes(x = degree, y = RMSE, colour = set)) +
+  geom_line() +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = 1:8) +
+  labs(x = "Degree of the polynomial", y = "RMSE (mg/dL)", colour = NULL,
+       title = "Training error keeps falling; test error does not")
+```
+
+The training RMSE falls with every extra degree, from 31.10 for the straight line
+to 30.12 for degree 8: a more flexible curve can always follow the training
+points more closely. The test RMSE does not follow. It is lowest at degree 2
+(29.08) and highest at degree 8 (29.74). The extra flexibility is spent on
+the noise of these particular 600 people, which does not repeat in new people.
+With 600 people and a single predictor the effect is small; with fewer people
+or more flexible models it can be very large.
+
+**Question!** Which degree would you choose, and on which data did you base the
+choice? (Look again at the Stretch below.)
+
+> **Learning points**
+>
+> - Training error always improves as a model becomes more flexible, so it cannot be used to choose how flexible a model should be.
+> - Test error stops improving, and starts to get worse, once the model fits noise: that is overfitting.
+
+## Stretch
+
+> **Stretch — choosing with the test set spends the test set**
+>
+> Part 4 chose a degree by looking at the test RMSE, and the test RMSE of that
+> degree is now an optimistic estimate of how it will do on new people. How
+> could you choose the degree using the training rows only, and keep the test
+> rows for one final check? Try it: split the 600 training rows again into 480
+> and 120, choose the degree on the 120, then report the test RMSE once.

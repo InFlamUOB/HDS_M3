@@ -165,6 +165,7 @@ def reference(nodes, lang, quote):
 
 
 COMPARE = False      # set per chapter: does it put the two languages side by side?
+SOLUTIONS = False    # set by build(): the "-solutions" notebooks, answers filled in
 
 
 def view(nodes, lang, test=False, quote=0):
@@ -185,8 +186,8 @@ def view(nodes, lang, test=False, quote=0):
             if re.search(r"#\|\s*(echo|include):\s*false", opts):
                 continue
             is_task = any("______" in b for b in body)
-            if test and is_task:
-                continue                     # the worked answer runs instead
+            if (test or SOLUTIONS) and is_task:
+                continue                     # the worked answer comes instead
             if test and re.search(r"#\|\s*eval:\s*false", opts):
                 continue                     # not run on the page either
             out.append(("code", body, is_task))
@@ -195,7 +196,11 @@ def view(nodes, lang, test=False, quote=0):
             if "show-solutions" in attrs and "content-visible" in attrs:
                 if test:
                     out += [x for x in view(children, lang, test, quote) if x[0] == "code"]
+                elif SOLUTIONS:
+                    out += view(children, lang, test, quote)
                 continue
+            if "show-solutions" in attrs and "content-hidden" in attrs and SOLUTIONS:
+                continue                     # e.g. "Released after the session"
             if "when-profile" in attrs or "instructor" in attrs:
                 continue
             if "panel-tabset" in attrs:
@@ -353,7 +358,8 @@ def intro(stem, lang):
     return [f"*HDS MSc · Module 3 · the {LABEL[lang]} version of this exercise; "
             f"the web page is at <{url}>.*", "",
             f"*{where}. Keep it in the folder that holds your `data` folder. "
-            "Cells with `______` are blanks for you to fill in.*"]
+            + ("This version has the worked answers filled in.*" if SOLUTIONS else
+               "Cells with `______` are blanks for you to fill in.*")]
 
 
 def option_lines(body, keep):
@@ -406,15 +412,33 @@ def to_ipynb(stem, title, items):
     return json.dumps(nb, indent=1, ensure_ascii=False) + "\n"
 
 
-def build(path, test=False):
-    """{dest filename: text} for one chapter (languages without code are skipped)."""
+def build(path, test=False, solutions=False):
+    """{dest filename: text} for one chapter (languages without code are skipped).
+    solutions=True gives the "-solutions" notebooks: worked answers in place of
+    the fill-in cells, with their explanation. They are published only when a
+    day is released with its answers (make release DAY=n ANSWERS=1)."""
+    global SOLUTIONS
+    SOLUTIONS = solutions
     stem = path.stem
     files = {}
-    for lang, ext in EXT.items():
-        title, items = extract(path, lang, test)
-        if not any(it[0] == "code" for it in items):
-            continue
-        files[stem + ext] = (to_rmd if lang == "r" else to_ipynb)(stem, title, items)
+    try:
+        for lang, ext in EXT.items():
+            title, items = extract(path, lang, test)
+            if not any(it[0] == "code" for it in items):
+                continue
+            if solutions:
+                title += " (with solutions)"
+            name = stem + ("-solutions" if solutions else "") + ext
+            files[name] = (to_rmd if lang == "r" else to_ipynb)(stem, title, items)
+    finally:
+        SOLUTIONS = False
+    return files
+
+
+def all_files(path):
+    """Student and solution notebooks for one chapter."""
+    files = build(path)
+    files.update(build(path, solutions=True))
     return files
 
 
@@ -430,12 +454,12 @@ def main(argv):
     written = []
     for name in targets:
         path = ROOT / name
-        files = build(path, test=bool(test_dir))
+        files = build(path, test=True) if test_dir else all_files(path)
         if not test_dir:
             for ext in EXT.values():                 # drop a language that has gone
-                stale = OUT / (path.stem + ext)
-                if stale.name not in files and stale.exists():
-                    stale.unlink()
+                for stale in (OUT / (path.stem + ext), OUT / (path.stem + "-solutions" + ext)):
+                    if stale.name not in files and stale.exists():
+                        stale.unlink()
         for fname, text in files.items():
             (out / fname).write_text(text)
             written.append(str((out / fname).relative_to(ROOT) if not test_dir else out / fname))
