@@ -123,14 +123,21 @@ def extract(path, with_answers=False):
 def render(stem, title, lang, chunks):
     c = COMMENT[lang]
     rule = c + " " + "-" * 68
+    # Each day is published at its own address: .../HDS_M3/day3/<chapter>.html
+    m = re.match(r"day(\d+)-", stem)
+    day = f"day{m.group(1)}/" if m else ""
+    # Say "fill in the blanks" only when the chapter has blanks.
+    blanks = [
+        f"{c} Lines with ______ are blanks to fill in, so this file is a worksheet:",
+        f"{c} it will not run end to end until you have filled them.",
+    ] if any("______" in code for _, code in chunks) else []
     head = [
         f"{c} {title}",
         f"{c} HDS MSc · Module 3 · exercise booklet",
-        f"{c} {SITE}{stem}.html",
+        f"{c} {SITE}{day}{stem}.html",
         c,
         f"{c} The {LABEL[lang]} code from the chapter, in page order, for you to copy and run.",
-        f"{c} Lines with ______ are blanks to fill in, so this file is a worksheet:",
-        f"{c} it will not run end to end until you have filled them.",
+        *blanks,
         f"{c} Run it from the folder that holds your `data` folder.",
         c,
         f"{c} Generated from {stem}.qmd. Edit the chapter, not this file.",

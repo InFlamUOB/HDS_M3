@@ -1,6 +1,6 @@
 # Exercise 3.2 — Loss functions
 # HDS MSc · Module 3 · exercise booklet
-# https://inflamuob.github.io/HDS_M3/day3-02-loss-functions.html
+# https://inflamuob.github.io/HDS_M3/day3/day3-02-loss-functions.html
 #
 # The R code from the chapter, in page order, for you to copy and run.
 # Lines with ______ are blanks to fill in, so this file is a worksheet:

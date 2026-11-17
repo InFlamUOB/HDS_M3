@@ -1,6 +1,6 @@
 # Exercise 3.5 — Ordinary least squares, in closed form
 # HDS MSc · Module 3 · exercise booklet
-# https://inflamuob.github.io/HDS_M3/day3-04-ols.html
+# https://inflamuob.github.io/HDS_M3/day3/day3-04-ols.html
 #
 # The Python code from the chapter, in page order, for you to copy and run.
 # Lines with ______ are blanks to fill in, so this file is a worksheet:
