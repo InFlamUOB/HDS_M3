@@ -206,7 +206,7 @@ def build_day(day, answers=False):
 
     (work / "code").mkdir()
     for name in chapters:
-        for ext in (".R", ".py"):
+        for ext in (".Rmd", ".ipynb"):
             src = ROOT / "code" / (name[:-4] + ext)
             if src.exists():
                 shutil.copy2(src, work / "code" / src.name)

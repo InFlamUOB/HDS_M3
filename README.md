@@ -134,7 +134,7 @@ scripts/check_links.py   dead links and unresolved cross-references, after a ren
 data/                    generated CSVs, published so students can download them
 site/                    what is published: one folder per released day
 _home/index.qmd          the text of the front page
-code/                    the R and Python script of each chapter that offers a download
+code/                    each chapter as an R Markdown (.Rmd) and a Jupyter (.ipynb) notebook, for download
 scripts/make_day_site.py builds and releases one day
 _book/                   your local render of the whole booklet; not committed, not published
 ```

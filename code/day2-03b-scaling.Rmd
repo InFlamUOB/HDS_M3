@@ -1,0 +1,233 @@
+---
+title: "Exercise 2.5 — Scaling, transformations and feature engineering"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day2/day2-03b-scaling.html>.*
+
+*Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+
+## Overview
+
+In this exercise, you will explore different scaling methods, apply transformations to numerical variables, and create new features through feature engineering—all essential steps in preparing data for downstream data analysis. 
+
+## The scenario
+
+We are continuing with the hospital admissions data to predict length of stay. Its
+variables are measured in different units: age in years, blood pressure in
+mmHg and C-reactive protein (CRP) in mg/L.
+
+This is the same file as in Exercise 2.4. If you do not have it yet,
+[**download `hospital_admissions.csv`**](data/hospital_admissions.csv) into your `data` folder.
+
+CRP is a marker of inflammation. Most patients have relatively low values, but
+some have very high measurements. This exercise looks at how different scaling
+methods handle those values, how a transformation changes a distribution, and
+how to create a clinically useful feature.
+
+### 1. Scaling: three different approaches
+
+Compare Min-Max, Standard and Robust scaling for age, systolic blood pressure
+and CRP.
+
+```{r}
+#| message: false
+#| warning: false
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse"))
+
+library(tidyverse)
+
+hospital <- read_csv("data/hospital_admissions.csv", show_col_types = FALSE)
+
+scale_cols <- c("age", "systolic_BP", "CRP_mg_L")
+
+hospital_scaled <- hospital |>
+  mutate(
+    across(all_of(scale_cols),
+           ~ (.x - min(.x)) / (max(.x) - min(.x)),
+           .names = "{.col}_minmax"),
+    across(all_of(scale_cols),
+           ~ as.numeric(scale(.x)),
+           .names = "{.col}_standard"),
+    across(all_of(scale_cols),
+           ~ (.x - median(.x)) / IQR(.x),
+           .names = "{.col}_robust")
+  )
+```
+
+> **Data wrangling again**
+>
+> Normally, we use `mutate()` to create a new variable. For example, to apply Min-Max scaling to age:
+
+```{r}
+hospital_scaled <- hospital |>
+  mutate(
+    age_minmax = (age - min(age)) /
+                 (max(age) - min(age))
+  )
+```
+
+> If we wanted to scale blood pressure and CRP as well, we could repeat the same calculation for each variable:
+
+```{r}
+hospital_scaled <- hospital |>
+  mutate(
+    age_minmax = (age - min(age)) /
+                 (max(age) - min(age)),
+    systolic_BP_minmax = (systolic_BP - min(systolic_BP)) /
+                         (max(systolic_BP) - min(systolic_BP)),
+    CRP_mg_L_minmax = (CRP_mg_L - min(CRP_mg_L)) /
+                      (max(CRP_mg_L) - min(CRP_mg_L))
+  )
+```
+
+> `across()` lets us apply the same operation to multiple columns without repeating the code.
+
+```{r}
+scale_cols <- c("age", "systolic_BP", "CRP_mg_L")
+
+hospital_scaled <- hospital |>
+  mutate(
+    across(
+      all_of(scale_cols),
+      ~ (.x - min(.x)) / (max(.x) - min(.x)),
+      .names = "{.col}_minmax"
+    )
+  )
+```
+
+Compare the range of values:
+
+```{r}
+hospital_scaled |>
+  select(starts_with("CRP")) |>
+  summary()
+
+sd(hospital_scaled$CRP_mg_L_standard)
+```
+
+Visualise CRP before and after scaling:
+
+```{r}
+#| fig-height: 4
+hospital_scaled |>
+  select(CRP_mg_L, starts_with("CRP_mg_L_")) |>
+  pivot_longer(everything()) |>
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(~name, scales = "free_x")
+```
+
+> **Think about it**
+>
+> 1. What happens to the range after Min-Max scaling?
+> 2. What happens to the mean and standard deviation after Standard scaling?
+> 3. How does Robust scaling differ?
+> 4. Does any scaling method eliminate CRP's skewness?
+
+> **Key observation**
+>
+> All three methods change the numerical scale, but preserve the underlying shape
+> of the distribution.
+
+------------------------------------------------------------------------
+
+### 2. Outliers: what happens to the other patients?
+
+Imagine a patient has an exceptionally high CRP. How does that influence the
+scaling of everyone else's measurements?
+
+Compare the largest CRP values before and after Min-Max scaling:
+
+```{r}
+sort(hospital_scaled$CRP_mg_L, decreasing = TRUE)[1:5]
+
+round(sort(hospital_scaled$CRP_mg_L_minmax, decreasing = TRUE)[1:5], 3)
+```
+
+Now make the maximum CRP three times larger, change nothing else, and scale
+again:
+
+```{r}
+crp_extreme <- hospital$CRP_mg_L
+crp_extreme[which.max(crp_extreme)] <- max(crp_extreme) * 3
+
+minmax <- function(x) (x - min(x)) / (max(x) - min(x))
+
+round(sort(minmax(crp_extreme), decreasing = TRUE)[1:5], 3)
+```
+
+> **Think about it**
+>
+> 1. What happened to the scaled values of the other patients?
+> 2. Which scaling method would be least affected by an extreme CRP measurement?
+> 3. Should a clinically plausible extreme value automatically be removed?
+
+> **Key observation**
+>
+> Min-Max scaling is sensitive to extreme values. Robust scaling uses the median
+> and interquartile range, which are far less sensitive to them.
+
+------------------------------------------------------------------------
+
+### 3. Transformation: can we reduce skewness?
+
+Scaling does not change the shape of a distribution. A nonlinear transformation
+can. Compare the original CRP distribution with its log transformation:
+
+```{r}
+#| fig-height: 2.8
+hospital <- hospital |>
+  mutate(log_CRP = log1p(CRP_mg_L))
+
+hospital |>
+  select(CRP_mg_L, log_CRP) |>
+  pivot_longer(everything()) |>
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(~name, scales = "free_x")
+```
+
+> **Think about it**
+>
+> 1. How does the shape change?
+> 2. What happens to the distance between low and high CRP measurements?
+> 3. Why use `log1p()` rather than `log()`?
+>
+------------------------------------------------------------------------
+
+### 4. Feature engineering: calculate BMI
+
+Our dataset includes patients' height and weight, but not their Body Mass Index (BMI). BMI is widely used in clinical practice and medical research, as it provides a measure of body size relative to height and has been associated with a range of health outcomes. By combining height and weight into a single, clinically meaningful feature, we may capture information that helps our predictive model. This is an example of feature engineering, where existing variables are used to create potentially more informative predictors.
+
+Let's calculate BMI and explore its distribution.
+
+```{r}
+#| fig-height: 2.8
+hospital <- hospital |>
+  mutate(BMI = weight_kg / (height_cm / 100)^2)
+
+ggplot(hospital, aes(x = BMI)) +
+  geom_histogram(bins = 25)
+```
+
+> **Think about it**
+>
+> 1. Why might BMI be more informative than weight alone?
+> 2. Is BMI adding new measurements, or combining existing information?
+> 3. What other clinically meaningful features could you derive from the
+>    variables you already have?
+
+------------------------------------------------------------------------
+
+### What to take from this
+
+- **Scaling changes the numerical range of a variable, not its shape.** CRP was
+  as skewed after all three scalers as before.
+- **Robust scaling is less sensitive to extreme values.** One inflated
+  measurement moved every other patient under Min-Max and none under Robust.
+- **Transformation can reduce skewness and changes the relationships between
+  values.** A log turned steps of units into steps of ratios.
+- **Feature engineering creates new variables from existing information.** BMI
+  added no measurement and still separated two patients that weight could not.

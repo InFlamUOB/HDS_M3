@@ -1,0 +1,296 @@
+---
+title: "Exercise 1.2 — Your first ML pipeline"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day1/day1-02-first-pipeline.html>.*
+
+*Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+
+## Overview
+
+In this exercise you will build your **first machine learning pipeline**, using a *linear regression algorithm*. A pipeline is a **sequence of reproducible steps** that takes raw data and produces predictions.
+
+The structure matters because we want models that work beyond the rows we fitted them to. You have already built a linear regression in the previous Module 2 (statistics). Here the same model sits inside a workflow with extra steps, whose job is to test how well it performs on **new, unseen data**. That workflow keeps growing over the next few days as we add concepts to it.
+
+**The five steps**
+
+1.  Load the data
+2.  Define the features (**X**) and the outcome (**y**)
+3.  Split into train and test
+4.  Fit the algorithm on the **training** data
+5.  Evaluate on the **held-out test** data
+
+Step 3 is what separates this from Module 2. In statistics you fit to all the data and ask whether a relationship is real. In machine learning you hold rows back and ask whether the model is any use on rows it has never seen.
+
+> **Today's validation is the simplest possible one**
+>
+> We use a **train/test split**: the model learns from one subset and is scored on another. It is easy to follow and it makes *generalisation* concrete, which is why we start here.
+>
+> **BUT**
+>
+> It is also wasteful and unstable. A single split uses the data inefficiently, and the score depends on which rows happened to land in the test set. In the following days you will learn about the concept of **resampling**: cross-validation, repeated splits and bootstrapping, which let us evaluate more reliably, tune more effectively, and get more out of a limited dataset.
+
+## The data
+
+We use `data/los_data.csv` — [download it here](data/los_data.csv), or take the whole folder from the zip on the [introduction page](index.qmd). It is a simplified hospital scenario, 1000 admissions to a general medical service:
+
+-   **Outcome (y):** `LOS`, length of stay in days
+-   **Features (X):**
+    -   `Age` — patient age in years
+    -   `Severity` — a severity score representing illness burden, 1 to 10
+
+We treat this as a purely *predictive* problem: given a patient's age and severity, can we forecast their length of stay? 
+
+### Look at it before you model it
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "rpart"))
+
+library(tidyverse)
+los <- read_csv("data/los_data.csv")
+summary(los)
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+import pandas as pd
+los = pd.read_csv("data/los_data.csv")
+los.describe()
+```
+
+Answer this questions before going on.
+
+1.  What is the oldest patient here, and is that plausible?
+
+------------------------------------------------------------------------
+
+## The pipeline, step by step
+
+The same five steps, in both languages, side by side: **Python with scikit-learn** on the left, **R with tidymodels** on the right. Read down one column if you are working in one language; read across if you want to see how the same idea is spelled in the other. We also save the fitted model, because in practice a model is trained once and then reused on new incoming data.
+
+### Setup
+
+```{r}
+#| message: false
+#| warning: false
+library(tidymodels)
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+import pandas as pd
+import numpy as np
+import joblib
+import os, tempfile
+
+from sklearn.model_selection import (
+    train_test_split,
+)
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error
+import matplotlib.pyplot as plt
+```
+
+### 1) Load the data
+
+```{r}
+#| message: false
+df <- read_csv("data/los_data.csv")
+head(df)
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+df = pd.read_csv("data/los_data.csv")
+df.head()
+```
+
+### 2) Say what predicts what
+
+This is the first place the two languages genuinely differ. scikit-learn wants the predictors and the outcome handed over as separate objects. tidymodels takes them as a formula at the moment of fitting, so there is nothing to do here --- which is why the right-hand column is empty until step 4.
+
+Nothing to define yet. The formula `LOS ~ Age + Severity` in step 4 says the same thing, at the point where it is used.
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+# 2-D: a frame, one column per feature
+X = df[["Age", "Severity"]]
+# 1-D: the outcome
+y = df["LOS"]
+```
+
+The double brackets are not a typo. scikit-learn wants a *matrix* of predictors and a *vector* of outcomes, and `df["Age"]` would give it a vector where it expects a matrix.
+
+### 3) Split into train and test
+
+```{r}
+set.seed(42)
+
+split <- initial_split(df, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+X_train, X_test, y_train, y_test = (
+    train_test_split(X, y, test_size=0.2,
+                     random_state=42)
+)
+
+X_train.shape, X_test.shape
+```
+
+### 4) Fit the model, and save it
+
+```{r}
+los_model <- linear_reg() %>%
+  set_engine("lm")
+
+los_fit <- los_model %>%
+  fit(LOS ~ Age + Severity, data = train)
+
+saveRDS(los_fit,
+        file.path(tempdir(),
+                  "los_fit_model.RDS"))
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+path = os.path.join(tempfile.gettempdir(),
+                    "los_fit_model.pkl")
+joblib.dump(model, path)
+
+model.intercept_, model.coef_
+```
+
+In your own project you would save it beside your script --- `joblib.dump(model, "los_fit_model.pkl")` or `saveRDS(los_fit, "los_fit_model.RDS")`. Here it goes to a temporary folder so the booklet does not leave files behind.
+
+On the R side, notice that `linear_reg()` fits nothing and mentions no data. The specification says *linear regression, computed by `lm`* and stops there. That separation is what lets you swap the algorithm later without touching the rest --- and it is the step scikit-learn folds into the one `LinearRegression()` call above.
+
+### 5) Evaluate on the test set
+
+To say whether the predictions are any good we have to measure them. We use the **mean absolute error**: take the absolute difference between each prediction and the truth, then average over the test set.
+
+$$
+\text{MAE} = \frac{1}{n} \sum_{i=1}^{n} \left| y_i - \hat{y}_i \right|
+$$
+
+Because we are predicting length of stay, MAE tells us how many days our predictions are wrong by, on average.
+
+```{r}
+test_pred <- predict(los_fit, test) %>%
+  bind_cols(test)
+
+mae(test_pred, truth = LOS,
+    estimate = .pred)
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+pred_test = model.predict(X_test)
+mae_test = mean_absolute_error(y_test,
+                               pred_test)
+mae_test
+```
+
+Later in the module we will check other available metrics such as RMSE, R² and median absolute error, and look at when each is preferable.
+
+### 6) Visualise predicted against actual
+
+```{r}
+ggplot(test_pred, aes(x = LOS, y = .pred)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0) +
+  labs(x = "Actual LOS (days)",
+       y = "Predicted LOS (days)") +
+  coord_equal()
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+fig, ax = plt.subplots()
+ax.scatter(y_test, pred_test, alpha=0.5)
+lo = min(y_test.min(), pred_test.min())
+hi = max(y_test.max(), pred_test.max())
+# the 45 degree line: perfect prediction
+ax.plot([lo, hi], [lo, hi])
+ax.set_xlabel("Actual LOS (days)")
+ax.set_ylabel("Predicted LOS (days)")
+plt.show()
+```
+
+A perfect model would put every point on the diagonal. How far the cloud sits from that line, and whether it drifts away from it at one end, is the whole story of the model in one picture.
+
+------------------------------------------------------------------------
+
+> **Why the two MAEs are not the same number**
+>
+> `set.seed(42)` and `random_state=42` do not select the same rows. They are different generators, and the seed is not a shared address. So the two languages have different test sets and different scores — ours differ by about 0.3 days.
+>
+> That is expected. What would be a problem is a difference large enough to change your conclusion. Both numbers are near 3.2 to 3.4 days, so both support the same statement. Cross-validation later replaces the single split, after which the two agree much more closely, because the score stops depending on one arbitrary partition.
+
+> **What happens if a change the seed**
+>
+> Change the seed value. Does the MAE change? Why? What is changing too?
+>
+------------------------------------------------------------------------
+
+## Exercise
+
+Now apply exactly the same pipeline design to a different dataset. The point is that you can swap in new data and a new target, and the structure does not change.
+
+Remember the baby weight exercise from Module 2? Build a pipeline that predicts birth weight (`bw`) from two ultrasound measurements, `bpd` (biparietal diameter, mm) and `ad` (abdominal diameter, mm). The file is `data/birthweight.csv` — [download it here](data/birthweight.csv) — and it holds 600 pregnancies. Use a test size of 20%, as above.
+
+If you are rewriting more than the variable names and the file path, stop and ask why.
+
+```{r}
+# Replace every ______ below, then run this cell.
+bwt <- read_csv("data/birthweight.csv")
+nrow(bwt)        # 600 pregnancies, if you have the right file
+
+set.seed(42)
+______
+```
+
+> **Stuck?**
+>
+> Exactly the five steps above, with three names changed. The functions are the ones you have already used: `initial_split()`, `training()`, `testing()`, `linear_reg() %>% set_engine("lm") %>% fit()`, `predict()`, `mae()`. The formula is `bw ~ bpd + ad`.
+
+### Solution
+
+> **Note**
+>
+> Released after the session.
+
+Report the test MAE and the model details
+
+## Struggling, or want more?
+
+-   [scikit-learn — getting started](https://scikit-learn.org/stable/getting_started.html)
+-   [tidymodels — build a model](https://www.tidymodels.org/start/models/)
+
+## Extension (optional)
+
+Just as the pipeline can be rerun on a different dataset, it can be rerun with a different **algorithm**. The structure stays; only the learning algorithm changes.
+
+> **Swap the algorithm, keep the pipeline**
+>
+> Replace linear regression with `decision_tree(mode = "regression") %>% set_engine("rpart")`, changing nothing else. Does it do better?
+
+> **Prove the split is doing something**
+>
+> Refit on **all 1000 rows**, then evaluate on the test subset. The MAE improves. Explain what has happened and why
