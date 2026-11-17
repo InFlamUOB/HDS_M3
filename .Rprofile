@@ -10,7 +10,7 @@
 
 local({
   pkgs <- c("pandas", "numpy", "matplotlib", "seaborn", "scikit-learn",
-                 "joblib", "shap")
+                 "joblib", "shap", "dalex", "plotly")
   if (nzchar(Sys.getenv("RETICULATE_PYTHON"))) return(invisible(NULL))
   if (!requireNamespace("reticulate", quietly = TRUE)) return(invisible(NULL))
   if (!exists("py_require", envir = asNamespace("reticulate"))) {
