@@ -4,523 +4,792 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 5.2 — Classification metrics {#sec-classification-metrics}
+# Exercise 5.2 — Evaluating a classification model on training and test data {#sec-classification-metrics}
 
+Exercise 5.1 evaluated a regression model by the size of its errors. A
+classification model predicts a class, diabetes or no diabetes, so an error is
+simply a wrong class, and there are two kinds of wrong. In this exercise we fit a
+logistic regression on the training rows, turn its probabilities into classes
+with a threshold, and measure its performance on the training and the test
+rows, first with metrics that depend on the threshold and then with the ROC
+curve and the AUC, which do not. Finally we add more predictors and compare.
 
-Every cell on this page is a real R or Python cell, run against
-`data/diabetes.csv`. Open `day5-02-classification-metrics.qmd` in your editor
-and run them one at a time.
+**Theory:** predicted probabilities and predicted classes; accuracy, precision,
+recall, sensitivity and specificity; which class is the event; the distribution
+of predicted probabilities; the ROC curve and the area under it (AUC);
+underfitting in classification.
 
-## Objectives
-
-::: {.objective-list}
-- Compute accuracy, sensitivity, specificity and AUC from predicted
-  probabilities, in both languages, and say which rows each one looked at.
-- State the accuracy of the majority-class rule for a dataset before you fit
-  anything, and report every later accuracy next to it.
-- Explain how a model can be a percentage point better than that rule, find
-  one diabetic patient in eight, and still have an AUC well above chance.
+::: {.callout-note}
+## The plots are for looking at
+The code for every plot is folded away just above it, in case you are curious,
+and all of it is in the code file linked at the top of each tab. You are not
+expected to write it yourself.
 :::
 
-## Why this, here
+:::::: {.panel-tabset group="language"}
 
-Exercise 5.1 ended where the outcome stops being a number. The
-outcome here is `pos` or `neg`, so the residual is no longer a distance and
-every metric on this page is built instead from counts in a 2×2 table. The
-table has two error types, the two are not interchangeable in a clinic, and
-accuracy — the metric everybody reaches for first — adds them together with
-weights chosen by the prevalence of the disease rather than by anyone's
-judgement.
-
-The data is the diabetes screening extract you have used since Day 2; the split
-is 70/30 and stratified, which is what Exercise 2.6 argued for.
-
-## Worked example — fit, and look at the table before the metrics
-
-::: {.panel-tabset}
 ## R
 
-```{r}
-library(tidymodels); library(readr)
+[**Download the R code from this chapter**](code/day5-02-classification-metrics.R){download="day5-02-classification-metrics.R"} — every cell below, in page order, including the code for every plot, with the blanks left for you to fill in. Open it in Positron beside the page and run it a chunk at a time.
 
+### Packages and data
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(patchwork)             # to put two plots side by side
+
+theme_set(theme_bw())          # white background for every plot
+options(pillar.sigfig = 3)     # show three significant figures in tables
+```
+
+The same 750 people and the same split as Exercise 5.1, from
+[`data/diabetes.csv`](data/diabetes.csv). This time we keep five predictors,
+because Part 4 uses them all. Triceps skinfold, insulin and blood pressure are
+left out because in this data set a zero in those columns means "not measured".
+The outcome is a factor with the levels `neg` then `pos`.
+
+```{r}
 diabetes <- read_csv("data/diabetes.csv") |>
-  dplyr::mutate(diabetes = factor(diabetes, levels = c("pos", "neg")))
+  select(pregnant, glucose, mass, pedigree, age, diabetes) |>
+  filter(glucose > 0, mass > 0) |>              # remove the impossible zeros
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
 
-table(diabetes$diabetes)
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+test  <- diabetes[test_rows, ]
 
-set.seed(123)
-split <- initial_split(diabetes, prop = 0.7, strata = diabetes)
-train <- training(split); test <- testing(split)
-
-age_fit <- logistic_reg() |> set_engine("glm") |> fit(diabetes ~ age, data = train)
-
-test_preds <- augment(age_fit, test)
-conf_mat(test_preds, truth = diabetes, estimate = .pred_class)
+count(train, diabetes)
+count(test, diabetes)
 ```
 
-## Python
+Always look at the number of people in each class first. 220 of the 600
+training rows (36.7%) and 53 of the 150 test rows (35.3%) have diabetes.
 
-```{python}
-import pandas as pd, numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import (accuracy_score, recall_score, roc_auc_score,
-                             confusion_matrix, roc_curve)
+------------------------------------------------------------------------
 
-diabetes = pd.read_csv("data/diabetes.csv")
-y = (diabetes["diabetes"] == "pos").astype(int)
-print(diabetes["diabetes"].value_counts())
+### Part 1 — An age-only model, and its predictions
 
-X_age = diabetes[["age"]]
-X_tr, X_te, y_tr, y_te = train_test_split(X_age, y, test_size=0.3,
-                                          random_state=123, stratify=y)
-
-age_fit = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)).fit(X_tr, y_tr)
-confusion_matrix(y_te, age_fit.predict(X_te), labels=[1, 0])
-```
-:::
-
-::: {.callout-warning}
-## Which class is the event is a decision, and the two languages ask for it differently
-In R, yardstick treats the **first level of the factor** as the event, so
-`factor(diabetes, levels = c("pos", "neg"))` is load-bearing: drop it, `neg`
-becomes the event, and your sensitivity and specificity silently swap places.
-In Python the convention is that the event is coded `1`, which is why the
-outcome is converted with `== "pos"` and why `labels=[1, 0]` is passed to
-`confusion_matrix` to get the same orientation as R's.
-
-Nothing warns you if you get this wrong. The symptom is a model that looks
-implausibly good at ruling out a common disease.
-:::
-
-Now the metrics, on the rows the model was fitted to and on the held-out rows.
-
-::: {.panel-tabset}
-## R
+Start with a very simple model, `diabetes ~ age`, built as a workflow: a model
+specification, a recipe and the workflow that joins them.
 
 ```{r}
-class_metrics <- metric_set(accuracy, sens, yardstick::specificity, precision)
+log_spec <- logistic_reg() |>
+  set_engine("glm") |>
+  set_mode("classification")
 
-dplyr::bind_rows(
-  class_metrics(augment(age_fit, train), truth = diabetes, estimate = .pred_class) |>
-    dplyr::mutate(set = "train"),
-  class_metrics(test_preds, truth = diabetes, estimate = .pred_class) |>
-    dplyr::mutate(set = "test")
-) |>
-  tidyr::pivot_wider(id_cols = .metric, names_from = set, values_from = .estimate)
+log_rec <- recipe(diabetes ~ age, data = train)
+
+log_wf <- workflow() |>
+  add_model(log_spec) |>
+  add_recipe(log_rec)
+
+log_fit <- log_wf |>
+  fit(data = train)
+
+tidy(log_fit)
 ```
 
-## Python
+The coefficient of age is positive: older people have higher predicted odds of
+diabetes, by a factor of $e^{0.0363} = 1.04$ per year.
 
-```{python}
-def scores(model, X, yy):
-    pred = model.predict(X)
-    return {"accuracy": accuracy_score(yy, pred),
-            "sens":     recall_score(yy, pred),
-            "spec":     recall_score(1 - yy, 1 - pred),
-            "auc":      roc_auc_score(yy, model.predict_proba(X)[:, 1])}
+A classification model first gives a **probability** for each person. To turn
+it into a predicted class we choose a threshold, as in Exercise 4.3; here we use
+the usual 0.5. Predict the training rows:
 
-pd.DataFrame({"train": scores(age_fit, X_tr, y_tr),
-              "test":  scores(age_fit, X_te, y_te)})
+```{r}
+train_preds <- predict(log_fit, new_data = train, type = "prob") |>
+  bind_cols(train) |>
+  mutate(pred_class = factor(if_else(.pred_pos >= 0.5, "pos", "neg"),
+                             levels = c("neg", "pos")))
+
+head(train_preds)
 ```
+
+`.pred_pos` is the predicted probability of `pos` (diabetes) and `.pred_neg`
+that of `neg`; they add up to 1. Now the same for the test rows:
+
+```{r}
+test_preds <- predict(log_fit, new_data = test, type = "prob") |>
+  bind_cols(test) |>
+  mutate(pred_class = factor(if_else(.pred_pos >= 0.5, "pos", "neg"),
+                             levels = c("neg", "pos")))
+
+count(test_preds, pred_class)
+```
+
+At 0.5 the age-only model predicts diabetes for only 20 of the 150 test patients:
+a probability of 0.5 or more needs an age of 49 or more.
+
+::: {.callout-important}
+## Learning points
+- The same workflow steps as for regression: specify, write the recipe, fit on the training rows, predict both sets.
+- A classifier gives probabilities first; the threshold turns them into classes.
 :::
 
+------------------------------------------------------------------------
+
+### Part 2 — Metrics on the training and the test rows
+
+From the confusion table of Exercise 4.3 come several metrics:
+
+- **Accuracy**: the proportion of people classified correctly.
+- **Precision**: of the people predicted to have diabetes, the proportion who
+  have it, $TP / (TP + FP)$.
+- **Recall** or **sensitivity**: of the people who have diabetes, the
+  proportion the model finds, $TP / (TP + FN)$.
+- **Specificity**: of the people without diabetes, the proportion correctly
+  left alone, $TN / (TN + FP)$.
+
+yardstick computes them all in one go with `metric_set()`. yardstick treats the
+**first** level of the outcome as the event, which here is `neg`, so we ask for
+`event_level = "second"` to make `pos` (diabetes) the event.
+
+```{r}
+class_metrics <- metric_set(accuracy, precision, recall, sens, spec)
+
+class_metrics(train_preds, truth = diabetes, estimate = pred_class,
+              event_level = "second")
+```
+
+Recall and sensitivity are the same thing under two names. Now compute the same
+metrics on the **test** rows:
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+class_metrics(______, truth = diabetes, estimate = pred_class,
+              event_level = ______)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Use the test predictions, `test_preds`, and keep `pos` as the event: it is the
+second level.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
-## `spec` is not `specificity`
-In R, writing `spec` inside `metric_set()` picks up `readr::spec`, the function
-that reports a column specification, and `metric_set()` fails with a message
-about mixing metric types. Write `yardstick::specificity`. This is the most
-common five-minute delay on this page.
+## Worked answer
+```{r}
+class_metrics(test_preds, truth = diabetes, estimate = pred_class,
+              event_level = "second")
+```
+
+| | Accuracy | Precision | Recall = sensitivity | Specificity |
+|:-|:-:|:-:|:-:|:-:|
+| Training rows | 0.623 | 0.461 | 0.159 | 0.892 |
+| Test rows | 0.647 | 0.500 | 0.189 | 0.897 |
+:::
 :::
 
-## Worked example — the ROC curve, which does not need a threshold
+**Question!** Is the model overfitting? Is it any good? Compare the test accuracy
+with a "model" that predicts no diabetes for everybody: it would be right for
+the 97 of 150 test patients without diabetes, an accuracy of 0.647.
 
-Everything above was computed after turning probabilities into classes at 0.5.
-That threshold is a separate decision from the model (Exercise 4.3). An ROC
-curve shows what the model can do at *every* threshold at once: each point is
-one threshold, plotting sensitivity against 1 − specificity.
+Training and test metrics are similar, so there is no strong sign of
+overfitting. But the age-only model is no more accurate than predicting "no
+diabetes" for everyone, and it finds fewer than one in five of the people with
+diabetes. It **underfits**: age alone is not enough.
 
-::: {.panel-tabset}
-## R
+::: {.callout-important}
+## Learning points
+- Accuracy, precision, recall (= sensitivity) and specificity all depend on the threshold.
+- Say which class is the event: `event_level = "second"` in yardstick when the event is the second level; `pos_label` in scikit-learn.
+- Compare accuracy with the share of the largest class: a model must beat predicting the same class for everyone.
+:::
+
+------------------------------------------------------------------------
+
+### Part 3 — Score distributions and the ROC curve
+
+The metrics above looked at one threshold. To see the model's probabilities
+themselves, plot them separately for the people with and without diabetes. A
+useful model gives the people with diabetes higher probabilities:
 
 ```{r}
-#| fig-height: 3.6
-#| fig-width: 4.2
-roc_curve(test_preds, truth = diabetes, .pred_pos) |>
-  autoplot() +
-  labs(title = "Age-only logistic model, test set")
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+train_plot <- ggplot(train_preds, aes(x = diabetes, y = .pred_pos, fill = diabetes)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(x = "True class", y = "Predicted probability of diabetes",
+       title = "Training rows") +
+  theme(legend.position = "none")
 
-roc_auc(test_preds, truth = diabetes, .pred_pos)
+test_plot <- ggplot(test_preds, aes(x = diabetes, y = .pred_pos, fill = diabetes)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(x = "True class", y = "Predicted probability of diabetes",
+       title = "Test rows") +
+  theme(legend.position = "none")
+
+train_plot + test_plot
 ```
+
+The boxes overlap a great deal, in both sets: age separates the two groups only
+weakly. Every threshold we could draw across this plot would misclassify many
+people.
+
+The **ROC curve** shows all thresholds at once. For each threshold it plots the
+sensitivity against $1 - \text{specificity}$, the proportion of false alarms;
+you computed three of its points by hand in Exercise 4.3. A model that guesses
+at random follows the diagonal. The **area under the curve** (AUC) summarises
+the curve in one number: 0.5 for guessing, 1 for perfect separation. It is also
+the probability that a randomly chosen person with diabetes gets a higher
+predicted probability than a randomly chosen person without.
+
+```{r}
+roc_age <- roc_curve(test_preds, truth = diabetes, .pred_pos, event_level = "second")
+auc_age <- roc_auc(test_preds, truth = diabetes, .pred_pos, event_level = "second")
+
+auc_age
+```
+
+```{r}
+autoplot(roc_age) +
+  ggtitle("ROC curve, age-only model (test rows)")
+```
+
+Now compute the AUC on the **training** rows, and compare:
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+roc_auc(______, truth = diabetes, ______, event_level = "second")
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+roc_auc(train_preds, truth = diabetes, .pred_pos, event_level = "second")
+```
+
+Training AUC 0.671, test AUC 0.668: similar, and both far from 1.
+:::
+:::
+
+::: {.callout-important}
+## Learning points
+- Plot the predicted probabilities by true class: the less the groups overlap, the better the model separates them.
+- The ROC curve shows sensitivity against 1 - specificity for every threshold; the AUC summarises it, 0.5 for guessing and 1 for perfect.
+- AUC does not depend on a threshold, so it compares models before anyone has chosen one.
+:::
+
+------------------------------------------------------------------------
+
+### Part 4 — Include more features
+
+Age alone was not enough. Add the other four predictors. The recipe also
+standardises them with `step_normalize()` (Day 2), so that the coefficients are
+on the same scale and can be compared: each is the change in log-odds for one
+standard deviation of that predictor. The model specification stays the same.
+
+```{r}
+log_rec2 <- recipe(diabetes ~ pregnant + glucose + mass + pedigree + age,
+                   data = train) |>
+  step_normalize(all_numeric_predictors())
+
+log_wf2 <- workflow() |>
+  add_model(log_spec) |>
+  add_recipe(log_rec2)
+
+log_fit2 <- log_wf2 |>
+  fit(data = train)
+
+tidy(log_fit2)
+```
+
+Glucose has by far the largest coefficient, 1.02 log-odds per standard
+deviation, followed by body mass (0.46). Once glucose is in the model, age adds
+little (0.15). (R's `step_normalize()` divides by the standard deviation with
+$n - 1$, Python's `StandardScaler()` with $n$; the coefficients differ in the
+fourth digit, the predictions do not.)
+
+Predict both sets and compute the metrics:
+
+```{r}
+train_preds2 <- predict(log_fit2, new_data = train, type = "prob") |>
+  bind_cols(train) |>
+  mutate(pred_class = factor(if_else(.pred_pos >= 0.5, "pos", "neg"),
+                             levels = c("neg", "pos")))
+
+test_preds2 <- predict(log_fit2, new_data = test, type = "prob") |>
+  bind_cols(test) |>
+  mutate(pred_class = factor(if_else(.pred_pos >= 0.5, "pos", "neg"),
+                             levels = c("neg", "pos")))
+
+class_metrics(train_preds2, truth = diabetes, estimate = pred_class,
+              event_level = "second")
+class_metrics(test_preds2, truth = diabetes, estimate = pred_class,
+              event_level = "second")
+```
+
+Test accuracy rises from 0.647 to 0.767 and sensitivity from 0.189 to 0.528.
+Training and test are still close, so the richer model does not overfit
+either. Complete the code for its ROC curve and AUC on the test rows:
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+roc_rich <- roc_curve(______, truth = diabetes, .pred_pos, event_level = "second")
+auc_rich <- roc_auc(______, truth = diabetes, .pred_pos, event_level = "second")
+
+auc_rich
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+roc_rich <- roc_curve(test_preds2, truth = diabetes, .pred_pos, event_level = "second")
+auc_rich <- roc_auc(test_preds2, truth = diabetes, .pred_pos, event_level = "second")
+
+auc_rich
+```
+
+Test AUC 0.830, against 0.668 for age only.
+:::
+:::
+
+The two ROC curves together. The richer model's curve lies further from the
+diagonal at nearly every threshold:
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+roc_both <- bind_rows(
+  roc_curve(test_preds,  truth = diabetes, .pred_pos, event_level = "second") |>
+    mutate(model = "age only"),
+  roc_curve(test_preds2, truth = diabetes, .pred_pos, event_level = "second") |>
+    mutate(model = "five predictors"))
+
+ggplot(roc_both, aes(x = 1 - specificity, y = sensitivity, colour = model)) +
+  geom_path(linewidth = 1) +
+  geom_abline(linetype = "dashed", colour = "grey50") +
+  coord_equal() +
+  labs(colour = NULL, title = "ROC curves on the test rows")
+```
+
+**Question!** The richer model is better on every metric. Could adding even more
+predictors ever make a model worse on the test rows? What would you look for?
+
+::: {.callout-important}
+## Learning points
+- Adding relevant predictors improved every metric and the AUC, on training and test alike.
+- Standardise the predictors when you want to compare the sizes of their coefficients.
+- More flexible models can still overfit: keep comparing training and test.
+:::
 
 ## Python
 
+[**Download the Python code from this chapter**](code/day5-02-classification-metrics.py){download="day5-02-classification-metrics.py"} — every cell below, in page order, including the code for every plot, with the blanks left for you to fill in. Open it in Positron beside the page and run it a cell at a time.
+
+### Packages and data
+
 ```{python}
-#| fig-height: 3.6
-#| fig-width: 4.2
+import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 
-fpr, tpr, _ = roc_curve(y_te, age_fit.predict_proba(X_te)[:, 1])
-fig, ax = plt.subplots(figsize=(4.2, 3.6))
-ax.plot(fpr, tpr)
-ax.plot([0, 1], [0, 1], linestyle="--", color="grey")
-ax.set_xlabel("1 - specificity"); ax.set_ylabel("sensitivity")
-ax.set_title("Age-only logistic model, test set")
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, precision_score, recall_score
+from sklearn.metrics import roc_curve, roc_auc_score
+```
+
+The same 750 people and the same split as Exercise 5.1, from
+[`data/diabetes.csv`](data/diabetes.csv). This time we keep five predictors,
+because Part 4 uses them all. Triceps skinfold, insulin and blood pressure are
+left out because in this data set a zero in those columns means "not measured".
+The outcome is coded 1 for `pos` and 0 for `neg`.
+
+```{python}
+diabetes = pd.read_csv("data/diabetes.csv")
+diabetes = diabetes[["pregnant", "glucose", "mass", "pedigree", "age", "diabetes"]]
+diabetes = diabetes[(diabetes["glucose"] > 0) & (diabetes["mass"] > 0)]   # remove the impossible zeros
+diabetes = diabetes.reset_index(drop=True)
+diabetes["diabetes"] = (diabetes["diabetes"] == "pos").astype(int)       # 1 = pos, 0 = neg
+
+is_test = diabetes.index % 5 == 0               # every fifth person is held back
+train = diabetes[~is_test]
+test  = diabetes[is_test]
+
+print(train["diabetes"].value_counts())
+print(test["diabetes"].value_counts())
+```
+
+Always look at the number of people in each class first. 220 of the 600
+training rows (36.7%) and 53 of the 150 test rows (35.3%) have diabetes.
+
+------------------------------------------------------------------------
+
+### Part 1 — An age-only model, and its predictions
+
+Start with a very simple model: diabetes from age only. `C=np.inf` switches off
+scikit-learn's default penalty, so the coefficients match R's.
+
+```{python}
+age_model = LogisticRegression(C=np.inf)
+age_model = age_model.fit(train[["age"]], train["diabetes"])
+
+print("intercept:", round(age_model.intercept_[0], 4))
+print("age:      ", round(age_model.coef_[0, 0], 4))
+```
+
+The coefficient of age is positive: older people have higher predicted odds of
+diabetes, by a factor of $e^{0.0363} = 1.04$ per year.
+
+A classification model first gives a **probability** for each person. To turn
+it into a predicted class we choose a threshold, as in Exercise 4.3; here we use
+the usual 0.5. Predict the training rows:
+
+```{python}
+train_preds = train.copy()
+train_preds["prob"] = age_model.predict_proba(train[["age"]])[:, 1]   # probability of 1
+train_preds["pred_class"] = (train_preds["prob"] >= 0.5).astype(int)
+
+train_preds.head().round(3)
+```
+
+`prob` is the predicted probability of diabetes (1) and `pred_class` the
+predicted class at the threshold 0.5. Now the same for the test rows:
+
+```{python}
+test_preds = test.copy()
+test_preds["prob"] = age_model.predict_proba(test[["age"]])[:, 1]
+test_preds["pred_class"] = (test_preds["prob"] >= 0.5).astype(int)
+
+test_preds["pred_class"].value_counts()
+```
+
+At 0.5 the age-only model predicts diabetes for only 20 of the 150 test patients:
+a probability of 0.5 or more needs an age of 49 or more.
+
+::: {.callout-important}
+## Learning points
+- The same workflow steps as for regression: specify, write the recipe, fit on the training rows, predict both sets.
+- A classifier gives probabilities first; the threshold turns them into classes.
+:::
+
+------------------------------------------------------------------------
+
+### Part 2 — Metrics on the training and the test rows
+
+From the confusion table of Exercise 4.3 come several metrics:
+
+- **Accuracy**: the proportion of people classified correctly.
+- **Precision**: of the people predicted to have diabetes, the proportion who
+  have it, $TP / (TP + FP)$.
+- **Recall** or **sensitivity**: of the people who have diabetes, the
+  proportion the model finds, $TP / (TP + FN)$.
+- **Specificity**: of the people without diabetes, the proportion correctly
+  left alone, $TN / (TN + FP)$.
+
+scikit-learn treats 1 as the event (`pos_label=1`). It has no specificity
+function, but specificity is the recall of the other class, so we ask for
+`recall_score(..., pos_label=0)`.
+
+```{python}
+truth     = train_preds["diabetes"]
+predicted = train_preds["pred_class"]
+
+print("accuracy:   ", round(accuracy_score(truth, predicted), 3))
+print("precision:  ", round(precision_score(truth, predicted), 3))
+print("recall:     ", round(recall_score(truth, predicted), 3))
+print("sensitivity:", round(recall_score(truth, predicted), 3))
+print("specificity:", round(recall_score(truth, predicted, pos_label=0), 3))
+```
+
+Recall and sensitivity are the same thing under two names. Now compute the same
+metrics on the **test** rows:
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+truth     = ______
+predicted = test_preds["pred_class"]
+
+print("accuracy:   ", round(accuracy_score(truth, predicted), 3))
+print("precision:  ", round(precision_score(truth, predicted), 3))
+print("recall:     ", round(recall_score(truth, predicted), 3))
+print("sensitivity:", round(recall_score(truth, predicted), 3))
+print("specificity:", round(recall_score(truth, predicted, ______), 3))
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The truth is the `diabetes` column of `test_preds`. Specificity is the recall
+of the class 0.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+truth     = test_preds["diabetes"]
+predicted = test_preds["pred_class"]
+
+print("accuracy:   ", round(accuracy_score(truth, predicted), 3))
+print("precision:  ", round(precision_score(truth, predicted), 3))
+print("recall:     ", round(recall_score(truth, predicted), 3))
+print("sensitivity:", round(recall_score(truth, predicted), 3))
+print("specificity:", round(recall_score(truth, predicted, pos_label=0), 3))
+```
+
+| | Accuracy | Precision | Recall = sensitivity | Specificity |
+|:-|:-:|:-:|:-:|:-:|
+| Training rows | 0.623 | 0.461 | 0.159 | 0.892 |
+| Test rows | 0.647 | 0.500 | 0.189 | 0.897 |
+:::
+:::
+
+**Question!** Is the model overfitting? Is it any good? Compare the test accuracy
+with a "model" that predicts no diabetes for everybody: it would be right for
+the 97 of 150 test patients without diabetes, an accuracy of 0.647.
+
+Training and test metrics are similar, so there is no strong sign of
+overfitting. But the age-only model is no more accurate than predicting "no
+diabetes" for everyone, and it finds fewer than one in five of the people with
+diabetes. It **underfits**: age alone is not enough.
+
+::: {.callout-important}
+## Learning points
+- Accuracy, precision, recall (= sensitivity) and specificity all depend on the threshold.
+- Say which class is the event: `event_level = "second"` in yardstick when the event is the second level; `pos_label` in scikit-learn.
+- Compare accuracy with the share of the largest class: a model must beat predicting the same class for everyone.
+:::
+
+------------------------------------------------------------------------
+
+### Part 3 — Score distributions and the ROC curve
+
+The metrics above looked at one threshold. To see the model's probabilities
+themselves, plot them separately for the people with and without diabetes. A
+useful model gives the people with diabetes higher probabilities:
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+fig, axes = plt.subplots(1, 2, figsize=(9, 4), sharey=True)
+for ax, data, name in [(axes[0], train_preds, "Training rows"), (axes[1], test_preds, "Test rows")]:
+    ax.boxplot([data.loc[data["diabetes"] == 0, "prob"], data.loc[data["diabetes"] == 1, "prob"]],
+               tick_labels=["no diabetes (0)", "diabetes (1)"])
+    ax.set_title(name)
+    ax.set_xlabel("True class")
+axes[0].set_ylabel("Predicted probability of diabetes")
 plt.show()
-
-roc_auc_score(y_te, age_fit.predict_proba(X_te)[:, 1])
-```
-:::
-
-The AUC is the area under that curve. It has one honest interpretation worth
-memorising: **take one patient with diabetes and one without, at random; the
-AUC is the probability the model gives the diabetic patient the higher score.**
-It is a statement about ranking, it never looks at the threshold, and 0.5 is
-the value you get by ranking at random.
-
-## Task 1 — The bar every accuracy has to clear
-
-Before comparing models, compute the accuracy of the rule *predict `neg` for
-everybody*. It uses no predictors, needs no fitting, and is the number your
-accuracy has to beat before it means anything.
-
-::: {.panel-tabset}
-## R
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-source("checks/checks.R")
-majority_accuracy <- mean(test$diabetes == ______)
-majority_accuracy
-
-model_accuracy <- accuracy(test_preds, truth = diabetes, estimate = .pred_class)$.estimate
-check_beats_prevalence(model_accuracy, ______)
 ```
 
-::: {.callout-tip collapse="true"}
-## Stuck?
-The first blank is a class label in quotation marks — the commoner of the two.
-The second is the vector of true outcomes for the rows the accuracy was
-computed on; the check works out the majority share itself.
-:::
+The boxes overlap a great deal, in both sets: age separates the two groups only
+weakly. Every threshold we could draw across this plot would misclassify many
+people.
 
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-source("checks/checks.R")
-majority_accuracy <- mean(test$diabetes == "neg")
-majority_accuracy
+The **ROC curve** shows all thresholds at once. For each threshold it plots the
+sensitivity against $1 - \text{specificity}$, the proportion of false alarms;
+you computed three of its points by hand in Exercise 4.3. A model that guesses
+at random follows the diagonal. The **area under the curve** (AUC) summarises
+the curve in one number: 0.5 for guessing, 1 for perfect separation. It is also
+the probability that a randomly chosen person with diabetes gets a higher
+predicted probability than a randomly chosen person without.
 
-model_accuracy <- accuracy(test_preds, truth = diabetes, estimate = .pred_class)$.estimate
-check_beats_prevalence(model_accuracy, test$diabetes)
+```{python}
+fpr_age, tpr_age, thresholds_age = roc_curve(test_preds["diabetes"], test_preds["prob"])
+auc_age = roc_auc_score(test_preds["diabetes"], test_preds["prob"])
+
+print("test AUC, age only:", round(auc_age, 3))
 ```
-:::
-:::
 
-## Python
+```{python}
+fig, ax = plt.subplots(figsize=(5, 5))
+ax.plot(fpr_age, tpr_age, color="black")
+ax.plot([0, 1], [0, 1], color="grey", linestyle="--")
+ax.set_xlabel("1 - specificity")
+ax.set_ylabel("Sensitivity")
+ax.set_title("ROC curve, age-only model (test rows)")
+plt.show()
+```
+
+Now compute the AUC on the **training** rows, and compare:
 
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
-majority_accuracy = (y_te == ______).mean()
-print(majority_accuracy)
+auc_age_train = roc_auc_score(______, ______)
 
-check_beats_prevalence(accuracy_score(y_te, age_fit.predict(X_te)), ______)
+print("training AUC, age only:", round(auc_age_train, 3))
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
-majority_accuracy = (y_te == 0).mean()
-print(majority_accuracy)
+auc_age_train = roc_auc_score(train_preds["diabetes"], train_preds["prob"])
 
-check_beats_prevalence(accuracy_score(y_te, age_fit.predict(X_te)), y_te)
-```
-:::
-:::
-:::
-
-Then count, from the confusion matrix you printed earlier, how many of the test
-patients who have diabetes this model identifies. Write the fraction down as
-"x of 84".
-
-## Task 2 — Earn the AUC: use every predictor
-
-Fit a second logistic model with all eight predictors, on the same training
-rows, and report accuracy, sensitivity, specificity and AUC on the same test
-rows.
-
-::: {.panel-tabset}
-## R
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-full_fit <- logistic_reg() |> set_engine("glm") |> fit(______, data = train)
-
-full_test <- augment(full_fit, test)
-class_metrics(full_test, truth = diabetes, estimate = .pred_class)
-roc_auc(full_test, truth = diabetes, ______)
-
-check_metric_range(roc_auc(full_test, truth = diabetes, .pred_pos)$.estimate,
-                   0.7, 0.95, "test AUC, all predictors")
+print("training AUC, age only:", round(auc_age_train, 3))
 ```
 
-::: {.callout-tip collapse="true"}
-## Stuck?
-A formula with every other column on the right-hand side has a one-character
-shorthand in R. The second blank is the column holding the probability of the
-event, which `augment()` has already added.
+Training AUC 0.671, test AUC 0.668: similar, and both far from 1.
+:::
 :::
 
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-full_fit <- logistic_reg() |> set_engine("glm") |> fit(diabetes ~ ., data = train)
+::: {.callout-important}
+## Learning points
+- Plot the predicted probabilities by true class: the less the groups overlap, the better the model separates them.
+- The ROC curve shows sensitivity against 1 - specificity for every threshold; the AUC summarises it, 0.5 for guessing and 1 for perfect.
+- AUC does not depend on a threshold, so it compares models before anyone has chosen one.
+:::
 
-full_test <- augment(full_fit, test)
-class_metrics(full_test, truth = diabetes, estimate = .pred_class)
-roc_auc(full_test, truth = diabetes, .pred_pos)
+------------------------------------------------------------------------
 
-check_metric_range(roc_auc(full_test, truth = diabetes, .pred_pos)$.estimate,
-                   0.7, 0.95, "test AUC, all predictors")
+### Part 4 — Include more features
+
+Age alone was not enough. Add the other four predictors. The pipeline also
+standardises them with `StandardScaler()` (Day 2), so that the coefficients are
+on the same scale and can be compared: each is the change in log-odds for one
+standard deviation of that predictor.
+
+```{python}
+predictors = ["pregnant", "glucose", "mass", "pedigree", "age"]
+
+rich_pipe = Pipeline([
+    ("scale", StandardScaler()),
+    ("model", LogisticRegression(C=np.inf)),
+])
+rich_pipe = rich_pipe.fit(train[predictors], train["diabetes"])
+
+pd.Series(rich_pipe["model"].coef_[0], index=predictors).round(3)
 ```
-:::
-:::
 
-## Python
+Glucose has by far the largest coefficient, 1.02 log-odds per standard
+deviation, followed by body mass (0.46). Once glucose is in the model, age adds
+little (0.15). (R's `step_normalize()` divides by the standard deviation with
+$n - 1$, Python's `StandardScaler()` with $n$; the coefficients differ in the
+fourth digit, the predictions do not.)
+
+Predict both sets and compute the metrics:
+
+```{python}
+train_preds2 = train.copy()
+train_preds2["prob"] = rich_pipe.predict_proba(train[predictors])[:, 1]
+train_preds2["pred_class"] = (train_preds2["prob"] >= 0.5).astype(int)
+
+test_preds2 = test.copy()
+test_preds2["prob"] = rich_pipe.predict_proba(test[predictors])[:, 1]
+test_preds2["pred_class"] = (test_preds2["prob"] >= 0.5).astype(int)
+
+for name, data in [("train", train_preds2), ("test", test_preds2)]:
+    truth, predicted = data["diabetes"], data["pred_class"]
+    print(name,
+          "accuracy", round(accuracy_score(truth, predicted), 3),
+          "precision", round(precision_score(truth, predicted), 3),
+          "sensitivity", round(recall_score(truth, predicted), 3),
+          "specificity", round(recall_score(truth, predicted, pos_label=0), 3))
+```
+
+Test accuracy rises from 0.647 to 0.767 and sensitivity from 0.189 to 0.528.
+Training and test are still close, so the richer model does not overfit
+either. Complete the code for its ROC curve and AUC on the test rows:
 
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-X_full = diabetes.drop(columns=______)
-Xf_tr, Xf_te, y_tr, y_te = train_test_split(X_full, y, test_size=0.3,
-                                            random_state=123, stratify=y)
-full_fit = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)).fit(Xf_tr, y_tr)
+fpr_rich, tpr_rich, thresholds_rich = roc_curve(test_preds2["diabetes"], ______)
+auc_rich = roc_auc_score(test_preds2["diabetes"], ______)
 
-print(scores(full_fit, Xf_te, y_te))
-check_metric_range(roc_auc_score(y_te, full_fit.predict_proba(Xf_te)[:, 1]),
-                   0.7, 0.95, "test AUC, all predictors")
-```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-X_full = diabetes.drop(columns="diabetes")
-Xf_tr, Xf_te, y_tr, y_te = train_test_split(X_full, y, test_size=0.3,
-                                            random_state=123, stratify=y)
-full_fit = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)).fit(Xf_tr, y_tr)
-
-print(scores(full_fit, Xf_te, y_te))
-check_metric_range(roc_auc_score(y_te, full_fit.predict_proba(Xf_te)[:, 1]),
-                   0.7, 0.95, "test AUC, all predictors")
-```
-:::
-:::
-:::
-
-Which of the four numbers improved most, in percentage points? It is not
-accuracy, and the reason is the subject of the next section.
-
-## Task 3 — A control: break the model on purpose
-
-An AUC of 0.68 from one predictor is either a weak signal or no signal reported
-confidently. The way to tell is to destroy the signal and see what the
-machinery reports. Shuffle the **training** outcomes so that no predictor can
-carry information about them, refit the full model, and score it on the
-untouched test rows. Do it ten times, because one shuffle tells you nothing.
-
-::: {.panel-tabset}
-## R
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-shuffled_auc <- function(seed) {
-  set.seed(seed)
-  train_shuf <- train |> dplyr::mutate(diabetes = ______(diabetes))
-  f <- logistic_reg() |> set_engine("glm") |> fit(diabetes ~ ., data = train_shuf)
-  roc_auc(augment(f, test), truth = diabetes, .pred_pos)$.estimate
-}
-aucs <- vapply(1:10, shuffled_auc, numeric(1))
-round(range(aucs), 3)
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-Shuffling a vector is sampling it without replacement, in full. One base R
-function does exactly that and takes no other argument.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-shuffled_auc <- function(seed) {
-  set.seed(seed)
-  train_shuf <- train |> dplyr::mutate(diabetes = sample(diabetes))
-  f <- logistic_reg() |> set_engine("glm") |> fit(diabetes ~ ., data = train_shuf)
-  roc_auc(augment(f, test), truth = diabetes, .pred_pos)$.estimate
-}
-aucs <- vapply(1:10, shuffled_auc, numeric(1))
-round(range(aucs), 3)
-```
-:::
-:::
-
-## Python
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-rng = np.random.default_rng(0)
-aucs = []
-for _ in range(10):
-    y_shuf = rng.______(y_tr.to_numpy())
-    f = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)).fit(Xf_tr, y_shuf)
-    aucs.append(roc_auc_score(y_te, f.predict_proba(Xf_te)[:, 1]))
-round(min(aucs), 3), round(max(aucs), 3)
+print("test AUC, five predictors:", round(auc_rich, 3))
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-rng = np.random.default_rng(0)
-aucs = []
-for _ in range(10):
-    y_shuf = rng.permutation(y_tr.to_numpy())
-    f = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)).fit(Xf_tr, y_shuf)
-    aucs.append(roc_auc_score(y_te, f.predict_proba(Xf_te)[:, 1]))
-round(min(aucs), 3), round(max(aucs), 3)
+fpr_rich, tpr_rich, thresholds_rich = roc_curve(test_preds2["diabetes"], test_preds2["prob"])
+auc_rich = roc_auc_score(test_preds2["diabetes"], test_preds2["prob"])
+
+print("test AUC, five predictors:", round(auc_rich, 3))
 ```
+
+Test AUC 0.830, against 0.668 for age only.
 :::
 :::
+
+The two ROC curves together. The richer model's curve lies further from the
+diagonal at nearly every threshold:
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+fpr2, tpr2, thr2 = roc_curve(test_preds2["diabetes"], test_preds2["prob"])
+
+fig, ax = plt.subplots(figsize=(5.5, 5))
+ax.plot(fpr_age, tpr_age, linewidth=2, label="age only")
+ax.plot(fpr2, tpr2, linewidth=2, label="five predictors")
+ax.plot([0, 1], [0, 1], color="grey", linestyle="--")
+ax.set_xlabel("1 - specificity")
+ax.set_ylabel("Sensitivity")
+ax.set_title("ROC curves on the test rows")
+ax.legend()
+plt.show()
+```
+
+**Question!** The richer model is better on every metric. Could adding even more
+predictors ever make a model worse on the test rows? What would you look for?
+
+::: {.callout-important}
+## Learning points
+- Adding relevant predictors improved every metric and the AUC, on training and test alike.
+- Standardise the predictors when you want to compare the sizes of their coefficients.
+- More flexible models can still overfit: keep comparing training and test.
 :::
 
-The shuffled AUCs do not sit on 0.5. Ours spanned roughly 0.28 to 0.74 across
-the two languages. That spread is the width of an AUC estimated on 231
-patients when there is nothing to estimate, and it is the yardstick against
-which the age-only model's 0.66–0.70 should be read.
-
-## The result that should bother you
-
-On the held-out rows, the age-only model's accuracy is about 0.63–0.65. The
-rule "predict `neg` for everybody" scores 0.636. In R's split the model is
-1.7 percentage points above that rule; in Python's split it is 0.9 points
-below it. And the model's sensitivity is around 0.11–0.12: of the 84
-test patients who have diabetes, it identifies nine or ten.
-
-Three steps.
-
-1. Accuracy is a weighted average of sensitivity and specificity, with the
-   weights fixed by prevalence — here 36% and 64%. A model can raise its
-   accuracy by abandoning the minority class entirely, and at a threshold of
-   0.5 a weak model does exactly that: it predicts `neg` for almost everyone,
-   inherits the majority rule's accuracy, and loses almost nothing.
-2. So an accuracy near the prevalence of the commonest class is not evidence of
-   a working model. It is the signature of a model that has declined to make a
-   decision. Always print the majority-class accuracy first; it costs one line
-   and it is the only context in which the second line can be read.
-3. Yet the same model's AUC is around 0.66–0.70, which is not nothing. AUC
-   ignores the threshold and asks only whether diabetic patients are ranked
-   above non-diabetic ones. There is a real but weak ordering in `age`;
-   accuracy at 0.5 threw it away. Two metrics, same model, two conclusions —
-   and both are correct answers to different questions.
-
-The full model, by contrast, reaches a test AUC of about 0.78–0.84 and a
-sensitivity of 0.49–0.57. It is the sensitivity that moved, from one patient in
-eight to about one in two, and sensitivity is the number a screening programme
-would be commissioned on.
-
-## Reflection
-
-1. A paper reports 94% accuracy for a model detecting a condition with a
-   prevalence of 5%. Write the one sentence you would put in your review.
-2. AUC does not change when you change the threshold, and accuracy does. Give a
-   clinical situation where that makes AUC the right summary, and one where it
-   makes AUC the wrong one.
-
-::: {.content-visible when-profile="instructor"}
-::: {.instructor}
-**Expected values** (the two languages split differently; both are given, and
-regenerated data moves the last digit).
-
-| | R, seed 123 | Python, random_state 123 |
-|---|---|---|
-| class counts | 280 `pos`, 488 `neg` | same |
-| majority-class accuracy, test | 0.636 | 0.636 |
-| age-only, train acc / sens / spec | 0.618 / 0.128 / 0.900 | 0.628 / 0.148 / 0.903 |
-| age-only, test acc / sens / spec | 0.654 / 0.119 / 0.959 | 0.628 / 0.107 / 0.925 |
-| age-only, test AUC | 0.678 | 0.699 |
-| all predictors, test acc / sens / spec | 0.758 / 0.488 / 0.912 | 0.740 / 0.571 / 0.837 |
-| all predictors, test AUC | 0.844 | 0.782 |
-| shuffled-outcome test AUC, 10 runs | 0.28 to 0.66 | 0.34 to 0.74 |
-
-: {tbl-colwidths="[40,30,30]"}
-
-**The sign flip is useful, not a defect.** In R the age-only model passes
-`check_beats_prevalence` by 1.7 points and in Python it fails it by 0.9. Put
-both on the board. A difference that changes whether the model "beats
-baseline" but is entirely produced by which rows landed in the test set is the
-cleanest argument for resampling that the week provides, and it sets up
-Exercise 5.3, where every tuning decision rests on a resampled estimate.
-
-**Watch for.** (1) Omitting the `levels = c("pos", "neg")` relevel in R:
-sensitivity and specificity swap, and the model appears to have a sensitivity
-of 0.96. Ask anyone reporting a sensitivity above 0.9 to print
-`levels(train$diabetes)`. (2) `spec` versus `yardstick::specificity`. (3)
-Reading `recall_score(1 - y, 1 - pred)` as a trick — it is the definition of
-specificity, and it is worth saying that out loud.
-
-**Timing.** Task 3 takes five minutes and is the task to protect. If you must
-cut, cut the ROC plot in one language.
-:::
-:::
+::::::
 
 ## Stretch
 
 ::: {.callout-note appearance="simple"}
-## Stretch 1 — Make accuracy look excellent
-Keep every `neg` patient and a random 10% of the `pos` patients, re-split, and
-refit the age-only model. Report accuracy. Then report sensitivity. You have
-changed nothing about the model or the predictors.
+## Stretch — the threshold for the richer model
+Exercise 4.3 chose a threshold by giving a missed case five times the cost of
+an unnecessary test. Repeat that calculation for the five-predictor model on the
+test rows: which threshold is cheapest now, and how much cheaper than the
+age-only model at its best threshold?
 :::
 
-::: {.callout-note appearance="simple"}
-## Stretch 2 — AUC is not everything either
-Two models can share an AUC of 0.80 and disagree completely about which
-patients are highest risk. Fit the all-predictor model and a model using only
-`glucose`, compare their AUCs, then compare the ranks they assign to the twenty
-highest-risk test patients. Which of the two would you rather hand to a triage
-nurse?
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Teaching choice.** The module lead's page used the full Pima data with a
+stratified random 70/30 split, `fct_relevel(diabetes, "pos", "neg")` to make
+`pos` the first level, the threshold `> 0.5`, and in its second half the
+predictors age, pressure, triceps, mass and insulin with median imputation.
+This version uses the shared Day 4 split and factor levels (`neg`, `pos`) with
+`event_level = "second"`, `>= 0.5` as in Exercise 4.3, and the shared predictor
+set (pregnant, glucose, mass, pedigree, age), for which no imputation is needed.
+Her flow is kept: workflow, predictions at 0.5, metric set on train and test,
+boxplots, ROC and AUC, then a richer model. The age coefficient is positive
+here (+0.0363) and was negative on her page (−0.0449) because with `pos` as the
+first level `glm` modelled the probability of `neg`; worth knowing if students
+compare the two pages.
+
+**Expected values.** Identical in R and Python (R coefficients differ from
+Python's in the fourth digit in Part 4, see the page). Train 600 (220 pos),
+test 150 (53 pos). Age-only: intercept −1.7715, age 0.0363 (odds ratio 1.04),
+probability 0.5 at age 48.8; 20 of 150 test patients predicted `pos`. Train
+accuracy 0.623, precision 0.461, sensitivity 0.159, specificity 0.892; test
+0.647, 0.500, 0.189, 0.897. Majority-class test accuracy 0.647 (97/150), equal
+to the age-only model's. AUC train 0.671, test 0.668. Five predictors
+(standardised, R): intercept −0.702, pregnant 0.235, glucose 1.02, mass 0.464,
+pedigree 0.220, age 0.149; train accuracy 0.763, precision 0.714, sensitivity
+0.591, specificity 0.863; test 0.767, 0.737, 0.528, 0.897; test AUC 0.830.
+
+**Common failures.** (1) Leaving out `event_level = "second"`: sensitivity and
+specificity swap, and the age-only model appears to have a sensitivity of 0.897.
+(2) Passing `.pred_neg` to `roc_auc()`, which gives 1 minus the AUC. (3) In
+Python, passing the predicted class rather than the probability to
+`roc_auc_score()`, which gives the area under a curve with a single threshold.
+(4) Reading the age-only model's accuracy of 0.647 as acceptable without
+comparing it with the majority class.
+
+**Timing.** Part 1 fifteen minutes, Part 2 fifteen, Part 3 twenty, Part 4
+twenty.
 :::
-
-::: {.callout-note appearance="simple"}
-## Stretch 3 — Balanced accuracy
-Compute `(sensitivity + specificity) / 2` for both models. What does it score
-for the majority-class rule, and why is that the property that makes it worth
-reporting?
 :::
-
-## What you can and cannot now claim
-
-**Can:** that you can evaluate a classifier honestly — against the
-majority-class rule, with both error types shown separately, and with AUC
-reported as a property of the ranking rather than of any decision.
-
-**Cannot:** that the model you evaluated is the best one available, or that
-either of today's models is flexible enough for this data. A logistic
-regression can only draw one straight boundary. Exercise 5.3 fits a
-model that can draw as many as it likes, which turns out to be the problem.

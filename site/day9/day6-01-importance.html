@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Exercise 9.1 — Variable importance, and a column of pure noise – Day 9 — Explainable AI</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./day6-02-shap.html" rel="next">
+<link href="./index.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-68d006cd884444a66203cf37d1af94b0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+</head>
+
+<body class="nav-sidebar docked quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./day6-01-importance.html"><span class="chapter-title">Exercise 9.1 — Variable importance, and a column of pure noise</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation docked overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Day 9 — Explainable AI</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Day 9 — Explainable AI</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day6-01-importance.html" class="sidebar-item-text sidebar-link active"><span class="chapter-title">Exercise 9.1 — Variable importance, and a column of pure noise</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day6-02-shap.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Exercise 9.2 — SHAP values: global and local explanations</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day6-03-dalex.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Exercise 9.3 — One toolbox for explanations: DALEX</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day6-04-subgroups.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Exercise 9.4 — For whom is the model worst?</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#stretch" id="toc-stretch" class="nav-link active" data-scroll-target="#stretch">Stretch</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title"><span id="sec-importance" class="quarto-section-identifier"><span class="chapter-title">Exercise 9.1 — Variable importance, and a column of pure noise</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>Day 5 ended with a random forest that predicts diabetes better than a single tree, but cannot be read the way a tree or a logistic regression can. The first question everyone asks of such a model is: <strong>which variables does it use?</strong> This exercise answers it in two different ways, which do not agree, and then tests both with a predictor we know to be useless.</p>
+<p><strong>Theory:</strong> impurity-based (Gini) importance; permutation importance; why a measure computed on the training rows can reward a useless variable; a column of pure noise as a control.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>The plots are for looking at
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The code for every plot is folded away just above it, in case you are curious, and all of it is in the code file linked at the top of each tab. You are not expected to write it yourself.</p>
+</div>
+</div>
+<div class="tabset-margin-container"></div><div class="panel-tabset" data-group="language">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true" href="">R</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false" href="">Python</a></li></ul>
+<div class="tab-content" data-group="language">
+<div id="tabset-1-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-1-1-tab">
+<p><a href="code/day6-01-importance.R" download="day6-01-importance.R"><strong>Download the R code from this chapter</strong></a> — every cell below, in page order, including the code for every plot, with the blanks left for you to fill in. Open it in Positron beside the page and run it a chunk at a time.</p>
+<section id="packages-and-data" class="level3">
+<h3 class="anchored" data-anchor-id="packages-and-data">Packages and data</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidymodels)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(vip)                   <span class="co"># variable importance for many kinds of model</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_bw</span>())          <span class="co"># white background for every plot</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">pillar.sigfig =</span> <span class="dv">3</span>)     <span class="co"># show three significant figures in tables</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<hr>
+</section>
+<section id="part-1-the-data-and-the-forest" class="level3">
+<h3 class="anchored" data-anchor-id="part-1-the-data-and-the-forest">Part 1 — The data and the forest</h3>
+<p>The same 750 people and the same split as Day 4, from <a href="data/diabetes.csv"><code>data/diabetes.csv</code></a>: every fifth person is held back as the test set. This time we keep five predictors: number of pregnancies, glucose, BMI (<code>mass</code>), the diabetes pedigree function and age. Skin thickness (<code>triceps</code>), insulin and blood pressure are left out, because in this file a zero in those columns means “not measured”, and too many of them are zero to simply drop the rows.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/diabetes.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pregnant, glucose, mass, pedigree, age, diabetes) <span class="sc">|&gt;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(glucose <span class="sc">&gt;</span> <span class="dv">0</span>, mass <span class="sc">&gt;</span> <span class="dv">0</span>) <span class="sc">|&gt;</span>              <span class="co"># remove the impossible zeros</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">diabetes =</span> <span class="fu">factor</span>(diabetes, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"neg"</span>, <span class="st">"pos"</span>)))</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(diabetes), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> diabetes[<span class="sc">-</span>test_rows, ]</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> diabetes[test_rows, ]</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="fu">count</span>(train, diabetes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 2 × 2
+#&gt;   diabetes     n
+#&gt;   &lt;fct&gt;    &lt;int&gt;
+#&gt; 1 neg        380
+#&gt; 2 pos        220</code></pre>
+</div>
+</div>
+<p>600 training rows, 220 with diabetes; 150 test rows, 53 with diabetes.</p>
+<p>Fit a random forest of 500 trees on the training rows, exactly as on Day 5. The argument <code>importance = "impurity"</code> asks the <strong>ranger</strong> engine to keep a record, while it grows the trees, of how much each variable helped; Part 2 reads it. A forest is random, so set the seed first.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>rf_fit <span class="ot">&lt;-</span> <span class="fu">rand_forest</span>(<span class="at">trees =</span> <span class="dv">500</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"ranger"</span>, <span class="at">importance =</span> <span class="st">"impurity"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(diabetes <span class="sc">~</span> ., <span class="at">data =</span> train)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>test_preds <span class="ot">&lt;-</span> <span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(test)</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="fu">roc_auc</span>(test_preds, <span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 1 × 3
+#&gt;   .metric .estimator .estimate
+#&gt;   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
+#&gt; 1 roc_auc binary         0.826</code></pre>
+</div>
+</div>
+<p>The test AUC is 0.826. Note <code>event_level = "second"</code>: yardstick treats the <strong>first</strong> level of the outcome factor as the event, and our first level is <code>neg</code>, so without it you would be scoring how well the model finds the people <em>without</em> diabetes.</p>
+<p>The two languages grow different random trees, so their forests, and every number on this page that comes from them, differ slightly. The Python tab gets an AUC of 0.824.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>We explain one model all day: a random forest of 500 trees on five predictors, fitted on the same 600 training rows as Day 4.</li>
+<li>A forest is random: fix the seed, and expect a different forest (and slightly different numbers) in the other language.</li>
+</ul>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-2-impurity-based-importance" class="level3">
+<h3 class="anchored" data-anchor-id="part-2-impurity-based-importance">Part 2 — Impurity-based importance</h3>
+<p>Every split in every tree makes the two groups it creates purer than the group it started from: the Gini impurity goes down. <strong>Impurity-based importance</strong> (also called Gini importance or <em>mean decrease in impurity</em>) is worked out like this:</p>
+<ol type="1">
+<li>for each split in each tree, take the reduction in Gini impurity;</li>
+<li>weight it by the number of training rows that reach that split;</li>
+<li>add these up for each variable, over all the splits that used it;</li>
+<li>average over the trees.</li>
+</ol>
+<p>A variable that the trees use often, near the top, to make large clean splits gets a high score. The forest computed all of this while it was being fitted, so it costs nothing to ask for.</p>
+<p>The <strong>vip</strong> package reads it off almost any fitted model with <code>vi()</code>, and plots it with <code>vip()</code>. ranger reports the raw total; divide by the sum to get each variable’s share.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>impurity_importance <span class="ot">&lt;-</span> <span class="fu">vi</span>(rf_fit) <span class="sc">|&gt;</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">share =</span> Importance <span class="sc">/</span> ______)</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>impurity_importance</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-3-contents" aria-controls="callout-3" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Stuck?
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-3" class="callout-3-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p><code>vi()</code> returns a table with the columns <code>Variable</code> and <code>Importance</code>. A share is one importance divided by the total of the whole column.</p>
+</div>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">vip</span>(rf_fit, <span class="at">num_features =</span> <span class="dv">5</span>, <span class="at">aesthetics =</span> <span class="fu">list</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>)) <span class="sc">+</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Random forest: impurity-based importance"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-01-importance_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+</div>
+<p><strong>Question!</strong> The impurity importance is computed from the splits the trees made on the <strong>training</strong> rows. What could that mean for a variable the forest happened to split on often, even though it does not really help to predict diabetes in new people?</p>
+<p>Keep your answer: Part 4 tests it.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>Impurity-based importance adds up how much each variable reduced the Gini impurity over all the splits in the forest.</li>
+<li>It is free, because the forest computes it while fitting, but it describes how the model used the training rows, not how well a variable predicts in new people.</li>
+<li>Different packages scale it differently: ranger gives a raw total, scikit-learn shares that add up to 1.</li>
+</ul>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-3-permutation-importance" class="level3">
+<h3 class="anchored" data-anchor-id="part-3-permutation-importance">Part 3 — Permutation importance</h3>
+<p><strong>Permutation importance</strong> asks a different question: <em>if this variable carried no information, how much worse would the model be on new people?</em> To find out, take the test set, shuffle one column so that its values land on the wrong patients, and score the model again. Nothing is refitted: the model stays the same, only its input has been damaged. The importance is the drop in AUC.</p>
+<p>Do it once by hand for glucose:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>auc_before <span class="ot">&lt;-</span> <span class="fu">roc_auc</span>(test_preds, <span class="at">truth =</span> diabetes, .pred_pos,</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>                      <span class="at">event_level =</span> <span class="st">"second"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(.estimate)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>test_shuffled <span class="ot">&lt;-</span> test <span class="sc">|&gt;</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">glucose =</span> <span class="fu">sample</span>(glucose))               <span class="co"># glucose now belongs to someone else</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>auc_after <span class="ot">&lt;-</span> <span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test_shuffled, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(test_shuffled) <span class="sc">|&gt;</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">roc_auc</span>(<span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(.estimate)</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">before =</span> auc_before, <span class="at">after =</span> auc_after, <span class="at">drop =</span> auc_before <span class="sc">-</span> auc_after)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;    before     after      drop 
+#&gt; 0.8264929 0.6720482 0.1544447</code></pre>
+</div>
+</div>
+<p>With glucose shuffled the AUC falls from 0.826 to 0.672, a drop of 0.154. <strong>Your turn:</strong> do the same for BMI (<code>mass</code>).</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>test_shuffled <span class="ot">&lt;-</span> test <span class="sc">|&gt;</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">mass =</span> <span class="fu">sample</span>(______))</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>auc_after <span class="ot">&lt;-</span> <span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> ______, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(test_shuffled) <span class="sc">|&gt;</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">roc_auc</span>(<span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(.estimate)</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">before =</span> auc_before, <span class="at">after =</span> auc_after, <span class="at">drop =</span> auc_before <span class="sc">-</span> auc_after)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Because one shuffle is one random draw, the proper version repeats it, 20 times for each variable, and reports the average drop. The loop below does exactly what you just did, for every predictor in turn. Read it line by line; it takes a few seconds.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>perm_results <span class="ot">&lt;-</span> <span class="fu">tibble</span>()                          <span class="co"># one row per shuffle</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (variable <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>)) {</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (repeat_number <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">20</span>) {</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    test_shuffled <span class="ot">&lt;-</span> test</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    test_shuffled[[variable]] <span class="ot">&lt;-</span> <span class="fu">sample</span>(test_shuffled[[variable]])</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    auc_after <span class="ot">&lt;-</span> <span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test_shuffled, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>      <span class="fu">bind_cols</span>(test_shuffled) <span class="sc">|&gt;</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>      <span class="fu">roc_auc</span>(<span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pull</span>(.estimate)</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>    perm_results <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(perm_results,</span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>                              <span class="fu">tibble</span>(<span class="at">variable =</span> variable,</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>                                     <span class="at">auc_drop =</span> auc_before <span class="sc">-</span> auc_after))</span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>perm_importance <span class="ot">&lt;-</span> perm_results <span class="sc">|&gt;</span></span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(variable) <span class="sc">|&gt;</span></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">importance =</span> <span class="fu">mean</span>(auc_drop), <span class="at">sd =</span> <span class="fu">sd</span>(auc_drop)) <span class="sc">|&gt;</span></span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(importance))</span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>perm_importance</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 5 × 3
+#&gt;   variable importance      sd
+#&gt;   &lt;chr&gt;         &lt;dbl&gt;   &lt;dbl&gt;
+#&gt; 1 glucose     0.155   0.0260 
+#&gt; 2 mass        0.0365  0.0171 
+#&gt; 3 age         0.0312  0.0204 
+#&gt; 4 pregnant    0.0112  0.0152 
+#&gt; 5 pedigree    0.00395 0.00971</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>perm_importance <span class="sc">|&gt;</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> importance, <span class="at">y =</span> <span class="fu">reorder</span>(variable, importance))) <span class="sc">+</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">fill =</span> <span class="st">"coral"</span>) <span class="sc">+</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_errorbar</span>(<span class="fu">aes</span>(<span class="at">xmin =</span> importance <span class="sc">-</span> sd, <span class="at">xmax =</span> importance <span class="sc">+</span> sd),</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>                <span class="at">width =</span> <span class="fl">0.3</span>, <span class="at">orientation =</span> <span class="st">"y"</span>) <span class="sc">+</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">0</span>) <span class="sc">+</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Mean drop in test AUC when the variable is shuffled (± 1 SD)"</span>,</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="cn">NULL</span>, <span class="at">title =</span> <span class="st">"Random forest: permutation importance"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-01-importance_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Glucose dominates: shuffling it costs the model 0.155 of AUC on average. Everything else is small, and the error bars (one standard deviation over the 20 shuffles) are about as large as the differences between the variables. Pregnancies (0.011) and the pedigree function (0.004) are within one standard deviation of zero.</p>
+<p><strong>Question!</strong> Impurity importance gave BMI, age and the pedigree function between 17% and 20% of the total each, about half of glucose. Permutation importance gives them a small fraction of glucose. Why can the two disagree so much?</p>
+<p>They measure different things. Impurity importance counts how much the trees <em>used</em> a variable on the training rows. Permutation importance measures how much the <em>predictions on new people</em> depend on it. A forest of deep trees uses every variable a great deal to separate the training rows, including in ways that do not carry over to new people. A permutation importance near zero, or below it, means the model would do as well without the information in that column.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>Permutation importance is the drop in a test-set score (here the AUC) when one column is shuffled; the model is not refitted.</li>
+<li>It must be repeated, because each shuffle is random; report the mean and the spread.</li>
+<li>Impurity importance and permutation importance answer different questions, so their rankings can differ.</li>
+</ul>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-4-a-control-a-column-of-pure-noise" class="level3">
+<h3 class="anchored" data-anchor-id="part-4-a-control-a-column-of-pure-noise">Part 4 — A control: a column of pure noise</h3>
+<p>How do we know which measure to believe? The way you would check any measurement: measure something whose true value you already know. Add a sixth predictor, <code>noise</code>, that is nothing but random numbers, drawn independently of everything else. Whatever an importance measure says about <code>noise</code>, the right answer is <strong>zero</strong>.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>train_noise <span class="ot">&lt;-</span> train <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="at">noise =</span> <span class="fu">rnorm</span>(______))   <span class="co"># one random number per row</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>test_noise  <span class="ot">&lt;-</span> test  <span class="sc">|&gt;</span> <span class="fu">mutate</span>(<span class="at">noise =</span> <span class="fu">rnorm</span>(______))</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>rf_noise <span class="ot">&lt;-</span> <span class="fu">rand_forest</span>(<span class="at">trees =</span> <span class="dv">500</span>) <span class="sc">|&gt;</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"ranger"</span>, <span class="at">importance =</span> <span class="st">"impurity"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(diabetes <span class="sc">~</span> ., <span class="at">data =</span> train_noise)</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a><span class="fu">vi</span>(rf_noise) <span class="sc">|&gt;</span></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">share =</span> Importance <span class="sc">/</span> <span class="fu">sum</span>(Importance))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-6-contents" aria-controls="callout-6" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Stuck?
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-6" class="callout-6-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p><code>rnorm()</code> needs to know how many numbers to draw: one per row. Inside <code>mutate()</code>, <code>n()</code> is the number of rows.</p>
+</div>
+</div>
+</div>
+<p>The column of random numbers gets 13% of the total impurity importance: more than the number of pregnancies, and almost as much as the pedigree function. By this measure, <code>noise</code> is a respectable predictor.</p>
+<p>Now the permutation importance of the same forest, on the test rows with their own noise column. The loop is the one from Part 3, with <code>noise</code> added to the list:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>auc_noise_before <span class="ot">&lt;-</span> <span class="fu">predict</span>(rf_noise, <span class="at">new_data =</span> test_noise, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(test_noise) <span class="sc">|&gt;</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">roc_auc</span>(<span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(.estimate)</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>perm_results_noise <span class="ot">&lt;-</span> <span class="fu">tibble</span>()</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (variable <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>, <span class="st">"noise"</span>)) {</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (repeat_number <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">20</span>) {</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    test_shuffled <span class="ot">&lt;-</span> test_noise</span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>    test_shuffled[[variable]] <span class="ot">&lt;-</span> <span class="fu">sample</span>(test_shuffled[[variable]])</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>    auc_after <span class="ot">&lt;-</span> <span class="fu">predict</span>(rf_noise, <span class="at">new_data =</span> test_shuffled, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>      <span class="fu">bind_cols</span>(test_shuffled) <span class="sc">|&gt;</span></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>      <span class="fu">roc_auc</span>(<span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pull</span>(.estimate)</span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>    perm_results_noise <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(perm_results_noise,</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>                                    <span class="fu">tibble</span>(<span class="at">variable =</span> variable,</span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>                                           <span class="at">auc_drop =</span> auc_noise_before <span class="sc">-</span> auc_after))</span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a>perm_results_noise <span class="sc">|&gt;</span></span>
+<span id="cb15-26"><a href="#cb15-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(variable) <span class="sc">|&gt;</span></span>
+<span id="cb15-27"><a href="#cb15-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">importance =</span> <span class="fu">mean</span>(auc_drop), <span class="at">sd =</span> <span class="fu">sd</span>(auc_drop)) <span class="sc">|&gt;</span></span>
+<span id="cb15-28"><a href="#cb15-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(importance))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 6 × 3
+#&gt;   variable importance      sd
+#&gt;   &lt;chr&gt;         &lt;dbl&gt;   &lt;dbl&gt;
+#&gt; 1 glucose    0.149    0.0247 
+#&gt; 2 mass       0.0294   0.0186 
+#&gt; 3 age        0.0262   0.0169 
+#&gt; 4 pregnant   0.0201   0.0143 
+#&gt; 5 pedigree   0.0100   0.00770
+#&gt; 6 noise     -0.000496 0.00940</code></pre>
+</div>
+</div>
+<p>Permutation importance puts <code>noise</code> at −0.0005, with a standard deviation of 0.009: zero, as it should be. Glucose (0.149), BMI (0.029) and age (0.026) stay clearly above it; pregnancies (0.020) and the pedigree function (0.010) beat it by little more than one standard deviation.</p>
+<p><strong>Question!</strong> Go back to your answer to the question in Part 2. A variable can get a sizeable impurity importance simply because it has many different values to split on, and deep trees will find <em>some</em> split on it that tidies up a few training rows. Random numbers have 600 different values. What does this tell you about reading a ranking of impurity importances on its own?</p>
+<p>A ranking always has a first and a last place, even when most of the variables do nothing. A known-useless column gives you a floor: any variable that does not clearly beat <code>noise</code> should not be described as important.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>A column of pure noise is a control: its true importance is zero, so it shows what each measure reports for nothing.</li>
+<li>Impurity importance gave the noise column a share comparable to real predictors; permutation importance on the test set put it at about zero.</li>
+<li>Report permutation importance, with its spread, when the question is which variables matter for prediction.</li>
+</ul>
+</div>
+</div>
+</section>
+</div>
+<div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
+<p><a href="code/day6-01-importance.py" download="day6-01-importance.py"><strong>Download the Python code from this chapter</strong></a> — every cell below, in page order, including the code for every plot, with the blanks left for you to fill in. Open it in Positron beside the page and run it a cell at a time.</p>
+<section id="packages-and-data-1" class="level3">
+<h3 class="anchored" data-anchor-id="packages-and-data-1">Packages and data</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.ensemble <span class="im">import</span> RandomForestClassifier</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> roc_auc_score</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.inspection <span class="im">import</span> permutation_importance</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<hr>
+</section>
+<section id="part-1-the-data-and-the-forest-1" class="level3">
+<h3 class="anchored" data-anchor-id="part-1-the-data-and-the-forest-1">Part 1 — The data and the forest</h3>
+<p>The same 750 people and the same split as Day 4, from <a href="data/diabetes.csv"><code>data/diabetes.csv</code></a>: every fifth person is held back as the test set. This time we keep five predictors: number of pregnancies, glucose, BMI (<code>mass</code>), the diabetes pedigree function and age. Skin thickness (<code>triceps</code>), insulin and blood pressure are left out, because in this file a zero in those columns means “not measured”, and too many of them are zero to simply drop the rows.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes.csv"</span>)</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes[[<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>, <span class="st">"diabetes"</span>]]</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes[(diabetes[<span class="st">"glucose"</span>] <span class="op">&gt;</span> <span class="dv">0</span>) <span class="op">&amp;</span> (diabetes[<span class="st">"mass"</span>] <span class="op">&gt;</span> <span class="dv">0</span>)]   <span class="co"># remove the impossible zeros</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes.reset_index(drop<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>diabetes[<span class="st">"diabetes"</span>] <span class="op">=</span> (diabetes[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"pos"</span>).astype(<span class="bu">int</span>)       <span class="co"># 1 = pos, 0 = neg</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> diabetes.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> diabetes[<span class="op">~</span>is_test]</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>test  <span class="op">=</span> diabetes[is_test]</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>predictors <span class="op">=</span> [<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>]</span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>train[<span class="st">"diabetes"</span>].value_counts()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; diabetes
+#&gt; 0    380
+#&gt; 1    220
+#&gt; Name: count, dtype: int64</code></pre>
+</div>
+</div>
+<p>600 training rows, 220 with diabetes; 150 test rows, 53 with diabetes.</p>
+<p>Fit a random forest of 500 trees on the training rows, exactly as on Day 5. scikit-learn keeps a record of how much each variable helped while it grows the trees; Part 2 reads it. A forest is random, so fix <code>random_state</code>.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> RandomForestClassifier(n_estimators<span class="op">=</span><span class="dv">500</span>, random_state<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> rf.fit(train[predictors], train[<span class="st">"diabetes"</span>])</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>test_prob <span class="op">=</span> rf.predict_proba(test[predictors])[:, <span class="dv">1</span>]    <span class="co"># probability of diabetes</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>auc_before <span class="op">=</span> roc_auc_score(test[<span class="st">"diabetes"</span>], test_prob)</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="bu">round</span>(auc_before, <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; 0.824</code></pre>
+</div>
+</div>
+<p>The test AUC is 0.824.</p>
+<p>The two languages grow different random trees, so their forests, and every number on this page that comes from them, differ slightly. The R tab gets an AUC of 0.826.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>We explain one model all day: a random forest of 500 trees on five predictors, fitted on the same 600 training rows as Day 4.</li>
+<li>A forest is random: fix the seed, and expect a different forest (and slightly different numbers) in the other language.</li>
+</ul>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-2-impurity-based-importance-1" class="level3">
+<h3 class="anchored" data-anchor-id="part-2-impurity-based-importance-1">Part 2 — Impurity-based importance</h3>
+<p>Every split in every tree makes the two groups it creates purer than the group it started from: the Gini impurity goes down. <strong>Impurity-based importance</strong> (also called Gini importance or <em>mean decrease in impurity</em>) is worked out like this:</p>
+<ol type="1">
+<li>for each split in each tree, take the reduction in Gini impurity;</li>
+<li>weight it by the number of training rows that reach that split;</li>
+<li>add these up for each variable, over all the splits that used it;</li>
+<li>average over the trees.</li>
+</ol>
+<p>A variable that the trees use often, near the top, to make large clean splits gets a high score. The forest computed all of this while it was being fitted, so it costs nothing to ask for.</p>
+<p>scikit-learn stores it in <code>feature_importances_</code>, one number per predictor in the order of the columns. They are already scaled to add up to 1, so each one is that variable’s share.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>impurity_importance <span class="op">=</span> pd.Series(rf.______, index<span class="op">=</span>predictors)</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>impurity_importance <span class="op">=</span> impurity_importance.sort_values(ascending<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(impurity_importance.<span class="bu">round</span>(<span class="dv">3</span>))</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"sum:"</span>, impurity_importance.<span class="bu">sum</span>().<span class="bu">round</span>(<span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-9-contents" aria-controls="callout-9" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Stuck?
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-9" class="callout-9-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>Type <code>rf.</code> and look through the attributes that end in an underscore: they are the ones set by <code>.fit()</code>.</p>
+</div>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">6</span>, <span class="fl">3.5</span>))</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>impurity_importance.sort_values().plot(kind<span class="op">=</span><span class="st">"barh"</span>, ax<span class="op">=</span>ax, color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Mean decrease in impurity (share of the total)"</span>)</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Random forest: impurity-based importance"</span>)</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-01-importance_files/figure-html/unnamed-chunk-21-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="576"></p>
+</figure>
+</div>
+</div>
+</div>
+<p><strong>Question!</strong> The impurity importance is computed from the splits the trees made on the <strong>training</strong> rows. What could that mean for a variable the forest happened to split on often, even though it does not really help to predict diabetes in new people?</p>
+<p>Keep your answer: Part 4 tests it.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>Impurity-based importance adds up how much each variable reduced the Gini impurity over all the splits in the forest.</li>
+<li>It is free, because the forest computes it while fitting, but it describes how the model used the training rows, not how well a variable predicts in new people.</li>
+<li>Different packages scale it differently: ranger gives a raw total, scikit-learn shares that add up to 1.</li>
+</ul>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-3-permutation-importance-1" class="level3">
+<h3 class="anchored" data-anchor-id="part-3-permutation-importance-1">Part 3 — Permutation importance</h3>
+<p><strong>Permutation importance</strong> asks a different question: <em>if this variable carried no information, how much worse would the model be on new people?</em> To find out, take the test set, shuffle one column so that its values land on the wrong patients, and score the model again. Nothing is refitted: the model stays the same, only its input has been damaged. The importance is the drop in AUC.</p>
+<p>Do it once by hand for glucose:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>rng <span class="op">=</span> np.random.default_rng(<span class="dv">1</span>)</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>test_shuffled <span class="op">=</span> test.copy()</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>test_shuffled[<span class="st">"glucose"</span>] <span class="op">=</span> rng.permutation(test_shuffled[<span class="st">"glucose"</span>].values)   <span class="co"># glucose now belongs to someone else</span></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>auc_after <span class="op">=</span> roc_auc_score(test_shuffled[<span class="st">"diabetes"</span>],</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>                          rf.predict_proba(test_shuffled[predictors])[:, <span class="dv">1</span>])</span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"before:"</span>, <span class="bu">round</span>(auc_before, <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; before: 0.824</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"after: "</span>, <span class="bu">round</span>(auc_after, <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; after:  0.608</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"drop:  "</span>, <span class="bu">round</span>(auc_before <span class="op">-</span> auc_after, <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; drop:   0.216</code></pre>
+</div>
+</div>
+<p>With glucose shuffled the AUC falls from 0.824 to 0.608, a drop of 0.216. <strong>Your turn:</strong> do the same for BMI (<code>mass</code>).</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>rng <span class="op">=</span> np.random.default_rng(<span class="dv">1</span>)</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>test_shuffled <span class="op">=</span> test.copy()</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>test_shuffled[<span class="st">"mass"</span>] <span class="op">=</span> rng.permutation(test_shuffled[______].values)</span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>auc_after <span class="op">=</span> roc_auc_score(test_shuffled[<span class="st">"diabetes"</span>],</span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>                          rf.predict_proba(______[predictors])[:, <span class="dv">1</span>])</span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"drop:"</span>, <span class="bu">round</span>(auc_before <span class="op">-</span> auc_after, <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Because one shuffle is one random draw, the proper version repeats it, 20 times for each variable, and reports the average drop. scikit-learn’s <code>permutation_importance()</code> does exactly what you just did, for every predictor in turn, with <code>scoring="roc_auc"</code>.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>perm <span class="op">=</span> permutation_importance(rf, test[predictors], test[<span class="st">"diabetes"</span>],</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>                              scoring<span class="op">=</span><span class="st">"roc_auc"</span>, n_repeats<span class="op">=</span><span class="dv">20</span>, random_state<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>perm_importance <span class="op">=</span> pd.DataFrame({<span class="st">"variable"</span>: predictors,</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>                                <span class="st">"importance"</span>: perm.importances_mean,</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>                                <span class="st">"sd"</span>: perm.importances_std})</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>perm_importance <span class="op">=</span> perm_importance.sort_values(<span class="st">"importance"</span>, ascending<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>perm_importance.<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;    variable  importance     sd
+#&gt; 1   glucose       0.159  0.036
+#&gt; 2      mass       0.040  0.022
+#&gt; 4       age       0.036  0.019
+#&gt; 0  pregnant       0.018  0.017
+#&gt; 3  pedigree       0.008  0.012</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>ordered <span class="op">=</span> perm_importance.sort_values(<span class="st">"importance"</span>)</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">6</span>, <span class="fl">3.5</span>))</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>ax.barh(ordered[<span class="st">"variable"</span>], ordered[<span class="st">"importance"</span>], xerr<span class="op">=</span>ordered[<span class="st">"sd"</span>],</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>        color<span class="op">=</span><span class="st">"coral"</span>, capsize<span class="op">=</span><span class="dv">3</span>)</span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>ax.axvline(<span class="dv">0</span>, color<span class="op">=</span><span class="st">"black"</span>, linewidth<span class="op">=</span><span class="fl">0.8</span>)</span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Mean drop in test AUC when the variable is shuffled (± 1 SD)"</span>)</span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Random forest: permutation importance"</span>)</span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-01-importance_files/figure-html/unnamed-chunk-26-3.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="576"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Glucose dominates: shuffling it costs the model 0.159 of AUC on average. Everything else is small, and the error bars (one standard deviation over the 20 shuffles) are about as large as the differences between the variables. The pedigree function (0.008) is within one standard deviation of zero, and pregnancies (0.018) only just above it.</p>
+<p><strong>Question!</strong> Impurity importance gave BMI, age and the pedigree function between 18% and 21% of the total each, 60% to 70% of glucose. Permutation importance gives them a small fraction of glucose. Why can the two disagree so much?</p>
+<p>They measure different things. Impurity importance counts how much the trees <em>used</em> a variable on the training rows. Permutation importance measures how much the <em>predictions on new people</em> depend on it. A forest of deep trees uses every variable a great deal to separate the training rows, including in ways that do not carry over to new people. A permutation importance near zero, or below it, means the model would do as well without the information in that column.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>Permutation importance is the drop in a test-set score (here the AUC) when one column is shuffled; the model is not refitted.</li>
+<li>It must be repeated, because each shuffle is random; report the mean and the spread.</li>
+<li>Impurity importance and permutation importance answer different questions, so their rankings can differ.</li>
+</ul>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-4-a-control-a-column-of-pure-noise-1" class="level3">
+<h3 class="anchored" data-anchor-id="part-4-a-control-a-column-of-pure-noise-1">Part 4 — A control: a column of pure noise</h3>
+<p>How do we know which measure to believe? The way you would check any measurement: measure something whose true value you already know. Add a sixth predictor, <code>noise</code>, that is nothing but random numbers, drawn independently of everything else. Whatever an importance measure says about <code>noise</code>, the right answer is <strong>zero</strong>.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>rng <span class="op">=</span> np.random.default_rng(<span class="dv">1</span>)</span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>train_noise <span class="op">=</span> train.copy()</span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>test_noise  <span class="op">=</span> test.copy()</span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>train_noise[<span class="st">"noise"</span>] <span class="op">=</span> rng.normal(size<span class="op">=</span>______)            <span class="co"># one random number per row</span></span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>test_noise[<span class="st">"noise"</span>]  <span class="op">=</span> rng.normal(size<span class="op">=</span>______)</span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a>predictors_noise <span class="op">=</span> predictors <span class="op">+</span> [<span class="st">"noise"</span>]</span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a>rf_noise <span class="op">=</span> RandomForestClassifier(n_estimators<span class="op">=</span><span class="dv">500</span>, random_state<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a>rf_noise <span class="op">=</span> rf_noise.fit(train_noise[predictors_noise], train_noise[<span class="st">"diabetes"</span>])</span>
+<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a>pd.Series(rf_noise.feature_importances_, index<span class="op">=</span>predictors_noise).<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-12-contents" aria-controls="callout-12" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Stuck?
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-12" class="callout-12-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p><code>size=</code> is how many numbers to draw: one per row, <code>len(train_noise)</code> for the training set and <code>len(test_noise)</code> for the test set.</p>
+</div>
+</div>
+</div>
+<p>The column of random numbers gets 15% of the total impurity importance: more than the number of pregnancies, and as much as the pedigree function and age. By this measure, <code>noise</code> is a respectable predictor.</p>
+<p>Now the permutation importance of the same forest, on the test rows with their own noise column:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>perm_noise <span class="op">=</span> permutation_importance(rf_noise, test_noise[predictors_noise],</span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>                                    test_noise[<span class="st">"diabetes"</span>], scoring<span class="op">=</span><span class="st">"roc_auc"</span>,</span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>                                    n_repeats<span class="op">=</span><span class="dv">20</span>, random_state<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>perm_importance_noise <span class="op">=</span> pd.DataFrame({<span class="st">"variable"</span>: predictors_noise,</span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>                                      <span class="st">"importance"</span>: perm_noise.importances_mean,</span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>                                      <span class="st">"sd"</span>: perm_noise.importances_std})</span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>perm_importance_noise.sort_values(<span class="st">"importance"</span>, ascending<span class="op">=</span><span class="va">False</span>).<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;    variable  importance     sd
+#&gt; 1   glucose       0.152  0.034
+#&gt; 2      mass       0.031  0.016
+#&gt; 4       age       0.021  0.018
+#&gt; 0  pregnant       0.013  0.018
+#&gt; 3  pedigree      -0.004  0.010
+#&gt; 5     noise      -0.013  0.007</code></pre>
+</div>
+</div>
+<p>Permutation importance puts <code>noise</code> at −0.013, with a standard deviation of 0.007: slightly below zero, meaning that shuffling it made the predictions, if anything, a little better. Glucose (0.152), BMI (0.031) and age (0.021) stay clearly above it; the pedigree function (−0.004) does no better than the noise.</p>
+<p><strong>Question!</strong> Go back to your answer to the question in Part 2. A variable can get a sizeable impurity importance simply because it has many different values to split on, and deep trees will find <em>some</em> split on it that tidies up a few training rows. Random numbers have 600 different values. What does this tell you about reading a ranking of impurity importances on its own?</p>
+<p>A ranking always has a first and a last place, even when most of the variables do nothing. A known-useless column gives you a floor: any variable that does not clearly beat <code>noise</code> should not be described as important.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>A column of pure noise is a control: its true importance is zero, so it shows what each measure reports for nothing.</li>
+<li>Impurity importance gave the noise column a share comparable to real predictors; permutation importance on the test set put it at about zero.</li>
+<li>Report permutation importance, with its spread, when the question is which variables matter for prediction.</li>
+</ul>
+</div>
+</div>
+</section>
+</div>
+</div>
+</div>
+<section id="stretch" class="level2">
+<h2 class="anchored" data-anchor-id="stretch">Stretch</h2>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Stretch — the forest’s own permutation importance
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>ranger can compute a permutation importance itself while it fits, using the <em>out-of-bag</em> rows (the training rows each tree did not see). Refit the R forest with <code>set_engine("ranger", importance = "permutation")</code> and look at <code>vi()</code>. In Python there is no built-in equivalent, but you can run <code>permutation_importance()</code> on the training rows instead of the test rows. Does <code>noise</code> still come out at about zero? Why might permutation on the training rows be too generous to it?</p>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Stretch — a noise column with only two values
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Replace the normal noise with a random 0/1 column (R: <code>sample(0:1, n(), replace = TRUE)</code>; Python: <code>rng.integers(0, 2, size=...)</code>). What happens to its impurity importance, and why?</p>
+</div>
+</div>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./index.html" class="pagination-link" aria-label="Day 9 — Explainable AI">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Day 9 — Explainable AI</span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./day6-02-shap.html" class="pagination-link" aria-label="Exercise 9.2 — SHAP values: global and local explanations">
+        <span class="nav-page-text"><span class="chapter-title">Exercise 9.2 — SHAP values: global and local explanations</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-left">
+<p>HDS MSc · Module 3</p>
+</div>   
+    <div class="nav-footer-center">
+      &nbsp;
+    </div>
+    <div class="nav-footer-right">
+<p>Code to read, copy and run yourself</p>
+</div>
+  </div>
+</footer>
+
+
+
+
+</body></html>
