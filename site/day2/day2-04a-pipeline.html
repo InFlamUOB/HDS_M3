@@ -192,7 +192,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul>
   <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
   <li><a href="#the-scenario" id="toc-the-scenario" class="nav-link" data-scroll-target="#the-scenario">The scenario</a></li>
-  <li><a href="#task-1-build-and-fit-a-pipeline" id="toc-task-1-build-and-fit-a-pipeline" class="nav-link" data-scroll-target="#task-1-build-and-fit-a-pipeline">Task 1 — Build and fit a pipeline</a></li>
+  <li><a href="#task-1-build-and-fit-a-pipeline" id="toc-task-1-build-and-fit-a-pipeline" class="nav-link" data-scroll-target="#task-1-build-and-fit-a-pipeline">Task 1 — Build and fit a pipeline</a>
+  <ul class="collapse">
+  <li><a href="#from-exercise-1.2-to-this-pipeline" id="toc-from-exercise-1.2-to-this-pipeline" class="nav-link" data-scroll-target="#from-exercise-1.2-to-this-pipeline">From Exercise 1.2 to this pipeline</a></li>
+  </ul></li>
   <li><a href="#task-2-look-inside-the-pipeline" id="toc-task-2-look-inside-the-pipeline" class="nav-link" data-scroll-target="#task-2-look-inside-the-pipeline">Task 2 — Look inside the pipeline</a>
   <ul class="collapse">
   <li><a href="#a.-where-does-the-imputation-median-come-from" id="toc-a.-where-does-the-imputation-median-come-from" class="nav-link" data-scroll-target="#a.-where-does-the-imputation-median-come-from">A. Where does the imputation median come from?</a></li>
@@ -2792,6 +2795,7 @@ forceTheme('sk-container-id-1');</script>
 <p>The names in quotation marks, such as <code>"impute"</code> and <code>"regression"</code>, are labels we choose for the steps. The objects beside them specify what each step does.</p>
 <p><strong>Defining a pipeline sets out the instructions. Calling <code>.fit()</code> learns from the training data.</strong></p>
 <p>When we later call <code>model.predict(X_test)</code>, the pipeline applies the preprocessing learned from the training patients before predicting. It does not recalculate medians or scaling parameters from the test set.</p>
+<p><strong>Compared with Exercise 1.2:</strong> <code>LinearRegression()</code>, <code>model.fit(X_train, y_train)</code> and <code>model.predict(X_test)</code> are exactly as before. What is new is the preprocessing, and wrapping it together with <code>LinearRegression()</code> in one <code>Pipeline</code>, so that <code>model</code> now means “preprocessing + regression”.</p>
 </div>
 </div>
 <div class="callout callout-style-simple callout-note callout-titled">
@@ -2818,6 +2822,84 @@ forceTheme('sk-container-id-1');</script>
 <p>When we later call <code>predict(los_fit, new_data = test)</code>, exactly as in Exercise 1.2, the fitted workflow applies the same preprocessing using the values learned from training, then predicts length of stay. Nothing is recalculated from the test patients.</p>
 </div>
 </div>
+<section id="from-exercise-1.2-to-this-pipeline" class="level3">
+<h3 class="anchored" data-anchor-id="from-exercise-1.2-to-this-pipeline">From Exercise 1.2 to this pipeline</h3>
+<p>In Exercise 1.2 there was no preprocessing: the model went straight onto the data. Here is what stays the same and what is new, in both languages:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>Exercise 1.2</th>
+<th>Exercise 2.6</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>The model, R</td>
+<td><code>los_model &lt;- linear_reg() %&gt;% set_engine("lm")</code></td>
+<td>the same <code>linear_reg()</code> and <code>set_engine("lm")</code></td>
+</tr>
+<tr class="even">
+<td>The model, Python</td>
+<td><code>model = LinearRegression()</code></td>
+<td>the same <code>LinearRegression()</code>, now the last step of the pipeline</td>
+</tr>
+<tr class="odd">
+<td>Preprocessing, R</td>
+<td>none</td>
+<td><code>rec &lt;- recipe(...)</code> followed by the <code>step_...()</code> functions</td>
+</tr>
+<tr class="even">
+<td>Preprocessing, Python</td>
+<td>none</td>
+<td><code>numeric</code>, <code>categorical</code> and <code>ColumnTransformer(...)</code></td>
+</tr>
+<tr class="odd">
+<td>Preprocessing + model together, R</td>
+<td>not needed</td>
+<td><code>workflow()</code>, then <code>add_recipe(rec)</code> and <code>add_model(los_model)</code></td>
+</tr>
+<tr class="even">
+<td>Preprocessing + model together, Python</td>
+<td>not needed</td>
+<td><code>Pipeline([("preprocess", ...), ("regression", LinearRegression())])</code></td>
+</tr>
+<tr class="odd">
+<td>Fit, R</td>
+<td><code>fit(LOS ~ Age + Severity, data = train)</code></td>
+<td><code>fit(data = train)</code>: the formula is now in the recipe</td>
+</tr>
+<tr class="even">
+<td>Fit, Python</td>
+<td><code>model.fit(X_train, y_train)</code></td>
+<td><code>model.fit(X_train, y_train)</code>: unchanged</td>
+</tr>
+<tr class="odd">
+<td>Predict, R</td>
+<td><code>predict(los_fit, test)</code></td>
+<td><code>predict(los_fit, test)</code>: unchanged</td>
+</tr>
+<tr class="even">
+<td>Predict, Python</td>
+<td><code>model.predict(X_test)</code></td>
+<td><code>model.predict(X_test)</code>: unchanged</td>
+</tr>
+</tbody>
+</table>
+<p><strong>In both languages</strong> the model, <code>fit</code> and <code>predict</code> are what you already know. The new part is the preprocessing and the single object that holds it together with the model (<code>workflow()</code> in R, <code>Pipeline</code> in Python). That object is what makes sure every value the preprocessing learns comes from the training patients only.</p>
+<p><strong>Where the two languages differ:</strong></p>
+<ul>
+<li>In R the formula moves into the recipe, so <code>fit()</code> takes only the data. In Python the predictors and the outcome are still passed separately, <code>fit(X_train, y_train)</code>, as in Exercise 1.2.</li>
+<li>R chooses columns for each step with selectors such as <code>all_numeric_predictors()</code>; Python lists them (<code>num</code>, <code>cat</code>) and sends them through <code>ColumnTransformer</code>.</li>
+<li>Python names every step in quotes (<code>"impute"</code>, <code>"regression"</code>); R steps have no names.</li>
+<li><code>step_dummy()</code> leaves out one category per variable and <code>OneHotEncoder()</code> does not, so R ends with 9 columns and Python with 11 (Task 2, part C).</li>
+<li><code>%&gt;%</code> (Exercise 1.2) and <code>|&gt;</code> (here) are two versions of the R pipe; they do the same job in this code.</li>
+</ul>
 <p>The same pipeline, read across the two columns:</p>
 <table class="caption-top table">
 <colgroup>
@@ -2888,6 +2970,7 @@ forceTheme('sk-container-id-1');</script>
 </div>
 </div>
 <hr>
+</section>
 </section>
 <section id="task-2-look-inside-the-pipeline" class="level2">
 <h2 class="anchored" data-anchor-id="task-2-look-inside-the-pipeline">Task 2 — Look inside the pipeline</h2>
