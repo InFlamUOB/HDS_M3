@@ -44,16 +44,13 @@ library(tidyverse)
 library(tidymodels)
 
 hospital <- read_csv(
-  "data/hospital_admissions.csv",
-  show_col_types = FALSE
+  "data/hospital_admissions.csv"
 ) |>
   mutate(
     BMI = weight_kg / (height_cm / 100)^2,
-    across(
-      c(admission_type, smoking_status),
-      as.factor
-    )
-  ) |>
+    admission_type = as.factor(admission_type), 
+    smoking_status =  as.factor(smoking_status)
+    ) |>
   select(
     length_of_stay,
     age, BMI, systolic_BP,
@@ -136,9 +133,11 @@ print(len(X_train), len(X_test))
 > Expect the numbers in the two columns to be close, not identical. The steps,
 > and what they teach, are the same.
 
-Create a pipeline that imputes missing values, encodes categorical variables,
-standardises numerical variables and fits a linear regression model. Then fit
-it on the training patients.
+A **pipeline** combines preprocessing and modelling into one sequence.
+This ensures that the same steps are applied consistently to training
+patients and any new patients. Here our preprocessing steps require imputing missing values, 
+encoding categorical variables and
+standardising numerical variables. This is the part that was not included in your exercise 1.2 yesterday!
 
 ```{r}
 # "." means every other column
@@ -198,6 +197,42 @@ model = Pipeline([
 
 model.fit(X_train, y_train)
 ```
+
+> **How to read this code: R**
+>
+> 1. **`recipe(length_of_stay ~ ., data = train)`** defines what we want
+>    to predict and which variables to use. `length_of_stay` is the
+>    outcome; `.` means every other column is a predictor. Remove patient
+>    identifiers beforehand.
+>
+> 2. **`step_impute_median()`** replaces missing numerical values with
+>    the median of each variable.
+>
+> 3. **`step_impute_mode()`** replaces missing categorical values with
+>    the most frequent category.
+>
+> 4. **`step_dummy()`** converts categorical variables into numerical
+>    indicator columns. By default, one category is left out as the
+>    reference category for linear regression.
+>
+> 5. **`step_normalize()`** centres numerical predictors on their mean
+>    and divides by their standard deviation. The minus signs exclude
+>    the dummy columns whose names start with `admission_type_` or
+>    `smoking_status_`, keeping their values as 0 and 1.
+>
+> 6. **`workflow()`** brings the preprocessing recipe and regression
+>    model together. `set_engine("lm")` specifies the R function used
+>    to fit the linear regression.
+>
+> 7. **`fit(model, data = train)`** learns the preprocessing values from
+>    the training patients, applies the steps and fits the regression.
+>
+> **The recipe defines the instructions; `fit()` learns from the
+> training data.**
+>
+> When we later call `predict(fitted_model, new_data = test)`, the fitted
+> workflow applies the same preprocessing using the values learned from
+> training, then predicts length of stay.
 
 The same pipeline, read across the two columns:
 
@@ -542,9 +577,7 @@ median, which should the pipeline use to impute test patients? Why?
 ### 5. What does a pipeline protect us from?
 
 Which aspects of preprocessing become more consistent when we use a fitted
-pipeline? What decisions still require clinical and statistical judgement?
-
-One decision to start with: this pipeline fills a missing smoking status with
+pipeline? What decisions still require clinical and statistical judgement? One decision to start with: this pipeline fills a missing smoking status with
 the most common value. What did Exercise 2.4 suggest instead?
 
 > **Worked answer**
