@@ -4,459 +4,896 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 9.2 — SHAP, one patient at a time {#sec-shap}
+# Exercise 9.2 — SHAP values: global and local explanations {#sec-shap}
 
+Exercise 9.1 ranked the variables for the forest as a whole. It said nothing
+about *direction* (does a high BMI push the risk up or down?) and nothing about
+any one patient. **SHAP values** give both. For every patient and every
+variable they say how much that variable moved this patient's predicted
+probability away from the average, and they add up exactly to the
+prediction. Averaged over patients, they also give a ranking of their own,
+which we finish by comparing with every other measure, and with the
+coefficients of a logistic regression.
 
-## Objectives
-
-::: {.objective-list}
-- Compute SHAP values for a fitted forest and check that they add up to the
-  prediction.
-- Read a beeswarm plot and a force plot, and say in one sentence what the model
-  did for one named patient.
-- Say why a SHAP summary and a logistic regression coefficient are not
-  comparable until one of them is rescaled.
-:::
-
-## Why this, here
-
-Exercise 9.1 gave you two rankings, both of them averages over 231 people.
-Neither can answer the question a clinician actually asks in front of a
-patient: *why this number, for her?* SHAP answers exactly that, and then lets
-you average the per-patient answers back up into a global picture. It is the
-most useful tool on this day and the easiest to overclaim with, which is why it
-sits between the measure that was plainly describing the model (9.1) and the
-chapter that says so in R (Exercise 9.3).
+**Theory:** Shapley values from cooperative game theory; the baseline
+(expected value); additivity; global summaries (mean absolute SHAP, beeswarm);
+local explanations (waterfall plot); coefficients of a logistic regression on
+a common scale.
 
 ::: {.callout-note}
-## This chapter is Python only
-`shap` is a Python library with no equivalent of comparable maturity in R. R
-gets its local explanations from DALEX in Exercise 9.3, by a different algorithm
-(sampling-based Shapley values) that answers the same question. Read this
-chapter even if you intend to work in R: the ideas transfer and the plots are
-the ones you will be shown by other people.
+## The plots are for looking at
+The code for every plot is folded away just above it, in case you are curious,
+and all of it is in the code file linked at the top of each tab. You are not
+expected to write it yourself.
 :::
 
-## The model, again, and its SHAP values
+:::::: {.panel-tabset group="language"}
 
-Each chapter is a fresh session, so we refit the forest from Exercise 9.1 —
-same data, same split, same control column.
+## R
+
+[**Download the R code from this chapter**](code/day6-02-shap.R){download="day6-02-shap.R"} — every cell below, in page order, including the code for every plot, with the blanks left for you to fill in. Open it in Positron beside the page and run it a chunk at a time.
+
+### Packages and data
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(vip)                   # impurity importance, as in Exercise 9.1
+library(kernelshap)            # computes SHAP values for any model
+library(shapviz)               # plots SHAP values
+
+theme_set(theme_bw())          # white background for every plot
+options(pillar.sigfig = 3)     # show three significant figures in tables
+```
+
+The same data ([`data/diabetes.csv`](data/diabetes.csv)), split, predictors
+and random forest as Exercise 9.1.
+
+```{r}
+diabetes <- read_csv("data/diabetes.csv") |>
+  select(pregnant, glucose, mass, pedigree, age, diabetes) |>
+  filter(glucose > 0, mass > 0) |>              # remove the impossible zeros
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+test  <- diabetes[test_rows, ]
+
+set.seed(1)
+rf_fit <- rand_forest(trees = 500) |>
+  set_engine("ranger", importance = "impurity") |>
+  set_mode("classification") |>
+  fit(diabetes ~ ., data = train)
+
+test_preds <- predict(rf_fit, new_data = test, type = "prob") |>
+  bind_cols(test)
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — SHAP values for the test patients
+
+SHAP (SHapley Additive exPlanations) borrows an idea from game theory. Think of
+the five predictors as players who together produce a payout: this patient's
+predicted probability, minus the average prediction (the **baseline**). The
+**Shapley value** of a player is its contribution averaged over every order
+in which the players could have joined the team. For a variable, that means:
+how much does the prediction change when we learn this patient's value of the
+variable, averaged over all the combinations of the other variables we might
+already know?
+
+Shapley values have properties that make them easy to read:
+
+- **Additivity (efficiency):** baseline + the SHAP values of all variables = the
+  prediction for that patient, exactly.
+- **Symmetry:** two variables that contribute the same get the same value.
+- **Dummy:** a variable that never changes the prediction gets zero.
+
+A positive SHAP value pushes this patient's risk **up**; a negative one pushes
+it **down**.
+
+In R, **kernelshap** computes SHAP values for any model that can predict. To
+stand for "a variable we do not know yet" it fills the variable in from a
+**background** sample of patients; 100 training rows are plenty. With five
+predictors it can try every combination, so the values are exact for that
+background. We explain the 150 test patients. Asking `predict()` for
+`type = "prob"` gives SHAP values for both columns, `.pred_neg` and
+`.pred_pos`; **shapviz** stores them, and we keep the ones for `.pred_pos`.
+This takes about 15 seconds.
+
+```{r}
+set.seed(1)
+background <- train |>
+  slice_sample(n = 100) |>
+  select(-diabetes)
+
+shap_rf <- kernelshap(rf_fit, X = test |> select(-diabetes), bg_X = background,
+                      type = "prob", verbose = FALSE)
+
+sv_pos <- shapviz(shap_rf)$.pred_pos       # SHAP values for the probability of pos
+
+dim(get_shap_values(sv_pos))               # one row per patient, one column per predictor
+get_baseline(sv_pos)                       # the average prediction
+```
+
+The baseline is 0.400: the mean predicted probability over the background
+patients. (Python's TreeExplainer averages over all the training rows and gets
+0.367; the forests differ too, so the two languages' SHAP values differ a
+little.)
+
+**Check additivity** for the first test patient: the baseline plus the five
+SHAP values should give that patient's predicted probability.
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+patient_shap <- get_shap_values(sv_pos)[1, ]
+patient_shap
+
+get_baseline(sv_pos) + ______(patient_shap)
+test_preds$.pred_pos[1]
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+patient_shap <- get_shap_values(sv_pos)[1, ]
+patient_shap
+
+get_baseline(sv_pos) + sum(patient_shap)
+test_preds$.pred_pos[1]
+```
+
+Both lines give the same number: 0.690 in R, 0.688 in Python. Glucose
+contributes by far the most to this patient's prediction (+0.308 in R,
++0.350 in Python).
+:::
+:::
+
+::: {.callout-important}
+## Learning points
+- A SHAP value is one variable's contribution to one patient's prediction, measured from the baseline (the average prediction).
+- Baseline + the SHAP values of all variables = the prediction, exactly.
+- Positive values push the predicted risk up, negative values push it down.
+:::
+
+------------------------------------------------------------------------
+
+### Part 2 — Global summaries: bar plot and beeswarm
+
+We now have 150 × 5 SHAP values. Two summaries turn them into a picture of the
+whole model. The first is the **mean absolute SHAP value** of each variable:
+how far, on average, the variable moves a patient's prediction, in either
+direction. It is a variable importance, in units of probability.
+
+```{r}
+shap_importance <- get_shap_values(sv_pos) |>
+  abs() |>
+  colMeans()
+
+sort(shap_importance, decreasing = TRUE)
+```
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| fig-height: 3.5
+sv_importance(sv_pos, fill = "steelblue")
+```
+
+On average glucose moves a patient's predicted probability by 0.139;
+the other four variables by between 0.026 and 0.057. The
+ranking is close to the permutation importance of Exercise 9.1.
+
+The second summary, the **beeswarm**, shows every patient. Each dot is one
+patient's SHAP value for one variable; the colour is the patient's value of
+that variable (from low to high).
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| fig-height: 3.5
+sv_importance(sv_pos, kind = "beeswarm")
+```
+
+**Question!** Read the glucose row of the beeswarm. Where are the patients with
+high glucose, and where are those with low glucose? Is the same true of age?
+
+High glucose sits on the right (pushes the risk up) and low glucose on the
+left. Glucose can move a prediction a long way in either direction: from about
+−0.3 to about +0.36 in R, and to +0.40 in Python. Age points the same way,
+older patients mostly on the right, but more weakly (about ±0.2). Nothing told the forest that
+either relation should go one way; it found the direction in the data, and
+SHAP makes it visible. This is what a bar of importances cannot show.
+
+::: {.callout-important}
+## Learning points
+- The mean absolute SHAP value of a variable is a global importance, measured in units of the prediction.
+- The beeswarm shows, for every patient, how large the contribution is and in which direction, coloured by the variable's value.
+- Unlike impurity or permutation importance, SHAP shows the direction of an effect.
+:::
+
+------------------------------------------------------------------------
+
+### Part 3 — One patient: the waterfall plot
+
+A **local** explanation answers: *why did the model give this patient this
+risk?* Take the first test patient:
+
+```{r}
+test_preds |>
+  slice(1) |>
+  select(pregnant, glucose, mass, pedigree, age, diabetes, .pred_pos)
+```
+
+A 28-year-old with no pregnancies, a BMI of 28.5 and a glucose of 194 mg/dL,
+who does **not** have diabetes. The model gives her a probability of 0.69 (0.690 in R, 0.688 in Python).
+The waterfall plot starts at the baseline at the bottom and adds one SHAP
+value at a time, up to her prediction at the top:
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| fig-height: 3.5
+sv_waterfall(sv_pos, row_id = 1)
+```
+
+Her very high glucose adds about 0.31 (R) or 0.35 (Python) to the baseline; her other
+values change little. At a threshold of 0.5 she is a false positive, and the
+explanation says why: the model has learned that a glucose of 194 usually means
+diabetes. Nothing in the explanation says the model is *right*; it says what
+the model did.
+
+The same information can be drawn as a **force plot** (R: `sv_force()`;
+Python: `shap.plots.force()`): one horizontal bar with the pushes up and down
+facing each other.
+
+**Your turn.** Draw the waterfall for the test patient the model thinks is at
+**highest** risk.
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+highest <- which.max(test_preds$______)     # the row number of the highest probability
+test_preds |> slice(highest)
+
+sv_waterfall(sv_pos, row_id = ______)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+highest <- which.max(test_preds$.pred_pos)
+test_preds |> slice(highest)
+
+sv_waterfall(sv_pos, row_id = highest)
+```
+
+Both forests pick the same patient: 27 years old, no pregnancies, a glucose
+of 165, a BMI of 42.1 and a pedigree function of 0.399, with a predicted
+probability of 0.975 (R) or 0.984 (Python). Every variable pushes her risk
+up; glucose adds about 0.35 (R) or 0.38 (Python), BMI about 0.10. She does
+**not** have diabetes. The model's most confident prediction in the test set
+is wrong, and nothing in the explanation would tell you so.
+:::
+:::
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`which.max()` returns the position of the largest value in a vector; the
+vector you want is the predicted probability of `pos`. Then pass that position
+as `row_id`.
+:::
+
+::: {.callout-important}
+## Learning points
+- A local explanation breaks one patient's prediction into contributions that add up from the baseline to the prediction.
+- It explains what the model did for this patient, not whether the model was right.
+- Different patients can be at high risk for different reasons, which a global ranking cannot show.
+:::
+
+------------------------------------------------------------------------
+
+### Part 4 — Logistic regression, and all the measures side by side
+
+A logistic regression on the same five predictors is a model we can read
+directly (Day 4): each coefficient is the change in the log-odds of diabetes
+for one unit more of that predictor, the others held fixed.
+
+```{r}
+log_fit <- logistic_reg() |>
+  set_engine("glm") |>
+  fit(diabetes ~ ., data = train)
+
+tidy(log_fit)
+
+predict(log_fit, new_data = test, type = "prob") |>
+  bind_cols(test) |>
+  roc_auc(truth = diabetes, .pred_pos, event_level = "second")
+```
+
+The logistic regression reaches a test AUC of 0.830, against
+0.826 (R) and 0.824 (Python) for the forest: on these five predictors the black box buys
+little or nothing. Every coefficient is positive: more of each predictor, more
+risk, the same directions the beeswarm showed.
+
+**Question!** The largest coefficient by far is for the pedigree function
+(0.590), and the smallest is for age (0.0126). Does that make the pedigree
+function the most important predictor?
+
+No. A coefficient is *per unit*, and the units differ: the pedigree function
+runs from about 0.1 to 2.4, glucose from about 50 to 200. To put them on a
+common footing, multiply each coefficient by the standard deviation of its
+predictor in the training rows: the change in log-odds for **one standard
+deviation** more.
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+predictor_sd <- train |>
+  select(-diabetes) |>
+  summarise(across(everything(), sd)) |>
+  pivot_longer(everything(), names_to = "term", values_to = "sd")
+
+coefs <- tidy(log_fit) |>
+  filter(term != "(Intercept)") |>
+  left_join(predictor_sd, by = "term") |>
+  mutate(per_sd = estimate * ______)
+
+coefs |> select(term, estimate, sd, per_sd)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+predictor_sd <- train |>
+  select(-diabetes) |>
+  summarise(across(everything(), sd)) |>
+  pivot_longer(everything(), names_to = "term", values_to = "sd")
+
+coefs <- tidy(log_fit) |>
+  filter(term != "(Intercept)") |>
+  left_join(predictor_sd, by = "term") |>
+  mutate(per_sd = estimate * sd)
+
+coefs |> select(term, estimate, sd, per_sd)
+```
+
+Per standard deviation: glucose 1.016, BMI 0.464, pregnancies 0.235, pedigree
+0.220, age 0.149, identical in R and Python (fitting a logistic regression
+involves no randomness). Glucose is by far the strongest predictor; the
+pedigree function, with the largest raw coefficient, comes fourth.
+:::
+:::
+
+Finally, put the four measures side by side: impurity importance and
+permutation importance (Exercise 9.1), mean absolute SHAP, and the size of
+the per-SD logistic coefficient. Their units have nothing in common, so divide
+each by its own largest value: the top variable of each measure scores 1.
+The permutation loop is the one from Exercise 9.1.
+
+```{r}
+auc_before <- roc_auc(test_preds, truth = diabetes, .pred_pos,
+                      event_level = "second") |>
+  pull(.estimate)
+
+set.seed(1)
+perm_results <- tibble()
+
+for (variable in c("pregnant", "glucose", "mass", "pedigree", "age")) {
+  for (repeat_number in 1:20) {
+    test_shuffled <- test
+    test_shuffled[[variable]] <- sample(test_shuffled[[variable]])
+
+    auc_after <- predict(rf_fit, new_data = test_shuffled, type = "prob") |>
+      bind_cols(test_shuffled) |>
+      roc_auc(truth = diabetes, .pred_pos, event_level = "second") |>
+      pull(.estimate)
+
+    perm_results <- bind_rows(perm_results,
+                              tibble(variable = variable,
+                                     auc_drop = auc_before - auc_after))
+  }
+}
+
+comparison <- vi(rf_fit) |>
+  select(variable = Variable, impurity = Importance) |>
+  left_join(perm_results |>
+              group_by(variable) |>
+              summarise(permutation = mean(auc_drop)),
+            by = "variable") |>
+  left_join(tibble(variable = names(shap_importance), shap = shap_importance),
+            by = "variable") |>
+  left_join(coefs |> select(variable = term, logistic = per_sd),
+            by = "variable") |>
+  mutate(impurity    = impurity / max(impurity),
+         permutation = permutation / max(permutation),
+         shap        = shap / max(shap),
+         logistic    = abs(logistic) / max(abs(logistic)))
+
+comparison
+```
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| fig-height: 4
+comparison |>
+  pivot_longer(-variable, names_to = "measure", values_to = "relative") |>
+  mutate(measure = factor(measure, levels = c("impurity", "permutation",
+                                              "shap", "logistic"))) |>
+  ggplot(aes(x = relative, y = reorder(variable, relative), fill = measure)) +
+  geom_col(position = "dodge") +
+  labs(x = "Importance relative to the top variable of each measure",
+       y = NULL, fill = "Measure")
+```
+
+All four put glucose first by a wide margin. Below it they disagree.
+Impurity importance gives BMI, age and the pedigree function around half of
+glucose's score or more; permutation importance gives them a quarter or less,
+and the pedigree function almost nothing; SHAP lies in between. The logistic
+regression agrees that BMI comes second but gives age the least weight of
+all. Age and the number of pregnancies are strongly correlated (0.74), and a
+model that holds one fixed while moving the other has to share the credit
+between them in some way; the forest and the logistic regression share it
+differently.
+
+**Question!** You are asked to report "the most important risk factors" in the
+model. Which of these measures would you use, and what would you say about the
+variables below glucose?
+
+::: {.callout-important}
+## Learning points
+- A coefficient is per unit of its predictor; multiply by the predictor's standard deviation before comparing sizes.
+- Impurity importance, permutation importance, mean absolute SHAP and standardised coefficients answer different questions; agreement at the top does not mean agreement below it.
+- Say which measure you used, and what question it answers, whenever you report an importance.
+:::
+
+## Python
+
+[**Download the Python code from this chapter**](code/day6-02-shap.py){download="day6-02-shap.py"} — every cell below, in page order, including the code for every plot, with the blanks left for you to fill in. Open it in Positron beside the page and run it a cell at a time.
+
+### Packages and data
 
 ```{python}
-import numpy as np, pandas as pd
-import matplotlib, matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 import shap
 
-# trim the surrounding whitespace when a figure is saved; shap's force plot
-# draws outside the axes and is otherwise clipped at the top
-matplotlib.rcParams["savefig.bbox"] = "tight"
-from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
-
-dia = pd.read_csv("data/diabetes.csv")
-y = (dia["diabetes"] == "pos").astype(int)
-X = dia.drop(columns=["diabetes"]).copy()
-X["noise"] = np.random.default_rng(42).normal(size=len(X)).round(2)
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.3, random_state=123, stratify=y)
-
-rf = RandomForestClassifier(n_estimators=300, random_state=123).fit(X_train, y_train)
-auc = roc_auc_score(y_test, rf.predict_proba(X_test)[:, 1])
-print("test AUC", round(auc, 3))
+from sklearn.inspection import permutation_importance
 ```
 
-A SHAP value is one number per patient per variable: how much that variable
-moved *this* patient's predicted probability away from the base value, where
-the base value is the average prediction over the training rows. The values are
-constructed so that they add up exactly:
+The same data ([`data/diabetes.csv`](data/diabetes.csv)), split, predictors
+and random forest as Exercise 9.1.
 
-$$\hat{p}(x_i) = \phi_0 + \sum_{j=1}^{p} \phi_{ij}$$
+```{python}
+diabetes = pd.read_csv("data/diabetes.csv")
+diabetes = diabetes[["pregnant", "glucose", "mass", "pedigree", "age", "diabetes"]]
+diabetes = diabetes[(diabetes["glucose"] > 0) & (diabetes["mass"] > 0)]   # remove the impossible zeros
+diabetes = diabetes.reset_index(drop=True)
+diabetes["diabetes"] = (diabetes["diabetes"] == "pos").astype(int)       # 1 = pos, 0 = neg
 
-with $\phi_0$ the base value and $\phi_{ij}$ the contribution of variable $j$
-to patient $i$. That identity is the whole reason SHAP is worth more than an
-importance bar chart: it is an exact decomposition of a specific prediction,
-not a summary statistic.
+is_test = diabetes.index % 5 == 0               # every fifth person is held back
+train = diabetes[~is_test]
+test  = diabetes[is_test]
+
+predictors = ["pregnant", "glucose", "mass", "pedigree", "age"]
+
+rf = RandomForestClassifier(n_estimators=500, random_state=1)
+rf = rf.fit(train[predictors], train["diabetes"])
+
+test_prob = rf.predict_proba(test[predictors])[:, 1]    # probability of diabetes
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — SHAP values for the test patients
+
+SHAP (SHapley Additive exPlanations) borrows an idea from game theory. Think of
+the five predictors as players who together produce a payout: this patient's
+predicted probability, minus the average prediction (the **baseline**). The
+**Shapley value** of a player is its contribution averaged over every order
+in which the players could have joined the team. For a variable, that means:
+how much does the prediction change when we learn this patient's value of the
+variable, averaged over all the combinations of the other variables we might
+already know?
+
+Shapley values have properties that make them easy to read:
+
+- **Additivity (efficiency):** baseline + the SHAP values of all variables = the
+  prediction for that patient, exactly.
+- **Symmetry:** two variables that contribute the same get the same value.
+- **Dummy:** a variable that never changes the prediction gets zero.
+
+A positive SHAP value pushes this patient's risk **up**; a negative one pushes
+it **down**.
+
+In Python, the **shap** package's `TreeExplainer` uses the structure of the
+trees to compute exact SHAP values quickly, without a background sample: the
+"unknown" variables are averaged over the training rows that went down each
+branch. We explain the 150 test patients. The result has one set of values
+for each class; we keep class 1, diabetes.
 
 ```{python}
 explainer = shap.TreeExplainer(rf)
-sv = explainer.shap_values(X_test)          # (patients, variables, classes)
-phi = sv[:, :, 1]                           # the 'pos' class
-base = explainer.expected_value[1]
+explanation = explainer(test[predictors])
 
-print("shape", sv.shape)
-print("base value", round(base, 3), " training prevalence", round(y_train.mean(), 3))
+shap_pos = explanation[:, :, 1]            # SHAP values for class 1 (diabetes)
+
+print("shape:   ", shap_pos.values.shape)  # one row per patient, one column per predictor
+print("baseline:", round(shap_pos.base_values[0], 3))   # the average prediction
 ```
 
-The base value is the training prevalence, as it must be: with no information
-about a patient, the forest's best guess is the average.
+The baseline is 0.367: the forest's average prediction over the training
+rows. (The R tab fills the unknown variables from a sample of 100 training
+rows and gets 0.400; the forests differ too, so the two languages' SHAP
+values differ a little.)
 
-::: {.callout-note appearance="simple"}
-## How long this takes, and what to do if it is slow
-`TreeExplainer` is exact for forests and it explains these 231 test patients in
-well under a second. Cost grows with the number of patients, trees and tree
-depth, so a larger forest or the full 768 rows will take longer. If it does,
-explain a random subsample — `X_test.sample(100, random_state=1)` — and say in
-your write-up that you did. A beeswarm of 100 patients looks almost identical
-to one of 231; a mean absolute SHAP value computed from 100 is a little
-noisier.
-:::
-
-## Global view 1 — the bar plot
-
-Averaging $|\phi_{ij}|$ down the patients gives a global importance: how much
-this variable moves predictions, in probability units, for a typical patient.
+**Check additivity** for the first test patient: the baseline plus the five
+SHAP values should give that patient's predicted probability.
 
 ```{python}
-#| fig-width: 6.5
+#| eval: false
+# Replace every ______ below, then run this cell.
+patient_shap = shap_pos.values[0]
+print(np.round(patient_shap, 3))
+
+print(shap_pos.base_values[0] + patient_shap.______())
+print(test_prob[0])
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+patient_shap = shap_pos.values[0]
+print(np.round(patient_shap, 3))
+
+print(shap_pos.base_values[0] + patient_shap.sum())
+print(test_prob[0])
+```
+
+Both lines give the same number: 0.690 in R, 0.688 in Python. Glucose
+contributes by far the most to this patient's prediction (+0.308 in R,
++0.350 in Python).
+:::
+:::
+
+::: {.callout-important}
+## Learning points
+- A SHAP value is one variable's contribution to one patient's prediction, measured from the baseline (the average prediction).
+- Baseline + the SHAP values of all variables = the prediction, exactly.
+- Positive values push the predicted risk up, negative values push it down.
+:::
+
+------------------------------------------------------------------------
+
+### Part 2 — Global summaries: bar plot and beeswarm
+
+We now have 150 × 5 SHAP values. Two summaries turn them into a picture of the
+whole model. The first is the **mean absolute SHAP value** of each variable:
+how far, on average, the variable moves a patient's prediction, in either
+direction. It is a variable importance, in units of probability.
+
+```{python}
+shap_importance = pd.Series(np.abs(shap_pos.values).mean(axis=0), index=predictors)
+
+shap_importance.sort_values(ascending=False).round(3)
+```
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
 #| fig-height: 3.5
-shap.summary_plot(phi, X_test, plot_type="bar", show=False, plot_size=(7.5, 3.5))
+shap.plots.bar(shap_pos, show=False)
 plt.tight_layout()
 plt.show()
 ```
 
-## Task 1 — The beeswarm, and the control again
+On average glucose moves a patient's predicted probability by 0.136;
+the other four variables by between 0.028 and 0.064. The
+ranking is close to the permutation importance of Exercise 9.1.
 
-The bar plot throws away everything except the magnitude. The beeswarm keeps
-it: one dot per patient per variable, placed at its SHAP value, coloured by how
-high that patient's value of the variable was. Draw it, then run the control
-check on the mean absolute SHAP values.
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
-
-shap.summary_plot(______, X_test, show=False, plot_size=(6.5, 4))
-plt.tight_layout(); plt.show()
-
-shap_importance = pd.Series(np.abs(______).mean(axis=0), index=X.columns)
-check_noise_control(shap_importance)
-```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-#| fig-width: 6.5
-#| fig-height: 4
-import sys; sys.path.append("checks")
-from checks import *
-
-shap.summary_plot(phi, X_test, show=False, plot_size=(6.5, 4))
-plt.tight_layout(); plt.show()
-
-shap_importance = pd.Series(np.abs(phi).mean(axis=0), index=X.columns)
-print(shap_importance.sort_values(ascending=False).round(4))
-check_noise_control(shap_importance)
-```
-:::
-:::
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-Both blanks want the same object: the matrix of SHAP values for the positive
-class that you built above. `np.abs()` and `.mean(axis=0)` collapse it down the
-patients.
-:::
-
-Read three things off the beeswarm before you move on.
-
-1. Glucose: the red dots are on the right. High glucose pushes the prediction
-   up, consistently, and by up to 0.4 in probability.
-2. Pressure and triceps: a vertical smudge at zero. The model barely uses them.
-3. `noise`: a smudge too — but a slightly wider one than pressure's, and the
-   control check fails again, at around 12% of glucose. SHAP is honest about
-   the model, and the model does use the noise column.
-
-## Local view — one patient
-
-Now the thing the averages could not do. Patient 0 of the test set:
+The second summary, the **beeswarm**, shows every patient. Each dot is one
+patient's SHAP value for one variable; the colour is the patient's value of
+that variable (blue low, red high).
 
 ```{python}
-i = 0
-x_i = X_test.iloc[[i]]
-print("row", X_test.index[i],
-      "| predicted", round(rf.predict_proba(x_i)[0, 1], 3),
-      "| actual", "pos" if y_test.iloc[i] == 1 else "neg")
-print(x_i.T.rename(columns={X_test.index[i]: "value"}))
-```
-
-```{python}
-#| fig-width: 10
-#| fig-height: 2.4
-shap.force_plot(base, phi[i], x_i.iloc[0], matplotlib=True, show=False,
-                figsize=(16, 3.2))
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| fig-height: 3.5
+shap.plots.beeswarm(shap_pos, show=False)
+plt.tight_layout()
 plt.show()
 ```
 
-Read the force plot as a tug of war on one number. It starts at the base value
-and ends at this patient's prediction; red segments push right, blue segments
-push left, and the width of each is its SHAP value. For this patient a glucose
-of 167 contributes about +0.31 on its own — more than everything else put
-together.
+**Question!** Read the glucose row of the beeswarm. Where are the patients with
+high glucose, and where are those with low glucose? Is the same true of age?
 
-Now the sentence that this chapter exists for. The model gave this patient a
-predicted probability of about 0.71. **She does not have diabetes.** The force
-plot is still entirely correct: it is a faithful account of how the forest
-arrived at 0.71. It is not an account of her physiology, and if you read it
-aloud as "her high glucose is driving her diabetes risk" you have changed the
-subject without noticing.
+High glucose sits on the right (pushes the risk up) and low glucose on the
+left. Glucose can move a prediction a long way in either direction: from about
+−0.3 to about +0.36 in R, and to +0.40 in Python. Age points the same way,
+older patients mostly on the right, but more weakly (about ±0.2). Nothing told the forest that
+either relation should go one way; it found the direction in the data, and
+SHAP makes it visible. This is what a bar of importances cannot show.
 
-## Task 2 — Check the arithmetic
-
-The additivity identity above is a claim you can test. Pick any patient, add
-the base value to their SHAP values, and compare with the model's prediction.
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
-
-j = 17                                   # any row of the test set
-reconstructed = ______ + phi[j].sum()
-predicted     = rf.predict_proba(X_test.iloc[[j]])[0, 1]
-print(round(reconstructed, 6), round(predicted, 6))
-check_metric_range(abs(reconstructed - ______), 0, 1e-6, "reconstruction error")
-```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-import sys; sys.path.append("checks")
-from checks import *
-
-j = 17
-reconstructed = base + phi[j].sum()
-predicted     = rf.predict_proba(X_test.iloc[[j]])[0, 1]
-print(round(reconstructed, 6), round(predicted, 6))
-check_metric_range(abs(reconstructed - predicted), 0, 1e-6, "reconstruction error")
-```
-:::
+::: {.callout-important}
+## Learning points
+- The mean absolute SHAP value of a variable is a global importance, measured in units of the prediction.
+- The beeswarm shows, for every patient, how large the contribution is and in which direction, coloured by the variable's value.
+- Unlike impurity or permutation importance, SHAP shows the direction of an effect.
 :::
 
-::: {.callout-tip collapse="true"}
-## Stuck?
-The identity has three parts: the base value, the sum of this patient's
-contributions, and the prediction. Two of them are already on the line.
-:::
+------------------------------------------------------------------------
 
-The error is of the order of $10^{-16}$. TreeExplainer is not approximating
-here — for a tree ensemble it computes the Shapley values exactly.
+### Part 3 — One patient: the waterfall plot
 
-## A fairer comparison — logistic regression coefficients
-
-The usual next slide puts SHAP next to the coefficients of a logistic
-regression and invites you to compare the two rankings. Done naively that
-comparison is meaningless, and it is worth seeing why.
+A **local** explanation answers: *why did the model give this patient this
+risk?* Take the first test patient:
 
 ```{python}
-lr = LogisticRegression(max_iter=1000, solver="liblinear",
-                        random_state=123).fit(X_train, y_train)
-print("logistic regression test AUC", round(roc_auc_score(y_test, lr.predict_proba(X_test)[:, 1]), 3))
-
-coef = pd.Series(lr.coef_[0], index=X.columns)
-print("\nraw coefficients, log-odds per unit:")
-print(coef.round(3))
+patient = test.iloc[[0]]                   # double brackets keep it a one-row table
+print(patient)
+print("predicted probability:", round(test_prob[0], 3))
 ```
 
-The largest coefficient by a factor of five belongs to `pedigree`. That is an
-artefact of the units: `pedigree` runs from about 0.08 to 2.4, while `glucose`
-runs to 199, so a coefficient "per unit" means something a hundred times
-smaller for glucose. Multiply each coefficient by the training standard
-deviation of its variable and you have the change in log-odds per standard
-deviation, which is comparable across variables.
+A 28-year-old with no pregnancies, a BMI of 28.5 and a glucose of 194 mg/dL,
+who does **not** have diabetes. The model gives her a probability of 0.69 (0.690 in R, 0.688 in Python).
+The waterfall plot starts at the baseline at the bottom and adds one SHAP
+value at a time, up to her prediction at the top:
 
 ```{python}
-#| fig-width: 6.5
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
 #| fig-height: 3.5
-coef_sd = (coef * X_train.std()).sort_values()
-print(coef_sd.round(3))
-
-fig, ax = plt.subplots(figsize=(6.5, 3.5))
-coef_sd.plot(kind="barh", ax=ax, color="mediumseagreen")
-ax.axvline(0, color="grey", linewidth=1)
-ax.set_xlabel("change in log-odds per 1 SD")
-fig.tight_layout(); plt.show()
+shap.plots.waterfall(shap_pos[0], show=False)
+plt.tight_layout()
+plt.show()
 ```
 
-On that scale glucose is the largest by a wide margin and `pedigree` has
-dropped to fourth. The ranking reversed because of a unit conversion, not
-because of anything in the data.
+Her very high glucose adds about 0.31 (R) or 0.35 (Python) to the baseline; her other
+values change little. At a threshold of 0.5 she is a false positive, and the
+explanation says why: the model has learned that a glucose of 194 usually means
+diabetes. Nothing in the explanation says the model is *right*; it says what
+the model did.
 
-Two further things are worth noticing. The logistic regression's test AUC is
-about the same as the forest's: the black box bought you nothing here, which is
-worth remembering before you spend a day explaining it. And `pressure` gets a
-substantial *negative* standardised coefficient while the forest gives it
-almost no SHAP at all — two models of the same data disagreeing about a
-variable, which is a fact about the models.
+The same information can be drawn as a **force plot** (R: `sv_force()`;
+Python: `shap.plots.force()`): one horizontal bar with the pushes up and down
+facing each other.
 
-## Task 3 — Put the four measures side by side
-
-Build one table with a column per method, each scaled to its own maximum so the
-columns are on a common footing, and read off where the control sits in each.
+**Your turn.** Draw the waterfall for the test patient the model thinks is at
+**highest** risk.
 
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-from sklearn.inspection import permutation_importance
+highest = test_prob.______()                # the position of the highest probability
+print(test.iloc[[highest]])
 
-perm = pd.Series(permutation_importance(
-    rf, X_test, y_test, n_repeats=20, random_state=123,
-    scoring="roc_auc").importances_mean, index=X.columns)
-
-comparison = pd.DataFrame({
-    "impurity":    pd.Series(rf.feature_importances_, index=X.columns),
-    "permutation": perm,
-    "mean |SHAP|": pd.Series(np.abs(phi).mean(axis=0), index=X.columns),
-    "|coef| per SD": ______,
-})
-comparison = comparison / comparison.______()
-print(comparison.round(2).sort_values("mean |SHAP|", ascending=False))
+shap.plots.waterfall(shap_pos[______], show=False)
+plt.tight_layout()
+plt.show()
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-from sklearn.inspection import permutation_importance
+highest = test_prob.argmax()
+print(test.iloc[[highest]])
 
-perm = pd.Series(permutation_importance(
-    rf, X_test, y_test, n_repeats=20, random_state=123,
-    scoring="roc_auc").importances_mean, index=X.columns)
-
-comparison = pd.DataFrame({
-    "impurity":    pd.Series(rf.feature_importances_, index=X.columns),
-    "permutation": perm,
-    "mean |SHAP|": pd.Series(np.abs(phi).mean(axis=0), index=X.columns),
-    "|coef| per SD": (coef * X_train.std()).abs(),
-})
-comparison = comparison / comparison.max()
-print(comparison.round(2).sort_values("mean |SHAP|", ascending=False))
+shap.plots.waterfall(shap_pos[highest], show=False)
+plt.tight_layout()
+plt.show()
 ```
+
+Both forests pick the same patient: 27 years old, no pregnancies, a glucose
+of 165, a BMI of 42.1 and a pedigree function of 0.399, with a predicted
+probability of 0.975 (R) or 0.984 (Python). Every variable pushes her risk
+up; glucose adds about 0.35 (R) or 0.38 (Python), BMI about 0.10. She does
+**not** have diabetes. The model's most confident prediction in the test set
+is wrong, and nothing in the explanation would tell you so.
 :::
 :::
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-The fourth column is the standardised coefficients you just computed, without
-their signs — importance measures have no direction, so take the absolute
-value. Scaling a data frame by its column maxima is one method call.
+NumPy arrays have `.argmax()`, the position of the largest value. Then use that
+position to pick the patient out of `shap_pos`.
 :::
 
-Every column agrees that glucose is first. Below that they disagree about
-almost everything, and the `noise` row is between 0 and 0.37 depending on which
-method you happened to run.
+::: {.callout-important}
+## Learning points
+- A local explanation breaks one patient's prediction into contributions that add up from the baseline to the prediction.
+- It explains what the model did for this patient, not whether the model was right.
+- Different patients can be at high risk for different reasons, which a global ranking cannot show.
+:::
 
-## The result that should bother you
+------------------------------------------------------------------------
 
-An explanation does not know whether the model is any good. Here is the same
-forest fitted to the same predictors with the outcome column shuffled, so that
-there is no relationship left to learn.
+### Part 4 — Logistic regression, and all the measures side by side
+
+A logistic regression on the same five predictors is a model we can read
+directly (Day 4): each coefficient is the change in the log-odds of diabetes
+for one unit more of that predictor, the others held fixed.
+
+`C=np.inf` switches off scikit-learn's default penalty, so the coefficients
+match R's `glm`.
 
 ```{python}
-#| fig-width: 6.5
-#| fig-height: 4
-y_shuffled = np.random.default_rng(0).permutation(y_train.values)
-rf_null = RandomForestClassifier(n_estimators=300, random_state=123).fit(X_train, y_shuffled)
-print("test AUC of the shuffled-label forest:",
-      round(roc_auc_score(y_test, rf_null.predict_proba(X_test)[:, 1]), 3))
+log_fit = LogisticRegression(C=np.inf, max_iter=5000)
+log_fit = log_fit.fit(train[predictors], train["diabetes"])
 
-phi_null = shap.TreeExplainer(rf_null).shap_values(X_test)[:, :, 1]
-shap.summary_plot(phi_null, X_test, show=False, plot_size=(6.5, 4))
-plt.tight_layout(); plt.show()
+coefs = pd.DataFrame({"term": predictors, "estimate": log_fit.coef_[0]})
+print("intercept:", round(log_fit.intercept_[0], 3))
+print(coefs.round(4))
+
+auc_log = roc_auc_score(test["diabetes"], log_fit.predict_proba(test[predictors])[:, 1])
+print("test AUC:", round(auc_log, 3))
 ```
 
-The AUC is about 0.47 — worse than a coin toss. The beeswarm is still a
-beeswarm: variables are ranked, dots are coloured, one predictor leads the
-others by a clear margin. The contributions are about a third the size of the
-real model's, which you would only notice by looking at the axis, and `shap`
-will not tell you.
+The logistic regression reaches a test AUC of 0.830, against
+0.826 (R) and 0.824 (Python) for the forest: on these five predictors the black box buys
+little or nothing. Every coefficient is positive: more of each predictor, more
+risk, the same directions the beeswarm showed.
 
-1. SHAP explains the function the model computes. It has no access to the
-   outcome, so it cannot know the function is worthless.
-2. Therefore a SHAP plot is never evidence that a model works. The evidence
-   that a model works is a held-out score against a baseline, and it has to
-   come first.
-3. And the ordering in a SHAP plot of a model that does not work is just the
-   ordering of its overfitting.
+**Question!** The largest coefficient by far is for the pedigree function
+(0.590), and the smallest is for age (0.0126). Does that make the pedigree
+function the most important predictor?
 
-## Reflection
+No. A coefficient is *per unit*, and the units differ: the pedigree function
+runs from about 0.1 to 2.4, glucose from about 50 to 200. To put them on a
+common footing, multiply each coefficient by the standard deviation of its
+predictor in the training rows: the change in log-odds for **one standard
+deviation** more.
 
-1. A colleague shows you a beeswarm plot in a slide deck. Write down the two
-   questions you would ask before reading anything off it.
-2. The force plot for patient 0 was a correct explanation of a prediction that
-   was wrong about the patient. Explain, in one sentence each, what the plot
-   does and does not license you to say.
-3. SHAP values for this model are in probability units and sum to the
-   prediction. What would be lost if they were reported on the log-odds scale
-   instead, and what would be gained?
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+coefs["sd"] = train[predictors].std().values
+coefs["per_sd"] = coefs["estimate"] * ______
 
-::: {.content-visible when-profile="instructor"}
-::: {.instructor}
-**Answers.** (1) "What is the held-out score, and against what baseline?" and
-"what is on the x-axis, and how wide is it?" — the shuffled-label figure above
-fails both. (2) It licenses: *the forest's output for this row was 0.71, and of
-the 0.35 above the base rate, about 0.31 came from the glucose value of 167.*
-It does not license any statement about her risk, her physiology, or what would
-happen if her glucose fell. The last one needs a causal model, not an
-attribution. (3) Log-odds are additive in the way logistic regression is
-additive, so contributions are comparable across patients with very different
-baseline risks; probability units are directly interpretable to a clinician but
-compress near 0 and 1, so the same physiological change produces a smaller
-$\phi$ for an already-low-risk patient.
+coefs.round(3)
+```
 
-**Expected values.** Base value equals the training prevalence, 0.36–0.37. Mean
-|SHAP|: glucose 0.15–0.16, everything else under 0.06, `noise` about 0.02 and
-around 12% of glucose. Patient 0 is predicted 0.70–0.72 and is a true negative;
-glucose contributes about +0.31. Reconstruction error of order 1e-16. Logistic
-regression AUC 0.75–0.77, i.e. indistinguishable from the forest. Shuffled-label
-forest AUC 0.44–0.52.
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+coefs["sd"] = train[predictors].std().values
+coefs["per_sd"] = coefs["estimate"] * coefs["sd"]
 
-**Common failures.** (1) Indexing `shap_values` as `sv[1]` — in `shap` 0.45 and
-later the array is (patients, variables, classes), and older tutorials assume a
-list of two arrays. If a student's plot looks mirrored, this is why. (2)
-Forgetting `show=False`, so the figure is drawn twice or not at all. (3)
-Reading the force plot as a causal claim about the patient; this is the one to
-stop the room for. (4) Comparing raw coefficients with SHAP values and
-concluding something about `pedigree`.
+coefs.round(3)
+```
 
-**Timing.** Task 3 is the one to cut. The shuffled-label example at the end is
-not optional — it is the payload of the whole day.
+Per standard deviation: glucose 1.016, BMI 0.464, pregnancies 0.235, pedigree
+0.220, age 0.149, identical in R and Python (fitting a logistic regression
+involves no randomness). Glucose is by far the strongest predictor; the
+pedigree function, with the largest raw coefficient, comes fourth.
 :::
 :::
+
+Finally, put the four measures side by side: impurity importance and
+permutation importance (Exercise 9.1), mean absolute SHAP, and the size of
+the per-SD logistic coefficient. Their units have nothing in common, so divide
+each by its own largest value: the top variable of each measure scores 1.
+
+```{python}
+perm = permutation_importance(rf, test[predictors], test["diabetes"],
+                              scoring="roc_auc", n_repeats=20, random_state=1)
+
+comparison = pd.DataFrame({
+    "impurity":    rf.feature_importances_,
+    "permutation": perm.importances_mean,
+    "shap":        shap_importance.values,
+    "logistic":    np.abs(coefs["per_sd"].values)}, index=predictors)
+
+comparison = comparison / comparison.max()        # each column divided by its largest value
+comparison.round(2)
+```
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| fig-height: 4
+ordered = comparison.sort_values("shap")
+
+fig, ax = plt.subplots(figsize=(7, 4))
+ordered.plot(kind="barh", ax=ax, width=0.8)
+ax.set_xlabel("Importance relative to the top variable of each measure")
+ax.legend(title="Measure")
+fig.tight_layout()
+plt.show()
+```
+
+All four put glucose first by a wide margin. Below it they disagree.
+Impurity importance gives BMI, age and the pedigree function around half of
+glucose's score or more; permutation importance gives them a quarter or less,
+and the pedigree function almost nothing; SHAP lies in between. The logistic
+regression agrees that BMI comes second but gives age the least weight of
+all. Age and the number of pregnancies are strongly correlated (0.74), and a
+model that holds one fixed while moving the other has to share the credit
+between them in some way; the forest and the logistic regression share it
+differently.
+
+**Question!** You are asked to report "the most important risk factors" in the
+model. Which of these measures would you use, and what would you say about the
+variables below glucose?
+
+::: {.callout-important}
+## Learning points
+- A coefficient is per unit of its predictor; multiply by the predictor's standard deviation before comparing sizes.
+- Impurity importance, permutation importance, mean absolute SHAP and standardised coefficients answer different questions; agreement at the top does not mean agreement below it.
+- Say which measure you used, and what question it answers, whenever you report an importance.
+:::
+
+::::::
 
 ## Stretch
 
 ::: {.callout-note appearance="simple"}
-## Stretch 1 — Two patients with the same prediction
-Find two test patients whose predicted probabilities agree to within 0.01 and
-plot a force plot for each. If the explanations differ, what does that tell you
-about the model that the prediction alone did not?
+## Stretch — SHAP values for the logistic regression
+Compute SHAP values for `log_fit` instead of the forest (R: `kernelshap()` with
+the same background; Python: `shap.Explainer(log_fit.predict_proba,
+train[predictors])`). For a model that is a straight line on the log-odds
+scale, what does the beeswarm look like for glucose? Why are the dots for
+glucose ordered by colour so neatly?
 :::
 
 ::: {.callout-note appearance="simple"}
-## Stretch 2 — Explain the logistic regression instead
-`shap.LinearExplainer` gives SHAP values for the logistic regression. Compute
-them and compare with the standardised coefficients. They should agree almost
-exactly, and the reason they do tells you what SHAP adds for a forest and does
-not add for a linear model.
+## Stretch — does the background matter?
+In R, rerun `kernelshap()` with a background of 20 patients instead of 100, or
+of 100 patients *with* diabetes only. What happens to the baseline and to the
+SHAP values of the first test patient? What does the baseline now stand for?
 :::
 
-## What you can and cannot now claim
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Teaching choice.** Spend the time on Part 3: a confident, wrong prediction
+explained in detail is the clearest demonstration that an explanation
+describes the model, not the truth. The SHAP theory in Part 1 can be one board
+diagram (baseline, arrows up and down, prediction).
 
-**Can:** that for this forest, this patient's prediction of 0.71 decomposes
-exactly into a base rate of 0.37 plus a set of contributions dominated by
-glucose; and that the same decomposition, done on a model that cannot predict
-anything, looks much the same.
+**Expected values.** Forest test AUC R 0.826, Python 0.824. SHAP baseline: R
+0.400 (mean prediction over the 100 background rows, `set.seed(1)`), Python
+0.367 (TreeExplainer, mean over the training rows; equal to the training
+prevalence). First test patient (pregnant 0, glucose 194, mass 28.5, pedigree
+0.24, age 28, neg): predicted 0.690 (R) / 0.688 (Python); SHAP, R: glucose
++0.308, pedigree −0.029, age +0.027, mass −0.018, pregnant +0.002; Python:
+glucose +0.350, pedigree −0.048, age +0.027, mass −0.018, pregnant +0.009.
+Mean |SHAP|, R: glucose 0.139, mass 0.057, age 0.057, pregnant 0.044,
+pedigree 0.026; Python: glucose 0.136, age 0.064, mass 0.062, pregnant 0.050,
+pedigree 0.028. Glucose SHAP range R −0.313 to +0.363, Python −0.336 to
++0.400; age R −0.187 to +0.175, Python −0.204 to +0.214. Highest-risk patient
+(same in both): pregnant 0, glucose 165, mass 42.1, pedigree 0.399, age 27,
+neg; predicted 0.975 (R) / 0.984 (Python); glucose +0.354 / +0.38, mass +0.104
+/ +0.10. Logistic regression (identical in both languages): intercept −7.886,
+pregnant 0.0604, glucose 0.0320, mass 0.0659, pedigree 0.590, age 0.0126;
+test AUC 0.830. Training SDs: 3.89, 31.7, 7.04, 0.372, 11.9; per-SD
+coefficients 0.235, 1.016, 0.464, 0.220, 0.149. Relative importances
+(impurity / permutation / SHAP / logistic), R: mass 0.550 / 0.235 / 0.411 /
+0.457; age 0.488 / 0.202 / 0.411 / 0.147; pedigree 0.475 / 0.026 / 0.186 /
+0.216; pregnant 0.279 / 0.072 / 0.318 / 0.231. Python: mass 0.68 / 0.25 /
+0.46 / 0.46; age 0.58 / 0.22 / 0.47 / 0.15; pedigree 0.63 / 0.05 / 0.21 /
+0.22; pregnant 0.33 / 0.11 / 0.37 / 0.23. Pregnancies and age correlate at
+0.74. kernelshap takes about 15 seconds; TreeExplainer under one second.
 
-**Cannot:** that glucose caused anything, that lowering it would lower the
-prediction for a future patient, or that the forest has found something about
-diabetes. The first of those needs a causal question asked properly; the others
-need an experiment. Exercise 9.3 asks the same questions in R, and adds the one
-plot that at least *looks* like an intervention — and shows why it is not one.
+**Common failures.** (1) Taking the SHAP values of class 0 (Python
+`explanation[:, :, 0]`, R `.pred_neg`): every sign flips. (2) Expecting the R
+and Python SHAP values to agree exactly: the forests and the definition of
+"unknown" (background sample versus tree paths) differ. (3) Ranking variables
+by raw logistic coefficients. (4) In R, leaving out `type = "prob"` in
+`kernelshap()`: `predict()` then returns classes and kernelshap stops with an
+error.
+
+**Timing.** Part 1 twenty minutes, Part 2 fifteen, Part 3 fifteen, Part 4
+twenty.
+:::
+:::

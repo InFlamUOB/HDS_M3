@@ -1,0 +1,112 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Day 9 — Explainable AI",
+    "section": "",
+    "text": "Day 9 — Explainable AI\nThese are the exercises for one teaching day of Module 3 of the Health Data Science MSc. Each chapter is one exercise you can finish in a single sitting, with an R path and a Python path doing the same work. Pick one; in class we go through R most of the time.\nSome tasks appear as code containing ______ for you to fill in. They are shown but not run, which is why no output appears beneath them. The worked answers are published after the session.",
+    "crumbs": [
+      "Day 9 — Explainable AI"
+    ]
+  },
+  {
+    "objectID": "index.html#the-exercises",
+    "href": "index.html#the-exercises",
+    "title": "Day 9 — Explainable AI",
+    "section": "The exercises",
+    "text": "The exercises\n\nExercise 9.1 — Variable importance, and a column of pure noise\nExercise 9.2 — SHAP values: global and local explanations\nExercise 9.3 — One toolbox for explanations: DALEX\nExercise 9.4 — For whom is the model worst?",
+    "crumbs": [
+      "Day 9 — Explainable AI"
+    ]
+  },
+  {
+    "objectID": "index.html#the-data",
+    "href": "index.html#the-data",
+    "title": "Day 9 — Explainable AI",
+    "section": "The data",
+    "text": "The data\nSave these in a folder called data, beside your script, before you start: day9-data.zip has all of them.\n\n\n\nFile\n\n\n\n\ndiabetes.csv",
+    "crumbs": [
+      "Day 9 — Explainable AI"
+    ]
+  },
+  {
+    "objectID": "day6-01-importance.html",
+    "href": "day6-01-importance.html",
+    "title": "Exercise 9.1 — Variable importance, and a column of pure noise",
+    "section": "",
+    "text": "Stretch\nDay 5 ended with a random forest that predicts diabetes better than a single tree, but cannot be read the way a tree or a logistic regression can. The first question everyone asks of such a model is: which variables does it use? This exercise answers it in two different ways, which do not agree, and then tests both with a predictor we know to be useless.\nTheory: impurity-based (Gini) importance; permutation importance; why a measure computed on the training rows can reward a useless variable; a column of pure noise as a control.",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Exercise 9.1 — Variable importance, and a column of pure noise</span>"
+    ]
+  },
+  {
+    "objectID": "day6-01-importance.html#stretch",
+    "href": "day6-01-importance.html#stretch",
+    "title": "Exercise 9.1 — Variable importance, and a column of pure noise",
+    "section": "",
+    "text": "NoteStretch — the forest’s own permutation importance\n\n\n\nranger can compute a permutation importance itself while it fits, using the out-of-bag rows (the training rows each tree did not see). Refit the R forest with set_engine(\"ranger\", importance = \"permutation\") and look at vi(). In Python there is no built-in equivalent, but you can run permutation_importance() on the training rows instead of the test rows. Does noise still come out at about zero? Why might permutation on the training rows be too generous to it?\n\n\n\n\n\n\n\n\nNoteStretch — a noise column with only two values\n\n\n\nReplace the normal noise with a random 0/1 column (R: sample(0:1, n(), replace = TRUE); Python: rng.integers(0, 2, size=...)). What happens to its impurity importance, and why?",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Exercise 9.1 — Variable importance, and a column of pure noise</span>"
+    ]
+  },
+  {
+    "objectID": "day6-02-shap.html",
+    "href": "day6-02-shap.html",
+    "title": "Exercise 9.2 — SHAP values: global and local explanations",
+    "section": "",
+    "text": "Stretch\nExercise 9.1 ranked the variables for the forest as a whole. It said nothing about direction (does a high BMI push the risk up or down?) and nothing about any one patient. SHAP values give both. For every patient and every variable they say how much that variable moved this patient’s predicted probability away from the average, and they add up exactly to the prediction. Averaged over patients, they also give a ranking of their own, which we finish by comparing with every other measure, and with the coefficients of a logistic regression.\nTheory: Shapley values from cooperative game theory; the baseline (expected value); additivity; global summaries (mean absolute SHAP, beeswarm); local explanations (waterfall plot); coefficients of a logistic regression on a common scale.",
+    "crumbs": [
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Exercise 9.2 — SHAP values: global and local explanations</span>"
+    ]
+  },
+  {
+    "objectID": "day6-02-shap.html#stretch",
+    "href": "day6-02-shap.html#stretch",
+    "title": "Exercise 9.2 — SHAP values: global and local explanations",
+    "section": "",
+    "text": "NoteStretch — SHAP values for the logistic regression\n\n\n\nCompute SHAP values for log_fit instead of the forest (R: kernelshap() with the same background; Python: shap.Explainer(log_fit.predict_proba, train[predictors])). For a model that is a straight line on the log-odds scale, what does the beeswarm look like for glucose? Why are the dots for glucose ordered by colour so neatly?\n\n\n\n\n\n\n\n\nNoteStretch — does the background matter?\n\n\n\nIn R, rerun kernelshap() with a background of 20 patients instead of 100, or of 100 patients with diabetes only. What happens to the baseline and to the SHAP values of the first test patient? What does the baseline now stand for?",
+    "crumbs": [
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Exercise 9.2 — SHAP values: global and local explanations</span>"
+    ]
+  },
+  {
+    "objectID": "day6-03-dalex.html",
+    "href": "day6-03-dalex.html",
+    "title": "Exercise 9.3 — One toolbox for explanations: DALEX",
+    "section": "",
+    "text": "Stretch\nExercises 9.1 and 9.2 used a different package for each explanation. The DALEX package collects these methods, and more, behind one interface: you wrap the fitted model once in an explainer, then ask the explainer for whatever you want to know. The same package exists in R (with DALEXtra for tidymodels) and in Python (dalex), with the same function names.\nTheory: the explainer object; model performance; permutation importance with a loss function; partial dependence and individual conditional expectation (ceteris-paribus) profiles; break-down and SHAP explanations of one prediction.",
+    "crumbs": [
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Exercise 9.3 — One toolbox for explanations: DALEX</span>"
+    ]
+  },
+  {
+    "objectID": "day6-03-dalex.html#stretch",
+    "href": "day6-03-dalex.html#stretch",
+    "title": "Exercise 9.3 — One toolbox for explanations: DALEX",
+    "section": "",
+    "text": "NoteStretch — explain the logistic regression too\n\n\n\nFit the logistic regression of Exercise 9.2 on the same five predictors, wrap it in a second explainer with the label \"Logistic regression\", and pass both model_parts() results (or both model_profile() results) to one plot. Where do the two models’ glucose profiles agree, and where not?\n\n\n\n\n\n\n\n\nNoteStretch — more repetitions\n\n\n\nmodel_parts() uses 10 shuffles per variable by default. Run it with B = 50 (R) or B=50 (Python), twice with different seeds. Does the order of pregnancies, age and BMI stay the same?",
+    "crumbs": [
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Exercise 9.3 — One toolbox for explanations: DALEX</span>"
+    ]
+  },
+  {
+    "objectID": "day6-04-subgroups.html",
+    "href": "day6-04-subgroups.html",
+    "title": "Exercise 9.4 — For whom is the model worst?",
+    "section": "",
+    "text": "Stretch\nA single test AUC describes the model for the 150 test patients as a whole. The model can still serve some groups of patients much worse than others, and the overall number will not show it. Here we split the test patients by age and by BMI and compare.\nTheory: performance by subgroup; sensitivity and specificity within a group; why a model that ranks a group well can still miss most of its cases; why small groups give noisy numbers.",
+    "crumbs": [
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
+    ]
+  },
+  {
+    "objectID": "day6-04-subgroups.html#stretch",
+    "href": "day6-04-subgroups.html#stretch",
+    "title": "Exercise 9.4 — For whom is the model worst?",
+    "section": "",
+    "text": "NoteStretch — a threshold per group?\n\n\n\nIn the youngest group, find the threshold that gives a sensitivity of at least 0.7 on the test patients (try 0.2, 0.3, 0.4). How many more of the young people without diabetes are now flagged? Why would you need a separate validation set to choose that threshold honestly?",
+    "crumbs": [
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Exercise 9.4 — For whom is the model worst?</span>"
+    ]
+  }
+]

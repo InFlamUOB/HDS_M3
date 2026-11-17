@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Exercise 9.3 — One toolbox for explanations: DALEX – Day 9 — Explainable AI</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./day6-04-subgroups.html" rel="next">
+<link href="./day6-02-shap.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-68d006cd884444a66203cf37d1af94b0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar docked quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./day6-03-dalex.html"><span class="chapter-title">Exercise 9.3 — One toolbox for explanations: DALEX</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation docked overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Day 9 — Explainable AI</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Day 9 — Explainable AI</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day6-01-importance.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Exercise 9.1 — Variable importance, and a column of pure noise</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day6-02-shap.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Exercise 9.2 — SHAP values: global and local explanations</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day6-03-dalex.html" class="sidebar-item-text sidebar-link active"><span class="chapter-title">Exercise 9.3 — One toolbox for explanations: DALEX</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./day6-04-subgroups.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Exercise 9.4 — For whom is the model worst?</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#stretch" id="toc-stretch" class="nav-link active" data-scroll-target="#stretch">Stretch</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title"><span id="sec-dalex" class="quarto-section-identifier"><span class="chapter-title">Exercise 9.3 — One toolbox for explanations: DALEX</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>Exercises 9.1 and 9.2 used a different package for each explanation. The <strong>DALEX</strong> package collects these methods, and more, behind one interface: you wrap the fitted model once in an <strong>explainer</strong>, then ask the explainer for whatever you want to know. The same package exists in R (with <strong>DALEXtra</strong> for tidymodels) and in Python (<code>dalex</code>), with the same function names.</p>
+<p><strong>Theory:</strong> the explainer object; model performance; permutation importance with a loss function; partial dependence and individual conditional expectation (ceteris-paribus) profiles; break-down and SHAP explanations of one prediction.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>The plots are for looking at
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The code for every plot is folded away just above it, in case you are curious, and all of it is in the code file linked at the top of each tab. You are not expected to write it yourself.</p>
+</div>
+</div>
+<div class="tabset-margin-container"></div><div class="panel-tabset" data-group="language">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true" href="">R</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false" href="">Python</a></li></ul>
+<div class="tab-content" data-group="language">
+<div id="tabset-1-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-1-1-tab">
+<p><a href="code/day6-03-dalex.R" download="day6-03-dalex.R"><strong>Download the R code from this chapter</strong></a> — every cell below, in page order, including the code for every plot, with the blanks left for you to fill in. Open it in Positron beside the page and run it a chunk at a time.</p>
+<section id="packages-and-data" class="level3">
+<h3 class="anchored" data-anchor-id="packages-and-data">Packages and data</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidymodels)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(DALEX)                 <span class="co"># explanations for any model</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(DALEXtra)              <span class="co"># connects DALEX to tidymodels</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_bw</span>())          <span class="co"># white background for every plot</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">pillar.sigfig =</span> <span class="dv">3</span>)     <span class="co"># show three significant figures in tables</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<hr>
+</section>
+<section id="part-1-the-model-and-the-explainer" class="level3">
+<h3 class="anchored" data-anchor-id="part-1-the-model-and-the-explainer">Part 1 — The model and the explainer</h3>
+<p>The black box is the random forest of Exercises 9.1 and 9.2: the same data (<a href="data/diabetes.csv"><code>data/diabetes.csv</code></a>), split and five predictors. The predictors stay in their own units. A forest splits on one variable at a time, so it does not need them scaled, and the plots below are easier to read in mg/dL and years than in standard deviations.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/diabetes.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pregnant, glucose, mass, pedigree, age, diabetes) <span class="sc">|&gt;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(glucose <span class="sc">&gt;</span> <span class="dv">0</span>, mass <span class="sc">&gt;</span> <span class="dv">0</span>) <span class="sc">|&gt;</span>              <span class="co"># remove the impossible zeros</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">diabetes =</span> <span class="fu">factor</span>(diabetes, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"neg"</span>, <span class="st">"pos"</span>)))</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(diabetes), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> diabetes[<span class="sc">-</span>test_rows, ]</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> diabetes[test_rows, ]</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>rf_fit <span class="ot">&lt;-</span> <span class="fu">rand_forest</span>(<span class="at">trees =</span> <span class="dv">500</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"ranger"</span>, <span class="at">importance =</span> <span class="st">"impurity"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(diabetes <span class="sc">~</span> ., <span class="at">data =</span> train)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Evaluate it on the test set, with the predicted classes (threshold 0.5):</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>test_preds <span class="ot">&lt;-</span> <span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(<span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test)) <span class="sc">|&gt;</span>     <span class="co"># adds .pred_class</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(test)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">metrics</span>(<span class="at">truth =</span> diabetes, <span class="at">estimate =</span> .pred_class)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 2 × 3
+#&gt;   .metric  .estimator .estimate
+#&gt;   &lt;chr&gt;    &lt;chr&gt;          &lt;dbl&gt;
+#&gt; 1 accuracy binary         0.767
+#&gt; 2 kap      binary         0.459</code></pre>
+</div>
+</div>
+<p>Accuracy 0.767 and Cohen’s kappa 0.459 (kappa is accuracy corrected for the agreement expected by chance). The Python forest is grown from different random numbers and gets 0.760 and 0.451.</p>
+<p>Now wrap the model in an explainer. <code>explain_tidymodels()</code> needs the model, the predictors of the data to explain it on (the 150 test patients), and the true outcome <code>y</code> <strong>as numbers, 1 for diabetes and 0 for none</strong>. Give the explainer a label; it appears on every result.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>explainer <span class="ot">&lt;-</span> <span class="fu">explain_tidymodels</span>(</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  rf_fit,</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data  =</span> test <span class="sc">|&gt;</span> <span class="fu">select</span>(<span class="sc">-</span>diabetes),</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">y     =</span> <span class="fu">as.numeric</span>(test<span class="sc">$</span>diabetes <span class="sc">==</span> ______),   <span class="co"># 1 = diabetes, 0 = none</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">label =</span> <span class="st">"Random forest"</span>,</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose =</span> <span class="cn">FALSE</span>                                <span class="co"># no progress report</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-2-contents" aria-controls="callout-2" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Stuck?
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-2" class="callout-2-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p><code>y</code> must be 1 for the people with diabetes. Which level of <code>diabetes</code> is that? Note that <code>as.numeric(test$diabetes)</code> on its own would give 1 and <strong>2</strong> (the positions of the levels), and the explainer would then compare probabilities with the wrong numbers.</p>
+</div>
+</div>
+</div>
+<p>Ask the explainer how well the model performs:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>performance <span class="ot">&lt;-</span> <span class="fu">model_performance</span>(explainer)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>performance<span class="sc">$</span>measures <span class="sc">|&gt;</span> <span class="fu">as_tibble</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 1 × 5
+#&gt;   recall precision    f1 accuracy   auc
+#&gt;    &lt;dbl&gt;     &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt; &lt;dbl&gt;
+#&gt; 1  0.547     0.725 0.624    0.767 0.826</code></pre>
+</div>
+</div>
+<p>The AUC, 0.826, is the same as <code>roc_auc()</code> gives: a quick check that the explainer is using the probability of <code>pos</code>. Recall, precision, F1 and accuracy use a threshold of 0.5.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>An explainer wraps a fitted model with the data to explain it on and the true outcome; every explanation is then one function call.</li>
+<li>The outcome must be numeric, 1 for the event and 0 otherwise; check the explainer’s report and the AUC before going on.</li>
+</ul>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-2-global-which-variables-matter" class="level3">
+<h3 class="anchored" data-anchor-id="part-2-global-which-variables-matter">Part 2 — Global: which variables matter?</h3>
+<p><code>model_parts()</code> computes the <strong>permutation importance</strong> of Exercise 9.1: shuffle one variable, measure how much worse the model gets, repeat (10 times by default) and average. DALEX measures “worse” with a <strong>loss</strong>, which by default for a classifier is <span class="math inline">\(1 - \text{AUC}\)</span>, so a larger loss is a worse model. Two reference rows come with the result: <code>_full_model_</code>, the loss with nothing shuffled, and <code>_baseline_</code>, the loss when <em>every</em> variable is shuffled at once (a model that knows nothing, AUC about 0.5).</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>importance_dalex <span class="ot">&lt;-</span> <span class="fu">model_parts</span>(explainer)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>importance_dalex <span class="sc">|&gt;</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>() <span class="sc">|&gt;</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(permutation <span class="sc">==</span> <span class="dv">0</span>) <span class="sc">|&gt;</span>        <span class="co"># permutation 0 is the average over the 10 shuffles</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(variable, dropout_loss)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 7 × 2
+#&gt;   variable     dropout_loss
+#&gt;   &lt;chr&gt;               &lt;dbl&gt;
+#&gt; 1 _full_model_        0.174
+#&gt; 2 pedigree            0.176
+#&gt; 3 pregnant            0.188
+#&gt; 4 age                 0.193
+#&gt; 5 mass                0.210
+#&gt; 6 glucose             0.334
+#&gt; 7 _baseline_          0.505</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>full_loss <span class="ot">&lt;-</span> importance_dalex <span class="sc">|&gt;</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>() <span class="sc">|&gt;</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(variable <span class="sc">==</span> <span class="st">"_full_model_"</span>, permutation <span class="sc">==</span> <span class="dv">0</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(dropout_loss)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>importance_dalex <span class="sc">|&gt;</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>() <span class="sc">|&gt;</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(permutation <span class="sc">&gt;</span> <span class="dv">0</span>, <span class="sc">!</span>variable <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"_full_model_"</span>, <span class="st">"_baseline_"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> dropout_loss, <span class="at">y =</span> <span class="fu">reorder</span>(variable, dropout_loss))) <span class="sc">+</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>(<span class="at">fill =</span> <span class="st">"coral"</span>, <span class="at">alpha =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> full_loss, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"1 - AUC after shuffling the variable (dashed: no variable shuffled)"</span>,</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="cn">NULL</span>, <span class="at">title =</span> <span class="st">"Random forest: permutation importance (DALEX)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-03-dalex_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># DALEX's own plot gives the same picture: plot(importance_dalex)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>The full model has a loss of 0.174 (an AUC of 0.826). Shuffling glucose raises it to 0.334; shuffling any other variable raises it by between 0.002 (pedigree) and 0.036 (BMI). This is the ranking of Exercise 9.1, Part 3, reached with one line of code.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><code>model_parts()</code> is permutation importance; its loss for a classifier is 1 − AUC, so higher means the model got worse.</li>
+<li><code>_full_model_</code> and <code>_baseline_</code> frame the result: the loss with nothing shuffled, and with everything shuffled.</li>
+</ul>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-3-how-does-the-prediction-change-with-one-variable" class="level3">
+<h3 class="anchored" data-anchor-id="part-3-how-does-the-prediction-change-with-one-variable">Part 3 — How does the prediction change with one variable?</h3>
+<p>An importance says <em>how much</em> a variable matters, not <em>how</em>. A <strong>partial dependence profile</strong> shows how: set glucose to 60 for every test patient, keeping everything else about them as it is, and average the predicted probabilities; then set it to 61, and so on, up to 199. The curve of these averages is what the model predicts, on average, at each glucose level.</p>
+<p>One patient’s curve on its own (every other variable held at her values) is an <strong>individual conditional expectation (ICE)</strong> or <strong>ceteris-paribus</strong> profile (“all else being equal”). The partial dependence profile is the average of the 150 ICE profiles.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>pdp_glucose <span class="ot">&lt;-</span> <span class="fu">model_profile</span>(explainer, <span class="at">variables =</span> <span class="st">"glucose"</span>, <span class="at">type =</span> <span class="st">"partial"</span>,</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>                             <span class="at">N =</span> <span class="cn">NULL</span>,                         <span class="co"># use all 150 patients</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>                             <span class="at">variable_splits_type =</span> <span class="st">"uniform"</span>) <span class="co"># an evenly spaced grid</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>pdp_glucose<span class="sc">$</span>agr_profiles <span class="sc">|&gt;</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>() <span class="sc">|&gt;</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="fu">seq</span>(<span class="dv">1</span>, <span class="dv">101</span>, <span class="at">by =</span> <span class="dv">20</span>))          <span class="co"># every 20th of the 101 grid points</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 6 × 5
+#&gt;   `_vname_` `_label_`     `_x_` `_yhat_` `_ids_`
+#&gt;   &lt;chr&gt;     &lt;chr&gt;         &lt;dbl&gt;    &lt;dbl&gt;   &lt;dbl&gt;
+#&gt; 1 glucose   Random forest  57      0.210       0
+#&gt; 2 glucose   Random forest  84.8    0.163       0
+#&gt; 3 glucose   Random forest 113.     0.296       0
+#&gt; 4 glucose   Random forest 140.     0.367       0
+#&gt; 5 glucose   Random forest 168.     0.612       0
+#&gt; 6 glucose   Random forest 196      0.664       0</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>pdp_glucose<span class="sc">$</span>agr_profiles <span class="sc">|&gt;</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> <span class="st">`</span><span class="at">_x_</span><span class="st">`</span>, <span class="at">y =</span> <span class="st">`</span><span class="at">_yhat_</span><span class="st">`</span>)) <span class="sc">+</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">colour =</span> <span class="st">"steelblue"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Glucose (mg/dL)"</span>, <span class="at">y =</span> <span class="st">"Average predicted probability of diabetes"</span>,</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"Partial dependence profile: glucose"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-03-dalex_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># DALEX's own plot: plot(pdp_glucose)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>Up to a glucose of about 90 the curve stays between about 0.16 and 0.21. It then climbs, gradually up to about 140 and steeply between 140 and 160, to about 0.6, and stays between 0.6 and 0.66 above that. A logistic regression would have drawn a smooth S; the forest draws steps, because it is made of splits.</p>
+<p>Now the ICE profiles behind the average. They are stored in <code>cp_profiles</code>:</p>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>pdp_glucose<span class="sc">$</span>cp_profiles <span class="sc">|&gt;</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>() <span class="sc">|&gt;</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> glucose, <span class="at">y =</span> <span class="st">`</span><span class="at">_yhat_</span><span class="st">`</span>, <span class="at">group =</span> <span class="st">`</span><span class="at">_ids_</span><span class="st">`</span>)) <span class="sc">+</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">colour =</span> <span class="st">"grey60"</span>, <span class="at">alpha =</span> <span class="fl">0.4</span>) <span class="sc">+</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">data =</span> pdp_glucose<span class="sc">$</span>agr_profiles,</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>            <span class="fu">aes</span>(<span class="at">x =</span> <span class="st">`</span><span class="at">_x_</span><span class="st">`</span>, <span class="at">y =</span> <span class="st">`</span><span class="at">_yhat_</span><span class="st">`</span>, <span class="at">group =</span> <span class="cn">NULL</span>),</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">colour =</span> <span class="st">"steelblue"</span>, <span class="at">linewidth =</span> <span class="fl">1.2</span>) <span class="sc">+</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Glucose (mg/dL)"</span>, <span class="at">y =</span> <span class="st">"Predicted probability of diabetes"</span>,</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"ICE profiles (grey) and their average (blue)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-03-dalex_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># DALEX's own plot: plot(pdp_glucose, geom = "profiles")</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p><strong>Question!</strong> Do all the grey curves have the same shape as the blue one? What would it mean if some went up steeply and others hardly moved?</p>
+<p>They rise in roughly the same place but by very different amounts, and they start at different heights. Where ICE curves have different shapes, the effect of glucose depends on the patient’s other values: an <strong>interaction</strong>. The average curve hides that, which is why it is worth drawing both.</p>
+<p><strong>Your turn.</strong> Draw the partial dependence profiles for the pedigree function and for age. <code>model_profile()</code> takes several variables at once.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>pdp_more <span class="ot">&lt;-</span> <span class="fu">model_profile</span>(explainer, <span class="at">variables =</span> <span class="fu">c</span>(______, ______), <span class="at">type =</span> <span class="st">"partial"</span>,</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>                          <span class="at">N =</span> <span class="cn">NULL</span>, <span class="at">variable_splits_type =</span> <span class="st">"uniform"</span>)</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>pdp_more<span class="sc">$</span>agr_profiles <span class="sc">|&gt;</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> <span class="st">`</span><span class="at">_x_</span><span class="st">`</span>, <span class="at">y =</span> <span class="st">`</span><span class="at">_yhat_</span><span class="st">`</span>)) <span class="sc">+</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">colour =</span> <span class="st">"steelblue"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> <span class="st">`</span><span class="at">_vname_</span><span class="st">`</span>, <span class="at">scales =</span> <span class="st">"free_x"</span>) <span class="sc">+</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="st">"Average predicted probability of diabetes"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>A partial dependence profile is the average prediction as one variable is moved through its range, everything else about each patient held fixed.</li>
+<li>ICE (ceteris-paribus) profiles are the individual curves behind that average; when their shapes differ, the variable interacts with others.</li>
+<li>A forest’s profiles are step-shaped, because the forest is made of splits.</li>
+</ul>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-4-one-patient-break-down-and-shap" class="level3">
+<h3 class="anchored" data-anchor-id="part-4-one-patient-break-down-and-shap">Part 4 — One patient: break-down and SHAP</h3>
+<p><code>predict_parts()</code> explains one prediction. Take the first test patient again, the 28-year-old with a glucose of 194 from Exercise 9.2.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>new_observation <span class="ot">&lt;-</span> test <span class="sc">|&gt;</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">|&gt;</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>diabetes)</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>new_observation</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 1 × 5
+#&gt;   pregnant glucose  mass pedigree   age
+#&gt;      &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt; &lt;dbl&gt;
+#&gt; 1        0     194  28.5     0.24    28</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(explainer, new_observation)          <span class="co"># her predicted probability</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;       pos 
+#&gt; 0.6900643</code></pre>
+</div>
+</div>
+<p><strong>SHAP</strong>, as in Exercise 9.2. DALEX estimates the Shapley values by adding the variables in 25 random orders and averaging each variable’s contribution, with the 150 test patients as the background:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>shap_patient <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(explainer, <span class="at">new_observation =</span> new_observation,</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>                              <span class="at">type =</span> <span class="st">"shap"</span>, <span class="at">B =</span> <span class="dv">25</span>)</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>shap_patient <span class="sc">|&gt;</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>() <span class="sc">|&gt;</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(B <span class="sc">==</span> <span class="dv">0</span>) <span class="sc">|&gt;</span>                    <span class="co"># B = 0 holds the average over the 25 orders</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(variable, contribution) <span class="sc">|&gt;</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(<span class="fu">abs</span>(contribution)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 5 × 2
+#&gt;   variable        contribution
+#&gt;   &lt;chr&gt;                  &lt;dbl&gt;
+#&gt; 1 glucose = 194        0.354  
+#&gt; 2 age = 28             0.0338 
+#&gt; 3 mass = 28.5         -0.0260 
+#&gt; 4 pedigree = 0.24     -0.0210 
+#&gt; 5 pregnant = 0         0.00978</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>shap_patient <span class="sc">|&gt;</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>() <span class="sc">|&gt;</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(B <span class="sc">==</span> <span class="dv">0</span>) <span class="sc">|&gt;</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> contribution, <span class="at">y =</span> <span class="fu">reorder</span>(variable, <span class="fu">abs</span>(contribution)),</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>             <span class="at">fill =</span> contribution <span class="sc">&gt;</span> <span class="dv">0</span>)) <span class="sc">+</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">show.legend =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"steelblue"</span>, <span class="st">"firebrick"</span>)) <span class="sc">+</span></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"SHAP contribution to the predicted probability"</span>, <span class="at">y =</span> <span class="cn">NULL</span>,</span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"SHAP values for the first test patient (DALEX)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-03-dalex_files/figure-html/unnamed-chunk-17-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># DALEX's own plot, with boxplots over the 25 orders: plot(shap_patient)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>Glucose contributes +0.354, much as in Exercise 9.2 (+0.308 there). The numbers are not identical: the background is the test patients rather than 100 training rows, and 25 random orders give an estimate, not the exact value.</p>
+<p><strong>Break-down</strong> is the simplest way to share out a prediction: start from the average prediction (the <em>intercept</em>), add the variables <strong>one at a time</strong> in a fixed order, and record how much the average prediction moves at each step. SHAP is the average of break-downs over many orders.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>breakdown_patient <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(explainer, <span class="at">new_observation =</span> new_observation,</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>                                   <span class="at">type =</span> ______)</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>breakdown_patient <span class="sc">|&gt;</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>() <span class="sc">|&gt;</span></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(variable, contribution, cumulative)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-6-contents" aria-controls="callout-6" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Stuck?
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-6" class="callout-6-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>The type is written as a string, with an underscore: look at the SHAP cell above and at <code>?predict_parts</code>.</p>
+</div>
+</div>
+</div>
+<p><strong>Question!</strong> In the break-down, which variable comes first, and why does the order matter? Would age get the same contribution if it were added first?</p>
+<p>The contribution of a variable depends on what is already known when it is added: knowing that a patient is 28 means something different before and after you know her glucose is 194. Break-down picks one order; SHAP averages over many, which is why it is the safer summary when variables interact.</p>
+<p>All of these explanations, and more, can be browsed together in an interactive dashboard:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Optional, not run here: an interactive dashboard of everything above</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="co"># library(modelStudio)</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="co"># modelStudio(explainer)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><code>predict_parts()</code> explains one prediction; <code>type = "break_down"</code> adds the variables in one order, <code>type = "shap"</code> averages over many orders.</li>
+<li>When variables interact, a break-down depends on the order; SHAP removes that dependence by averaging.</li>
+<li>One explainer, four questions: how good is the model, which variables matter, how does the prediction change with a variable, and why did this patient get this prediction.</li>
+</ul>
+</div>
+</div>
+</section>
+</div>
+<div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
+<p><a href="code/day6-03-dalex.py" download="day6-03-dalex.py"><strong>Download the Python code from this chapter</strong></a> — every cell below, in page order, including the code for every plot, with the blanks left for you to fill in. Open it in Positron beside the page and run it a cell at a time.</p>
+<section id="packages-and-data-1" class="level3">
+<h3 class="anchored" data-anchor-id="packages-and-data-1">Packages and data</h3>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> dalex <span class="im">as</span> dx             <span class="co"># explanations for any model</span></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.ensemble <span class="im">import</span> RandomForestClassifier</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> accuracy_score, cohen_kappa_score</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<hr>
+</section>
+<section id="part-1-the-model-and-the-explainer-1" class="level3">
+<h3 class="anchored" data-anchor-id="part-1-the-model-and-the-explainer-1">Part 1 — The model and the explainer</h3>
+<p>The black box is the random forest of Exercises 9.1 and 9.2: the same data (<a href="data/diabetes.csv"><code>data/diabetes.csv</code></a>), split and five predictors. The predictors stay in their own units. A forest splits on one variable at a time, so it does not need them scaled, and the plots below are easier to read in mg/dL and years than in standard deviations.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes.csv"</span>)</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes[[<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>, <span class="st">"diabetes"</span>]]</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes[(diabetes[<span class="st">"glucose"</span>] <span class="op">&gt;</span> <span class="dv">0</span>) <span class="op">&amp;</span> (diabetes[<span class="st">"mass"</span>] <span class="op">&gt;</span> <span class="dv">0</span>)]   <span class="co"># remove the impossible zeros</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes.reset_index(drop<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>diabetes[<span class="st">"diabetes"</span>] <span class="op">=</span> (diabetes[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"pos"</span>).astype(<span class="bu">int</span>)       <span class="co"># 1 = pos, 0 = neg</span></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> diabetes.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> diabetes[<span class="op">~</span>is_test]</span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>test  <span class="op">=</span> diabetes[is_test]</span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a>predictors <span class="op">=</span> [<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>]</span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> RandomForestClassifier(n_estimators<span class="op">=</span><span class="dv">500</span>, random_state<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> rf.fit(train[predictors], train[<span class="st">"diabetes"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Evaluate it on the test set, with the predicted classes (threshold 0.5):</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>test_class <span class="op">=</span> rf.predict(test[predictors])          <span class="co"># predicted class, threshold 0.5</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"accuracy:"</span>, <span class="bu">round</span>(accuracy_score(test[<span class="st">"diabetes"</span>], test_class), <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; accuracy: 0.76</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"kappa:   "</span>, <span class="bu">round</span>(cohen_kappa_score(test[<span class="st">"diabetes"</span>], test_class), <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; kappa:    0.451</code></pre>
+</div>
+</div>
+<p>Accuracy 0.760 and Cohen’s kappa 0.451 (kappa is accuracy corrected for the agreement expected by chance). The R forest is grown from different random numbers and gets 0.767 and 0.459.</p>
+<p>Now wrap the model in an explainer. <code>dx.Explainer()</code> needs the model, the predictors of the data to explain it on (the 150 test patients), and the true outcome <code>y</code> <strong>as numbers, 1 for diabetes and 0 for none</strong>. Give the explainer a label; it appears on every result.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>explainer <span class="op">=</span> dx.Explainer(</span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>    rf,</span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>    data<span class="op">=</span>test[______],</span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span>test[<span class="st">"diabetes"</span>],                           <span class="co"># already 1 = diabetes, 0 = none</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="st">"Random forest"</span>,</span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>    verbose<span class="op">=</span><span class="va">False</span>,                                <span class="co"># no progress report</span></span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-8-contents" aria-controls="callout-8" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Stuck?
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-8" class="callout-8-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p><code>data</code> is the table of predictors only, without the outcome column: the same columns the forest was fitted on.</p>
+</div>
+</div>
+</div>
+<p>Ask the explainer how well the model performs:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>performance <span class="op">=</span> explainer.model_performance()</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>performance.result.<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;                recall  precision     f1  accuracy    auc
+#&gt; Random forest   0.566      0.698  0.625      0.76  0.824</code></pre>
+</div>
+</div>
+<p>The AUC, 0.824, is the same as <code>roc_auc_score()</code> gives on these probabilities: a quick check that the explainer is using the probability of diabetes. Recall, precision, F1 and accuracy use a threshold of 0.5.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>An explainer wraps a fitted model with the data to explain it on and the true outcome; every explanation is then one function call.</li>
+<li>The outcome must be numeric, 1 for the event and 0 otherwise; check the explainer’s report and the AUC before going on.</li>
+</ul>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-2-global-which-variables-matter-1" class="level3">
+<h3 class="anchored" data-anchor-id="part-2-global-which-variables-matter-1">Part 2 — Global: which variables matter?</h3>
+<p><code>model_parts()</code> computes the <strong>permutation importance</strong> of Exercise 9.1: shuffle one variable, measure how much worse the model gets, repeat (10 times by default) and average. DALEX measures “worse” with a <strong>loss</strong>, which by default for a classifier is <span class="math inline">\(1 - \text{AUC}\)</span>, so a larger loss is a worse model. Two reference rows come with the result: <code>_full_model_</code>, the loss with nothing shuffled, and <code>_baseline_</code>, the loss when <em>every</em> variable is shuffled at once (a model that knows nothing, AUC about 0.5).</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>importance_dalex <span class="op">=</span> explainer.model_parts(random_state<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>importance_dalex.result[[<span class="st">"variable"</span>, <span class="st">"dropout_loss"</span>]].<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;        variable  dropout_loss
+#&gt; 0  _full_model_         0.176
+#&gt; 1      pedigree         0.185
+#&gt; 2      pregnant         0.193
+#&gt; 3           age         0.208
+#&gt; 4          mass         0.211
+#&gt; 5       glucose         0.340
+#&gt; 6    _baseline_         0.506</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> importance_dalex.result</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>full_loss <span class="op">=</span> result.loc[result[<span class="st">"variable"</span>] <span class="op">==</span> <span class="st">"_full_model_"</span>, <span class="st">"dropout_loss"</span>].iloc[<span class="dv">0</span>]</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>bars <span class="op">=</span> result[<span class="op">~</span>result[<span class="st">"variable"</span>].isin([<span class="st">"_full_model_"</span>, <span class="st">"_baseline_"</span>])]</span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>bars <span class="op">=</span> bars.sort_values(<span class="st">"dropout_loss"</span>)</span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">6</span>, <span class="fl">3.5</span>))</span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>ax.barh(bars[<span class="st">"variable"</span>], bars[<span class="st">"dropout_loss"</span>] <span class="op">-</span> full_loss, left<span class="op">=</span>full_loss, color<span class="op">=</span><span class="st">"coral"</span>)</span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a>ax.axvline(full_loss, color<span class="op">=</span><span class="st">"black"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>)</span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a>ax.set_xlim(left<span class="op">=</span>full_loss <span class="op">-</span> <span class="fl">0.01</span>)                <span class="co"># leave room to see the dashed line</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; (0.1656467613304804, 0.3477193153083058)</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"1 - AUC after shuffling the variable (dashed: no variable shuffled)"</span>)</span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Random forest: permutation importance (DALEX)"</span>)</span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-03-dalex_files/figure-html/unnamed-chunk-28-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="576"></p>
+</figure>
+</div>
+</div>
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a><span class="co"># dalex's own plot gives the same picture, as an interactive plotly figure:</span></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a><span class="co"># importance_dalex.plot()</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>The full model has a loss of 0.176 (an AUC of 0.824). Shuffling glucose raises it to 0.340; shuffling any other variable raises it by between 0.009 (pedigree) and 0.035 (BMI). This is the ranking of Exercise 9.1, Part 3, reached with one line of code.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><code>model_parts()</code> is permutation importance; its loss for a classifier is 1 − AUC, so higher means the model got worse.</li>
+<li><code>_full_model_</code> and <code>_baseline_</code> frame the result: the loss with nothing shuffled, and with everything shuffled.</li>
+</ul>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-3-how-does-the-prediction-change-with-one-variable-1" class="level3">
+<h3 class="anchored" data-anchor-id="part-3-how-does-the-prediction-change-with-one-variable-1">Part 3 — How does the prediction change with one variable?</h3>
+<p>An importance says <em>how much</em> a variable matters, not <em>how</em>. A <strong>partial dependence profile</strong> shows how: set glucose to 60 for every test patient, keeping everything else about them as it is, and average the predicted probabilities; then set it to 61, and so on, up to 199. The curve of these averages is what the model predicts, on average, at each glucose level.</p>
+<p>One patient’s curve on its own (every other variable held at her values) is an <strong>individual conditional expectation (ICE)</strong> or <strong>ceteris-paribus</strong> profile (“all else being equal”). The partial dependence profile is the average of the 150 ICE profiles.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>pdp_glucose <span class="op">=</span> explainer.model_profile(variables<span class="op">=</span>[<span class="st">"glucose"</span>], <span class="bu">type</span><span class="op">=</span><span class="st">"partial"</span>,</span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>                                      verbose<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a>pdp_glucose.result.iloc[::<span class="dv">20</span>].<span class="bu">round</span>(<span class="dv">3</span>)   <span class="co"># every 20th of the 101 grid points</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;      _vname_        _label_    _x_  _yhat_  _ids_
+#&gt; 0    glucose  Random forest   57.0   0.196      0
+#&gt; 20   glucose  Random forest   84.8   0.161      0
+#&gt; 40   glucose  Random forest  112.6   0.304      0
+#&gt; 60   glucose  Random forest  140.4   0.375      0
+#&gt; 80   glucose  Random forest  168.2   0.592      0
+#&gt; 100  glucose  Random forest  196.0   0.661      0</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">6</span>, <span class="fl">3.5</span>))</span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a>ax.plot(pdp_glucose.result[<span class="st">"_x_"</span>], pdp_glucose.result[<span class="st">"_yhat_"</span>], color<span class="op">=</span><span class="st">"steelblue"</span>, linewidth<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Glucose (mg/dL)"</span>)</span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Average predicted probability of diabetes"</span>)</span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Partial dependence profile: glucose"</span>)</span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-03-dalex_files/figure-html/unnamed-chunk-30-3.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="576"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Up to a glucose of about 90 the curve stays between about 0.16 and 0.20. It then climbs, gradually up to about 140 and steeply between 140 and 160, to about 0.6, and stays between 0.6 and 0.66 above that. A logistic regression would have drawn a smooth S; the forest draws steps, because it is made of splits.</p>
+<p>Now the ICE profiles behind the average. They are stored in <code>raw_profiles</code>:</p>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>ice <span class="op">=</span> pdp_glucose.raw_profiles.result</span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">6</span>, <span class="fl">3.5</span>))</span>
+<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> patient_id <span class="kw">in</span> ice[<span class="st">"_ids_"</span>].unique():</span>
+<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a>    one <span class="op">=</span> ice[ice[<span class="st">"_ids_"</span>] <span class="op">==</span> patient_id]</span>
+<span id="cb47-6"><a href="#cb47-6" aria-hidden="true" tabindex="-1"></a>    ax.plot(one[<span class="st">"glucose"</span>], one[<span class="st">"_yhat_"</span>], color<span class="op">=</span><span class="st">"grey"</span>, alpha<span class="op">=</span><span class="fl">0.3</span>, linewidth<span class="op">=</span><span class="fl">0.7</span>)</span>
+<span id="cb47-7"><a href="#cb47-7" aria-hidden="true" tabindex="-1"></a>ax.plot(pdp_glucose.result[<span class="st">"_x_"</span>], pdp_glucose.result[<span class="st">"_yhat_"</span>], color<span class="op">=</span><span class="st">"steelblue"</span>, linewidth<span class="op">=</span><span class="fl">2.5</span>)</span>
+<span id="cb47-8"><a href="#cb47-8" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Glucose (mg/dL)"</span>)</span>
+<span id="cb47-9"><a href="#cb47-9" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Predicted probability of diabetes"</span>)</span>
+<span id="cb47-10"><a href="#cb47-10" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"ICE profiles (grey) and their average (blue)"</span>)</span>
+<span id="cb47-11"><a href="#cb47-11" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb47-12"><a href="#cb47-12" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-03-dalex_files/figure-html/unnamed-chunk-31-5.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="576"></p>
+</figure>
+</div>
+</div>
+</div>
+<p><strong>Question!</strong> Do all the grey curves have the same shape as the blue one? What would it mean if some went up steeply and others hardly moved?</p>
+<p>They rise in roughly the same place but by very different amounts, and they start at different heights. Where ICE curves have different shapes, the effect of glucose depends on the patient’s other values: an <strong>interaction</strong>. The average curve hides that, which is why it is worth drawing both.</p>
+<p><strong>Your turn.</strong> Draw the partial dependence profiles for the pedigree function and for age. <code>model_profile()</code> takes several variables at once.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb48"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>pdp_more <span class="op">=</span> explainer.model_profile(variables<span class="op">=</span>[______, ______], <span class="bu">type</span><span class="op">=</span><span class="st">"partial"</span>,</span>
+<span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a>                                   verbose<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb48-4"><a href="#cb48-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb48-5"><a href="#cb48-5" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">8</span>, <span class="fl">3.5</span>), sharey<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb48-6"><a href="#cb48-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> ax, name <span class="kw">in</span> <span class="bu">zip</span>(axes, [<span class="st">"pedigree"</span>, <span class="st">"age"</span>]):</span>
+<span id="cb48-7"><a href="#cb48-7" aria-hidden="true" tabindex="-1"></a>    one <span class="op">=</span> pdp_more.result[pdp_more.result[<span class="st">"_vname_"</span>] <span class="op">==</span> name]</span>
+<span id="cb48-8"><a href="#cb48-8" aria-hidden="true" tabindex="-1"></a>    ax.plot(one[<span class="st">"_x_"</span>], one[<span class="st">"_yhat_"</span>], color<span class="op">=</span><span class="st">"steelblue"</span>, linewidth<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb48-9"><a href="#cb48-9" aria-hidden="true" tabindex="-1"></a>    ax.set_xlabel(name)</span>
+<span id="cb48-10"><a href="#cb48-10" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_ylabel(<span class="st">"Average predicted probability of diabetes"</span>)</span>
+<span id="cb48-11"><a href="#cb48-11" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb48-12"><a href="#cb48-12" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>A partial dependence profile is the average prediction as one variable is moved through its range, everything else about each patient held fixed.</li>
+<li>ICE (ceteris-paribus) profiles are the individual curves behind that average; when their shapes differ, the variable interacts with others.</li>
+<li>A forest’s profiles are step-shaped, because the forest is made of splits.</li>
+</ul>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-4-one-patient-break-down-and-shap-1" class="level3">
+<h3 class="anchored" data-anchor-id="part-4-one-patient-break-down-and-shap-1">Part 4 — One patient: break-down and SHAP</h3>
+<p><code>predict_parts()</code> explains one prediction. Take the first test patient again, the 28-year-old with a glucose of 194 from Exercise 9.2.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>new_observation <span class="op">=</span> test[predictors].iloc[[<span class="dv">0</span>]]</span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(new_observation)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;    pregnant  glucose  mass  pedigree  age
+#&gt; 0         0      194  28.5      0.24   28</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(explainer.predict(new_observation))     <span class="co"># her predicted probability</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; [0.688]</code></pre>
+</div>
+</div>
+<p><strong>SHAP</strong>, as in Exercise 9.2. DALEX estimates the Shapley values by adding the variables in 25 random orders and averaging each variable’s contribution, with the 150 test patients as the background:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a>shap_patient <span class="op">=</span> explainer.predict_parts(new_observation, <span class="bu">type</span><span class="op">=</span><span class="st">"shap"</span>, B<span class="op">=</span><span class="dv">25</span>,</span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>                                       random_state<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a>shap_average <span class="op">=</span> shap_patient.result[shap_patient.result[<span class="st">"B"</span>] <span class="op">==</span> <span class="dv">0</span>]   <span class="co"># B = 0 holds the average over the 25 orders</span></span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a>shap_average <span class="op">=</span> shap_average[[<span class="st">"variable"</span>, <span class="st">"contribution"</span>]]</span>
+<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a>shap_average.sort_values(<span class="st">"contribution"</span>, key<span class="op">=</span><span class="bu">abs</span>, ascending<span class="op">=</span><span class="va">False</span>).<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;           variable  contribution
+#&gt; 0  glucose = 194.0         0.349
+#&gt; 1       age = 28.0         0.048
+#&gt; 2  pedigree = 0.24        -0.033
+#&gt; 3      mass = 28.5        -0.020
+#&gt; 4   pregnant = 0.0         0.006</code></pre>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a>ordered <span class="op">=</span> shap_average.sort_values(<span class="st">"contribution"</span>, key<span class="op">=</span><span class="bu">abs</span>)</span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>colours <span class="op">=</span> np.where(ordered[<span class="st">"contribution"</span>] <span class="op">&gt;</span> <span class="dv">0</span>, <span class="st">"firebrick"</span>, <span class="st">"steelblue"</span>)</span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">6</span>, <span class="dv">3</span>))</span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>ax.barh(ordered[<span class="st">"variable"</span>], ordered[<span class="st">"contribution"</span>], color<span class="op">=</span>colours)</span>
+<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a>ax.axvline(<span class="dv">0</span>, color<span class="op">=</span><span class="st">"black"</span>, linewidth<span class="op">=</span><span class="fl">0.8</span>)</span>
+<span id="cb55-7"><a href="#cb55-7" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"SHAP contribution to the predicted probability"</span>)</span>
+<span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"SHAP values for the first test patient (dalex)"</span>)</span>
+<span id="cb55-9"><a href="#cb55-9" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb55-10"><a href="#cb55-10" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-03-dalex_files/figure-html/unnamed-chunk-36-9.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="576"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Glucose contributes +0.349, much as in Exercise 9.2 (+0.350 there). The numbers are not identical: the background is the test patients rather than the training rows, and 25 random orders give an estimate, not the exact value.</p>
+<p><strong>Break-down</strong> is the simplest way to share out a prediction: start from the average prediction (the <em>intercept</em>), add the variables <strong>one at a time</strong> in a fixed order, and record how much the average prediction moves at each step. SHAP is the average of break-downs over many orders.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb56"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a>breakdown_patient <span class="op">=</span> explainer.predict_parts(new_observation, <span class="bu">type</span><span class="op">=</span>______)</span>
+<span id="cb56-3"><a href="#cb56-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb56-4"><a href="#cb56-4" aria-hidden="true" tabindex="-1"></a>breakdown_patient.result[[<span class="st">"variable"</span>, <span class="st">"contribution"</span>, <span class="st">"cumulative"</span>]].<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-12-contents" aria-controls="callout-12" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Stuck?
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-12" class="callout-12-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>The type is written as a string, with an underscore: look at the SHAP cell above and at <code>help(explainer.predict_parts)</code>.</p>
+</div>
+</div>
+</div>
+<p><strong>Question!</strong> In the break-down, which variable comes first, and why does the order matter? Would age get the same contribution if it were added first?</p>
+<p>The contribution of a variable depends on what is already known when it is added: knowing that a patient is 28 means something different before and after you know her glucose is 194. Break-down picks one order; SHAP averages over many, which is why it is the safer summary when variables interact.</p>
+<p>All of these explanations, and more, can be browsed together in an interactive dashboard:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb57"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Optional, not run here: an interactive dashboard of everything above</span></span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a><span class="co"># arena = dx.Arena()</span></span>
+<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a><span class="co"># arena.push_model(explainer)</span></span>
+<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a><span class="co"># arena.push_observations(test[predictors])</span></span>
+<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a><span class="co"># arena.run_server()</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Learning points
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><code>predict_parts()</code> explains one prediction; <code>type = "break_down"</code> adds the variables in one order, <code>type = "shap"</code> averages over many orders.</li>
+<li>When variables interact, a break-down depends on the order; SHAP removes that dependence by averaging.</li>
+<li>One explainer, four questions: how good is the model, which variables matter, how does the prediction change with a variable, and why did this patient get this prediction.</li>
+</ul>
+</div>
+</div>
+</section>
+</div>
+</div>
+</div>
+<section id="stretch" class="level2">
+<h2 class="anchored" data-anchor-id="stretch">Stretch</h2>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Stretch — explain the logistic regression too
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Fit the logistic regression of Exercise 9.2 on the same five predictors, wrap it in a second explainer with the label <code>"Logistic regression"</code>, and pass both <code>model_parts()</code> results (or both <code>model_profile()</code> results) to one plot. Where do the two models’ glucose profiles agree, and where not?</p>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Stretch — more repetitions
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><code>model_parts()</code> uses 10 shuffles per variable by default. Run it with <code>B = 50</code> (R) or <code>B=50</code> (Python), twice with different seeds. Does the order of pregnancies, age and BMI stay the same?</p>
+</div>
+</div>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./day6-02-shap.html" class="pagination-link" aria-label="Exercise 9.2 — SHAP values: global and local explanations">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-title">Exercise 9.2 — SHAP values: global and local explanations</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./day6-04-subgroups.html" class="pagination-link" aria-label="Exercise 9.4 — For whom is the model worst?">
+        <span class="nav-page-text"><span class="chapter-title">Exercise 9.4 — For whom is the model worst?</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-left">
+<p>HDS MSc · Module 3</p>
+</div>   
+    <div class="nav-footer-center">
+      &nbsp;
+    </div>
+    <div class="nav-footer-right">
+<p>Code to read, copy and run yourself</p>
+</div>
+  </div>
+</footer>
+
+
+
+
+</body></html>

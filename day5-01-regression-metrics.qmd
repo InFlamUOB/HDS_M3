@@ -4,469 +4,754 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 5.1 — Regression metrics {#sec-regression-metrics}
+# Exercise 5.1 — Evaluating a regression model on training and test data {#sec-regression-metrics}
 
+On Day 3 you fitted a straight line to predict glucose and measured its error
+with a loss function. A model is only useful if it also predicts **people it has
+not seen**. In this exercise we fit a model on the training rows, predict both
+the training and the test rows, and compare the errors. The comparison tells us
+whether the model is **overfitting** (much better on training than on test) or
+**underfitting** (similar on both, but poor on both).
 
-Every cell on this page is a real R or Python cell. Open
-`day5-01-regression-metrics.qmd` in your editor and run them one at a time. The
-output printed here is what the cell produced when the booklet was built.
+Suppose we believe that the relationship between glucose and age is not a
+straight line but a **cubic**:
 
-## Objectives
+$$\widehat{\text{glucose}} = \beta_0 + \beta_1\,\text{age} + \beta_2\,\text{age}^2 + \beta_3\,\text{age}^3$$
 
-::: {.objective-list}
-- Compute RMSE, MAE and R² for one fitted model, and say in a sentence what
-  question each of the three answers.
-- Say which of the three changes when a handful of patients are badly
-  predicted, and which barely moves.
-- Explain how the same model, on the same clinical question, can have an R² of
-  0.93 in one population and 0.2 in another without being a worse model.
+**Theory:** polynomial features as a pre-processing step; recipes, workflows
+and pipelines; predictions on training and test data; mean squared error, root
+mean squared error and mean absolute error; overfitting and underfitting.
+
+::: {.callout-note}
+## The plots are for looking at
+The code for every plot is folded away just above it, in case you are curious,
+and all of it is in the code file linked at the top of each tab. You are not
+expected to write it yourself.
 :::
 
-## Why this, here
+:::::: {.panel-tabset group="language"}
 
-Exercise 1.2 reported one number for the length-of-stay model: a mean absolute
-error of about three days. Exercise 3.2 showed that the quantity a model
-*minimises* is a choice. This exercise is about the quantity you *report*, which
-is a separate choice and is the one your reader will act on. Three metrics are
-in routine use for a continuous outcome, they are computed from the same
-residuals, and they disagree in ways that matter.
-
-## The three metrics
-
-$$\text{MAE} = \frac{1}{n}\sum_{i=1}^{n}\left|y_i-\hat y_i\right|
-\qquad
-\text{RMSE} = \sqrt{\frac{1}{n}\sum_{i=1}^{n}\left(y_i-\hat y_i\right)^2}
-\qquad
-R^2 = 1-\frac{\sum_i (y_i-\hat y_i)^2}{\sum_i (y_i-\bar y)^2}$$
-
-| Metric | Units | Reads as | Blind to |
-|---|---|---|---|
-| MAE | the outcome's | the typical error | whether the error is a steady drizzle or two catastrophes |
-| RMSE | the outcome's | the error, with large ones weighted up | nothing much, which is the problem: one bad patient moves it |
-| R² | none | the share of the outcome's variance the model accounts for | how large the error is in days, and how variable this population happens to be |
-
-: {tbl-colwidths="[12,14,38,36]"}
-
-The third column of that table is what a clinician hears. The fourth is what
-you have to supply.
-
-## Worked example — all three, on the model you already know
-
-Same data, same split and same model as Exercise 1.2, so that the MAE below is
-a number you have seen before.
-
-::: {.panel-tabset}
 ## R
 
+[**Download the R code from this chapter**](code/day5-01-regression-metrics.R){download="day5-01-regression-metrics.R"} — every cell below, in page order, including the code for every plot, with the blanks left for you to fill in. Open it in Positron beside the page and run it a chunk at a time.
+
+### Packages and data
+
 ```{r}
-library(tidymodels); library(readr)
+library(tidyverse)
+library(tidymodels)
 
-los <- read_csv("data/los_data.csv")
-
-set.seed(42)
-split <- initial_split(los, prop = 0.8)
-train <- training(split); test <- testing(split)
-
-fit <- linear_reg() |> set_engine("lm") |> fit(LOS ~ Age + Severity, data = train)
-
-preds <- augment(fit, test)
-reg_metrics <- metric_set(rmse, mae, rsq_trad)
-reg_metrics(preds, truth = LOS, estimate = .pred)
+theme_set(theme_bw())          # white background for every plot
+options(pillar.sigfig = 4)     # show four significant figures in tables
 ```
+
+The data are in [`data/diabetes.csv`](data/diabetes.csv). We use the same 750
+people and the same split as on Day 4: the impossible zeros in glucose and body
+mass are removed, and every fifth person is held back as the test set.
+
+```{r}
+diabetes <- read_csv("data/diabetes.csv") |>
+  select(glucose, mass, age, diabetes) |>
+  filter(glucose > 0, mass > 0) |>              # remove the impossible zeros
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+test  <- diabetes[test_rows, ]
+
+dim(diabetes)
+dim(train)
+dim(test)
+```
+
+750 people: 600 for training (80%) and 150 for testing (20%).
+
+------------------------------------------------------------------------
+
+### Part 1 — A cubic model as a pre-processing step
+
+To fit a cubic we do not need a new kind of model. We create new columns from
+age (its square and its cube) and fit an ordinary linear regression on them.
+Creating new columns from old ones is **feature engineering**, so in tidymodels
+it belongs in the **recipe**, alongside the other pre-processing steps you met
+on Day 2. `step_poly()` adds the polynomial columns:
+
+```{r}
+cubic_spec <- linear_reg() |>
+  set_engine("lm")
+
+cubic_rec <- recipe(glucose ~ age, data = train) |>
+  step_poly(age, degree = 3)
+```
+
+Look at what the recipe does to the data. `prep()` works out the transformation
+from the training rows and `bake(new_data = NULL)` applies it to them:
+
+```{r}
+cubic_rec |>
+  prep() |>
+  bake(new_data = NULL)
+```
+
+Age has been replaced by three columns, `age_poly_1` to `age_poly_3`. They are
+not simply age, age² and age³: `step_poly()` makes **orthogonal** polynomials,
+rescaled versions that carry the same information but are uncorrelated with
+each other, which keeps the computer's arithmetic accurate. The fitted curve is
+exactly the same cubic.
+
+Now put the model and the recipe together in a **workflow** and fit it on the
+training rows:
+
+```{r}
+cubic_wf <- workflow() |>
+  add_model(cubic_spec) |>
+  add_recipe(cubic_rec)
+
+model_cubic <- cubic_wf |>
+  fit(data = train)
+
+tidy(model_cubic)
+```
+
+The four coefficients belong to the orthogonal columns, so they are hard to read
+on their own, and they differ from the ones you get in Python, which uses the raw
+powers of age. The **predictions** are identical in both languages, and the
+predictions are what we evaluate.
+
+Here is the fitted cubic on top of the training data:
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+age_grid <- tibble(age = 21:81)
+curve <- augment(model_cubic, age_grid)
+
+ggplot(train, aes(x = age, y = glucose)) +
+  geom_point(alpha = 0.3) +
+  geom_line(data = curve, aes(y = .pred), colour = "red", linewidth = 1) +
+  labs(x = "Age (years)", y = "Glucose (mg/dL)",
+       title = "Cubic fit of glucose on age, training rows")
+```
+
+::: {.callout-important}
+## Learning points
+- A polynomial model is a linear regression on new columns made from the predictor.
+- Making those columns is pre-processing, so it lives in the recipe (R) or the pipeline (Python), together with the model.
+- R's `step_poly()` uses orthogonal polynomials and Python's `PolynomialFeatures()` uses raw powers: different coefficients, identical predictions.
+:::
+
+------------------------------------------------------------------------
+
+### Part 2 — Predictions on the training and the test rows
+
+We want to know whether the model **generalises**: does it predict new people as
+well as the people it was fitted on? So we predict both sets. `predict()` gives
+a column `.pred`:
+
+```{r}
+predict(model_cubic, new_data = train) |>
+  head()
+```
+
+It is easier to keep the predictions next to the data. `augment()` does that in
+one step: it adds the prediction `.pred` and the residual `.resid` (observed
+minus predicted) to each row. Do it for the training rows and the test rows:
+
+```{r}
+train_preds <- augment(model_cubic, new_data = train)
+test_preds  <- augment(model_cubic, new_data = test)
+
+head(test_preds)
+```
+
+The first test person is 28 years old with a glucose of 194, and the model
+predicts 127.4 for them: an error of 66.6 mg/dL, a person the model gets badly
+wrong.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+both_sets <- bind_rows(train_preds |> mutate(set = "train (600)"),
+                       test_preds  |> mutate(set = "test (150)")) |>
+  mutate(set = factor(set, levels = c("train (600)", "test (150)")))   # train first
+
+ggplot(both_sets, aes(x = age, y = glucose)) +
+  geom_point(alpha = 0.3) +
+  geom_line(aes(y = .pred), colour = "red", linewidth = 1) +
+  facet_wrap(~ set) +
+  labs(x = "Age (years)", y = "Glucose (mg/dL)",
+       title = "The same fitted cubic, on the training and the test rows")
+```
+
+::: {.callout-important}
+## Learning points
+- The model is fitted on the training rows only; the test rows are used for predicting, never for fitting.
+- Keep the predictions next to the data: `augment()` in R, a new column in Python.
+:::
+
+------------------------------------------------------------------------
+
+### Part 3 — Measuring the error, by hand and with a package
+
+For a regression model the error of one person is $y_i - \hat{y}_i$, the observed
+glucose minus the predicted glucose. Three summaries of these errors are used
+everywhere; you met them as loss functions on Day 3:
+
+$$\text{MSE} = \frac{1}{n}\sum_{i=1}^{n}(y_i - \hat{y}_i)^2 \qquad
+\text{RMSE} = \sqrt{\text{MSE}} \qquad
+\text{MAE} = \frac{1}{n}\sum_{i=1}^{n}|y_i - \hat{y}_i|$$
+
+RMSE and MAE are in the units of the outcome, mg/dL, so they can be read as
+"the typical size of an error". MSE is in squared units. Compute all three on the
+training rows, one step at a time:
+
+```{r}
+train_preds |>
+  mutate(error = glucose - .pred) |>
+  summarise(MSE  = mean(error^2),
+            RMSE = sqrt(MSE),
+            MAE  = mean(abs(error)))
+```
+
+On the training rows the typical error is about 30 mg/dL (RMSE 30.29, MAE
+24.61). Now do the same for the **test** rows:
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+test_preds |>
+  mutate(error = ______) |>
+  summarise(MSE  = mean(error^2),
+            RMSE = ______,
+            MAE  = mean(abs(error)))
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Copy the training cell and change `train_preds` to `test_preds`. The error is
+the observed glucose minus the prediction `.pred`, and RMSE is the square root
+of MSE.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+test_preds |>
+  mutate(error = glucose - .pred) |>
+  summarise(MSE  = mean(error^2),
+            RMSE = sqrt(MSE),
+            MAE  = mean(abs(error)))
+```
+
+| | MSE | RMSE | MAE |
+|:-|:-:|:-:|:-:|
+| Training rows | 917.6 | 30.29 | 24.61 |
+| Test rows | 865.1 | 29.41 | 23.69 |
+
+The test error is about the same as the training error, here even slightly
+smaller.
+:::
+:::
+
+You will compute these metrics for every model you build, so packages already
+do it. In tidymodels they come from **yardstick**: each metric takes the data,
+the column with the truth and the column with the prediction. `metric_set()`
+bundles several metrics into one function:
+
+```{r}
+rmse(train_preds, truth = glucose, estimate = .pred)
+
+reg_metrics <- metric_set(rmse, mae)
+reg_metrics(train_preds, truth = glucose, estimate = .pred)
+```
+
+The same numbers as by hand. Check the test rows with the package as well:
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+reg_metrics(______, truth = glucose, estimate = ______)
+```
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+reg_metrics(test_preds, truth = glucose, estimate = .pred)
+```
+
+Test RMSE 29.41 and MAE 23.69, the same as your hand calculation.
+:::
+:::
+
+**Question!** The model is about as good on the test rows as on the training
+rows. Is it overfitting? Is it a good model? A typical error of 30 mg/dL, when
+most glucose values lie between 80 and 180, is large. What would you try next?
+
+The errors are similar on both sets, so there is no sign of **overfitting**. But
+they are large on both, which is **underfitting**: age alone cannot capture what
+drives a person's glucose, whatever the shape of the curve. The natural next step
+is to add predictors, not to make the curve more flexible.
+
+::: {.callout-important}
+## Learning points
+- MSE, RMSE and MAE summarise the errors $y_i - \hat{y}_i$; RMSE and MAE are in the units of the outcome.
+- Always compute them on both the training and the test rows, and compare.
+- Much better on training than on test: overfitting. Similar but poor on both: underfitting.
+:::
+
+------------------------------------------------------------------------
+
+### Part 4 — More flexible is not more accurate
+
+Was the cubic the right choice? Fit polynomials of degree 1 (a straight line) up
+to 8, and record the training and test RMSE of each. The code is the same as in
+Part 1 with a different `degree`, repeated in a loop:
+
+```{r}
+degree_results <- tibble()
+
+for (d in 1:8) {
+  poly_wf <- workflow() |>
+    add_model(linear_reg()) |>
+    add_recipe(recipe(glucose ~ age, data = train) |>
+                 step_poly(age, degree = d))
+  poly_fit <- poly_wf |>
+    fit(data = train)
+
+  train_rmse <- augment(poly_fit, new_data = train) |>
+    rmse(truth = glucose, estimate = .pred)
+  test_rmse <- augment(poly_fit, new_data = test) |>
+    rmse(truth = glucose, estimate = .pred)
+
+  degree_results <- bind_rows(degree_results,
+                              tibble(degree     = d,
+                                     train_rmse = train_rmse$.estimate,
+                                     test_rmse  = test_rmse$.estimate))
+}
+
+degree_results
+```
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+degree_results |>
+  pivot_longer(c(train_rmse, test_rmse), names_to = "set", values_to = "RMSE") |>
+  ggplot(aes(x = degree, y = RMSE, colour = set)) +
+  geom_line() +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = 1:8) +
+  labs(x = "Degree of the polynomial", y = "RMSE (mg/dL)", colour = NULL,
+       title = "Training error keeps falling; test error does not")
+```
+
+The training RMSE falls with every extra degree, from 31.10 for the straight line
+to 30.12 for degree 8: a more flexible curve can always follow the training
+points more closely. The test RMSE does not follow. It is lowest at degree 2
+(29.08) and highest at degree 8 (29.74). The extra flexibility is spent on
+the noise of these particular 600 people, which does not repeat in new people.
+With 600 people and a single predictor the effect is small; with fewer people
+or more flexible models it can be very large.
+
+**Question!** Which degree would you choose, and on which data did you base the
+choice? (Look again at the Stretch below.)
+
+::: {.callout-important}
+## Learning points
+- Training error always improves as a model becomes more flexible, so it cannot be used to choose how flexible a model should be.
+- Test error stops improving, and starts to get worse, once the model fits noise: that is overfitting.
+:::
 
 ## Python
 
+[**Download the Python code from this chapter**](code/day5-01-regression-metrics.py){download="day5-01-regression-metrics.py"} — every cell below, in page order, including the code for every plot, with the blanks left for you to fill in. Open it in Positron beside the page and run it a cell at a time.
+
+### Packages and data
+
 ```{python}
-import pandas as pd, numpy as np
-from sklearn.model_selection import train_test_split
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
-
-los = pd.read_csv("data/los_data.csv")
-X, y = los[["Age", "Severity"]], los["LOS"]
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-model = LinearRegression().fit(X_train, y_train)
-p = model.predict(X_test)
-
-pd.Series({"rmse": root_mean_squared_error(y_test, p),
-           "mae":  mean_absolute_error(y_test, p),
-           "r2":   r2_score(y_test, p)})
 ```
+
+The data are in [`data/diabetes.csv`](data/diabetes.csv). We use the same 750
+people and the same split as on Day 4: the impossible zeros in glucose and body
+mass are removed, and every fifth person is held back as the test set.
+
+```{python}
+diabetes = pd.read_csv("data/diabetes.csv")
+diabetes = diabetes[["glucose", "mass", "age", "diabetes"]]
+diabetes = diabetes[(diabetes["glucose"] > 0) & (diabetes["mass"] > 0)]   # remove the impossible zeros
+diabetes = diabetes.reset_index(drop=True)
+
+is_test = diabetes.index % 5 == 0               # every fifth person is held back
+train = diabetes[~is_test]
+test  = diabetes[is_test]
+
+print(diabetes.shape)
+print(train.shape)
+print(test.shape)
+```
+
+750 people: 600 for training (80%) and 150 for testing (20%).
+
+------------------------------------------------------------------------
+
+### Part 1 — A cubic model as a pre-processing step
+
+To fit a cubic we do not need a new kind of model. We create new columns from
+age (its square and its cube) and fit an ordinary linear regression on them.
+Creating new columns from old ones is **feature engineering**, so in
+scikit-learn it is a step of the **pipeline**, alongside the other pre-processing
+steps you met on Day 2. `PolynomialFeatures()` adds the polynomial columns:
+
+```{python}
+poly_step = PolynomialFeatures(degree=3, include_bias=False)   # age, age^2, age^3
+```
+
+Look at what the step does to the data. `fit_transform()` works out the
+transformation from the training rows and applies it to them:
+
+```{python}
+cubic_features = poly_step.fit_transform(train[["age"]])
+
+pd.DataFrame(cubic_features, columns=poly_step.get_feature_names_out()).head(10)
+```
+
+The three columns are age, age² and age³. The squared and cubed values are
+large (81³ = 531441), which is fine for a cubic.
+
+Now put the polynomial step and the model together in a **pipeline** and fit it
+on the training rows:
+
+```{python}
+cubic_pipe = Pipeline([
+    ("poly", PolynomialFeatures(degree=3, include_bias=False)),
+    ("model", LinearRegression()),
+])
+cubic_pipe = cubic_pipe.fit(train[["age"]], train["glucose"])
+
+print("intercept:   ", round(cubic_pipe["model"].intercept_, 3))
+print("coefficients:", cubic_pipe["model"].coef_)
+```
+
+The coefficients belong to age, age² and age³. They differ from the ones you get
+in R, where `step_poly()` uses orthogonal polynomials, but the **predictions**
+are identical in both languages, and the predictions are what we evaluate.
+
+Here is the fitted cubic on top of the training data:
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+age_grid = pd.DataFrame({"age": np.arange(21, 82)})
+curve = cubic_pipe.predict(age_grid)
+
+fig, ax = plt.subplots()
+ax.scatter(train["age"], train["glucose"], alpha=0.3, color="black")
+ax.plot(age_grid["age"], curve, color="red", linewidth=2)
+ax.set_xlabel("Age (years)")
+ax.set_ylabel("Glucose (mg/dL)")
+ax.set_title("Cubic fit of glucose on age, training rows")
+plt.show()
+```
+
+::: {.callout-important}
+## Learning points
+- A polynomial model is a linear regression on new columns made from the predictor.
+- Making those columns is pre-processing, so it lives in the recipe (R) or the pipeline (Python), together with the model.
+- R's `step_poly()` uses orthogonal polynomials and Python's `PolynomialFeatures()` uses raw powers: different coefficients, identical predictions.
 :::
 
-The two languages split differently, as they did on Day 1, so the numbers differ
-in the first decimal place and agree on every statement you would make from
-them: the error is around three to three and a half days, and the model accounts
-for about 93–94% of the variance in length of stay.
+------------------------------------------------------------------------
 
-::: {.callout-warning}
-## `rsq` and `rsq_trad` are not the same function
-yardstick has two R² metrics. `rsq()` is the **squared correlation** between
-truth and prediction; `rsq_trad()` is the textbook $1-\text{SS}_\text{res}/\text{SS}_\text{tot}$,
-which is what `sklearn.metrics.r2_score` computes. On a well-fitting model they
-agree to two decimals. They part company exactly where it matters: a prediction
-that is systematically too high by ten days has a perfect correlation with the
-truth, so `rsq()` is 1 and `rsq_trad()` is far below zero. Use `rsq_trad()`, and
-when you read someone else's R² ask which one they computed.
+### Part 2 — Predictions on the training and the test rows
+
+We want to know whether the model **generalises**: does it predict new people as
+well as the people it was fitted on? So we predict both sets. `predict()` gives
+an array of predictions:
+
+```{python}
+cubic_pipe.predict(train[["age"]])[:6].round(2)
+```
+
+It is easier to keep the predictions next to the data. Copy each data set and
+add the predictions as a new column `pred`, for the training rows and the test
+rows:
+
+```{python}
+train_preds = train.copy()
+train_preds["pred"] = cubic_pipe.predict(train[["age"]])
+
+test_preds = test.copy()
+test_preds["pred"] = cubic_pipe.predict(test[["age"]])
+
+test_preds.head().round(2)
+```
+
+The first test person is 28 years old with a glucose of 194, and the model
+predicts 127.4 for them: an error of 66.6 mg/dL, a person the model gets badly
+wrong.
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+fig, axes = plt.subplots(1, 2, figsize=(9, 4), sharey=True)
+for ax, data, name in [(axes[0], train_preds, "train (600)"), (axes[1], test_preds, "test (150)")]:
+    data = data.sort_values("age")
+    ax.scatter(data["age"], data["glucose"], alpha=0.3, color="black")
+    ax.plot(data["age"], data["pred"], color="red", linewidth=2)
+    ax.set_title(name)
+    ax.set_xlabel("Age (years)")
+axes[0].set_ylabel("Glucose (mg/dL)")
+fig.suptitle("The same fitted cubic, on the training and the test rows")
+plt.show()
+```
+
+::: {.callout-important}
+## Learning points
+- The model is fitted on the training rows only; the test rows are used for predicting, never for fitting.
+- Keep the predictions next to the data: `augment()` in R, a new column in Python.
 :::
 
-## Task 1 — Give the metrics something to beat
+------------------------------------------------------------------------
 
-Exercise 1.2 compared the model's MAE against a predictor that ignores age and
-severity and returns the mean training length of stay for every patient.
-Compute all three metrics for that baseline on the same test rows.
+### Part 3 — Measuring the error, by hand and with a package
 
-::: {.panel-tabset}
-## R
+For a regression model the error of one person is $y_i - \hat{y}_i$, the observed
+glucose minus the predicted glucose. Three summaries of these errors are used
+everywhere; you met them as loss functions on Day 3:
 
-```{r}
+$$\text{MSE} = \frac{1}{n}\sum_{i=1}^{n}(y_i - \hat{y}_i)^2 \qquad
+\text{RMSE} = \sqrt{\text{MSE}} \qquad
+\text{MAE} = \frac{1}{n}\sum_{i=1}^{n}|y_i - \hat{y}_i|$$
+
+RMSE and MAE are in the units of the outcome, mg/dL, so they can be read as
+"the typical size of an error". MSE is in squared units. Compute all three on the
+training rows, one step at a time:
+
+```{python}
+train_error = train_preds["glucose"] - train_preds["pred"]
+
+train_mse  = np.mean(train_error ** 2)
+train_rmse = np.sqrt(train_mse)
+train_mae  = np.mean(np.abs(train_error))
+
+print("MSE: ", round(train_mse, 2))
+print("RMSE:", round(train_rmse, 2))
+print("MAE: ", round(train_mae, 2))
+```
+
+On the training rows the typical error is about 30 mg/dL (RMSE 30.29, MAE
+24.61). Now do the same for the **test** rows:
+
+```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-source("checks/checks.R")
-baseline <- test |> dplyr::mutate(.pred = ______)
-reg_metrics(baseline, truth = LOS, estimate = .pred)
+test_error = ______
 
-check_beats_baseline(mae(preds, truth = LOS, estimate = .pred)$.estimate,
-                     mae(baseline, truth = LOS, estimate = ______)$.estimate)
+test_mse  = np.mean(test_error ** 2)
+test_rmse = ______
+test_mae  = np.mean(np.abs(test_error))
+
+print("MSE: ", round(test_mse, 2))
+print("RMSE:", round(test_rmse, 2))
+print("MAE: ", round(test_mae, 2))
 ```
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-The baseline prediction is one number repeated for every test patient, and it
-comes from the training rows, not the test rows. `mean()` is the whole model.
-The second blank is the name of the column you just created.
+Copy the training cell and change `train_preds` to `test_preds`. The error is
+the observed glucose minus the prediction `pred`, and RMSE is the square root
+of MSE.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-```{r}
-source("checks/checks.R")
-baseline <- test |> dplyr::mutate(.pred = mean(train$LOS))
-reg_metrics(baseline, truth = LOS, estimate = .pred)
+```{python}
+test_error = test_preds["glucose"] - test_preds["pred"]
 
-check_beats_baseline(mae(preds, truth = LOS, estimate = .pred)$.estimate,
-                     mae(baseline, truth = LOS, estimate = .pred)$.estimate)
+test_mse  = np.mean(test_error ** 2)
+test_rmse = np.sqrt(test_mse)
+test_mae  = np.mean(np.abs(test_error))
+
+print("MSE: ", round(test_mse, 2))
+print("RMSE:", round(test_rmse, 2))
+print("MAE: ", round(test_mae, 2))
 ```
+
+| | MSE | RMSE | MAE |
+|:-|:-:|:-:|:-:|
+| Training rows | 917.6 | 30.29 | 24.61 |
+| Test rows | 865.1 | 29.41 | 23.69 |
+
+The test error is about the same as the training error, here even slightly
+smaller.
 :::
 :::
 
-## Python
+You will compute these metrics for every model you build, so packages already
+do it. In scikit-learn they are in `sklearn.metrics`: each takes the truth
+first and the prediction second.
+
+```{python}
+from sklearn.metrics import mean_squared_error, root_mean_squared_error, mean_absolute_error
+
+print("train MSE: ", round(mean_squared_error(train_preds["glucose"], train_preds["pred"]), 2))
+print("train RMSE:", round(root_mean_squared_error(train_preds["glucose"], train_preds["pred"]), 2))
+print("train MAE: ", round(mean_absolute_error(train_preds["glucose"], train_preds["pred"]), 2))
+```
+
+The same numbers as by hand. Check the test rows with the package as well:
 
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-import sys; sys.path.append("checks")
-from checks import *
-b = np.full(len(y_test), ______)
-print({"rmse": root_mean_squared_error(y_test, b),
-       "mae":  mean_absolute_error(y_test, b),
-       "r2":   r2_score(y_test, b)})
-check_beats_baseline(mean_absolute_error(y_test, p), mean_absolute_error(y_test, ______))
+print("test MSE: ", round(mean_squared_error(______, ______), 2))
+print("test RMSE:", round(root_mean_squared_error(test_preds["glucose"], test_preds["pred"]), 2))
+print("test MAE: ", round(mean_absolute_error(test_preds["glucose"], test_preds["pred"]), 2))
 ```
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-import sys; sys.path.append("checks")
-from checks import *
-b = np.full(len(y_test), y_train.mean())
-print({"rmse": root_mean_squared_error(y_test, b),
-       "mae":  mean_absolute_error(y_test, b),
-       "r2":   r2_score(y_test, b)})
-check_beats_baseline(mean_absolute_error(y_test, p), mean_absolute_error(y_test, b))
-```
-:::
-:::
-:::
-
-The baseline's R² is not approximately zero by luck. Read the formula again:
-the baseline's numerator and denominator are the same sum, up to the difference
-between the training mean and the test mean. **R² is defined as a comparison
-with the predict-the-mean baseline**, so reporting R² and then saying "and it
-beats the baseline" says the same thing twice. RMSE and MAE say nothing about a
-baseline at all, which is why Exercise 1.2 had to compute one by hand.
-
-## Task 2 — The same model, a realistic outcome
-
-`data/los_data.csv` has a symmetric length of stay with a median around 66 days,
-which is not what length of stay looks like.
-`data/los_data_skewed.csv` holds the realistic version: the same 1000 patients,
-the same two predictors, a right-skewed outcome with a median of about five
-days and a tail reaching beyond fifty.
-
-Run the identical pipeline on it and report the same three metrics.
-
-::: {.panel-tabset}
-## R
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-source("checks/checks.R")
-skew <- read_csv("data/los_data_skewed.csv")
-summary(skew$LOS)
-
-set.seed(42)
-split_s <- initial_split(skew, prop = 0.8)
-train_s <- training(split_s); test_s <- ______
-
-fit_s   <- linear_reg() |> set_engine("lm") |> fit(______, data = train_s)
-preds_s <- augment(fit_s, test_s)
-reg_metrics(preds_s, truth = LOS, estimate = .pred)
-
-check_metric_range(rsq_trad(preds_s, truth = LOS, estimate = .pred)$.estimate,
-                   0, 1, "R-squared, skewed outcome")
+print("test MSE: ", round(mean_squared_error(test_preds["glucose"], test_preds["pred"]), 2))
+print("test RMSE:", round(root_mean_squared_error(test_preds["glucose"], test_preds["pred"]), 2))
+print("test MAE: ", round(mean_absolute_error(test_preds["glucose"], test_preds["pred"]), 2))
 ```
 
-::: {.callout-tip collapse="true"}
-## Stuck?
-Nothing new is needed. The functions are the ones two cells above:
-`testing()`, and the same formula you used for the symmetric data.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-source("checks/checks.R")
-skew <- read_csv("data/los_data_skewed.csv")
-summary(skew$LOS)
-
-set.seed(42)
-split_s <- initial_split(skew, prop = 0.8)
-train_s <- training(split_s); test_s <- testing(split_s)
-
-fit_s   <- linear_reg() |> set_engine("lm") |> fit(LOS ~ Age + Severity, data = train_s)
-preds_s <- augment(fit_s, test_s)
-reg_metrics(preds_s, truth = LOS, estimate = .pred)
-
-check_metric_range(rsq_trad(preds_s, truth = LOS, estimate = .pred)$.estimate,
-                   0, 1, "R-squared, skewed outcome")
-```
+Test RMSE 29.41 and MAE 23.69, the same as your hand calculation.
 :::
 :::
 
-## Python
+**Question!** The model is about as good on the test rows as on the training
+rows. Is it overfitting? Is it a good model? A typical error of 30 mg/dL, when
+most glucose values lie between 80 and 180, is large. What would you try next?
+
+The errors are similar on both sets, so there is no sign of **overfitting**. But
+they are large on both, which is **underfitting**: age alone cannot capture what
+drives a person's glucose, whatever the shape of the curve. The natural next step
+is to add predictors, not to make the curve more flexible.
+
+::: {.callout-important}
+## Learning points
+- MSE, RMSE and MAE summarise the errors $y_i - \hat{y}_i$; RMSE and MAE are in the units of the outcome.
+- Always compute them on both the training and the test rows, and compare.
+- Much better on training than on test: overfitting. Similar but poor on both: underfitting.
+:::
+
+------------------------------------------------------------------------
+
+### Part 4 — More flexible is not more accurate
+
+Was the cubic the right choice? Fit polynomials of degree 1 (a straight line) up
+to 8, and record the training and test RMSE of each. The code is the same as in
+Part 1 with a different `degree`, repeated in a loop. One change: age is scaled
+first with `StandardScaler()`. Age to the power 8 has fifteen digits, too many
+for the computer's arithmetic to stay accurate; scaling first keeps the numbers
+small and gives the same predictions.
 
 ```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-skew = pd.read_csv("data/los_data_skewed.csv")
-print(skew["LOS"].describe())
+from sklearn.preprocessing import StandardScaler
 
-Xs, ys = skew[["Age", "Severity"]], skew["LOS"]
-Xs_tr, Xs_te, ys_tr, ys_te = train_test_split(Xs, ys, test_size=0.2, random_state=42)
-ps = LinearRegression().fit(Xs_tr, ys_tr).predict(______)
+rows = []
+for d in range(1, 9):
+    poly_pipe = Pipeline([
+        ("scale", StandardScaler()),
+        ("poly", PolynomialFeatures(degree=d, include_bias=False)),
+        ("model", LinearRegression()),
+    ])
+    poly_pipe = poly_pipe.fit(train[["age"]], train["glucose"])
 
-print({"rmse": root_mean_squared_error(ys_te, ps),
-       "mae":  mean_absolute_error(ys_te, ps),
-       "r2":   r2_score(______, ps)})
+    train_rmse = root_mean_squared_error(train["glucose"], poly_pipe.predict(train[["age"]]))
+    test_rmse  = root_mean_squared_error(test["glucose"], poly_pipe.predict(test[["age"]]))
+    rows.append({"degree": d, "train_rmse": train_rmse, "test_rmse": test_rmse})
+
+degree_results = pd.DataFrame(rows)
+degree_results.round(3)
 ```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-skew = pd.read_csv("data/los_data_skewed.csv")
-print(skew["LOS"].describe())
-
-Xs, ys = skew[["Age", "Severity"]], skew["LOS"]
-Xs_tr, Xs_te, ys_tr, ys_te = train_test_split(Xs, ys, test_size=0.2, random_state=42)
-ps = LinearRegression().fit(Xs_tr, ys_tr).predict(Xs_te)
-
-print({"rmse": root_mean_squared_error(ys_te, ps),
-       "mae":  mean_absolute_error(ys_te, ps),
-       "r2":   r2_score(ys_te, ps)})
-```
-:::
-:::
-:::
-
-Write the six numbers — three metrics, two datasets — in a two-row table before
-you read on. The point of this exercise is in that table and not in any one cell.
-
-## Task 3 — Find out who the RMSE is listening to
-
-RMSE squares each residual, so a patient predicted 30 days out contributes 100
-times what a patient predicted 3 days out contributes. Measure that directly:
-sort the test rows by squared error and compute the share of the **total**
-squared error carried by the worst 5% of patients, for each of the two datasets.
-
-::: {.panel-tabset}
-## R
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-worst_share <- function(p) {
-  e <- sort((p$LOS - p$.pred)^2, decreasing = TRUE)
-  k <- ceiling(0.05 * length(e))
-  sum(e[1:k]) / ______
-}
-c(symmetric = worst_share(preds), skewed = worst_share(preds_s))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-A share is a part over a whole. You already have the part.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-worst_share <- function(p) {
-  e <- sort((p$LOS - p$.pred)^2, decreasing = TRUE)
-  k <- ceiling(0.05 * length(e))
-  sum(e[1:k]) / sum(e)
-}
-c(symmetric = worst_share(preds), skewed = worst_share(preds_s))
-```
-:::
-:::
-
-## Python
 
 ```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-def worst_share(y_true, y_pred):
-    e = np.sort((np.asarray(y_true) - y_pred) ** 2)[::-1]
-    k = int(np.ceil(0.05 * len(e)))
-    return e[:k].sum() / ______
-
-{"symmetric": worst_share(y_test, p), "skewed": worst_share(ys_te, ps)}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+fig, ax = plt.subplots()
+ax.plot(degree_results["degree"], degree_results["train_rmse"], marker="o", label="train_rmse")
+ax.plot(degree_results["degree"], degree_results["test_rmse"], marker="o", label="test_rmse")
+ax.set_xlabel("Degree of the polynomial")
+ax.set_ylabel("RMSE (mg/dL)")
+ax.set_title("Training error keeps falling; test error does not")
+ax.legend()
+plt.show()
 ```
 
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-def worst_share(y_true, y_pred):
-    e = np.sort((np.asarray(y_true) - y_pred) ** 2)[::-1]
-    k = int(np.ceil(0.05 * len(e)))
-    return e[:k].sum() / e.sum()
+The training RMSE falls with every extra degree, from 31.10 for the straight line
+to 30.12 for degree 8: a more flexible curve can always follow the training
+points more closely. The test RMSE does not follow. It is lowest at degree 2
+(29.08) and highest at degree 8 (29.74). The extra flexibility is spent on
+the noise of these particular 600 people, which does not repeat in new people.
+With 600 people and a single predictor the effect is small; with fewer people
+or more flexible models it can be very large.
 
-{"symmetric": worst_share(y_test, p), "skewed": worst_share(ys_te, ps)}
-```
+**Question!** Which degree would you choose, and on which data did you base the
+choice? (Look again at the Stretch below.)
+
+::: {.callout-important}
+## Learning points
+- Training error always improves as a model becomes more flexible, so it cannot be used to choose how flexible a model should be.
+- Test error stops improving, and starts to get worse, once the model fits noise: that is overfitting.
 :::
-:::
-:::
 
-Then compute RMSE ÷ MAE for both datasets. The ratio is 1 when every residual
-is the same size and grows as the errors become uneven. It is a one-line
-diagnostic worth running on any regression you are handed.
-
-## The result that should bother you
-
-The model is the same model. The predictors are the same two columns. The
-clinical question is the same question. And:
-
-- MAE moves from about 3.2–3.4 days to about 3.8 days — barely at all;
-- R² collapses from about 0.93 to somewhere between 0.14 and 0.21.
-
-Three steps, because the reasoning transfers to every R² you will ever read.
-
-1. R² is a ratio, and the denominator is the variance of the outcome *in the
-   sample you evaluated on*. The symmetric file has a standard deviation of
-   around 16 days; the skewed file has one of around 6. The same 4–6 days of
-   error is a small fraction of the first and a large fraction of the second.
-2. So R² is a statement about the model **and** the population jointly. Move
-   the model to a hospital with a narrower case-mix and R² falls, with nothing
-   about the model having changed. This is the single most common way a
-   published R² misleads.
-3. MAE did not collapse because it is denominated in days rather than in
-   variance. It also did not improve: in both files the model is wrong by
-   several days, which is the fact a ward manager needs. The clinically useless
-   model and the clinically useful one are distinguished by neither metric on
-   its own — you need the error in days *and* something to compare it with.
-
-Notice too that the skewed file's own baseline has an MAE of about 3.9–4.3
-days. The model's 3.8 days beats it by a few percent, where on the symmetric
-file it beat the baseline by a factor of four. The R² and the
-model-versus-baseline ratio are telling you the same story; the MAE on its own
-is not telling you any story at all.
-
-## Reflection
-
-1. A colleague reports "R² = 0.91" for a model predicting length of stay in a
-   specialist unit, and asks you to deploy it on a general medical ward. What do
-   you need to know before that number means anything, and why is the answer
-   not "the code"?
-2. You must choose one metric to put in the abstract of a paper about a
-   length-of-stay model. Which, and what do you have to write next to it to
-   stop it being misread?
-
-::: {.content-visible when-profile="instructor"}
-::: {.instructor}
-**Expected values** (regenerated data moves the last digit; R and Python split
-differently, so both are given).
-
-| | R, seed 42 | Python, random_state 42 |
-|---|---|---|
-| `los_data` test RMSE / MAE / R² | 4.27 / 3.42 / 0.934 | 3.96 / 3.16 / 0.942 |
-| `los_data` baseline RMSE / MAE / R² | 16.7 / 13.1 / −0.0001 | 16.5 / 13.0 / −0.004 |
-| `los_data_skewed` test RMSE / MAE / R² | 5.73 / 3.80 / 0.208 | 4.96 / 3.75 / 0.137 |
-| `los_data_skewed` baseline RMSE / MAE | 6.45 / 4.29 | 5.37 / 3.95 |
-| worst-5% share of squared error | 0.29 symmetric, 0.55 skewed | 0.28 symmetric, 0.40 skewed |
-| RMSE ÷ MAE | 1.25 symmetric, 1.51 skewed | 1.25 symmetric, 1.32 skewed |
-
-: {tbl-colwidths="[40,30,30]"}
-
-**Task 1's real answer.** Most students compute the baseline correctly and then
-read its R² of zero as a bug. It is the definition. The exchange to have is:
-"what would a baseline R² of −0.4 mean?" — a model worse than the mean, which
-is common in genuinely held-out evaluation and almost never reported.
-
-**Common failures.** (1) `mean(test$LOS)` instead of `mean(train$LOS)` in Task 1
-— the number barely changes, so nobody notices; ask how they would know.
-(2) Computing `rsq()` rather than `rsq_trad()` in R and getting a positive
-number for the baseline, or an `NA` with a warning because a constant prediction
-has no variance. (3) Forgetting to re-split for the skewed file and evaluating
-the skewed model on symmetric test rows.
-
-**Timing.** Task 3 is the one to drop if you are short; the worst-5% share is
-the most memorable number on the page but the RMSE ÷ MAE ratio carries the same
-message in one line.
-:::
-:::
+::::::
 
 ## Stretch
 
 ::: {.callout-note appearance="simple"}
-## Stretch 1 — Make `rsq` and `rsq_trad` disagree
-Add ten days to every prediction on the symmetric test set and recompute both.
-One is unchanged and one falls below zero. Which behaviour do you want from a
-metric reported in a paper, and which from a metric used to compare two models
-during development?
+## Stretch — choosing with the test set spends the test set
+Part 4 chose a degree by looking at the test RMSE, and the test RMSE of that
+degree is now an optimistic estimate of how it will do on new people. How
+could you choose the degree using the training rows only, and keep the test
+rows for one final check? Try it: split the 600 training rows again into 480
+and 120, choose the degree on the 120, then report the test RMSE once.
 :::
 
-::: {.callout-note appearance="simple"}
-## Stretch 2 — Fit on the log scale
-Refit the skewed model as `log(LOS) ~ Age + Severity`, then exponentiate the
-predictions and compute RMSE, MAE and R² **in days**. Metrics computed on the
-log scale are not comparable with metrics computed in days, and a surprising
-number of published models compare them anyway.
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Teaching choice.** The module lead's page used the full 768-row Pima data and
+a random 70/30 split (`initial_split`, seed 123); this version uses the shared
+Day 4 split (750 rows after removing zero glucose and mass, every fifth person
+held back) so that every number agrees between R and Python and with the rest of
+the booklet. Her user-defined `rmse_mine()` is replaced by `mutate()` and
+`summarise()` steps, and the Metrics package by yardstick (already loaded with
+tidymodels; Metrics masks yardstick's `rmse` and `mae`, a known source of
+confusion). Part 4 is an addition: it turns her closing question about over- and
+underfitting into a picture.
+
+**Expected values.** Identical in R and Python. Train 600, test 150. Cubic
+predictions for the first six training rows 136.45, 123.19, 137.31, 111.81,
+134.43, 111.81. R orthogonal coefficients 125.9, 149.8, −144.3, 95.52; Python raw
+coefficients intercept −44.04, age 11.54, age² −0.2364, age³ 0.001528. First test
+person: age 28, glucose 194, predicted 127.4 (residual 66.57). Train MSE 917.6, RMSE 30.29, MAE
+24.61; test MSE 865.1, RMSE 29.41, MAE 23.69. Degrees 1 to 8, train RMSE 31.10,
+30.54, 30.29, 30.28, 30.22, 30.19, 30.17, 30.12; test RMSE 29.41, 29.08, 29.41,
+29.34, 29.58, 29.52, 29.62, 29.74.
+
+**Common failures.** (1) Fitting the workflow on `test`, or on `diabetes`.
+(2) Taking the square root of each error before averaging (that is the MAE of
+square-rooted errors, not the RMSE). (3) In Python, raising the degree above 8
+without the scaler: degree 8 with raw powers already gives a training RMSE of
+30.99 instead of 30.12, because the arithmetic loses precision; degree 10 drifts
+even with the scaler, which is why the loop stops at 8. (4) Students puzzled
+that the test error is lower than the training error: 150 people is a small
+sample, and this test set happens to be slightly easier.
+
+**Timing.** Part 1 fifteen minutes, Part 2 ten, Part 3 twenty, Part 4 ten.
 :::
-
-::: {.callout-note appearance="simple"}
-## Stretch 3 — Choose the metric from the harm
-Write the sentence that decides between MAE and RMSE for a bed-planning model:
-if being 30 days wrong about one patient is worse than being 3 days wrong about
-ten patients, which metric encodes that, and who in the hospital is entitled to
-make that judgement?
 :::
-
-## What you can and cannot now claim
-
-**Can:** that you can compute and interpret the three standard regression
-metrics, say which one a given audience needs, and spot an R² that is reporting
-a property of the population rather than of the model.
-
-**Cannot:** anything at all about a model whose outcome is a class rather than a
-number. None of these three metrics is defined when the truth is `pos` or `neg`,
-and the metrics that replace them have a failure mode of their own — which is
-Exercise 5.2.

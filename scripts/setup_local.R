@@ -20,9 +20,11 @@ r_pkgs  <- c("tidymodels", "tidyverse", "data.table", "rpart", "reticulate",
              "ranger",      # the random forest engine (Day 5)
              "glmnet",      # penalised regression (Day 5.5)
              "vip",         # variable importance (Days 5-6)
-             "DALEX", "DALEXtra")            # model explanation (Day 6)
+             "DALEX", "DALEXtra",            # model explanation (Day 9)
+             "kernelshap", "shapviz",        # SHAP values and plots (Day 9)
+             "patchwork")                    # plots side by side
 py_pkgs <- c("pandas", "numpy", "matplotlib", "seaborn", "scikit-learn", "joblib",
-             "shap", "plotly")   # Day 6
+             "shap", "dalex", "plotly")   # shap and dalex: Day 9
 
 # ---- R side ----------------------------------------------------------------
 missing <- r_pkgs[!vapply(r_pkgs, requireNamespace, logical(1), quietly = TRUE)]
