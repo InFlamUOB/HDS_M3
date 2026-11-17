@@ -104,7 +104,10 @@ def extract(path, with_answers=False):
             while j < len(lines) and not re.match(r"^```\s*$", lines[j]):
                 body.append(lines[j])
                 j += 1
-            if not hidden:
+            # A chunk with `#| echo: false` draws a figure the page shows without
+            # its code (the 3D loss surface); it is not part of the student code.
+            shown = not any(re.match(r"#\|\s*echo:\s*false", b) for b in body)
+            if not hidden and shown:
                 body = [b for b in body if not b.startswith("#| ")]
                 while body and not body[0].strip():
                     body.pop(0)

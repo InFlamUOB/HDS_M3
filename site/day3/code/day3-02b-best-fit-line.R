@@ -11,87 +11,133 @@
 
 
 # --------------------------------------------------------------------
-# Where we left off
+# Packages and data
 # --------------------------------------------------------------------
 
 library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())  # white background for every plot
 
 glu <- read_csv("data/glucose_study.csv")
 
-fit_ols <- lm(glucose ~ age, data = glu)
+glu3 <- glu[1:3, ]
+glu3
 
-glu_bad <- glu |>
-  mutate(glucose = if_else(row_number() %in% c(1, 3, 5),
-                           glucose * 3, glucose))
-
-coef(fit_ols)
-
-# --------------------------------------------------------------------
-# Step 1 — The loss as a function of the parameters
-# --------------------------------------------------------------------
-
-glu |>
-  slice(1:3) |>
-  mutate(pred = 3 + 5 * age,
-         r    = glucose - pred) |>
-  summarise(MSE = mean(r^2))
+age     <- glu3$age        # x, the feature
+glucose <- glu3$glucose    # y, the outcome label
+m       <- length(age)     # the number of samples
 
 # --------------------------------------------------------------------
-# Task 1 — Score two candidate lines on all 80 patients
+# Pause for understanding!
 # --------------------------------------------------------------------
+
+mse_practical <- function(beta0, beta1, x, y, m) {
+  (1 / m) * sum((y - (beta0 + beta1 * x))^2)
+}
+
+mse_practical(3, 5, age, glucose, m)
+
+mse_practical(beta0 = 3, beta1 = 5, x = age, y = glucose, m = m)
+
+((194 - 143)^2 + (129 - 223)^2 + (132 - 133)^2) / 3
 
 # Replace every ______ below, then run this cell.
-glu |>
-  mutate(r_3_5 = glucose - (3 + 5 * age),
-         r_4_7 = glucose - (______)) |>
-  summarise(at_3_5 = mean(r_3_5^2),
-            at_4_7 = mean(r_4_7^2)) |>
-  round(1)
+mse_practical(beta0 = ______, beta1 = ______, x = age, y = glucose, m = m)
+
+ggplot(glu3, aes(x = age, y = glucose)) +
+  geom_point(size = 3) +
+  geom_abline(aes(intercept = 3, slope = 5, colour = "B0 = 3, B1 = 5"), linewidth = 1) +
+  geom_abline(aes(intercept = 4, slope = 7, colour = "B0 = 4, B1 = 7"), linewidth = 1) +
+  scale_colour_manual(values = c("blue", "red")) +
+  xlim(0, 60) +
+  ylim(0, 350) +
+  labs(title = "Different betas", x = "Age", y = "Glucose", colour = NULL)
 
 # --------------------------------------------------------------------
-# Step 2 — Every candidate line at once
+# Trying many lines
 # --------------------------------------------------------------------
 
-candidates <- expand_grid(b0 = seq(60, 160, by = 1),
-                          b1 = seq(-1, 2, by = 0.02))
+age     <- glu$age
+glucose <- glu$glucose
+m       <- length(age)
 
-scores <- candidates |>
-  cross_join(glu |> select(age, glucose)) |>
-  mutate(r = glucose - (b0 + b1 * age)) |>
-  summarise(MSE = mean(r^2),
-            MAE = mean(abs(r)), .by = c(b0, b1))
+line_data <- expand_grid(B0 = c(100, 110, 120), B1 = c(0, 0.25, 0.5, 0.75))
 
-scores
+ggplot(glu, aes(x = age, y = glucose)) +
+  geom_point(size = 2) +
+  geom_abline(data = line_data,
+              aes(intercept = B0, slope = B1,
+                  colour = factor(B0), linetype = factor(B1)), linewidth = 0.8) +
+  labs(title = "Effect of different B0 and B1 values on the regression line",
+       x = "Age (feature)", y = "Glucose (label)",
+       colour = "B0 (intercept)", linetype = "B1 (slope)")
 
-ggplot(scores, aes(x = b0, y = b1)) +
+# --------------------------------------------------------------------
+# The loss function in 3D
+# --------------------------------------------------------------------
+
+B0_values <- seq(60, 160, by = 1)
+B1_values <- seq(-1, 2, by = 0.02)
+
+df <- expand_grid(B0 = B0_values, B1 = B1_values) |>
+  rowwise() |>
+  mutate(MSE = mse_practical(beta0 = B0, beta1 = B1, x = age, y = glucose, m = m)) |>
+  ungroup()
+
+head(df)
+
+# persp() wants the MSE as a matrix: one row per B0, one column per B1
+MSE_matrix <- matrix(df$MSE, nrow = length(B0_values), ncol = length(B1_values),
+                     byrow = TRUE)
+best <- df[which.min(df$MSE), ]    # the lowest point, to mark it in red
+
+# colour each small tile of the surface by its height (dark = low MSE)
+n0 <- nrow(MSE_matrix)
+n1 <- ncol(MSE_matrix)
+tile_height <- (MSE_matrix[-1, -1] + MSE_matrix[-1, -n1] +
+                MSE_matrix[-n0, -1] + MSE_matrix[-n0, -n1]) / 4
+tile_colour <- viridisLite::magma(100)[cut(log10(tile_height), 100, labels = FALSE)]
+
+par(mar = c(3, 3, 1, 2))                # narrow margins around the plot
+view <- persp(B0_values, B1_values, MSE_matrix,
+              theta = 35, phi = 22,     # the angle we look from: try other numbers
+              col = tile_colour, border = NA, shade = 0.25,
+              ticktype = "detailed", expand = 0.75, cex.axis = 0.6,
+              xlab = "\nB0 (intercept)", ylab = "\nB1 (slope)", zlab = "\nMSE")
+points(trans3d(best$B0, best$B1, best$MSE, view), col = "red", pch = 19, cex = 1.6)
+
+# This plot needs the plotly package: install.packages("plotly")
+fig_3d <- plotly::plot_ly() |>
+  plotly::add_surface(x = B0_values, y = B1_values, z = t(MSE_matrix),
+                      colorbar = list(title = "MSE")) |>
+  plotly::add_markers(x = best$B0, y = best$B1, z = best$MSE,
+                      marker = list(size = 7, color = "red"),
+                      name = "Minimum MSE") |>
+  plotly::layout(scene = list(xaxis = list(title = "B0 (intercept)"),
+                              yaxis = list(title = "B1 (slope)"),
+                              zaxis = list(title = "MSE"),
+                              camera = list(eye = list(x = 1.5, y = -1.7, z = 0.9))))
+
+fig_3d
+
+min(df$MSE)
+
+# Find the minimum point
+filter(df, MSE == min(MSE))
+
+ggplot(df, aes(x = B0, y = B1)) +
   geom_raster(aes(fill = log10(MSE))) +
-  geom_contour(aes(z = log10(MSE)), colour = "white",
-               alpha = 0.4, bins = 12) +
-  annotate("point", x = coef(fit_ols)[[1]], y = coef(fit_ols)[[2]],
-           colour = "red", size = 3) +
+  geom_contour(aes(z = log10(MSE)), colour = "white", alpha = 0.4, bins = 12) +
+  geom_point(data = best, colour = "red", size = 3) +
   scale_fill_viridis_c(option = "magma") +
-  labs(x = expression(hat(beta)[0]), y = expression(hat(beta)[1]),
-       fill = "log10(MSE)")
+  labs(x = "B0 (intercept)", y = "B1 (slope)", fill = "log10(MSE)")
 
-# --------------------------------------------------------------------
-# Task 2 — Find the best candidate under each loss
-# --------------------------------------------------------------------
+lm_model <- linear_reg() |>
+  set_engine("lm") |>        # the lm implementation of linear regression
+  set_mode("regression")
 
-# Replace every ______ below, then run this cell.
-scores |> slice_min(______, n = 1)
-scores |> slice_min(MAE, n = 1)
+fit1 <- lm_model |>
+  fit(glucose ~ age, data = glu)
 
-coef(fit_ols)   # the fitted line, to compare
-
-scores_bad <- candidates |>
-  cross_join(glu_bad |> select(age, glucose)) |>
-  mutate(r = glucose - (b0 + b1 * age)) |>
-  summarise(MSE = mean(r^2),
-            MAE = mean(abs(r)), .by = c(b0, b1))
-
-bind_rows(
-  clean_MSE        = scores     |> slice_min(MSE, n = 1) |> select(b0, b1),
-  contaminated_MSE = scores_bad |> slice_min(MSE, n = 1) |> select(b0, b1),
-  clean_MAE        = scores     |> slice_min(MAE, n = 1) |> select(b0, b1),
-  contaminated_MAE = scores_bad |> slice_min(MAE, n = 1) |> select(b0, b1),
-  .id = "best_under")
+fit1

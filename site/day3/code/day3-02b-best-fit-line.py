@@ -11,95 +11,139 @@
 
 
 # --------------------------------------------------------------------
-# Where we left off
+# Packages and data
 # --------------------------------------------------------------------
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+
 from sklearn.linear_model import LinearRegression
 
 glu = pd.read_csv("data/glucose_study.csv")
 
-fit_ols = LinearRegression().fit(glu[["age"]], glu["glucose"])
+glu3 = glu.iloc[:3]
+glu3
 
-glu_bad = glu.copy()
-glu_bad.loc[[0, 2, 4], "glucose"] *= 3
-
-fit_ols.intercept_, fit_ols.coef_[0]
-
-# --------------------------------------------------------------------
-# Step 1 — The loss as a function of the parameters
-# --------------------------------------------------------------------
-
-first3 = glu.head(3).copy()
-first3["pred"] = 3 + 5 * first3["age"]
-first3["r"]    = first3["glucose"] - first3["pred"]
-
-(first3["r"] ** 2).mean()
+age     = glu3["age"]       # x, the feature
+glucose = glu3["glucose"]   # y, the outcome label
+m       = len(age)          # the number of samples
 
 # --------------------------------------------------------------------
-# Task 1 — Score two candidate lines on all 80 patients
+# Pause for understanding!
 # --------------------------------------------------------------------
+
+def mse_practical(beta0, beta1, x, y, m):
+    return (1 / m) * np.sum((y - (beta0 + beta1 * x)) ** 2)
+
+mse_practical(3, 5, age, glucose, m)
+
+mse_practical(beta0=3, beta1=5, x=age, y=glucose, m=m)
+
+((194 - 143)**2 + (129 - 223)**2 + (132 - 133)**2) / 3
 
 # Replace every ______ below, then run this cell.
-r_3_5 = glu["glucose"] - (3 + 5 * glu["age"])
-r_4_7 = glu["glucose"] - (______)
+mse_practical(beta0=______, beta1=______, x=age, y=glucose, m=m)
 
-pd.Series({"at_3_5": (r_3_5 ** 2).mean(),
-           "at_4_7": (r_4_7 ** 2).mean()}).round(1)
-
-# --------------------------------------------------------------------
-# Step 2 — Every candidate line at once
-# --------------------------------------------------------------------
-
-b0s = np.arange(60, 161, 1)
-b1s = np.round(np.arange(-1, 2.001, 0.02), 2)
-
-candidates = pd.MultiIndex.from_product(
-    [b0s, b1s], names=["b0", "b1"]).to_frame(index=False)
-
-scores = candidates.merge(glu[["age", "glucose"]], how="cross")
-scores["r"] = scores["glucose"] - (scores["b0"] + scores["b1"] * scores["age"])
-scores = (scores.assign(sq=lambda d: d["r"] ** 2,
-                        ab=lambda d: d["r"].abs())
-                .groupby(["b0", "b1"], as_index=False)
-                .agg(MSE=("sq", "mean"), MAE=("ab", "mean")))
-
-scores.head()
-
-surface = scores.pivot(index="b1", columns="b0", values="MSE")
+ages = np.array([0, 60])   # the two ends of each line
 
 fig, ax = plt.subplots()
-cs = ax.contourf(surface.columns, surface.index,
-                 np.log10(surface.values), levels=20, cmap="magma")
-ax.scatter([fit_ols.intercept_], [fit_ols.coef_[0]], color="red", zorder=3)
-cbar = fig.colorbar(cs, ax=ax, label="log10(MSE)")
-ax.set_xlabel(r"$\hat\beta_0$")
-ax.set_ylabel(r"$\hat\beta_1$")
+ax.scatter(glu3["age"], glu3["glucose"], color="black", s=60, zorder=3)
+ax.plot(ages, 3 + 5 * ages, color="blue", label="B0 = 3, B1 = 5")
+ax.plot(ages, 4 + 7 * ages, color="red", label="B0 = 4, B1 = 7")
+ax.set_xlim(0, 60)
+ax.set_ylim(0, 350)
+ax.set_title("Different betas")
+ax.set_xlabel("Age")
+ax.set_ylabel("Glucose")
+ax.legend()
 plt.show()
 
 # --------------------------------------------------------------------
-# Task 2 — Find the best candidate under each loss
+# Trying many lines
 # --------------------------------------------------------------------
 
-# Replace every ______ below, then run this cell.
-print(scores.nsmallest(1, ______))
-print(scores.nsmallest(1, "MAE"))
+age     = glu["age"]
+glucose = glu["glucose"]
+m       = len(age)
 
-print(fit_ols.intercept_, fit_ols.coef_[0])   # the fitted line, to compare
+ages = np.array([glu["age"].min(), glu["age"].max()])
 
-scores_bad = candidates.merge(glu_bad[["age", "glucose"]], how="cross")
-scores_bad["r"] = (scores_bad["glucose"]
-                   - (scores_bad["b0"] + scores_bad["b1"] * scores_bad["age"]))
-scores_bad = (scores_bad.assign(sq=lambda d: d["r"] ** 2,
-                                ab=lambda d: d["r"].abs())
-                        .groupby(["b0", "b1"], as_index=False)
-                        .agg(MSE=("sq", "mean"), MAE=("ab", "mean")))
+fig, ax = plt.subplots(figsize=(8, 4.5))
+ax.scatter(glu["age"], glu["glucose"], color="black", s=25, zorder=3)
+colours = {100: "tab:red", 110: "tab:green", 120: "tab:blue"}    # one colour per intercept
+styles = {0: "-", 0.25: "--", 0.5: "-.", 0.75: ":"}              # one line type per slope
+for b0 in colours:
+    for b1 in styles:
+        ax.plot(ages, b0 + b1 * ages, color=colours[b0], linestyle=styles[b1],
+                label=f"B0 = {b0}, B1 = {b1}")
+ax.set_title("Effect of different B0 and B1 values on the regression line")
+ax.set_xlabel("Age (feature)")
+ax.set_ylabel("Glucose (label)")
+ax.legend(title="Parameter combination", bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=8)
+plt.tight_layout()
+plt.show()
 
-pd.DataFrame(
-    [scores.nsmallest(1, "MSE")[["b0", "b1"]].iloc[0],
-     scores_bad.nsmallest(1, "MSE")[["b0", "b1"]].iloc[0],
-     scores.nsmallest(1, "MAE")[["b0", "b1"]].iloc[0],
-     scores_bad.nsmallest(1, "MAE")[["b0", "b1"]].iloc[0]],
-    index=["clean_MSE", "contaminated_MSE", "clean_MAE", "contaminated_MAE"])
+# --------------------------------------------------------------------
+# The loss function in 3D
+# --------------------------------------------------------------------
+
+B0_values = np.arange(60, 161, 1)                   # 60, 61, ..., 160
+B1_values = np.round(np.linspace(-1, 2, 151), 2)    # -1, -0.98, ..., 2
+
+df = pd.DataFrame(
+    [{"B0": b0, "B1": b1, "MSE": mse_practical(b0, b1, age, glucose, m)}
+     for b0 in B0_values for b1 in B1_values]
+)
+
+df.head()
+
+from matplotlib.colors import LogNorm
+
+# plot_surface() wants the MSE as a matrix: one row per B1, one column per B0
+MSE_matrix = df.pivot(index="B1", columns="B0", values="MSE")
+B0_grid, B1_grid = np.meshgrid(MSE_matrix.columns, MSE_matrix.index)
+best = df[df["MSE"] == df["MSE"].min()]    # the lowest point, to mark it in red
+
+fig = plt.figure(figsize=(7, 5.5))
+ax = fig.add_subplot(projection="3d", computed_zorder=False)
+ax.plot_surface(B0_grid, B1_grid, MSE_matrix.values, cmap="magma", norm=LogNorm())
+ax.scatter(best["B0"], best["B1"], best["MSE"], color="red", s=70, zorder=5)
+ax.view_init(elev=22, azim=-55)    # the angle we look from: try other numbers
+ax.set_xlabel("B0 (intercept)")
+ax.set_ylabel("B1 (slope)")
+ax.set_zlabel("MSE", labelpad=12)
+plt.show()
+
+# This plot needs the plotly package: pip install plotly
+import plotly.graph_objects as go
+
+fig_3d = go.Figure(go.Surface(x=MSE_matrix.columns, y=MSE_matrix.index,
+                              z=MSE_matrix.values, colorbar={"title": "MSE"}))
+fig_3d.add_trace(go.Scatter3d(x=best["B0"], y=best["B1"], z=best["MSE"],
+                              mode="markers", marker={"size": 7, "color": "red"},
+                              name="Minimum MSE"))
+fig_3d.update_layout(scene={"xaxis_title": "B0 (intercept)",
+                            "yaxis_title": "B1 (slope)",
+                            "zaxis_title": "MSE",
+                            "camera": {"eye": {"x": 1.5, "y": -1.7, "z": 0.9}}})
+fig_3d.show()
+
+df["MSE"].min()
+
+# Find the minimum point
+df[df["MSE"] == df["MSE"].min()]
+
+fig, ax = plt.subplots()
+cs = ax.contourf(MSE_matrix.columns, MSE_matrix.index, np.log10(MSE_matrix.values),
+                 levels=20, cmap="magma")
+ax.scatter(best["B0"], best["B1"], color="red", zorder=3)
+fig.colorbar(cs, ax=ax, label="log10(MSE)")
+ax.set_xlabel("B0 (intercept)")
+ax.set_ylabel("B1 (slope)")
+plt.show()
+
+fit1 = LinearRegression()
+fit1 = fit1.fit(glu[["age"]], glu["glucose"])
+
+print(fit1.intercept_, fit1.coef_[0])
