@@ -205,10 +205,11 @@ def build_day(day, answers=False):
             z.write(ROOT / f, f)
 
     (work / "code").mkdir()
-    # The notebooks with blanks always; the "-solutions" notebooks only when the
-    # day is released with its answers (their links on the pages appear then too).
+    # Before the answers are released: the notebooks with blanks. After
+    # (ANSWERS=1): only the "-solutions" notebooks, which hold the whole exercise
+    # with the answers filled in; the pages switch their links the same way.
     for name in chapters:
-        for sfx in ("", "-solutions") if answers else ("",):
+        for sfx in ("-solutions",) if answers else ("",):
             for ext in (".Rmd", ".ipynb"):
                 src = ROOT / "code" / (name[:-4] + sfx + ext)
                 if src.exists():

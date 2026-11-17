@@ -1,11 +1,11 @@
 ---
-title: "Exercise 1.2 — Your first ML pipeline"
+title: "Exercise 1.2 — Your first ML pipeline (with solutions)"
 output: html_document
 ---
 
 *HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day1/day1-02-first-pipeline.html>.*
 
-*Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+*Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
 ## Overview
 
@@ -170,7 +170,7 @@ model.fit(X_train, y_train)
 
 path = os.path.join(tempfile.gettempdir(),
                     "los_fit_model.pkl")
-joblib.dump(model, path)
+saved = joblib.dump(model, path)
 
 model.intercept_, model.coef_
 ```
@@ -257,24 +257,34 @@ Remember the baby weight exercise from Module 2? Build a pipeline that predicts 
 
 If you are rewriting more than the variable names and the file path, stop and ask why.
 
-```{r}
-# Replace every ______ below, then run this cell.
-bwt <- read_csv("data/birthweight.csv")
-nrow(bwt)        # 600 pregnancies, if you have the right file
-
-set.seed(42)
-______
-```
-
 > **Stuck?**
 >
 > Exactly the five steps above, with three names changed. The functions are the ones you have already used: `initial_split()`, `training()`, `testing()`, `linear_reg() %>% set_engine("lm") %>% fit()`, `predict()`, `mae()`. The formula is `bw ~ bpd + ad`.
 
-### Solution
+> **Worked answer**
 
-> **Note**
->
-> Released after the session.
+```{r}
+#| message: false
+bwt <- read_csv("data/birthweight.csv")
+
+set.seed(42)
+split_bwt <- initial_split(bwt, prop = 0.8)
+train_bwt <- training(split_bwt)
+test_bwt  <- testing(split_bwt)
+c(train = nrow(train_bwt), test = nrow(test_bwt))
+
+fit_bwt   <- linear_reg() %>%
+  set_engine("lm") %>%
+  fit(bw ~ bpd + ad, data = train_bwt)
+preds_bwt <- predict(fit_bwt, test_bwt) %>% bind_cols(test_bwt)
+
+mae_bwt          <- mae(preds_bwt, truth = bw, estimate = .pred)$.estimate
+mae_bwt_baseline <- mean(abs(test_bwt$bw - mean(train_bwt$bw)))
+
+c(model = mae_bwt, baseline = mae_bwt_baseline)
+```
+
+### Solution
 
 Report the test MAE and the model details
 
