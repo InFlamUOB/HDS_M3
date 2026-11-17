@@ -14,6 +14,9 @@
 # Packages and data
 # --------------------------------------------------------------------
 
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels"))
+
 library(tidyverse)
 library(tidymodels)
 

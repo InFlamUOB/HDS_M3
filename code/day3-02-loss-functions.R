@@ -14,6 +14,9 @@
 # Packages and data
 # --------------------------------------------------------------------
 
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse"))
+
 library(tidyverse)
 
 theme_set(theme_bw())         # white background for every plot

@@ -30,6 +30,10 @@ r_guess  = y - (120 + 0.5 * x)
 print({"fitted": (r_fitted.sum(), (x * r_fitted).sum()),
        "guess":  (r_guess.sum(),  (x * r_guess).sum())})
 
+# Packages for this exercise. If one is missing, install it once from a terminal
+# (in a Jupyter notebook, type %pip instead of pip):
+# pip install pandas numpy scikit-learn
+
 rows = []
 for lo, hi in [(21, 25), (21, 30), (21, 40), (21, 81)]:
     s = glu[(glu["age"] >= lo) & (glu["age"] <= hi)]

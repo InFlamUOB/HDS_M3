@@ -14,6 +14,9 @@
 # Minimising $f(x) = x^2$
 # --------------------------------------------------------------------
 
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "patchwork"))
+
 library(tidyverse)
 library(patchwork)
 

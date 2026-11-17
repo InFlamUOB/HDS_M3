@@ -1,6 +1,6 @@
 # Exercise 9.2 — SHAP values: global and local explanations
 # HDS MSc · Module 3 · exercise booklet
-# https://inflamuob.github.io/HDS_M3/day6/day6-02-shap.html
+# https://inflamuob.github.io/HDS_M3/day9/day6-02-shap.html
 #
 # The R code from the chapter, in page order, for you to copy and run.
 # Lines with ______ are blanks to fill in, so this file is a worksheet:
@@ -13,6 +13,9 @@
 # --------------------------------------------------------------------
 # Packages and data
 # --------------------------------------------------------------------
+
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "kernelshap", "ranger", "shapviz", "vip"))
 
 library(tidyverse)
 library(tidymodels)

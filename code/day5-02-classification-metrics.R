@@ -14,6 +14,9 @@
 # Packages and data
 # --------------------------------------------------------------------
 
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "patchwork"))
+
 library(tidyverse)
 library(tidymodels)
 library(patchwork)             # to put two plots side by side

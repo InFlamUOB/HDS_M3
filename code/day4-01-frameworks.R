@@ -14,6 +14,9 @@
 # Packages
 # --------------------------------------------------------------------
 
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "glmnet", "rpart"))
+
 library(tidyverse)
 library(tidymodels)
 
