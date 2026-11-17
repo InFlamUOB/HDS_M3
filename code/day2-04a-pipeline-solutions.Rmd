@@ -252,6 +252,45 @@ model.fit(X_train, y_train)
 > the values learned from training, then predicts length of stay. Nothing
 > is recalculated from the test patients.
 
+### From Exercise 1.2 to this pipeline
+
+In Exercise 1.2 there was no preprocessing: the model went straight onto the
+data. Here is what stays the same and what is new, in both languages:
+
+| Step | Exercise 1.2 | Exercise 2.6 |
+|---|---|---|
+| The model, R | `los_model <- linear_reg() %>% set_engine("lm")` | the same `linear_reg()` and `set_engine("lm")` |
+| The model, Python | `model = LinearRegression()` | the same `LinearRegression()`, now the last step of the pipeline |
+| Preprocessing, R | none | `rec <- recipe(...)` followed by the `step_...()` functions |
+| Preprocessing, Python | none | `numeric`, `categorical` and `ColumnTransformer(...)` |
+| Preprocessing + model together, R | not needed | `workflow()`, then `add_recipe(rec)` and `add_model(los_model)` |
+| Preprocessing + model together, Python | not needed | `Pipeline([("preprocess", ...), ("regression", LinearRegression())])` |
+| Fit, R | `fit(LOS ~ Age + Severity, data = train)` | `fit(data = train)`: the formula is now in the recipe |
+| Fit, Python | `model.fit(X_train, y_train)` | `model.fit(X_train, y_train)`: unchanged |
+| Predict, R | `predict(los_fit, test)` | `predict(los_fit, test)`: unchanged |
+| Predict, Python | `model.predict(X_test)` | `model.predict(X_test)`: unchanged |
+
+**In both languages** the model, `fit` and `predict` are what you already know.
+The new part is the preprocessing and the single object that holds it together
+with the model (`workflow()` in R, `Pipeline` in Python). That object is what
+makes sure every value the preprocessing learns comes from the training
+patients only.
+
+**Where the two languages differ:**
+
+- In R the formula moves into the recipe, so `fit()` takes only the data. In
+  Python the predictors and the outcome are still passed separately,
+  `fit(X_train, y_train)`, as in Exercise 1.2.
+- R chooses columns for each step with selectors such as
+  `all_numeric_predictors()`; Python lists them (`num`, `cat`) and sends them
+  through `ColumnTransformer`.
+- Python names every step in quotes (`"impute"`, `"regression"`); R steps
+  have no names.
+- `step_dummy()` leaves out one category per variable and `OneHotEncoder()`
+  does not, so R ends with 9 columns and Python with 11 (Task 2, part C).
+- `%>%` (Exercise 1.2) and `|>` (here) are two versions of the R pipe; they do
+  the same job in this code.
+
 The same pipeline, read across the two columns:
 
 | What it does | Python | R |
