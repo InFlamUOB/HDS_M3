@@ -24,7 +24,7 @@ r_pkgs  <- c("tidymodels", "tidyverse", "data.table", "rpart", "reticulate",
              "kernelshap", "shapviz",        # SHAP values and plots (Day 9)
              "patchwork")                    # plots side by side
 py_pkgs <- c("pandas", "numpy", "matplotlib", "seaborn", "scikit-learn", "joblib",
-             "shap", "dalex", "plotly")   # shap and dalex: Day 9
+             "shap", "dalex>=1.8", "plotly")   # shap and dalex: Day 9
 
 # ---- R side ----------------------------------------------------------------
 missing <- r_pkgs[!vapply(r_pkgs, requireNamespace, logical(1), quietly = TRUE)]
