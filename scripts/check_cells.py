@@ -19,40 +19,41 @@ CHUNK = re.compile(r"^```\{(r|python)\}\n((?:#\|[^\n]*\n)*)(.*?)\n```[ \t]*$", r
 problems: list[str] = []
 
 def check_code_files() -> None:
-    """The downloadable scripts must still match the chapters they came from.
+    """The downloadable notebooks must still match the chapters they came from.
 
-    Only chapters that link to their code file are checked: a chapter without
+    Only chapters that link to their notebooks are checked: a chapter without
     that link simply does not offer a download yet.
     """
     sys.path.insert(0, str(ROOT / "scripts"))
-    import make_code_files as mcf
+    import make_notebooks as mnb
 
     n = 0
     for chapter in sorted(ROOT.glob("day*.qmd")):
-        dests = {lang: ROOT / "code" / (chapter.stem + ext)
-                 for lang, ext in mcf.EXT.items()}
-        if not mcf.offers_download(chapter):
-            for dest in dests.values():
+        dests = [ROOT / "code" / (chapter.stem + ext) for ext in mnb.EXT.values()]
+        if not mnb.offers_download(chapter):
+            for dest in dests:
                 if dest.exists():
                     problems.append(f"code/{dest.name} exists but {chapter.name} "
                                     "does not link to it; delete one or the other")
             continue
-        title, blocks = mcf.extract(chapter)
-        for lang, dest in dests.items():
-            chunks = blocks[lang]
-            if not chunks:
+        want = mnb.build(chapter)
+        for dest in dests:
+            if dest.name not in want:
                 if dest.exists():
-                    problems.append(f"code/{dest.name}: the chapter has no {lang} "
-                                    "cells left; delete the file")
+                    problems.append(f"code/{dest.name}: the chapter has no code in "
+                                    "that language; delete the file")
             elif not dest.exists():
                 problems.append(f"code/{dest.name} is missing; run "
-                                "python3 scripts/make_code_files.py")
-            elif dest.read_text() != mcf.render(chapter.stem, title, lang, chunks):
+                                "python3 scripts/make_notebooks.py")
+            elif dest.read_text() != want[dest.name]:
                 problems.append(f"code/{dest.name} is out of date; run "
-                                "python3 scripts/make_code_files.py")
+                                "python3 scripts/make_notebooks.py")
             else:
                 n += 1
-    print(f"\n  {n} downloadable code files match their chapters")
+    for old in sorted((ROOT / "code").glob("*")):
+        if old.suffix not in mnb.EXT.values():
+            problems.append(f"code/{old.name} is not a notebook; delete it")
+    print(f"\n  {n} downloadable notebooks match their chapters")
 
 
 def main() -> int:
