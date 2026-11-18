@@ -415,6 +415,21 @@ message("wrote hospital_admissions.csv: ", nrow(hospital), " rows; ",
         "creatinine_truth.csv: ", nrow(creatinine_truth), " rows")
 
 # ---------------------------------------------------------------------------
+# data/diabetes_clean.csv  - Days 4, 5 and 9
+#
+# diabetes.csv without the impossible zeros in glucose (5) and BMI (`mass`,
+# 13): 750 rows, lines copied unchanged and in the same order, so the Day 4, 5
+# and 9 exercises read it directly and students filter nothing.
+# ---------------------------------------------------------------------------
+if (file.exists("data/diabetes.csv")) {
+  diabetes_lines <- readLines("data/diabetes.csv")
+  diabetes_all <- readr::read_csv("data/diabetes.csv", show_col_types = FALSE)
+  keep <- diabetes_all$glucose > 0 & diabetes_all$mass > 0
+  writeLines(c(diabetes_lines[1], diabetes_lines[-1][keep]), "data/diabetes_clean.csv")
+  message("wrote diabetes_clean.csv: ", sum(keep), " rows")
+}
+
+# ---------------------------------------------------------------------------
 # data/glucose_study.csv  - the Day 3 case study
 #
 # Age and glucose for 80 screened adults, taken straight from diabetes.csv:
@@ -429,13 +444,4 @@ if (file.exists("data/diabetes.csv")) {
   glucose_study <- head(glucose_study, 80)
   readr::write_csv(glucose_study, "data/glucose_study.csv")
   message("wrote glucose_study.csv: ", nrow(glucose_study), " rows")
-
-  # data/diabetes_clean.csv - diabetes.csv without the impossible zeros in
-  # glucose (5) and BMI (`mass`, 13): 750 rows, same order and same text, so the
-  # Day 4, 5 and 9 exercises read it directly and students filter nothing.
-  diabetes_lines <- readLines("data/diabetes.csv")
-  diabetes_all <- readr::read_csv("data/diabetes.csv", show_col_types = FALSE)
-  keep <- diabetes_all$glucose > 0 & diabetes_all$mass > 0
-  writeLines(c(diabetes_lines[1], diabetes_lines[-1][keep]), "data/diabetes_clean.csv")
-  message("wrote diabetes_clean.csv: ", sum(keep), " rows")
 }
