@@ -13,12 +13,11 @@ get.
 
 ## Objectives
 
-- Write the gradient descent update rule from memory and say what each symbol
-  in it does.
-- Minimise a function of one variable in code, and diagnose from the printed
-  path whether the learning rate is too large, too small, or about right.
-- Explain why the same algorithm started from two different places returns two
-  different answers, and when that matters.
+- Write the gradient descent update rule and say what each symbol in it does.
+- Minimise a function in code, and tell from the printed path whether the
+  learning rate is too large, too small, or about right.
+- Explain why gradient descent on unscaled data can stop far from the answer
+  without any warning, and how standardising fixes it.
 
 ## Why this, here
 
@@ -175,125 +174,14 @@ the loop runs happily and returns a number.
 > both are a number. Always print the path, or the loss, and look at whether it is
 > going down.
 
-### Task 2 — Find the edge yourself
-
-Run the descent at learning rates either side of the boundary and identify, to
-within 0.05, the largest rate that still converges for $f(x) = x^2$.
-
-```{r}
-# Replace every ______ below, then run this cell.
-rates <- seq(0.8, 1.2, by = 0.05)
-finals <- sapply(rates, function(a) descend_1d(a, x0 = -10, n = ______))
-data.frame(alpha = rates, final_x = signif(finals, 3))
-```
-
-Then answer: the boundary you found is a property of $f(x) = x^2$ and would be
-different for $f(x) = 100x^2$. What does that imply about carrying a learning
-rate over from one problem to another?
-
-### Local and global minima
-
-Everything above had one minimum. Now take
-
-$$f(x) = x^4 + x^3 - 2x^2 \qquad f'(x) = 4x^3 + 3x^2 - 4x$$
-
-which has two: a shallow one near $x = 0.69$ and a deeper one near $x = -1.44$.
-
-```{r}
-h       <- function(x) x^4 + x^3 - 2 * x^2
-h_prime <- function(x) 4 * x^3 + 3 * x^2 - 4 * x
-
-descend_h <- function(x0, alpha = 0.03, n = 200) {
-  x <- x0
-  for (i in seq_len(n)) x <- x - alpha * h_prime(x)
-  c(start = x0, end = x, f_end = h(x))
-}
-
-t(sapply(c(1, 0.2, 0, -0.1, -0.5, 2), descend_h))
-```
-
-```{r}
-curve_h <- data.frame(x = seq(-2, 1.5, length.out = 300)) |> mutate(f_x = h(x))
-ends    <- data.frame(start = c(1, 0.2, 0, -0.1, -0.5, 2)) |>
-  mutate(end = sapply(start, function(s) descend_h(s)[["end"]]), f_end = h(end))
-
-ggplot(curve_h, aes(x, f_x)) +
-  geom_line(colour = "grey40") +
-  geom_point(data = ends, aes(x = end, y = f_end), colour = "red", size = 3) +
-  labs(x = "x", y = "f(x)")
-```
-
-Starting at 1, 0.2 or 2 lands on $x = 0.693$, where $f = -0.397$. Starting at
-−0.1 or −0.5 lands on $x = -1.443$, where $f = -2.833$ — seven times lower.
-Nothing distinguishes the two runs except where they began, and neither run can
-tell you it stopped in the worse of the two places.
-
-Starting at exactly 0 is the strangest case: the derivative there is zero, so the
-first step moves nowhere and every step after it moves nowhere. Gradient descent
-stops at any stationary point, and $x = 0$ here is a local *maximum*.
-
-> **Why this does not ruin least squares**
+> **One dip or several**
 >
-> The MSE surface you plotted in Exercise 3.3 is a bowl with one minimum —
-> convex, in the technical term — so for linear regression this whole worry is
-> moot: every starting point reaches the same answer. The worry is real for almost
-> everything else, which is why deep learning papers report random seeds, and why
-> "we trained it twice and got different models" is a sentence you will hear.
-
-### Task 3 — Where is the watershed
-
-Find, to within 0.05, the starting value between −0.1 and 0.2 at which the
-destination switches from one minimum to the other. Predict it before you
-compute it.
-
-```{r}
-# Replace every ______ below, then run this cell.
-starts <- seq(-0.1, 0.2, by = 0.01)
-data.frame(start = starts,
-           end = round(sapply(starts, function(s) ______), 3))
-```
-
-### Two parameters at once
-
-A loss has as many derivatives as it has parameters. Collect them into a
-gradient vector and the update rule is unchanged — it just applies to every
-parameter simultaneously. For
-
-$$f(x, y) = x\sin(y) + x^2 \qquad
-\nabla f = \left\langle \sin(y) + 2x,\; x\cos(y) \right\rangle$$
-
-```{r}
-fxy <- function(x, y) x * sin(y) + x^2
-grad_x <- function(x, y) sin(y) + 2 * x
-grad_y <- function(x, y) x * cos(y)
-
-x <- 1; y <- 2; alpha <- 0.01
-trace_xy <- data.frame(iter = 0, x = x, y = y, f = fxy(x, y))
-
-for (i in 1:1000) {
-  gx <- grad_x(x, y); gy <- grad_y(x, y)
-  x <- x - alpha * gx
-  y <- y - alpha * gy
-  if (i %% 100 == 0)
-    trace_xy <- rbind(trace_xy, data.frame(iter = i, x = x, y = y, f = fxy(x, y)))
-}
-trace_xy
-```
-
-It reaches $x = -0.5$, $y = 1.578$, $f = -0.25$, which is the exact minimum of
-this function: for any $y$ the best $x$ is $-\sin(y)/2$, giving
-$f = -\sin^2(y)/4$, smallest when $\sin y = 1$. Notice how much of the progress
-happens early — after 100 iterations $f$ is already −0.153, and the remaining 900
-buy −0.097.
-
-> **Partial derivatives by hand, and when not to**
->
-> We differentiated $f$ twice by hand, once per variable. For a model with a
-> million parameters nobody does that: the derivatives are generated
-> mechanically — symbolically, as a computer algebra system would, or by automatic
-> differentiation, which is what every deep learning framework is at bottom.
-> Knowing that the gradient is just a list of slopes is enough to read those
-> tools' output.
+> Some functions have more than one dip, and gradient descent stops in whichever
+> one it walks into first: start somewhere else and you can get a different
+> answer, with no warning. The MSE of a linear regression is a single bowl, as you
+> saw in Exercise 3.3, so every starting point reaches the same line. Most other
+> models are not so kind, which is why the same neural network trained twice can
+> give two different results.
 
 ### Gradient descent on the glucose data
 
@@ -307,7 +195,9 @@ $$\frac{\partial \text{MSE}}{\partial \beta_0} = -\frac{2}{m}\sum r_i
 \qquad
 \frac{\partial \text{MSE}}{\partial \beta_1} = -\frac{2}{m}\sum x_i r_i$$
 
-with $r_i = y_i - \beta_0 - \beta_1 x_i$. The extra reading at the end of Day 3 derives them.
+with $r_i = y_i - \beta_0 - \beta_1 x_i$ (the extra reading at the end of Day 3 derives
+them). Two coefficients means two derivatives, and the update rule is applied to
+both at the same time.
 
 ```{r}
 glu <- read_csv("data/glucose_study.csv")
@@ -350,7 +240,7 @@ The fix is to standardise both columns (subtract the mean, divide by the
 standard deviation) so that both coefficients are on the same scale, descend
 there, and convert the answer back.
 
-### Task 4 — Make it converge
+### Task 2 — Make it converge
 
 Standardise, descend with a learning rate a thousand times larger, and rescale
 the parameters to the original units.
@@ -381,12 +271,6 @@ same loss; twenty times fewer iterations and a thousand times larger step.
 Scaling was not a tidying-up step, it was the difference between an answer and
 no answer.
 
-> **One more thing the standardised fit tells you**
->
-> On standardised columns the fitted slope is 0.1347, which is exactly the
-> correlation between age and glucose. That is not a coincidence, and
-> the extra reading at the end of Day 3 shows why.
-
 ```{r}
 std_shown <- descend_mse((glu$age - mean(glu$age)) / sd(glu$age),
                          (glu$glucose - mean(glu$glucose)) / sd(glu$glucose),
@@ -412,29 +296,14 @@ telling you to change the learning rate or the number of steps.
    can the two intercepts — one on standardised columns, one on the original —
    differ while the predictions stay identical?
 
-## Stretch
-
-> **Stretch 1 — How few iterations do you need**
+> **Learning points**
 >
-> On the standardised data, find the smallest number of iterations at
-> $\alpha = 0.5$ that still matches `lm()` to three decimal places. Then halve the
-> learning rate and repeat. The product of the two numbers is roughly constant,
-> which is the trade-off every optimiser is managing.
-
-> **Stretch 2 — One patient at a time**
->
-> Modify `descend_mse()` to use a single randomly chosen patient's residual for
-> each update rather than the mean over all 80 — stochastic gradient descent. The
-> loss curve becomes noisy and the answer still arrives. Then say why a method
-> that uses a worse estimate of the gradient is the one used to fit models with
-> billions of parameters.
-
-## What you can and cannot now claim
-
-**Can:** that you can minimise a function numerically in either language,
-diagnose a learning rate from the loss curve, and state why a converged descent
-on a convex loss gives the same answer as `lm()`.
-
-**Cannot:** that you needed any of this for linear regression. For this
-particular model there is an exact formula, obtainable with algebra and no
-iteration at all, and that is the extra reading at the end of Day 3.
+> - Gradient descent repeats one step: move each coefficient against the
+>   derivative of the MSE with respect to that coefficient, scaled by the learning
+>   rate.
+> - The learning rate decides everything: too small is slow, too large overshoots
+>   and blows up, and neither raises an error.
+> - On unscaled columns the descent can stop far from the answer; standardise
+>   first, and always look at the loss curve.
+> - For linear regression the MSE is a single bowl, so the descent reaches the
+>   same line as `lm()` and `LinearRegression`.
