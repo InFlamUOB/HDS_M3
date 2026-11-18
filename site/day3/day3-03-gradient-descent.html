@@ -202,7 +202,7 @@ window.Quarto = {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./day3-04-ols.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Exercise 3.5 — Ordinary least squares, in closed form</span></a>
+  <a href="./day3-04-ols.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Extra reading — Ordinary least squares, in closed form</span></a>
   </div>
 </li>
     </ul>
@@ -245,7 +245,7 @@ window.Quarto = {
 </header>
 
 
-<p>This is the longest exercise of the day and the only one where you will watch an algorithm fail. Run the cells as you read; the printed output is what you should get.</p>
+<p>This is the longest exercise of the day and the only one where you will watch an algorithm stop far from the answer without any warning. Run the cells as you read; the printed output is what you should get.</p>
 <section id="objectives" class="level2">
 <h2 class="anchored" data-anchor-id="objectives">Objectives</h2>
 <div class="objective-list">
@@ -269,7 +269,7 @@ window.Quarto = {
 <p><span class="math display">\[x_{n+1} = x_n - \alpha f'(x_n)\]</span></p>
 <ul>
 <li><span class="math inline">\(x_n\)</span> is the current guess.</li>
-<li><span class="math inline">\(f'(x_n)\)</span> is the derivative of the function at that guess — the slope.</li>
+<li><span class="math inline">\(f'(x_n)\)</span> is the derivative of the function at that guess: the slope of the tangent to the curve there. When we fit a model, the function is the MSE and <span class="math inline">\(x\)</span> is one of the coefficients, so this slope is <strong>the derivative of the MSE with respect to the coefficient</strong>.</li>
 <li><span class="math inline">\(\alpha\)</span> is the learning rate: a small positive number controlling step size.</li>
 </ul>
 <p>The minus sign carries the whole idea. Where the slope is positive the function rises to the right, so we subtract and move left; where it is negative we subtract a negative and move right. Either way the step is <em>against</em> the slope, and the steeper the slope the bigger the step.</p>
@@ -595,13 +595,13 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 </div>
 </div>
 </section>
-<section id="the-result-that-should-bother-you" class="level3">
-<h3 class="anchored" data-anchor-id="the-result-that-should-bother-you">The result that should bother you</h3>
-<p>Now put the method on the actual problem: find the intercept and slope that minimise the MSE for glucose against age, by gradient descent instead of by <code>lm()</code>. The gradients of <span class="math inline">\(\text{MSE}(\beta_0, \beta_1) = \frac{1}{m}\sum (y_i - \beta_0 - \beta_1 x_i)^2\)</span> are</p>
+<section id="gradient-descent-on-the-glucose-data" class="level3">
+<h3 class="anchored" data-anchor-id="gradient-descent-on-the-glucose-data">Gradient descent on the glucose data</h3>
+<p>Now put the method on the actual problem: find the intercept and slope that minimise the MSE for glucose against age, by gradient descent instead of by <code>lm()</code>. The derivatives of <span class="math inline">\(\text{MSE}(\beta_0, \beta_1) = \frac{1}{m}\sum (y_i - \beta_0 - \beta_1 x_i)^2\)</span> with respect to the two coefficients are</p>
 <p><span class="math display">\[\frac{\partial \text{MSE}}{\partial \beta_0} = -\frac{2}{m}\sum r_i
 \qquad
 \frac{\partial \text{MSE}}{\partial \beta_1} = -\frac{2}{m}\sum x_i r_i\]</span></p>
-<p>with <span class="math inline">\(r_i = y_i - \beta_0 - \beta_1 x_i\)</span>. Exercise 3.5 derives them.</p>
+<p>with <span class="math inline">\(r_i = y_i - \beta_0 - \beta_1 x_i\)</span>. The extra reading at the end of Day 3 derives them.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>glu <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/glucose_study.csv"</span>)</span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -629,14 +629,10 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 #&gt; 110.2979509   0.2886749</code></pre>
 </div>
 </div>
-<p>After a thousand iterations the descent reports an intercept of 3.23 and a slope of 3.04, with an MSE of 2513. The correct answer is 110.298 and 0.2887, with an MSE of 847.5. The descent is not close, and it is worse than predicting the mean glucose for everybody, which scores 863.</p>
-<p>Three steps of reasoning.</p>
-<ol type="1">
-<li>The run did not fail. The MSE went down at every iteration and the loop finished without complaint. Had we only printed the final parameters and drawn a line through the data, the plot would have looked plausible.</li>
-<li>The cause is the shape of the surface from Exercise 3.3: a long diagonal trough, not a round bowl. Age has a mean of 33 and glucose a mean of 120, so the <span class="math inline">\(\beta_1\)</span> gradient is hundreds of times larger than the <span class="math inline">\(\beta_0\)</span> one. Any learning rate small enough to keep <span class="math inline">\(\beta_1\)</span> stable leaves <span class="math inline">\(\beta_0\)</span> crawling. Raising <span class="math inline">\(\alpha\)</span> to <span class="math inline">\(10^{-3}\)</span> does not fix it either — try it, and watch both parameters overflow to infinity within a few hundred steps.</li>
-<li>This is the usual failure of gradient descent on raw clinical data: not a wrong answer that announces itself, but a right-shaped answer that is nowhere near the optimum. The published version of this material reported those unconverged numbers as the optimised parameters.</li>
-</ol>
-<p>The fix is to standardise both columns — subtract the mean, divide by the standard deviation — so the trough becomes a bowl, descend there, and convert the answer back.</p>
+<p>After a thousand iterations the descent reports an intercept of 3.23 and a slope of 3.04, with an MSE of 2513. <code>lm()</code> gives 110.30 and 0.289, with an MSE of 847.5.</p>
+<p><strong>Why is it so far off? The descent has not finished.</strong> Both coefficients start at 0. The intercept has to travel all the way to about 110, the slope only to about 0.3. But the derivative of the MSE with respect to the slope is multiplied by age (33 years on average), so at the start it is about 34 times larger than the derivative with respect to the intercept. The learning rate has to be small enough that the slope does not overshoot, and at that rate the intercept crawls: it needs about 160,000 iterations to get within 1 of 110. Make the learning rate ten times larger (<span class="math inline">\(10^{-3}\)</span>) and the slope overshoots further at every step until the numbers blow up.</p>
+<p>Nothing warned us. The MSE went down at every iteration and the loop finished without an error. Compare with a known answer when you have one, and always look at the loss.</p>
+<p>The fix is to standardise both columns (subtract the mean, divide by the standard deviation) so that both coefficients are on the same scale, descend there, and convert the answer back.</p>
 </section>
 <section id="task-4-make-it-converge" class="level3">
 <h3 class="anchored" data-anchor-id="task-4-make-it-converge">Task 4 — Make it converge</h3>
@@ -681,7 +677,7 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>On standardised columns the fitted slope is 0.1347, which is exactly the correlation between age and glucose. That is not a coincidence, and Exercise 3.5 shows why.</p>
+<p>On standardised columns the fitted slope is 0.1347, which is exactly the correlation between age and glucose. That is not a coincidence, and the extra reading at the end of Day 3 shows why.</p>
 </div>
 </div>
 <div class="cell" data-layout-align="center">
@@ -711,7 +707,7 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 <p><span class="math display">\[x_{n+1} = x_n - \alpha f'(x_n)\]</span></p>
 <ul>
 <li><span class="math inline">\(x_n\)</span> is the current guess.</li>
-<li><span class="math inline">\(f'(x_n)\)</span> is the derivative of the function at that guess — the slope.</li>
+<li><span class="math inline">\(f'(x_n)\)</span> is the derivative of the function at that guess: the slope of the tangent to the curve there. When we fit a model, the function is the MSE and <span class="math inline">\(x\)</span> is one of the coefficients, so this slope is <strong>the derivative of the MSE with respect to the coefficient</strong>.</li>
 <li><span class="math inline">\(\alpha\)</span> is the learning rate: a small positive number controlling step size.</li>
 </ul>
 <p>The minus sign carries the whole idea. Where the slope is positive the function rises to the right, so we subtract and move left; where it is negative we subtract a negative and move right. Either way the step is <em>against</em> the slope, and the steeper the slope the bigger the step.</p>
@@ -1035,13 +1031,13 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 </div>
 </div>
 </section>
-<section id="the-result-that-should-bother-you-1" class="level3">
-<h3 class="anchored" data-anchor-id="the-result-that-should-bother-you-1">The result that should bother you</h3>
-<p>Now put the method on the actual problem: find the intercept and slope that minimise the MSE for glucose against age, by gradient descent instead of by <code>LinearRegression</code>. The gradients of <span class="math inline">\(\text{MSE}(\beta_0, \beta_1) = \frac{1}{m}\sum (y_i - \beta_0 - \beta_1 x_i)^2\)</span> are</p>
+<section id="gradient-descent-on-the-glucose-data-1" class="level3">
+<h3 class="anchored" data-anchor-id="gradient-descent-on-the-glucose-data-1">Gradient descent on the glucose data</h3>
+<p>Now put the method on the actual problem: find the intercept and slope that minimise the MSE for glucose against age, by gradient descent instead of by <code>LinearRegression</code>. The derivatives of <span class="math inline">\(\text{MSE}(\beta_0, \beta_1) = \frac{1}{m}\sum (y_i - \beta_0 - \beta_1 x_i)^2\)</span> with respect to the two coefficients are</p>
 <p><span class="math display">\[\frac{\partial \text{MSE}}{\partial \beta_0} = -\frac{2}{m}\sum r_i
 \qquad
 \frac{\partial \text{MSE}}{\partial \beta_1} = -\frac{2}{m}\sum x_i r_i\]</span></p>
-<p>with <span class="math inline">\(r_i = y_i - \beta_0 - \beta_1 x_i\)</span>. Exercise 3.5 derives them.</p>
+<p>with <span class="math inline">\(r_i = y_i - \beta_0 - \beta_1 x_i\)</span>. The extra reading at the end of Day 3 derives them.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
 <span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>glu <span class="op">=</span> pd.read_csv(<span class="st">"data/glucose_study.csv"</span>)</span>
@@ -1063,14 +1059,10 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 <pre><code>#&gt; (np.float64(3.2340597363518033), np.float64(3.040202790594225), np.float64(2512.5215912023486))</code></pre>
 </div>
 </div>
-<p>After a thousand iterations the descent reports an intercept of 3.23 and a slope of 3.04, with an MSE of 2513. The correct answer is 110.298 and 0.2887, with an MSE of 847.5. The descent is not close, and it is worse than predicting the mean glucose for everybody, which scores 863.</p>
-<p>Three steps of reasoning.</p>
-<ol type="1">
-<li>The run did not fail. The MSE went down at every iteration and the loop finished without complaint. Had we only printed the final parameters and drawn a line through the data, the plot would have looked plausible.</li>
-<li>The cause is the shape of the surface from Exercise 3.3: a long diagonal trough, not a round bowl. Age has a mean of 33 and glucose a mean of 120, so the <span class="math inline">\(\beta_1\)</span> gradient is hundreds of times larger than the <span class="math inline">\(\beta_0\)</span> one. Any learning rate small enough to keep <span class="math inline">\(\beta_1\)</span> stable leaves <span class="math inline">\(\beta_0\)</span> crawling. Raising <span class="math inline">\(\alpha\)</span> to <span class="math inline">\(10^{-3}\)</span> does not fix it either — try it, and watch both parameters overflow to infinity within a few hundred steps.</li>
-<li>This is the usual failure of gradient descent on raw clinical data: not a wrong answer that announces itself, but a right-shaped answer that is nowhere near the optimum. The published version of this material reported those unconverged numbers as the optimised parameters.</li>
-</ol>
-<p>The fix is to standardise both columns — subtract the mean, divide by the standard deviation — so the trough becomes a bowl, descend there, and convert the answer back.</p>
+<p>After a thousand iterations the descent reports an intercept of 3.23 and a slope of 3.04, with an MSE of 2513. <code>LinearRegression</code> gives 110.30 and 0.289, with an MSE of 847.5.</p>
+<p><strong>Why is it so far off? The descent has not finished.</strong> Both coefficients start at 0. The intercept has to travel all the way to about 110, the slope only to about 0.3. But the derivative of the MSE with respect to the slope is multiplied by age (33 years on average), so at the start it is about 34 times larger than the derivative with respect to the intercept. The learning rate has to be small enough that the slope does not overshoot, and at that rate the intercept crawls: it needs about 160,000 iterations to get within 1 of 110. Make the learning rate ten times larger (<span class="math inline">\(10^{-3}\)</span>) and the slope overshoots further at every step until the numbers blow up.</p>
+<p>Nothing warned us. The MSE went down at every iteration and the loop finished without an error. Compare with a known answer when you have one, and always look at the loss.</p>
+<p>The fix is to standardise both columns (subtract the mean, divide by the standard deviation) so that both coefficients are on the same scale, descend there, and convert the answer back.</p>
 </section>
 <section id="task-4-make-it-converge-1" class="level3">
 <h3 class="anchored" data-anchor-id="task-4-make-it-converge-1">Task 4 — Make it converge</h3>
@@ -1104,7 +1096,7 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>On standardised columns the fitted slope is 0.1347, which is exactly the correlation between age and glucose. That is not a coincidence, and Exercise 3.5 shows why.</p>
+<p>On standardised columns the fitted slope is 0.1347, which is exactly the correlation between age and glucose. That is not a coincidence, and the extra reading at the end of Day 3 shows why.</p>
 </div>
 </div>
 <div class="cell" data-layout-align="center">
@@ -1169,7 +1161,7 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 <section id="what-you-can-and-cannot-now-claim" class="level2">
 <h2 class="anchored" data-anchor-id="what-you-can-and-cannot-now-claim">What you can and cannot now claim</h2>
 <p><strong>Can:</strong> that you can minimise a function numerically in either language, diagnose a learning rate from the loss curve, and state why a converged descent on a convex loss gives the same answer as <code>lm()</code>.</p>
-<p><strong>Cannot:</strong> that you needed any of this for linear regression. For this particular model there is an exact formula, obtainable with algebra and no iteration at all, and that is Exercise 3.5.</p>
+<p><strong>Cannot:</strong> that you needed any of this for linear regression. For this particular model there is an exact formula, obtainable with algebra and no iteration at all, and that is the extra reading at the end of Day 3.</p>
 
 
 </section>
@@ -1587,8 +1579,8 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
       </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a href="./day3-04-ols.html" class="pagination-link" aria-label="Exercise 3.5 — Ordinary least squares, in closed form">
-        <span class="nav-page-text"><span class="chapter-title">Exercise 3.5 — Ordinary least squares, in closed form</span></span> <i class="bi bi-arrow-right-short"></i>
+      <a href="./day3-04-ols.html" class="pagination-link" aria-label="Extra reading — Ordinary least squares, in closed form">
+        <span class="nav-page-text"><span class="chapter-title">Extra reading — Ordinary least squares, in closed form</span></span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

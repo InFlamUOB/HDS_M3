@@ -8,7 +8,7 @@ output: html_document
 *Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
 
 This is the longest exercise of the day and the only one where you will watch an
-algorithm fail. Run the cells as you read; the printed output is what you should
+algorithm stop far from the answer without any warning. Run the cells as you read; the printed output is what you should
 get.
 
 ## Objectives
@@ -32,7 +32,10 @@ fitted by the method on this page instead: start somewhere, measure which way is
 $$x_{n+1} = x_n - \alpha f'(x_n)$$
 
 - $x_n$ is the current guess.
-- $f'(x_n)$ is the derivative of the function at that guess — the slope.
+- $f'(x_n)$ is the derivative of the function at that guess: the slope of the
+  tangent to the curve there. When we fit a model, the function is the MSE and
+  $x$ is one of the coefficients, so this slope is **the derivative of the MSE
+  with respect to the coefficient**.
 - $\alpha$ is the learning rate: a small positive number controlling step size.
 
 The minus sign carries the whole idea. Where the slope is positive the function
@@ -292,19 +295,19 @@ buy −0.097.
 > Knowing that the gradient is just a list of slopes is enough to read those
 > tools' output.
 
-### The result that should bother you
+### Gradient descent on the glucose data
 
 Now put the method on the actual problem: find the intercept and slope that
 minimise the MSE for glucose against age, by gradient descent instead of by
-`lm()`. The gradients of
+`lm()`. The derivatives of
 $\text{MSE}(\beta_0, \beta_1) = \frac{1}{m}\sum (y_i - \beta_0 - \beta_1 x_i)^2$
-are
+with respect to the two coefficients are
 
 $$\frac{\partial \text{MSE}}{\partial \beta_0} = -\frac{2}{m}\sum r_i
 \qquad
 \frac{\partial \text{MSE}}{\partial \beta_1} = -\frac{2}{m}\sum x_i r_i$$
 
-with $r_i = y_i - \beta_0 - \beta_1 x_i$. Exercise 3.5 derives them.
+with $r_i = y_i - \beta_0 - \beta_1 x_i$. The extra reading at the end of Day 3 derives them.
 
 ```{r}
 glu <- read_csv("data/glucose_study.csv")
@@ -327,29 +330,25 @@ coef(lm(glucose ~ age, data = glu))
 ```
 
 After a thousand iterations the descent reports an intercept of 3.23 and a slope
-of 3.04, with an MSE of 2513. The correct answer is 110.298 and 0.2887, with an
-MSE of 847.5. The descent is not close, and it is worse than predicting the mean
-glucose for everybody, which scores 863.
+of 3.04, with an MSE of 2513. `lm()` gives 110.30 and 0.289, with an MSE of 847.5.
 
-Three steps of reasoning.
+**Why is it so far off? The descent has not finished.** Both coefficients start
+at 0. The intercept has to travel all the way to about 110, the slope only to
+about 0.3. But the derivative of the MSE with respect to the slope is multiplied
+by age (33 years on average), so at the start it is about 34 times larger than
+the derivative with respect to the intercept. The learning rate has to be small
+enough that the slope does not overshoot, and at that rate the intercept
+crawls: it needs about 160,000 iterations to get within 1 of 110. Make the
+learning rate ten times larger ($10^{-3}$) and the slope overshoots further at
+every step until the numbers blow up.
 
-1. The run did not fail. The MSE went down at every iteration and the loop
-   finished without complaint. Had we only printed the final parameters and
-   drawn a line through the data, the plot would have looked plausible.
-2. The cause is the shape of the surface from Exercise 3.3: a long
-   diagonal trough, not a round bowl. Age has a mean of 33 and glucose a mean of
-   120, so the $\beta_1$ gradient is hundreds of times larger than the $\beta_0$
-   one. Any learning rate small enough to keep $\beta_1$ stable leaves $\beta_0$
-   crawling. Raising $\alpha$ to $10^{-3}$ does not fix it either — try it, and
-   watch both parameters overflow to infinity within a few hundred steps.
-3. This is the usual failure of gradient descent on raw clinical data: not a
-   wrong answer that announces itself, but a right-shaped answer that is nowhere
-   near the optimum. The published version of this material reported those
-   unconverged numbers as the optimised parameters.
+Nothing warned us. The MSE went down at every iteration and the loop finished
+without an error. Compare with a known answer when you have one, and always
+look at the loss.
 
-The fix is to standardise both columns — subtract the mean, divide by the
-standard deviation — so the trough becomes a bowl, descend there, and convert
-the answer back.
+The fix is to standardise both columns (subtract the mean, divide by the
+standard deviation) so that both coefficients are on the same scale, descend
+there, and convert the answer back.
 
 ### Task 4 — Make it converge
 
@@ -386,7 +385,7 @@ no answer.
 >
 > On standardised columns the fitted slope is 0.1347, which is exactly the
 > correlation between age and glucose. That is not a coincidence, and
-> Exercise 3.5 shows why.
+> the extra reading at the end of Day 3 shows why.
 
 ```{r}
 std_shown <- descend_mse((glu$age - mean(glu$age)) / sd(glu$age),
@@ -438,4 +437,4 @@ on a convex loss gives the same answer as `lm()`.
 
 **Cannot:** that you needed any of this for linear regression. For this
 particular model there is an exact formula, obtainable with algebra and no
-iteration at all, and that is Exercise 3.5.
+iteration at all, and that is the extra reading at the end of Day 3.

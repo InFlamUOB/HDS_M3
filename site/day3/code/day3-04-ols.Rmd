@@ -1,5 +1,5 @@
 ---
-title: "Exercise 3.5 — Ordinary least squares, in closed form"
+title: "Extra reading — Ordinary least squares, in closed form"
 output: html_document
 ---
 
@@ -7,30 +7,23 @@ output: html_document
 
 *Open it in Positron or RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
 
-## Objectives
-
-- Derive the ordinary least squares estimators for a single predictor, in your
-  own handwriting, from the squared-error loss.
-- Compute both estimators from a dataset with nothing but means, a covariance
-  and a variance, and show that they agree with `lm()`.
-- Name the two conditions the derivation imposes on the fitted residuals, and
-  check them numerically.
+This page is reading, not an exercise: there is nothing to fill in. Read it
+after Exercise 3.4, run the code if you want to see the numbers for yourself,
+and come back to it when you meet linear regression again.
 
 ## Why this, here
 
 Exercise 3.4 minimised the squared-error loss by walking downhill, and
 needed standardised columns and a well-chosen learning rate to get there. For
 this particular loss and this particular model, none of that is necessary: the
-minimum can be written down. This exercise does the algebra, and then checks it
+minimum can be written down. This page does the algebra, and then checks it
 against the software.
 
-> **This exercise is one language, deliberately**
+> **Mostly algebra**
 >
-> The derivation is algebra and has no R version or Python version. Only the
-> verification at the end is code, and that appears in both languages. If you are
-> following the booklet in Python, the three pages of mathematics below still
-> apply to you in full — `LinearRegression` is solving the same equations as
-> `lm()`.
+> The derivation has no R version or Python version. Only the checks at the end
+> are code, and they appear in both languages. `LinearRegression` in Python is
+> solving the same equations as `lm()` in R.
 
 ## Setting up the minimisation problem
 
@@ -159,79 +152,98 @@ with more than one predictor the same argument is done in matrix
 form and gives $\hat{\beta} = (X^\top X)^{-1} X^\top y$, which is what `lm()`
 actually evaluates.
 
-## Task 1 — The closed form against the software
+## The closed form against the software
 
-Compute both estimators from means, a covariance and a variance, and compare
-them with the fitted model.
+Both estimators from means, a covariance and a variance, next to the fitted
+model:
 
 ```{r}
-# Replace every ______ below, then run this cell.
+# Packages for this page. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse"))
+
 library(tidyverse)
 
 glu <- read_csv("data/glucose_study.csv")
 x    <- glu$age
 y    <- glu$glucose
 
-b1hat <- ______ / ______
-b0hat <- mean(y) - b1hat * ______
+b1hat <- cov(x, y) / var(x)
+b0hat <- mean(y) - b1hat * mean(x)
 
 fit <- lm(glucose ~ age, data = glu)
 rbind(closed_form = c(b0hat, b1hat), lm = coef(fit))
 ```
 
-> **Stuck?**
->
-> Two functions, `cov()` and `var()`, in the order the formula gives them. The
-> third blank is the mean of the predictor.
+*For comparison, the same step in Python (not run here):*
+
+```python
+# Packages for this page. If one is missing, install it once from a terminal
+
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+
+glu = pd.read_csv("data/glucose_study.csv")
+x, y = glu["age"], glu["glucose"]
+
+b1hat = x.cov(y) / x.var()
+b0hat = y.mean() - b1hat * x.mean()
+
+fit = LinearRegression().fit(glu[["age"]], y)
+print({"closed_form": (b0hat, b1hat), "sklearn": (fit.intercept_, fit.coef_[0])})
+```
 
 Both give 110.298 and 0.2886749. Not approximately: to every digit either
-language will print. `lm()` is not doing anything you have not just done by
-hand, and neither is `LinearRegression`.
+language will print. `lm()` is not doing anything more than these two lines,
+and neither is `LinearRegression`.
 
 > **The covariance ratio also explains Exercise 3.4**
 >
 > Standardising both columns makes $\operatorname{Var}(x) = 1$ and turns
 > $\operatorname{Cov}(x,y)$ into the correlation, so on standardised data
 > $\hat\beta_1 = \operatorname{Cor}(x,y)$ — the 0.1347 the descent converged to.
-> The correlation is the slope of the standardised fit, which is a more useful
-> definition of it than the one most people carry.
 
-## Task 2 — The two conditions the derivation imposes
+## The two conditions the derivation imposes
 
 @eq-ols-d0 and @eq-ols-d1 say that at the optimum, $\sum r_i = 0$ and
 $\sum x_i r_i = 0$. Those are not assumptions about the world; they are
-consequences of having minimised. Check both for the fitted line, and for the
-hand-drawn line from Exercise 3.2.
+consequences of having minimised. Here they are for the fitted line, and for the
+hand-drawn line $120 + 0.5 \times \text{age}$ from Exercise 3.2:
 
 ```{r}
-# Replace every ______ below, then run this cell.
-r_fitted <- ______                     # residuals of the fitted line
+r_fitted <- resid(fit)                 # residuals of the fitted line
 r_guess  <- y - (120 + 0.5 * x)        # residuals of the hand-drawn line
 
 rbind(fitted = c(sum_r = sum(r_fitted), sum_xr = sum(x * r_fitted)),
       guess  = c(sum_r = sum(r_guess),  sum_xr = sum(x * r_guess)))
 ```
 
+*For comparison, the same step in Python (not run here):*
+
+```python
+r_fitted = y - fit.predict(glu[["age"]])   # residuals of the fitted line
+r_guess  = y - (120 + 0.5 * x)             # residuals of the hand-drawn line
+
+print({"fitted": (r_fitted.sum(), (x * r_fitted).sum()),
+       "guess":  (r_guess.sum(),  (x * r_guess).sum())})
+```
+
 The fitted residuals sum to something of the order of $10^{-13}$ and their
 product with age to the order of $10^{-11}$: zero, to the precision
-floating-point arithmetic allows. The hand-drawn line's residuals sum to −1338.5 and its
-cross-product to −47700.5.
+floating-point arithmetic allows. The hand-drawn line's residuals sum to −1338.5
+and its cross-product to −47700.5.
 
 That is a diagnostic worth keeping. If someone hands you fitted values from a
 least-squares model and the residuals do not sum to zero, either there is no
 intercept in the model or those are not least-squares fitted values.
 
-## The result that should bother you
+## The slope depends on the range of the predictor
 
 The derivation divides by $\operatorname{Var}(x)$. It therefore returns an
-answer for any dataset in which the predictor is not perfectly constant — and
-says nothing about how large that variance is. Refit the same model on
-progressively narrower age bands.
+answer for any dataset in which the predictor is not perfectly constant, and
+says nothing about how large that variance is. Here is the same model fitted on
+narrower and narrower age bands:
 
 ```{r}
-# Packages for this exercise. If one is missing, remove the # and run this line once:
-# install.packages(c("tidyverse"))
-
 bands <- list(c(21, 25), c(21, 30), c(21, 40), c(21, 81))
 
 do.call(rbind, lapply(bands, function(b) {
@@ -254,76 +266,18 @@ for lo, hi in [(21, 25), (21, 30), (21, 40), (21, 81)]:
 pd.DataFrame(rows)
 ```
 
-Three steps of reasoning.
+Over the full range the slope is 0.289 mg/dL per year. Among patients aged 21
+to 40 it is 2.21, and among those aged 21 to 30 it is 4.17: fourteen times the
+full-range estimate, from a subset of the same 80 patients. Restricting the age
+range cuts $\operatorname{Var}(x)$ from 190 to 8, and the covariance on top is
+estimated from fewer, closer points, so it is mostly noise. A slope is a
+property of a relationship *and of the range of predictor values the sample
+happened to cover*: when you compare your coefficient with someone else's,
+compare the predictor ranges first.
 
-1. Over the full range the slope is 0.289 mg/dL per year. Among patients aged
-   21 to 40 it is 2.21, and among those aged 21 to 30 it is 4.17 — fourteen
-   times the full-range estimate, from a subset of the same 80 patients.
-2. The mechanism is the denominator. Restricting the age range cuts
-   $\operatorname{Var}(x)$ from 190 to 8, and the covariance in the numerator is
-   estimated from fewer, closer points, so it is noise-dominated. The estimator
-   is behaving exactly as derived; the data cannot support what is being asked
-   of it.
-3. So a published slope is not a property of a relationship. It is a property of
-   a relationship *and the range of predictor values the sample happened to
-   cover*. When you compare your coefficient with someone else's, compare the
-   predictor ranges first.
-
-## Task 3 — Somewhere the formula has not been
-
-`data/birthweight.csv` holds 600 pregnancies: `bpd` (biparietal diameter, mm),
-`ad` (abdominal diameter, mm) and `bw` (birth weight, g). Apply the closed form
-to predict `bw` from `bpd`, and confirm it against the fitted model.
-
-```{r}
-# Replace every ______ below, then run this cell.
-bwt <- read_csv("data/birthweight.csv")
-
-slope_bw     <- ______
-intercept_bw <- ______
-
-fit_bw <- lm(bw ~ bpd, data = bwt)
-rbind(closed_form = c(intercept_bw, slope_bw), lm = coef(fit_bw))
-```
-
-The answer is 891.21 + 29.04 per mm of biparietal diameter. Then report two more
-things before you believe it: the in-sample MSE, and the MSE of predicting the
-mean birth weight for every pregnancy. Ours are 106,801 and 129,410, so the
-model removes 17% of the squared error — ten times what age managed for glucose,
-and still not a model anyone should be handed without the plot.
-
-## Reflection
+## Two things to think about
 
 1. The derivation never mentions the data being normally distributed,
-   independent, or anything else. What exactly does it assume, and where in the
-   algebra would you look to find out?
+   independent, or anything else. What exactly does it assume?
 2. Given that the closed form exists and takes microseconds, why is the whole of
    modern machine learning fitted by gradient descent?
-
-## Stretch
-
-> **Stretch 1 — Two predictors, in matrix form**
->
-> Build the design matrix $X$ with a column of ones and the columns `bpd` and
-> `ad`, and evaluate $(X^\top X)^{-1} X^\top y$ with `solve()` in R or
-> `np.linalg.solve` in Python. Compare with `lm(bw ~ bpd + ad)`. Then compare the
-> `bpd` coefficient with the single-predictor one from Task 3: here they are close
-> because `bpd` and `ad` are almost uncorrelated, which is unusual in clinical
-> data and is why the comparison is normally not so forgiving.
-
-> **Stretch 2 — Break the formula**
->
-> Construct a dataset where the closed form fails or misleads: all patients the
-> same age, two patients only, or one patient with an age of 10,000. Predict what
-> each will do before you run it, and say which of the three a real extract is
-> most likely to contain.
-
-## What you can and cannot now claim
-
-**Can:** that you can derive and compute the least squares estimators for one
-predictor, verify them against both languages' implementations, and state the
-two conditions a least-squares fit imposes on its residuals.
-
-**Cannot:** that any of today's models are good. Every number on every page was
-computed on the rows the model was fitted to, and we have not scored a single
-held-out patient.
