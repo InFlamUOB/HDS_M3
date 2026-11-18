@@ -142,7 +142,7 @@ Ask the explainer how well the model performs:
 
 ```{r}
 performance <- model_performance(explainer)
-performance$measures |> as_tibble()
+performance$measures |> as.data.frame()
 ```
 
 The AUC, 0.826, is the same as `roc_auc()` gives: a quick check that the
@@ -172,7 +172,7 @@ set.seed(1)
 importance_dalex <- model_parts(explainer)
 
 importance_dalex |>
-  as_tibble() |>
+  as.data.frame() |>
   filter(permutation == 0) |>        # permutation 0 is the average over the 10 shuffles
   select(variable, dropout_loss)
 ```
@@ -182,12 +182,12 @@ importance_dalex |>
 #| code-summary: "Code for this plot (optional)"
 #| fig-height: 3.5
 full_loss <- importance_dalex |>
-  as_tibble() |>
+  as.data.frame() |>
   filter(variable == "_full_model_", permutation == 0) |>
   pull(dropout_loss)
 
 importance_dalex |>
-  as_tibble() |>
+  as.data.frame() |>
   filter(permutation > 0, !variable %in% c("_full_model_", "_baseline_")) |>
   ggplot(aes(x = dropout_loss, y = reorder(variable, dropout_loss))) +
   geom_boxplot(fill = "coral", alpha = 0.6) +
@@ -230,7 +230,7 @@ pdp_glucose <- model_profile(explainer, variables = "glucose", type = "partial",
                              variable_splits_type = "uniform") # an evenly spaced grid
 
 pdp_glucose$agr_profiles |>
-  as_tibble() |>
+  as.data.frame() |>
   slice(seq(1, 101, by = 20))          # every 20th of the 101 grid points
 ```
 
@@ -259,7 +259,7 @@ Now the ICE profiles behind the average. They are stored in `cp_profiles`:
 #| code-summary: "Code for this plot (optional)"
 #| fig-height: 3.5
 pdp_glucose$cp_profiles |>
-  as_tibble() |>
+  as.data.frame() |>
   ggplot(aes(x = glucose, y = `_yhat_`, group = `_ids_`)) +
   geom_line(colour = "grey60", alpha = 0.4) +
   geom_line(data = pdp_glucose$agr_profiles,
@@ -351,7 +351,7 @@ shap_patient <- predict_parts(explainer, new_observation = new_observation,
                               type = "shap", B = 25)
 
 shap_patient |>
-  as_tibble() |>
+  as.data.frame() |>
   filter(B == 0) |>                    # B = 0 holds the average over the 25 orders
   select(variable, contribution) |>
   arrange(desc(abs(contribution)))
@@ -362,7 +362,7 @@ shap_patient |>
 #| code-summary: "Code for this plot (optional)"
 #| fig-height: 3
 shap_patient |>
-  as_tibble() |>
+  as.data.frame() |>
   filter(B == 0) |>
   ggplot(aes(x = contribution, y = reorder(variable, abs(contribution)),
              fill = contribution > 0)) +
@@ -391,7 +391,7 @@ breakdown_patient <- predict_parts(explainer, new_observation = new_observation,
                                    type = ______)
 
 breakdown_patient |>
-  as_tibble() |>
+  as.data.frame() |>
   select(variable, contribution, cumulative)
 ```
 
@@ -403,7 +403,7 @@ breakdown_patient <- predict_parts(explainer, new_observation = new_observation,
                                    type = "break_down")
 
 breakdown_patient |>
-  as_tibble() |>
+  as.data.frame() |>
   select(variable, contribution, cumulative)
 ```
 
