@@ -69,7 +69,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="./">
 <link href="./day3-02b-best-fit-line.html" rel="next">
-<link href="./day3-01b-one-workflow.html" rel="prev">
+<link href="./day3-01-one-workflow.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
@@ -182,12 +182,7 @@ window.Quarto = {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./day3-01-supervised-learning.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Exercise 3.1 — Supervised learning</span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="./day3-01b-one-workflow.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Exercise 3.1b — One workflow, two models</span></a>
+  <a href="./day3-01-one-workflow.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Exercise 3.1 — One workflow, two models</span></a>
   </div>
 </li>
         <li class="sidebar-item">
@@ -268,6 +263,7 @@ window.Quarto = {
 <p><a href="code/day3-02-loss-functions.Rmd" download="day3-02-loss-functions.Rmd"><strong>Download this exercise as an R Markdown notebook (.Rmd)</strong></a>: the text and every code cell of the R version, including the code for the plots, with the blanks left for you to fill in. Open it in Positron or RStudio and run it a chunk at a time.</p>
 <section id="packages-and-data" class="level3">
 <h3 class="anchored" data-anchor-id="packages-and-data">Packages and data</h3>
+<p><code>data/glucose_study.csv</code> is the dataset for the rest of Day 3: age in years and one blood glucose measurement in mg/dL for 80 adults, taken from <code>data/diabetes.csv</code>, the file you met on Day 2.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Packages for this exercise. If one is missing, remove the # and run this line once:</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages(c("tidyverse"))</span></span>
@@ -303,22 +299,20 @@ window.Quarto = {
 </section>
 <section id="part-1-follow-one-prediction-into-a-loss" class="level3">
 <h3 class="anchored" data-anchor-id="part-1-follow-one-prediction-into-a-loss">Part 1 — Follow one prediction into a loss</h3>
-<p>Take the line from Exercise 3.1, with its two parameters rounded so that the arithmetic is easy to do by hand:</p>
+<p>Take the line that linear regression fits to these 80 people (you will fit it yourself in Part 3), with its two parameters rounded so that the arithmetic is easy to do by hand:</p>
 <p><span class="math display">\[\widehat{\text{glucose}} = 110 + 0.3 \times \text{age}\]</span></p>
 <p>and three people from the dataset:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>three <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">person  =</span> <span class="fu">c</span>(<span class="st">"A"</span>, <span class="st">"B"</span>, <span class="st">"C"</span>),</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>three <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">person  =</span> <span class="fu">c</span>(<span class="st">"A"</span>, <span class="st">"B"</span>, <span class="st">"C"</span>),</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>                <span class="at">age     =</span> <span class="fu">c</span>(<span class="dv">28</span>, <span class="dv">30</span>, <span class="dv">55</span>),</span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>                <span class="at">glucose =</span> <span class="fu">c</span>(<span class="dv">194</span>, <span class="dv">115</span>, <span class="dv">111</span>))</span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>three</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; # A tibble: 3 × 3
-#&gt;   person   age glucose
-#&gt;   &lt;chr&gt;  &lt;dbl&gt;   &lt;dbl&gt;
-#&gt; 1 A         28     194
-#&gt; 2 B         30     115
-#&gt; 3 C         55     111</code></pre>
+<pre><code>#&gt;   person age glucose
+#&gt; 1      A  28     194
+#&gt; 2      B  30     115
+#&gt; 3      C  55     111</code></pre>
 </div>
 </div>
 <p>Here they are with the line. The black points are the observed glucose values. The orange points are what the line predicts for a person of that age. The dashed red segment between the two is the residual.</p>
@@ -698,7 +692,7 @@ window.Quarto = {
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>                  <span class="st">"With three outliers"</span> <span class="ot">=</span> glu_outliers, <span class="at">.id =</span> <span class="st">"data"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">data =</span> <span class="fu">fct_inorder</span>(data))</span>
 <span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>lines <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">data      =</span> <span class="fu">fct_inorder</span>(<span class="fu">c</span>(<span class="st">"Without outliers"</span>, <span class="st">"With three outliers"</span>)),</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>lines <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">data      =</span> <span class="fu">fct_inorder</span>(<span class="fu">c</span>(<span class="st">"Without outliers"</span>, <span class="st">"With three outliers"</span>)),</span>
 <span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>                <span class="at">intercept =</span> <span class="fu">c</span>(<span class="fu">coef</span>(fit_clean)[<span class="dv">1</span>], <span class="fu">coef</span>(fit_outliers)[<span class="dv">1</span>]),</span>
 <span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>                <span class="at">slope     =</span> <span class="fu">c</span>(<span class="fu">coef</span>(fit_clean)[<span class="dv">2</span>], <span class="fu">coef</span>(fit_outliers)[<span class="dv">2</span>]))</span>
 <span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a></span>
@@ -804,6 +798,7 @@ window.Quarto = {
 <p><a href="code/day3-02-loss-functions.ipynb" download="day3-02-loss-functions.ipynb"><strong>Download this exercise as a Jupyter notebook (.ipynb)</strong></a>: the text and every code cell of the Python version, including the code for the plots, with the blanks left for you to fill in. Open it in Jupyter, VS Code or Positron and run it a cell at a time.</p>
 <section id="packages-and-data-1" class="level3">
 <h3 class="anchored" data-anchor-id="packages-and-data-1">Packages and data</h3>
+<p><code>data/glucose_study.csv</code> is the dataset for the rest of Day 3: age in years and one blood glucose measurement in mg/dL for 80 adults, taken from <code>data/diabetes.csv</code>, the file you met on Day 2.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Packages for this exercise. If one is missing, install it once from a terminal</span></span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="co"># (in a Jupyter notebook, type %pip instead of pip):</span></span>
@@ -839,7 +834,7 @@ window.Quarto = {
 </section>
 <section id="part-1-follow-one-prediction-into-a-loss-1" class="level3">
 <h3 class="anchored" data-anchor-id="part-1-follow-one-prediction-into-a-loss-1">Part 1 — Follow one prediction into a loss</h3>
-<p>Take the line from Exercise 3.1, with its two parameters rounded so that the arithmetic is easy to do by hand:</p>
+<p>Take the line that linear regression fits to these 80 people (you will fit it yourself in Part 3), with its two parameters rounded so that the arithmetic is easy to do by hand:</p>
 <p><span class="math display">\[\widehat{\text{glucose}} = 110 + 0.3 \times \text{age}\]</span></p>
 <p>and three people from the dataset:</p>
 <div class="cell" data-layout-align="center">
@@ -1799,8 +1794,8 @@ window.Quarto = {
   </script>
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
-      <a href="./day3-01b-one-workflow.html" class="pagination-link" aria-label="Exercise 3.1b — One workflow, two models">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-title">Exercise 3.1b — One workflow, two models</span></span>
+      <a href="./day3-01-one-workflow.html" class="pagination-link" aria-label="Exercise 3.1 — One workflow, two models">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-title">Exercise 3.1 — One workflow, two models</span></span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">

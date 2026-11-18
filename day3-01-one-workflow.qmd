@@ -4,7 +4,7 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 3.1b — One workflow, two models {#sec-one-workflow}
+# Exercise 3.1 — One workflow, two models {#sec-one-workflow}
 
 In R, you can fit a linear regression directly with `lm()`. In this practical
 you will use `lm()` as the engine inside the familiar tidymodels steps:
@@ -36,11 +36,11 @@ want it.
 ## R
 
 ::: {.content-hidden when-meta="show-solutions"}
-[**Download this exercise as an R Markdown notebook (.Rmd)**](code/day3-01b-one-workflow.Rmd){download="day3-01b-one-workflow.Rmd"}: the text and every code cell of the R version, including the code for the plots, with the blanks left for you to fill in. Open it in Positron or RStudio and run it a chunk at a time.
+[**Download this exercise as an R Markdown notebook (.Rmd)**](code/day3-01-one-workflow.Rmd){download="day3-01-one-workflow.Rmd"}: the text and every code cell of the R version, including the code for the plots, with the blanks left for you to fill in. Open it in Positron or RStudio and run it a chunk at a time.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
-[**Download the R notebook with the solutions (.Rmd)**](code/day3-01b-one-workflow-solutions.Rmd){download="day3-01b-one-workflow-solutions.Rmd"}: the same notebook with the worked answers filled in.
+[**Download the R notebook with the solutions (.Rmd)**](code/day3-01-one-workflow-solutions.Rmd){download="day3-01-one-workflow-solutions.Rmd"}: the same notebook with the worked answers filled in.
 :::
 
 ### Packages and data
@@ -133,7 +133,7 @@ Now check it with `predict()`, which uses the unrounded parameters:
 
 ```{r}
 # predict() wants a data frame: one row, one column per predictor
-predict(line_fit, new_data = tibble(age = 45))$.pred
+predict(line_fit, new_data = data.frame(age = 45))$.pred
 ```
 
 The two agree to within a few hundredths: the difference is only the
@@ -146,7 +146,7 @@ ggplot(train, aes(x = age, y = glucose)) +
   geom_point(colour = "steelblue") +
   geom_abline(intercept = b[1], slope = b[2],
               colour = "red", linetype = "dashed", linewidth = 1) +
-  annotate("point", x = 45, y = predict(line_fit, new_data = tibble(age = 45))$.pred,
+  annotate("point", x = 45, y = predict(line_fit, new_data = data.frame(age = 45))$.pred,
            colour = "red", size = 4) +
   labs(x = "Age (years)", y = "Glucose (mg/dL)",
        title = "Training patients, the fitted line, and the 45-year-old")
@@ -218,7 +218,7 @@ line_fit_1 <- lm_model |>
   fit(glucose ~ age, data = ______)
 
 line_fit_1$fit$coefficients
-predict(line_fit_1, new_data = tibble(age = ______))$.pred
+predict(line_fit_1, new_data = data.frame(age = ______))$.pred
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -240,7 +240,7 @@ line_fit_1 <- lm_model |>
   fit(glucose ~ age, data = train_1)
 
 line_fit_1$fit$coefficients
-predict(line_fit_1, new_data = tibble(age = 45))$.pred
+predict(line_fit_1, new_data = data.frame(age = 45))$.pred
 ```
 
 The slope more than doubles, from 0.25 to 0.57, and the prediction for the
@@ -254,12 +254,12 @@ Twenty different splits, twenty different lines:
 ```{r}
 #| code-fold: true
 #| code-summary: "Code for this plot (optional)"
-lines_20 <- tibble()
+lines_20 <- data.frame()
 for (s in 1:20) {
   set.seed(s)
   train_s <- training(initial_split(glu, prop = 0.8))
   fit_s <- lm_model |> fit(glucose ~ age, data = train_s)
-  lines_20 <- bind_rows(lines_20, tibble(
+  lines_20 <- bind_rows(lines_20, data.frame(
     seed = s,
     intercept = fit_s$fit$coefficients[1],
     slope = fit_s$fit$coefficients[2]))
@@ -335,7 +335,7 @@ predicted_patient
 Check it with `predict()`:
 
 ```{r}
-patient <- tibble(age = 45, BMI = 30)
+patient <- data.frame(age = 45, BMI = 30)
 
 predict(plane_fit, new_data = patient)$.pred
 ```
@@ -519,7 +519,7 @@ if (!exists("fig_tree")) knitr::asis_output(paste0(
    patients, so it never goes above or below what it saw in training:
 
 ```{r}
-old <- tibble(age = 90, BMI = 30)
+old <- data.frame(age = 90, BMI = 30)
 predict(plane_fit, new_data = old)$.pred
 predict(tree_fit, new_data = old)$.pred
 ```
@@ -541,11 +541,11 @@ predict(tree_fit, new_data = old)$.pred
 ## Python
 
 ::: {.content-hidden when-meta="show-solutions"}
-[**Download this exercise as a Jupyter notebook (.ipynb)**](code/day3-01b-one-workflow.ipynb){download="day3-01b-one-workflow.ipynb"}: the text and every code cell of the Python version, including the code for the plots, with the blanks left for you to fill in. Open it in Jupyter, VS Code or Positron and run it a cell at a time.
+[**Download this exercise as a Jupyter notebook (.ipynb)**](code/day3-01-one-workflow.ipynb){download="day3-01-one-workflow.ipynb"}: the text and every code cell of the Python version, including the code for the plots, with the blanks left for you to fill in. Open it in Jupyter, VS Code or Positron and run it a cell at a time.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
-[**Download the Jupyter notebook with the solutions (.ipynb)**](code/day3-01b-one-workflow-solutions.ipynb){download="day3-01b-one-workflow-solutions.ipynb"}: the same notebook with the worked answers filled in.
+[**Download the Jupyter notebook with the solutions (.ipynb)**](code/day3-01-one-workflow-solutions.ipynb){download="day3-01-one-workflow-solutions.ipynb"}: the same notebook with the worked answers filled in.
 :::
 
 ### Packages and data
@@ -766,8 +766,8 @@ ax.scatter(glu["age"], glu["glucose"], color="grey")
 for s in range(1, 21):
     train_s, _ = train_test_split(glu, test_size=0.2, random_state=s)
     model_s = LinearRegression().fit(train_s[["age"]], train_s["glucose"])
-    ax.plot(ages_line, model_s.intercept_ + model_s.coef_[0] * ages_line,
-            color="steelblue", alpha=0.5)
+    line_s = ax.plot(ages_line, model_s.intercept_ + model_s.coef_[0] * ages_line,
+                     color="steelblue", alpha=0.5)
 ax.set_xlabel("Age (years)")
 ax.set_ylabel("Glucose (mg/dL)")
 ax.set_title("The fitted line from 20 different training splits")
