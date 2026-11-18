@@ -9,9 +9,9 @@ output: html_document
 
 ## Overview
 
-Data preprocessing is a critical part of any data analysis workflow, as the choices we make when handling missing values, encoding variables, scaling features and transforming data can substantially influence downstream analyses and model performance.
-
-In the next exercise, you will explore how to bring these steps together using preprocessing pipelines. Frameworks such as `tidymodels` in R and `scikit-learn` in Python allow us to integrate preprocessing directly into the modelling workflow, making our analyses more reproducible, consistent and less prone to errors such as data leakage.
+In this exercise, we combine imputation, encoding, scaling and regression
+into one fitted workflow. We then inspect what the preprocessing learned
+from the training patients and apply it to unseen test patients.
 
 ## The scenario
 
@@ -139,6 +139,49 @@ patients and any new patients. Here our preprocessing steps require imputing mis
 encoding categorical variables and
 standardising numerical variables. This is the part that was not included in your exercise 1.2 yesterday!
 
+### How the pieces connect
+
+In Python, we build the workflow in three parts:
+
+1. **Two preprocessing pipelines:** numerical variables are imputed
+   and then scaled; categorical variables are imputed and then encoded.
+2. **A `ColumnTransformer`:** applies each pipeline to its selected
+   columns and joins the outputs side by side.
+3. **An outer `Pipeline`:** passes the combined, prepared predictors
+   to linear regression.
+
+Each entry in `ColumnTransformer` specifies a name, a transformer
+and the columns it should process:
+
+```python
+preprocessor = ColumnTransformer([
+    # Name          Pipeline       Columns
+    ("numeric",     numeric,       num),
+    ("categorical", categorical,   cat),
+])
+```
+
+**Within a `Pipeline`, each step receives the previous step's output.**
+The two branches inside `ColumnTransformer` work independently on
+different columns.
+
+The names in quotation marks, such as `"impute"` and `"regression"`, are
+labels we choose; we use them in Task 2 to look inside the fitted pipeline.
+`handle_unknown="ignore"` lets the pipeline process a new patient whose
+category was not seen in training: that patient's columns for the variable
+are all zero.
+
+In R, the `recipe()` defines the preprocessing steps and selects the
+variables for each step. `length_of_stay ~ .` names the outcome, and `.`
+means every other column is a predictor. A `workflow()` connects that recipe
+to the model. Because the formula is already in the recipe, `fit()` needs only
+the data. (`|>` is the base-R pipe; it does the same job as `%>%` in
+Exercise 1.2.)
+
+See the [ColumnTransformer documentation](https://scikit-learn.org/stable/modules/generated/sklearn.compose.ColumnTransformer.html)
+and the [recipes documentation](https://recipes.tidymodels.org/) for further
+details.
+
 ```{r}
 # "." means every other column
 rec <- recipe(
@@ -151,13 +194,11 @@ rec <- recipe(
   step_impute_mode(
     all_nominal_predictors()
   ) |>
+  step_normalize(
+    all_numeric_predictors()
+  ) |>
   step_dummy(
     all_nominal_predictors()
-  ) |>
-  step_normalize(
-    all_numeric_predictors(),
-    -starts_with("admission_type_"),
-    -starts_with("smoking_status_")
   )
 
 # The model: as in Exercise 1.2
@@ -203,93 +244,28 @@ model = Pipeline([
 model.fit(X_train, y_train)
 ```
 
-> **How to read this code: R**
->
-> 1. **`recipe(length_of_stay ~ ., data = train)`** defines what we want
->    to predict and which variables to use. `length_of_stay` is the
->    outcome; `.` means every other column is a predictor. Remove patient
->    identifiers beforehand.
->
-> 2. **`step_impute_median()`** replaces missing numerical values with
->    the median of each variable.
->
-> 3. **`step_impute_mode()`** replaces missing categorical values with
->    the most frequent category.
->
-> 4. **`step_dummy()`** converts categorical variables into numerical
->    indicator columns. By default, one category is left out as the
->    reference category for linear regression.
->
-> 5. **`step_normalize()`** centres numerical predictors on their mean
->    and divides by their standard deviation. The minus signs exclude
->    the dummy columns whose names start with `admission_type_` or
->    `smoking_status_`, keeping their values as 0 and 1.
->
-> 6. **`los_model <- linear_reg() |> set_engine("lm")`** is the model,
->    written exactly as in Exercise 1.2: *linear regression, computed by
->    `lm`*. It fits nothing yet and mentions no data.
->
-> 7. **`los_workflow <- workflow() |> add_recipe(rec) |> add_model(los_model)`**
->    puts the two pieces together: first the recipe (the preprocessing),
->    then the model. This is the new step compared with Exercise 1.2, and
->    the R counterpart of Python's `Pipeline`. We need it because the
->    recipe and the model must be fitted together: otherwise we would have
->    to learn the preprocessing and apply it by hand before every fit and
->    every prediction.
->
-> 8. **`los_fit <- los_workflow |> fit(data = train)`** is the same call as
->    in Exercise 1.2, with the workflow in place of the model. It learns the
->    preprocessing values (medians, most frequent categories, means and
->    standard deviations) from the training patients, applies the steps and
->    fits the regression. There is no formula in `fit()` this time: the
->    formula, `length_of_stay ~ .`, is already in the recipe.
->
-> **The recipe and the workflow set out the instructions; `fit()` learns
-> from the training data.**
->
-> When we later call `predict(los_fit, new_data = test)`, exactly as in
-> Exercise 1.2, the fitted workflow applies the same preprocessing using
-> the values learned from training, then predicts length of stay. Nothing
-> is recalculated from the test patients.
+`step_normalize()` standardises the numerical predictors before
+`step_dummy()` creates the indicator columns, so the new indicator columns
+keep their values of 0 and 1.
 
-### From Exercise 1.2 to this pipeline
-
-In Exercise 1.2 there was no preprocessing: the model went straight onto the
-data. Here is what stays the same and what is new, in both languages:
-
-| Step | Exercise 1.2 | Exercise 2.6 |
-|---|---|---|
-| The model, R | `los_model <- linear_reg() %>% set_engine("lm")` | the same `linear_reg()` and `set_engine("lm")` |
-| The model, Python | `model = LinearRegression()` | the same `LinearRegression()`, now the last step of the pipeline |
-| Preprocessing, R | none | `rec <- recipe(...)` followed by the `step_...()` functions |
-| Preprocessing, Python | none | `numeric`, `categorical` and `ColumnTransformer(...)` |
-| Preprocessing + model together, R | not needed | `workflow()`, then `add_recipe(rec)` and `add_model(los_model)` |
-| Preprocessing + model together, Python | not needed | `Pipeline([("preprocess", ...), ("regression", LinearRegression())])` |
-| Fit, R | `fit(LOS ~ Age + Severity, data = train)` | `fit(data = train)`: the formula is now in the recipe |
-| Fit, Python | `model.fit(X_train, y_train)` | `model.fit(X_train, y_train)`: unchanged |
-| Predict, R | `predict(los_fit, test)` | `predict(los_fit, test)`: unchanged |
-| Predict, Python | `model.predict(X_test)` | `model.predict(X_test)`: unchanged |
-
-**In both languages** the model, `fit` and `predict` are what you already know.
-The new part is the preprocessing and the single object that holds it together
-with the model (`workflow()` in R, `Pipeline` in Python). That object is what
-makes sure every value the preprocessing learns comes from the training
-patients only.
-
-**Where the two languages differ:**
-
-- In R the formula moves into the recipe, so `fit()` takes only the data. In
-  Python the predictors and the outcome are still passed separately,
-  `fit(X_train, y_train)`, as in Exercise 1.2.
-- R chooses columns for each step with selectors such as
-  `all_numeric_predictors()`; Python lists them (`num`, `cat`) and sends them
-  through `ColumnTransformer`.
-- Python names every step in quotes (`"impute"`, `"regression"`); R steps
-  have no names.
-- `step_dummy()` leaves out one category per variable and `OneHotEncoder()`
-  does not, so R ends with 9 columns and Python with 11 (Task 2, part C).
-- `%>%` (Exercise 1.2) and `|>` (here) are two versions of the R pipe; they do
-  the same job in this code.
+> **Defining, fitting and predicting**
+>
+> **Define:** creating a pipeline or workflow sets out the instructions.
+> No preprocessing parameters have been learned yet.
+>
+> **Fit:** `model.fit(X_train, y_train)` in Python or
+> `los_workflow |> fit(data = train)` in R learns the preprocessing
+> parameters (medians, most frequent categories, category labels, means and
+> standard deviations) from the training patients, applies the
+> transformations and fits the regression.
+>
+> **Predict:** `model.predict(X_test)` or `predict(los_fit, test)` applies
+> the stored training transformations before predicting. These parameters
+> are not recalculated from the test patients.
+>
+> Compared with Exercise 1.2, the regression is familiar: the same model,
+> `fit` and `predict`. The new part is the preprocessing and the object that
+> connects it to the model (`Pipeline` in Python, `workflow()` in R).
 
 The same pipeline, read across the two columns:
 
@@ -301,7 +277,7 @@ The same pipeline, read across the two columns:
 | standardise | `StandardScaler()` | `step_normalize()` |
 | say which columns get which step | `ColumnTransformer` | selectors such as `all_numeric_predictors()` |
 | preprocessing and model as one object | `Pipeline` | `workflow()` |
-| learn from the training patients | `model.fit()` | `fit()` |
+| learn from the training patients | `model.fit(X_train, y_train)` | `fit(data = train)`: the formula is in the recipe |
 
 > **Think about it**
 >
@@ -324,7 +300,8 @@ The same pipeline, read across the two columns:
 >
 > **`fit()` runs the steps in order on the training patients.** Each step learns
 > its numbers, transforms the training data and hands the result to the next
-> step. The regression is fitted last, on the fully processed table. Everything
+> step (in Python, the numerical and categorical branches run side by side and
+> are joined). The regression is fitted last, on the fully processed table. Everything
 > learned is stored inside the fitted object. The test patients are not looked at.
 
 ------------------------------------------------------------------------
@@ -335,6 +312,12 @@ The same pipeline, read across the two columns:
 
 Compare the training and test medians for creatinine, then ask the fitted
 pipeline which median it stored.
+
+To inspect the stored median, we navigate through the fitted objects. In
+Python: the model's `"preprocess"` step → its `"numeric"` branch → its
+`"impute"` step. `statistics_` contains the learned medians in the same order
+as `num`. In R: `extract_recipe()` takes the fitted recipe out of the
+workflow, and `tidy(..., number = 1)` shows what its first step learned.
 
 ```{r}
 median(train$creatinine, na.rm = TRUE)
@@ -364,9 +347,9 @@ imputer = (
     .named_steps["impute"]
 )
 
+position = num.index("creatinine")
 print("Pipeline median:",
-      imputer.statistics_[
-          num.index("creatinine")])
+      imputer.statistics_[position])
 ```
 
 > **Think about it**
@@ -417,8 +400,10 @@ bind_rows(
   )
 ) |>
   ggplot(aes(x = creatinine)) +
+  # the same bins in both panels
   geom_histogram(
-    bins = 25, na.rm = TRUE
+    binwidth = 10, boundary = 0,
+    na.rm = TRUE
   ) +
   facet_wrap(
     ~ fct_inorder(stage), ncol = 1
@@ -435,14 +420,17 @@ imputed_train = imputer.transform(
     X_train[num]
 )
 
+# the same bins for both: 0, 10, 20, ... 220
+bins = range(0, 230, 10)
+
 plt.hist(
     X_train["creatinine"].dropna(),
-    bins=25, alpha=0.5,
+    bins=bins, alpha=0.5,
     label="Original")
 plt.hist(
     imputed_train[
         :, num.index("creatinine")],
-    bins=25, alpha=0.5,
+    bins=bins, alpha=0.5,
     label="Imputed")
 plt.legend()
 plt.xlabel("Creatinine (µmol/L)")
@@ -516,6 +504,11 @@ for name in names:
 > `step_dummy()` leaves out the first category of each variable, because it is
 > implied by the others: a patient who is not `Emergency` is `Elective`. Both
 > tables hold the same information.
+>
+> For linear regression with an intercept, keeping every category creates
+> redundant predictors. Python can still fit this model and its predictions are
+> unaffected, but the individual category coefficients are not uniquely
+> identifiable; R's reference-category encoding avoids this redundancy.
 
 > **Think about it**
 >
@@ -564,6 +557,10 @@ print("First five predictions:",
 
 As you have seen, a key advantage of pipelines is that all preprocessing parameters, such as imputation medians, scaling means and standard deviations, and encoding categories, are learned from the training data only. These same parameters are then applied to the test data without being recalculated. This is essential to prevent data leakage, ensuring that information from the test set does not influence model training and that performance is evaluated on genuinely unseen data.
 
+Fitting the pipeline on the training data keeps the learned preprocessing
+parameters within the training set. Preprocessing performed on the full
+dataset beforehand can still introduce leakage.
+
 ---------------
 
 ## Final reflection — Preprocessing choices and order
@@ -577,7 +574,8 @@ would happen if we reversed the order?
 >
 > Imputing first is the usual order, and it is what both pipelines above do.
 >
-> Reversing it does not fail. Both tools skip the gaps when they compute a mean
+> Reversing the order is not automatically invalid. Both scalers support
+> missing values: they skip the gaps when they compute a mean
 > and a standard deviation. The result is slightly different, though: scaled
 > first and filled second, training creatinine ends with a standard deviation of
 > 0.92 instead of 1, because some 30 identical values were added after the
@@ -613,8 +611,8 @@ mathematically incorrect? Why might we prefer to leave them as 0 and 1?
 > standard scaling the same column holds about −1.1 and 0.9, and the coefficient
 > is no longer that difference.
 >
-> This is why the R recipe excludes the indicator columns from
-> `step_normalize()`, and why the Python pipeline never sends the categorical
+> This is why the R recipe runs `step_normalize()` before `step_dummy()`
+> creates the indicator columns, and why the Python pipeline never sends the categorical
 > columns to the scaler.
 
 ### 4. Training versus test data
