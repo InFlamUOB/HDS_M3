@@ -247,7 +247,7 @@ window.Quarto = {
 </header>
 
 
-<p><strong>Download this exercise as a notebook:</strong> <a href="code/day2-03b-scaling.Rmd" download="day2-03b-scaling.Rmd"><strong>R Markdown (.Rmd)</strong></a> for R, or <a href="code/day2-03b-scaling.ipynb" download="day2-03b-scaling.ipynb"><strong>Jupyter (.ipynb)</strong></a> for Python. Each holds the text and every code cell of that language, with the blanks left for you to fill in.</p>
+<p><strong>Download this exercise with the solutions:</strong> <a href="code/day2-03b-scaling-solutions.Rmd" download="day2-03b-scaling-solutions.Rmd"><strong>R Markdown (.Rmd)</strong></a> or <a href="code/day2-03b-scaling-solutions.ipynb" download="day2-03b-scaling-solutions.ipynb"><strong>Jupyter (.ipynb)</strong></a>, the same notebooks with the worked answers filled in.</p>
 <section id="overview" class="level2">
 <h2 class="anchored" data-anchor-id="overview">Overview</h2>
 <p>In this exercise, you will explore different scaling methods, apply transformations to numerical variables, and create new features through feature engineering, all essential steps in preparing data for downstream data analysis.</p>
@@ -432,6 +432,21 @@ x_{\text{scaled}} =
 </ol>
 </div>
 </div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>Min-Max</strong> puts every value between 0 and 1: the lowest CRP, 0.8, becomes 0 and the highest, 264.6, becomes 1. Look at where the typical patient lands, though — the median is 0.037. Most of the cohort is crammed into the bottom tenth of the scale.</p>
+<p><strong>Standard</strong> gives a mean of 0 and a standard deviation of 1. It is not bounded: the highest CRP sits about 8.4 standard deviations above the mean.</p>
+<p><strong>Robust</strong> centres on the median instead of the mean, so the median becomes 0, and divides by the interquartile range instead of the standard deviation. The highest patient is 13.7 interquartile ranges out.</p>
+</div>
+</div>
 <div class="callout callout-style-simple callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -503,6 +518,47 @@ x_{\text{scaled}} =
 </ol>
 </div>
 </div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>They all moved, though none of them changed.</strong> The patient with the second-highest CRP, 197.7, was at 0.746 and is now at 0.248. Their measurement is exactly what it was. Min-Max divides by the range, the range is set by the single largest value, and so one patient decides where everybody else sits.</p>
+<p><strong>Robust</strong>, and you can check it:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>hospital <span class="sc">|&gt;</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">CRP_extreme =</span> <span class="fu">if_else</span>(</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>      CRP_mg_L <span class="sc">==</span> <span class="fu">max</span>(CRP_mg_L, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>      CRP_mg_L <span class="sc">*</span> <span class="dv">3</span>,</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>      CRP_mg_L</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">robust_original =</span> <span class="fu">round</span>(<span class="fu">robust</span>(CRP_mg_L), <span class="dv">2</span>),</span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">robust_extreme =</span> <span class="fu">round</span>(<span class="fu">robust</span>(CRP_extreme), <span class="dv">2</span>)</span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(CRP_mg_L, CRP_extreme, robust_original, robust_extreme) <span class="sc">|&gt;</span></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(CRP_mg_L)) <span class="sc">|&gt;</span></span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 5 × 4
+#&gt;   CRP_mg_L CRP_extreme robust_original robust_extreme
+#&gt;      &lt;dbl&gt;       &lt;dbl&gt;           &lt;dbl&gt;          &lt;dbl&gt;
+#&gt; 1     265.        794.           13.8           42.4 
+#&gt; 2     198.        198.           10.1           10.1 
+#&gt; 3     145.        145.            7.27           7.27
+#&gt; 4     141         141             7.06           7.06
+#&gt; 5     129.        129.            6.4            6.4</code></pre>
+</div>
+</div>
+<p>Only the first number is different. The second-highest patient is at 10.12 before and 10.12 after, because the median and the interquartile range are not moved by one extreme value. Standard scaling falls in between: the same patient drops from 6.1 to 3.2, since the standard deviation is inflated by the outlier.</p>
+<p><strong>No.</strong> A CRP of 265 is not an error; in a real patient it would mean a severe infection, and probably the patient a model most needs to get right. Removing a value because it is inconvenient for a scaler throws away the cases that matter. Pick a scaler, or a transformation, that copes with them instead.</p>
+</div>
+</div>
 <div class="callout callout-style-simple callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -522,15 +578,15 @@ x_{\text{scaled}} =
 <h3 class="anchored" data-anchor-id="transformation-can-we-reduce-skewness">3. Transformation: can we reduce skewness?</h3>
 <p>Scaling does not change the shape of a distribution. A nonlinear transformation can. Compare the original CRP distribution with its log transformation:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>hospital <span class="ot">&lt;-</span> hospital <span class="sc">|&gt;</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">log_CRP =</span> <span class="fu">log1p</span>(CRP_mg_L))</span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>hospital <span class="sc">|&gt;</span></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(CRP_mg_L, log_CRP) <span class="sc">|&gt;</span></span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">everything</span>()) <span class="sc">|&gt;</span></span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> value)) <span class="sc">+</span></span>
-<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">30</span>) <span class="sc">+</span></span>
-<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>name, <span class="at">scales =</span> <span class="st">"free_x"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>hospital <span class="ot">&lt;-</span> hospital <span class="sc">|&gt;</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">log_CRP =</span> <span class="fu">log1p</span>(CRP_mg_L))</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>hospital <span class="sc">|&gt;</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(CRP_mg_L, log_CRP) <span class="sc">|&gt;</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">everything</span>()) <span class="sc">|&gt;</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> value)) <span class="sc">+</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">30</span>) <span class="sc">+</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>name, <span class="at">scales =</span> <span class="st">"free_x"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -556,6 +612,21 @@ x_{\text{scaled}} =
 </ol>
 </div>
 </div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>The long right tail is pulled in</strong> and the distribution becomes close to symmetric: CRP’s skewness falls from 4.43 to 0.38.</p>
+<p><strong>Distances stop being about units and start being about ratios.</strong> On the original scale, going from 5 to 10 mg/L is a step of 5, and going from 100 to 200 is a step of 100. After the transformation those two doublings are almost the same size: about 0.61 and 0.69. That matches how CRP is read clinically — a doubling means something whether it starts low or high — and it stops the handful of very high values from dominating everything measured in distance.</p>
+<p><strong>Because the log of zero is minus infinity.</strong> <code>log1p(x)</code> computes <span class="math inline">\(\log(1 + x)\)</span>, so a value of 0 becomes 0 instead of breaking the column. In this file the lowest CRP is 0.8, so a plain <code>log()</code> would have run — but a laboratory can report a result below its detection limit as 0, and <code>log1p()</code> is the habit that survives that.</p>
+</div>
+</div>
 <hr>
 </section>
 <section id="feature-engineering-calculate-bmi" class="level3">
@@ -563,11 +634,11 @@ x_{\text{scaled}} =
 <p>Our dataset includes patients’ height and weight, but not their Body Mass Index (BMI). BMI is widely used in clinical practice and medical research, as it provides a measure of body size relative to height and has been associated with a range of health outcomes. By combining height and weight into a single, clinically meaningful feature, we may capture information that helps our predictive model. This is an example of feature engineering, where existing variables are used to create potentially more informative predictors.</p>
 <p>Let’s calculate BMI and explore its distribution.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>hospital <span class="ot">&lt;-</span> hospital <span class="sc">|&gt;</span></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">BMI =</span> weight_kg <span class="sc">/</span> (height_cm <span class="sc">/</span> <span class="dv">100</span>)<span class="sc">^</span><span class="dv">2</span>)</span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(hospital, <span class="fu">aes</span>(<span class="at">x =</span> BMI)) <span class="sc">+</span></span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">25</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>hospital <span class="ot">&lt;-</span> hospital <span class="sc">|&gt;</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">BMI =</span> weight_kg <span class="sc">/</span> (height_cm <span class="sc">/</span> <span class="dv">100</span>)<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(hospital, <span class="fu">aes</span>(<span class="at">x =</span> BMI)) <span class="sc">+</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">25</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -591,6 +662,35 @@ x_{\text{scaled}} =
 <li>Is BMI adding new measurements, or combining existing information?</li>
 <li>What other clinically meaningful features could you derive from the variables you already have?</li>
 </ol>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>Because weight means nothing without height.</strong> Two patients from this file:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>hospital <span class="sc">|&gt;</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(patient_id <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"H134"</span>, <span class="st">"H184"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(patient_id, height_cm, weight_kg, BMI) <span class="sc">|&gt;</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">BMI =</span> <span class="fu">round</span>(BMI, <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 2 × 4
+#&gt;   patient_id height_cm weight_kg   BMI
+#&gt;   &lt;chr&gt;          &lt;dbl&gt;     &lt;dbl&gt; &lt;dbl&gt;
+#&gt; 1 H134             142      78.7  39  
+#&gt; 2 H184             201      79.3  19.6</code></pre>
+</div>
+</div>
+<p>Both weigh about 79 kg. One is 142 cm tall and has a BMI of 39.0; the other is 201 cm and has a BMI of 19.6. On weight alone a model sees two identical patients. On BMI it sees one who is obese and one at the lean end of normal.</p>
+<p><strong>Combining.</strong> No new measurement was taken; BMI is arithmetic on two columns that were already there. What it adds is the <em>relationship</em> between them, in the form a clinician would use. A model handed height and weight separately would have to discover that ratio for itself, and a linear model cannot.</p>
+<p><strong>Others from this table:</strong> the shock index, heart rate divided by systolic blood pressure, which is used at the bedside to flag circulatory compromise; a flag for tachycardia (heart rate over 100) or hypotension (systolic below 90); age bands; the log of CRP you have just made. The test is the same each time: does the new column say something clinically meaningful that the raw columns only imply?</p>
 </div>
 </div>
 <hr>
@@ -632,15 +732,15 @@ x_{\text{scaled}} =
 \]</span></p>
 <p>Here, <span class="math inline">\(\operatorname{IQR}(x) = Q_{75} - Q_{25}\)</span> is the interquartile range: the difference between the 75th and 25th percentiles. The scaled variable has <strong>median 0 and IQR 1</strong>. This method is less sensitive to extreme values.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Packages for this exercise. If one is missing, install it once from a terminal</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="co"># (in a Jupyter notebook, type %pip instead of pip):</span></span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="co"># pip install pandas numpy matplotlib</span></span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
-<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>hospital <span class="op">=</span> pd.read_csv(<span class="st">"data/hospital_admissions.csv"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Packages for this exercise. If one is missing, install it once from a terminal</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="co"># (in a Jupyter notebook, type %pip instead of pip):</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="co"># pip install pandas numpy matplotlib</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>hospital <span class="op">=</span> pd.read_csv(<span class="st">"data/hospital_admissions.csv"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
 </section>
@@ -648,11 +748,11 @@ x_{\text{scaled}} =
 <h3 class="anchored" data-anchor-id="from-a-calculation-to-a-function-1">From a calculation to a function</h3>
 <p>To apply Min-Max scaling to CRP, we can write the calculation directly:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>crp <span class="op">=</span> hospital[<span class="st">"CRP_mg_L"</span>]</span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>hospital.assign(</span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>    CRP_scaled<span class="op">=</span>(crp <span class="op">-</span> crp.<span class="bu">min</span>()) <span class="op">/</span> (crp.<span class="bu">max</span>() <span class="op">-</span> crp.<span class="bu">min</span>())</span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>).head()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>crp <span class="op">=</span> hospital[<span class="st">"CRP_mg_L"</span>]</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>hospital.assign(</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>    CRP_scaled<span class="op">=</span>(crp <span class="op">-</span> crp.<span class="bu">min</span>()) <span class="op">/</span> (crp.<span class="bu">max</span>() <span class="op">-</span> crp.<span class="bu">min</span>())</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>).head()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;   patient_id admission_type  age  ...  smoking_status  length_of_stay  CRP_scaled
 #&gt; 0       H001      Emergency   77  ...          Former             6.0    0.025398
@@ -666,16 +766,16 @@ x_{\text{scaled}} =
 </div>
 <p>To reuse this calculation, we can give it a name by creating a <strong>function</strong>:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> minmax(x):</span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (x <span class="op">-</span> x.<span class="bu">min</span>()) <span class="op">/</span> (x.<span class="bu">max</span>() <span class="op">-</span> x.<span class="bu">min</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> minmax(x):</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (x <span class="op">-</span> x.<span class="bu">min</span>()) <span class="op">/</span> (x.<span class="bu">max</span>() <span class="op">-</span> x.<span class="bu">min</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>A function <strong>takes an input, performs a calculation and returns the result</strong>. Here, <code>x</code> is a placeholder for the numerical column we want to scale. <code>def</code> starts the function, the indented lines below it are its body, and <code>return</code> hands back the result. Unlike R, Python needs the word <code>return</code>.</p>
 <p>We can now call our function inside <code>assign()</code>, the pandas counterpart of <code>mutate()</code>:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>hospital.assign(</span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>    CRP_scaled<span class="op">=</span>minmax(hospital[<span class="st">"CRP_mg_L"</span>]),</span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    age_scaled<span class="op">=</span>minmax(hospital[<span class="st">"age"</span>])</span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>).head()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>hospital.assign(</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>    CRP_scaled<span class="op">=</span>minmax(hospital[<span class="st">"CRP_mg_L"</span>]),</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>    age_scaled<span class="op">=</span>minmax(hospital[<span class="st">"age"</span>])</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>).head()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;   patient_id admission_type  age  ...  length_of_stay  CRP_scaled  age_scaled
 #&gt; 0       H001      Emergency   77  ...             6.0    0.025398    0.766234
@@ -690,11 +790,11 @@ x_{\text{scaled}} =
 <p>Each column takes the place of <code>x</code>. We write the calculation once and reuse it for different variables.</p>
 <p>Let’s build the remaining two functions of the three scaling methods and apply them to CRP.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> standard(x):</span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (x <span class="op">-</span> x.mean()) <span class="op">/</span> x.std()</span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> robust(x):</span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (x <span class="op">-</span> x.median()) <span class="op">/</span> (x.quantile(<span class="fl">0.75</span>) <span class="op">-</span> x.quantile(<span class="fl">0.25</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> standard(x):</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (x <span class="op">-</span> x.mean()) <span class="op">/</span> x.std()</span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> robust(x):</span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (x <span class="op">-</span> x.median()) <span class="op">/</span> (x.quantile(<span class="fl">0.75</span>) <span class="op">-</span> x.quantile(<span class="fl">0.25</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>pandas ignores missing values when it calculates the minimum, mean and other summary statistics, which is what <code>na.rm = TRUE</code> does in R.</p>
 </section>
@@ -702,14 +802,14 @@ x_{\text{scaled}} =
 <h3 class="anchored" data-anchor-id="apply-each-function-to-crp-1">Apply each function to CRP</h3>
 <p>We pass the same CRP column to each function and save the results as three new columns:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>hospital_scaled <span class="op">=</span> hospital.assign(</span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>    CRP_minmax<span class="op">=</span>minmax(hospital[<span class="st">"CRP_mg_L"</span>]),</span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>    CRP_standard<span class="op">=</span>standard(hospital[<span class="st">"CRP_mg_L"</span>]),</span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>    CRP_robust<span class="op">=</span>robust(hospital[<span class="st">"CRP_mg_L"</span>])</span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>hospital_scaled <span class="op">=</span> hospital.assign(</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>    CRP_minmax<span class="op">=</span>minmax(hospital[<span class="st">"CRP_mg_L"</span>]),</span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>    CRP_standard<span class="op">=</span>standard(hospital[<span class="st">"CRP_mg_L"</span>]),</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>    CRP_robust<span class="op">=</span>robust(hospital[<span class="st">"CRP_mg_L"</span>])</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital_scaled.<span class="bu">filter</span>(like<span class="op">=</span><span class="st">"CRP"</span>).describe().<span class="bu">round</span>(<span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital_scaled.<span class="bu">filter</span>(like<span class="op">=</span><span class="st">"CRP"</span>).describe().<span class="bu">round</span>(<span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;        CRP_mg_L  CRP_minmax  CRP_standard  CRP_robust
 #&gt; count   250.000     250.000       250.000     250.000
@@ -721,24 +821,24 @@ x_{\text{scaled}} =
 #&gt; 75%      23.575       0.086         0.129       0.700
 #&gt; max     264.600       1.000         8.398      13.746</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital_scaled[<span class="st">"CRP_standard"</span>].std())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital_scaled[<span class="st">"CRP_standard"</span>].std())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; 1.0</code></pre>
 </div>
 </div>
 <p>Visualise CRP before and after scaling:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>cols <span class="op">=</span> [<span class="st">"CRP_mg_L"</span>, <span class="st">"CRP_minmax"</span>, <span class="st">"CRP_standard"</span>, <span class="st">"CRP_robust"</span>]</span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>hospital_scaled[cols].hist(bins<span class="op">=</span><span class="dv">30</span>, figsize<span class="op">=</span>(<span class="dv">9</span>, <span class="dv">6</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>cols <span class="op">=</span> [<span class="st">"CRP_mg_L"</span>, <span class="st">"CRP_minmax"</span>, <span class="st">"CRP_standard"</span>, <span class="st">"CRP_robust"</span>]</span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>hospital_scaled[cols].hist(bins<span class="op">=</span><span class="dv">30</span>, figsize<span class="op">=</span>(<span class="dv">9</span>, <span class="dv">6</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; array([[&lt;Axes: title={'center': 'CRP_mg_L'}&gt;,
 #&gt;         &lt;Axes: title={'center': 'CRP_minmax'}&gt;],
 #&gt;        [&lt;Axes: title={'center': 'CRP_standard'}&gt;,
 #&gt;         &lt;Axes: title={'center': 'CRP_robust'}&gt;]], dtype=object)</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
-<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -764,6 +864,21 @@ x_{\text{scaled}} =
 </ol>
 </div>
 </div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>Min-Max</strong> puts every value between 0 and 1: the lowest CRP, 0.8, becomes 0 and the highest, 264.6, becomes 1. Look at where the typical patient lands, though — the median is 0.037. Most of the cohort is crammed into the bottom tenth of the scale.</p>
+<p><strong>Standard</strong> gives a mean of 0 and a standard deviation of 1. It is not bounded: the highest CRP sits about 8.4 standard deviations above the mean.</p>
+<p><strong>Robust</strong> centres on the median instead of the mean, so the median becomes 0, and divides by the interquartile range instead of the standard deviation. The highest patient is 13.7 interquartile ranges out.</p>
+</div>
+</div>
 <div class="callout callout-style-simple callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -784,27 +899,27 @@ x_{\text{scaled}} =
 <p>Imagine a patient has an exceptionally high CRP. How does that influence the scaling of everyone else’s measurements?</p>
 <p>Compare the largest CRP values before and after Min-Max scaling:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital_scaled[<span class="st">"CRP_mg_L"</span>].nlargest(<span class="dv">5</span>).tolist())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital_scaled[<span class="st">"CRP_mg_L"</span>].nlargest(<span class="dv">5</span>).tolist())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; [264.6, 197.7, 144.9, 141.0, 128.8]</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital_scaled[<span class="st">"CRP_minmax"</span>].nlargest(<span class="dv">5</span>).<span class="bu">round</span>(<span class="dv">3</span>).tolist())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(hospital_scaled[<span class="st">"CRP_minmax"</span>].nlargest(<span class="dv">5</span>).<span class="bu">round</span>(<span class="dv">3</span>).tolist())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; [1.0, 0.746, 0.546, 0.531, 0.485]</code></pre>
 </div>
 </div>
 <p>Now make the maximum CRP three times larger, change nothing else, and scale again:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>crp <span class="op">=</span> hospital[<span class="st">"CRP_mg_L"</span>]</span>
-<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>hospital_extreme <span class="op">=</span> hospital.assign(</span>
-<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>    CRP_extreme<span class="op">=</span>np.where(crp <span class="op">==</span> crp.<span class="bu">max</span>(), crp <span class="op">*</span> <span class="dv">3</span>, crp)</span>
-<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>hospital_extreme[<span class="st">"CRP_minmax"</span>] <span class="op">=</span> minmax(hospital_extreme[<span class="st">"CRP_extreme"</span>]).<span class="bu">round</span>(<span class="dv">3</span>)</span>
-<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>(hospital_extreme[[<span class="st">"CRP_extreme"</span>, <span class="st">"CRP_minmax"</span>]]</span>
-<span id="cb41-9"><a href="#cb41-9" aria-hidden="true" tabindex="-1"></a> .sort_values(<span class="st">"CRP_extreme"</span>, ascending<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb41-10"><a href="#cb41-10" aria-hidden="true" tabindex="-1"></a> .head(<span class="dv">5</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>crp <span class="op">=</span> hospital[<span class="st">"CRP_mg_L"</span>]</span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>hospital_extreme <span class="op">=</span> hospital.assign(</span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>    CRP_extreme<span class="op">=</span>np.where(crp <span class="op">==</span> crp.<span class="bu">max</span>(), crp <span class="op">*</span> <span class="dv">3</span>, crp)</span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a>hospital_extreme[<span class="st">"CRP_minmax"</span>] <span class="op">=</span> minmax(hospital_extreme[<span class="st">"CRP_extreme"</span>]).<span class="bu">round</span>(<span class="dv">3</span>)</span>
+<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a>(hospital_extreme[[<span class="st">"CRP_extreme"</span>, <span class="st">"CRP_minmax"</span>]]</span>
+<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a> .sort_values(<span class="st">"CRP_extreme"</span>, ascending<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a> .head(<span class="dv">5</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;      CRP_extreme  CRP_minmax
 #&gt; 245        793.8       1.000
@@ -831,6 +946,38 @@ x_{\text{scaled}} =
 </ol>
 </div>
 </div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>They all moved, though none of them changed.</strong> The patient with the second-highest CRP, 197.7, was at 0.746 and is now at 0.248. Their measurement is exactly what it was. Min-Max divides by the range, the range is set by the single largest value, and so one patient decides where everybody else sits.</p>
+<p><strong>Robust</strong>, and you can check it:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>hospital_extreme[<span class="st">"robust_original"</span>] <span class="op">=</span> robust(hospital_extreme[<span class="st">"CRP_mg_L"</span>]).<span class="bu">round</span>(<span class="dv">2</span>)</span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>hospital_extreme[<span class="st">"robust_extreme"</span>] <span class="op">=</span> robust(hospital_extreme[<span class="st">"CRP_extreme"</span>]).<span class="bu">round</span>(<span class="dv">2</span>)</span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a>(hospital_extreme[[<span class="st">"CRP_mg_L"</span>, <span class="st">"CRP_extreme"</span>, <span class="st">"robust_original"</span>, <span class="st">"robust_extreme"</span>]]</span>
+<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a> .sort_values(<span class="st">"CRP_mg_L"</span>, ascending<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb47-6"><a href="#cb47-6" aria-hidden="true" tabindex="-1"></a> .head(<span class="dv">5</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;      CRP_mg_L  CRP_extreme  robust_original  robust_extreme
+#&gt; 245     264.6        793.8            13.75           42.39
+#&gt; 209     197.7        197.7            10.12           10.12
+#&gt; 95      144.9        144.9             7.27            7.27
+#&gt; 239     141.0        141.0             7.06            7.06
+#&gt; 171     128.8        128.8             6.40            6.40</code></pre>
+</div>
+</div>
+<p>Only the first number is different. The second-highest patient is at 10.12 before and 10.12 after, because the median and the interquartile range are not moved by one extreme value. Standard scaling falls in between: the same patient drops from 6.1 to 3.2, since the standard deviation is inflated by the outlier.</p>
+<p><strong>No.</strong> A CRP of 265 is not an error; in a real patient it would mean a severe infection, and probably the patient a model most needs to get right. Removing a value because it is inconvenient for a scaler throws away the cases that matter. Pick a scaler, or a transformation, that copes with them instead.</p>
+</div>
+</div>
 <div class="callout callout-style-simple callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -850,15 +997,15 @@ x_{\text{scaled}} =
 <h3 class="anchored" data-anchor-id="transformation-can-we-reduce-skewness-1">3. Transformation: can we reduce skewness?</h3>
 <p>Scaling does not change the shape of a distribution. A nonlinear transformation can. Compare the original CRP distribution with its log transformation:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"log_CRP"</span>] <span class="op">=</span> np.log1p(hospital[<span class="st">"CRP_mg_L"</span>])</span>
-<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>hospital[[<span class="st">"CRP_mg_L"</span>, <span class="st">"log_CRP"</span>]].hist(bins<span class="op">=</span><span class="dv">30</span>, figsize<span class="op">=</span>(<span class="dv">8</span>, <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"log_CRP"</span>] <span class="op">=</span> np.log1p(hospital[<span class="st">"CRP_mg_L"</span>])</span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>hospital[[<span class="st">"CRP_mg_L"</span>, <span class="st">"log_CRP"</span>]].hist(bins<span class="op">=</span><span class="dv">30</span>, figsize<span class="op">=</span>(<span class="dv">8</span>, <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; array([[&lt;Axes: title={'center': 'CRP_mg_L'}&gt;,
 #&gt;         &lt;Axes: title={'center': 'log_CRP'}&gt;]], dtype=object)</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
-<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -884,6 +1031,21 @@ x_{\text{scaled}} =
 </ol>
 </div>
 </div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>The long right tail is pulled in</strong> and the distribution becomes close to symmetric: CRP’s skewness falls from 4.43 to 0.38.</p>
+<p><strong>Distances stop being about units and start being about ratios.</strong> On the original scale, going from 5 to 10 mg/L is a step of 5, and going from 100 to 200 is a step of 100. After the transformation those two doublings are almost the same size: about 0.61 and 0.69. That matches how CRP is read clinically — a doubling means something whether it starts low or high — and it stops the handful of very high values from dominating everything measured in distance.</p>
+<p><strong>Because the log of zero is minus infinity.</strong> <code>log1p(x)</code> computes <span class="math inline">\(\log(1 + x)\)</span>, so a value of 0 becomes 0 instead of breaking the column. In this file the lowest CRP is 0.8, so a plain <code>log()</code> would have run — but a laboratory can report a result below its detection limit as 0, and <code>log1p()</code> is the habit that survives that.</p>
+</div>
+</div>
 <hr>
 </section>
 <section id="feature-engineering-calculate-bmi-1" class="level3">
@@ -891,12 +1053,12 @@ x_{\text{scaled}} =
 <p>Our dataset includes patients’ height and weight, but not their Body Mass Index (BMI). BMI is widely used in clinical practice and medical research, as it provides a measure of body size relative to height and has been associated with a range of health outcomes. By combining height and weight into a single, clinically meaningful feature, we may capture information that helps our predictive model. This is an example of feature engineering, where existing variables are used to create potentially more informative predictors.</p>
 <p>Let’s calculate BMI and explore its distribution.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"BMI"</span>] <span class="op">=</span> hospital[<span class="st">"weight_kg"</span>] <span class="op">/</span> (hospital[<span class="st">"height_cm"</span>] <span class="op">/</span> <span class="dv">100</span>) <span class="op">**</span> <span class="dv">2</span></span>
-<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"BMI"</span>].hist(bins<span class="op">=</span><span class="dv">25</span>, figsize<span class="op">=</span>(<span class="dv">7</span>, <span class="fl">2.8</span>))</span>
-<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">"BMI (kg/m²)"</span>)</span>
-<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
-<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb52"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"BMI"</span>] <span class="op">=</span> hospital[<span class="st">"weight_kg"</span>] <span class="op">/</span> (hospital[<span class="st">"height_cm"</span>] <span class="op">/</span> <span class="dv">100</span>) <span class="op">**</span> <span class="dv">2</span></span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>hospital[<span class="st">"BMI"</span>].hist(bins<span class="op">=</span><span class="dv">25</span>, figsize<span class="op">=</span>(<span class="dv">7</span>, <span class="fl">2.8</span>))</span>
+<span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">"BMI (kg/m²)"</span>)</span>
+<span id="cb52-5"><a href="#cb52-5" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb52-6"><a href="#cb52-6" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -920,6 +1082,32 @@ x_{\text{scaled}} =
 <li>Is BMI adding new measurements, or combining existing information?</li>
 <li>What other clinically meaningful features could you derive from the variables you already have?</li>
 </ol>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>Because weight means nothing without height.</strong> Two patients from this file:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a>(hospital[hospital[<span class="st">"patient_id"</span>].isin([<span class="st">"H134"</span>, <span class="st">"H184"</span>])]</span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a> [[<span class="st">"patient_id"</span>, <span class="st">"height_cm"</span>, <span class="st">"weight_kg"</span>, <span class="st">"BMI"</span>]]</span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a> .<span class="bu">round</span>({<span class="st">"BMI"</span>: <span class="dv">1</span>}))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;     patient_id  height_cm  weight_kg   BMI
+#&gt; 133       H134        142       78.7  39.0
+#&gt; 183       H184        201       79.3  19.6</code></pre>
+</div>
+</div>
+<p>Both weigh about 79 kg. One is 142 cm tall and has a BMI of 39.0; the other is 201 cm and has a BMI of 19.6. On weight alone a model sees two identical patients. On BMI it sees one who is obese and one at the lean end of normal.</p>
+<p><strong>Combining.</strong> No new measurement was taken; BMI is arithmetic on two columns that were already there. What it adds is the <em>relationship</em> between them, in the form a clinician would use. A model handed height and weight separately would have to discover that ratio for itself, and a linear model cannot.</p>
+<p><strong>Others from this table:</strong> the shock index, heart rate divided by systolic blood pressure, which is used at the bedside to flag circulatory compromise; a flag for tachycardia (heart rate over 100) or hypotension (systolic below 90); age bands; the log of CRP you have just made. The test is the same each time: does the new column say something clinically meaningful that the raw columns only imply?</p>
 </div>
 </div>
 <hr>

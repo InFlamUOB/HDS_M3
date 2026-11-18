@@ -1,11 +1,11 @@
 ---
-title: "Exercise 2.6 — Understanding preprocessing pipelines"
+title: "Exercise 2.6 — Understanding preprocessing pipelines (with solutions)"
 output: html_document
 ---
 
 *HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day2/day2-04a-pipeline.html>.*
 
-*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
 ## Overview
 
@@ -285,6 +285,25 @@ The same pipeline, read across the two columns:
 > 2. Why do we use different pipelines for numerical and categorical variables?
 > 3. What does `fit()` actually do?
 
+> **Worked answer**
+>
+> **All of them.** Median imputation learns one median per numeric column. Mode
+> imputation learns the most common category. The encoder learns the list of
+> categories. The scaler learns a mean and a standard deviation per numeric
+> column. The regression learns its coefficients.
+>
+> **Because the operations only make sense for one kind of variable.** There is
+> no median of "Emergency" and "Elective", and one-hot encoding age would create
+> a column for every age. Python makes the division explicit with a
+> `ColumnTransformer`. R does it inside one recipe, with selectors such as
+> `all_numeric_predictors()`.
+>
+> **`fit()` runs the steps in order on the training patients.** Each step learns
+> its numbers, transforms the training data and hands the result to the next
+> step (in Python, the numerical and categorical branches run side by side and
+> are joined). The regression is fitted last, on the fully processed table. Everything
+> learned is stored inside the fitted object. The test patients are not looked at.
+
 ------------------------------------------------------------------------
 
 ## Task 2 — Look inside the pipeline 
@@ -339,6 +358,20 @@ print("Pipeline median:",
 > 2. Will it use that same median when transforming the test patients?
 > 3. Why shouldn't the test median be used to fill missing values in the test
 >    set?
+
+> **Worked answer**
+>
+> **The training median**: 74.5 in the Python column and 76 in the R column. The
+> test medians, 80 and 78, appear nowhere inside the pipeline.
+>
+> **Yes.** A test patient with no creatinine recorded receives the training
+> median.
+>
+> **Because the test patients stand in for patients you have not met yet.** A
+> future patient arrives alone, and one patient has no median. Filling test gaps
+> with the test median also means the preprocessing has learned from the very
+> patients it is being judged on, so the reported error is no longer an honest
+> estimate.
 
 ### B. Visualise the effect of imputation
 
@@ -417,6 +450,17 @@ plt.show()
 > What happens to the distribution when several patients receive exactly the
 > same median value?
 
+> **Worked answer**
+>
+> **One bar shoots up.** About 30 of the 200 training patients had no creatinine
+> recorded (32 in the Python split, 31 in the R split), and every one of them is
+> now placed at exactly the same value. The rest of the histogram is untouched.
+>
+> The column looks more certain than it is: the spread has shrunk, and a block of
+> patients now appear to have a perfectly typical creatinine that nobody
+> measured. This is the same effect as in Exercise 2.4, now happening inside
+> the pipeline where it is easy to forget.
+
 ### C. What happens to the number of columns?
 
 ```{r}
@@ -472,6 +516,21 @@ for name in names:
 > 2. Which original variables were responsible?
 > 3. What would happen if we one-hot encoded age or CRP instead?
 
+> **Worked answer**
+>
+> **Because a model needs numbers, and a category is not a number.** Each
+> categorical variable is replaced by a set of 0/1 columns.
+>
+> **`admission_type` and `smoking_status`.** The six numeric variables are still
+> six columns. They were changed in value, not in number.
+>
+> **The table would explode.** There are more than 60 different ages among the
+> 200 training patients, and about 150 different CRP values. One-hot encoding CRP
+> would give nearly one column per patient. The columns would also throw away
+> what makes the variable useful: the model could no longer tell that a CRP of 40
+> lies between 30 and 50. And a new patient with a value never seen in training
+> would match no column at all.
+
 ------------------------------------------------------------------------
 
 ## Task 3 — Apply the pipeline to new patients 
@@ -511,23 +570,100 @@ dataset beforehand can still introduce leakage.
 Should we impute missing numerical values before standardising them? What
 would happen if we reversed the order?
 
+> **Worked answer**
+>
+> Imputing first is the usual order, and it is what both pipelines above do.
+>
+> Reversing the order is not automatically invalid. Both scalers support
+> missing values: they skip the gaps when they compute a mean
+> and a standard deviation. The result is slightly different, though: scaled
+> first and filled second, training creatinine ends with a standard deviation of
+> 0.92 instead of 1, because some 30 identical values were added after the
+> spread was measured.
+>
+> With median imputation little is at stake. The order matters far more when the
+> imputer uses distances between patients, as KNN does. Then scale first, or the
+> variables with the largest numbers decide who counts as a neighbour.
+
 ### 2. One-hot encoding continuous features
 
 If we accidentally one-hot encoded age, blood pressure and CRP, what would
 happen to the number of columns and the information they contain?
+
+> **Worked answer**
+>
+> Three columns would become roughly 270 to 280: more than 60 for age, about 60 for
+> blood pressure and about 150 for CRP, for 200 training patients. Most of those
+> columns would describe one or two patients each.
+>
+> The information that the values are ordered would be lost. To the model, a
+> systolic pressure of 150 would be no closer to 151 than to 95.
 
 ### 3. Scaling one-hot encoded features
 
 Would applying standard scaling to the resulting 0/1 categorical indicators be
 mathematically incorrect? Why might we prefer to leave them as 0 and 1?
 
+> **Worked answer**
+>
+> The meaning is lost!  A 0/1 column says "emergency admission: no or
+> yes", and its coefficient is the difference between the two groups. After
+> standard scaling the same column holds about −1.1 and 0.9, and the coefficient
+> is no longer that difference.
+>
+> This is why the R recipe runs `step_normalize()` before `step_dummy()`
+> creates the indicator columns, and why the Python pipeline never sends the categorical
+> columns to the scaler.
+
 ### 4. Training versus test data
 
 If the test-set creatinine median is very different from the training-set
 median, which should the pipeline use to impute test patients? Why?
+
+> **Worked answer**
+>
+> The training median, always.
+>
+> A large difference is worth investigating: the split may have been unlucky, or
+> the two groups of patients may really differ. But it is not a reason to learn
+> from the test patients. Once the model is in use there is no test median to
+> borrow.
 
 ### 5. What does a pipeline protect us from?
 
 Which aspects of preprocessing become more consistent when we use a fitted
 pipeline? What decisions still require clinical and statistical judgement? One decision to start with: this pipeline fills a missing smoking status with
 the most common value. What did Exercise 2.4 suggest instead?
+
+> **Worked answer**
+>
+> **More consistent:** every patient goes through the same steps, in the same
+> order, with the same learned numbers, and comes out with the same columns.
+> Nothing is learned from the test patients. The preprocessing and the model
+> travel together as one object.
+>
+> **Still a judgement:** which variables to use; whether the median is a
+> reasonable stand-in for a missing creatinine; whether CRP should be
+> log-transformed first (Exercise 2.5); whether an extreme value is an error or a
+> very sick patient.
+>
+> The pipeline applies whatever you chose, faithfully. It cannot tell you whether
+> the choice was right. Smoking status is the example: Exercise 2.4 argued
+> that an `Unknown` category is more honest than the most common value. Changing
+> the pipeline's mind takes one line.
+
+```{r}
+#| eval: false
+step_unknown(
+  smoking_status,
+  new_level = "Unknown"
+)
+```
+
+> *For comparison, the same step in Python (not run here):*
+>
+> ```python
+> SimpleImputer(
+>     strategy="constant",
+>     fill_value="Unknown")
+> ```

@@ -1,11 +1,11 @@
 ---
-title: "Exercise 2.4 — Missing data and imputation"
+title: "Exercise 2.4 — Missing data and imputation (with solutions)"
 output: html_document
 ---
 
 *HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day2/day2-03a-imputation.html>.*
 
-*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
 ## Overview
 
@@ -65,6 +65,30 @@ hospital |>
 >    rest? In which variable?
 > 2. What would happen to the cohort if you simply removed every patient with a
 >    missing value?
+
+> **Worked answer**
+>
+> Yes, and in one variable only. Emergency admissions make up 71% of the patients
+> with no creatinine result but 50% of those with one (p = 0.018). Age, blood
+> pressure and heart rate show no convincing difference.
+>
+> That is worth noticing: the missingness follows *how the patient arrived*, not
+> what their measurements were. A comparison of the measurements alone would have
+> found nothing.
+
+```{r}
+complete <- hospital |> drop_na()
+
+nrow(complete)
+round(100 * mean(hospital$admission_type == "Emergency"), 1)
+round(100 * mean(complete$admission_type == "Emergency"), 1)
+```
+
+> Dropping incomplete rows keeps 182 of 250 — more than a quarter of the cohort
+> gone — and the loss is not even. Emergency admissions fall from 53.6% of the
+> data to 45.6%. A model fitted to what remains has been trained on a cohort that
+> is more elective than the hospital really is, and nothing in the output would
+> tell you. This would be valauble information that we are missing.
 
 ------------------------------------------------------------------------
 
@@ -145,6 +169,30 @@ hospital |>
 > 3. Would keeping "Unknown" as its own category be more appropriate here? Use
 >    the last table to argue it.
 
+> **Worked answer**
+>
+> **Creatinine.** Forty-two patients now sit on exactly the same value, 78.9, and
+> the histogram grows a spike there that no real cohort has. The standard
+> deviation falls from 24.4 to 22.2. Nothing was learned about those patients,
+> but the column now looks more consistent than the measurements ever were — and
+> every confidence interval computed from it afterwards will be too narrow. The
+> median version does the same thing at 76.
+>
+> **Smoking.** "Never" was 107 of 250 patients, 42.8%. After mode imputation it
+> is 139, 55.6%. Thirteen percentage points of never-smokers were created by the
+> filling, and the other two categories did not move — the commonest group got
+> commoner, which is exactly the direction that hides a minority.
+>
+> **Unknown.** Yes, here. The patients with no recorded smoking status are 84%
+> emergency admissions, against roughly half of everyone else. They are not a
+> random sample of the cohort: they are the people nobody had time to ask.
+> Relabelling all 32 of them as never-smokers erases that. Keeping `Unknown` as a
+> category invents nothing, and leaves a model free to learn that "not asked" is
+> itself informative.
+>
+> The general rule: fill a category with its mode only when you believe the gaps
+> are scattered at random. When *who is missing* carries meaning, say so.
+
 ------------------------------------------------------------------------
 
 ### 3. Using the other variables
@@ -178,6 +226,16 @@ sum(is.na(hospital$creatinine_advanced))
 > Two patients of the same age, with the same blood pressure and heart rate, will
 > be given the same imputed creatinine. Why might their real values be very
 > different?
+
+> **Worked answer**
+>
+> Because creatinine depends on things this table does not contain: kidney
+> disease, muscle mass, hydration, sex, the drugs the patient is on. Two patients
+> who look identical on three vital signs can differ on every one of those.
+>
+> The imputer can only use the columns it is given. It is not estimating the
+> patient's creatinine; it is reporting the average creatinine of patients who
+> resemble them on age, blood pressure and heart rate.
 
 ------------------------------------------------------------------------
 
