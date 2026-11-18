@@ -429,4 +429,15 @@ if (file.exists("data/diabetes.csv")) {
   glucose_study <- head(glucose_study, 80)
   readr::write_csv(glucose_study, "data/glucose_study.csv")
   message("wrote glucose_study.csv: ", nrow(glucose_study), " rows")
+
+  # data/glucose_bmi_study.csv - the same 80 patients with BMI (diabetes.csv's
+  # `mass`) added, for Exercise 3.1b. Kept separate so glucose_study.csv, which
+  # Day 3 chapters describe as two columns, does not change. Three BMIs are 0
+  # (missing); the exercise removes them itself.
+  glucose_bmi <- readr::read_csv("data/diabetes.csv", show_col_types = FALSE)
+  glucose_bmi <- glucose_bmi[glucose_bmi$glucose > 0, c("age", "mass", "glucose")]
+  glucose_bmi <- head(glucose_bmi, 80)
+  names(glucose_bmi)[names(glucose_bmi) == "mass"] <- "BMI"
+  readr::write_csv(glucose_bmi, "data/glucose_bmi_study.csv")
+  message("wrote glucose_bmi_study.csv: ", nrow(glucose_bmi), " rows")
 }
