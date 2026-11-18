@@ -70,9 +70,8 @@ into one number. The smaller that number, the better the line fits.
 
 ### Part 1 — Follow one prediction into a loss
 
-Take the line that linear regression fits to these 80 people (you will fit it
-yourself in Part 3), with its two parameters rounded so that the arithmetic is
-easy to do by hand:
+Take the line that linear regression fits to these 80 people, with its two
+parameters rounded so that the arithmetic is easy to do by hand:
 
 $$\widehat{\text{glucose}} = 110 + 0.3 \times \text{age}$$
 
@@ -214,8 +213,8 @@ ggplot(squares) +
 Person A's residual is much longer than the other two. As a length, A is 80% of
 the total absolute error. As a square, A is 96% of the total squared error: the
 other two squares almost disappear. Squaring gives
-large errors far more weight than small ones. Keep this picture in mind for
-Part 3.
+large errors far more weight than small ones. Keep this picture in mind: it
+comes back at the end of this exercise.
 
 ::: {.callout-important}
 ## Learning points
@@ -366,127 +365,19 @@ fits these 80 people better.
 
 ------------------------------------------------------------------------
 
-### Part 3 — What outliers do to each loss
+### The default loss: MSE
 
-Part 1 showed that squaring gives large errors far more weight. Here is what
-that does to a fitted line.
+The functions that fit a linear regression, such as `linear_reg()`, choose the line
+with the lowest **MSE**, so this is not a decision you will normally have to
+take. The reason is practical: the squared loss is a smooth curve with no
+corners, which makes its lowest point easy to find. Exercise 3.4 finds it by
+following the slope downhill, and Exercise 3.5 finds it with a formula.
 
-First fit the line to the 80 people. `lm()` is the function underneath
-`linear_reg()` from Exercise 3.1, and it returns the line with the lowest MSE:
-
-```{r}
-fit_clean <- lm(glucose ~ age, data = glu)
-
-coef(fit_clean)
-```
-
-Now suppose three glucose values were recorded three times too large, which is
-a plausible unit or typing error. Multiply the glucose of the people in rows 1,
-3 and 5 by three, and fit the line again on the data with these outliers.
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-glu_outliers <- glu |>
-  mutate(glucose = if_else(row_number() %in% c(1, 3, 5),
-                           glucose * ______, glucose))
-
-fit_outliers <- lm(glucose ~ age, data = ______)
-
-coef(fit_outliers)
-```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-glu_outliers <- glu |>
-  mutate(glucose = if_else(row_number() %in% c(1, 3, 5),
-                           glucose * 3, glucose))
-
-fit_outliers <- lm(glucose ~ age, data = glu_outliers)
-
-coef(fit_outliers)
-```
-:::
-:::
-
-Here are the two fitted lines, each drawn over the data it was fitted to. The
-three changed readings are in red.
-
-```{r}
-#| code-fold: true
-#| code-summary: "Code for this plot (optional)"
-#| fig-width: 8
-#| fig-height: 4
-both <- bind_rows("Without outliers" = glu,
-                  "With three outliers" = glu_outliers, .id = "data") |>
-  mutate(data = fct_inorder(data))
-
-lines <- data.frame(data      = fct_inorder(c("Without outliers", "With three outliers")),
-                intercept = c(coef(fit_clean)[1], coef(fit_outliers)[1]),
-                slope     = c(coef(fit_clean)[2], coef(fit_outliers)[2]))
-
-ggplot(both, aes(x = age, y = glucose)) +
-  geom_point(aes(colour = glucose > 250), alpha = 0.7) +   # the outliers in red
-  geom_abline(data = lines, aes(intercept = intercept, slope = slope),
-              colour = "black", linetype = "dashed", linewidth = 1) +
-  scale_colour_manual(values = c("blue", "red"), guide = "none") +
-  facet_wrap(~ data) +
-  labs(x = "Age (years)", y = "Glucose (mg/dL)")
-```
-
-Three rows out of eighty, under four per cent of the data, moved the intercept
-from 110.3 to 135.3 and turned the slope from +0.289 to −0.136. The fitted line
-now says that glucose *falls* with age. Nothing warned you: the fit succeeded,
-as it always does.
-
-It is tempting to say that outliers break regression. They do not. They break
-*this loss*. You now have two lines, the one fitted without the outliers and
-the one fitted with them. Score both lines on the data that contains the
-outliers, once with the MSE and once with the MAE:
-
-```{r}
-b_clean    <- coef(fit_clean)
-b_outliers <- coef(fit_outliers)
-
-glu_outliers |>
-  mutate(r_clean    = glucose - (b_clean[1]    + b_clean[2]    * age),
-         r_outliers = glucose - (b_outliers[1] + b_outliers[2] * age)) |>
-  summarise(MSE_clean = mean(r_clean^2),
-            MSE_outliers = mean(r_outliers^2),
-            MAE_clean = mean(abs(r_clean)),
-            MAE_outliers = mean(abs(r_outliers)))
-```
-
-The two losses disagree about which line is better:
-
-| On the data with outliers | Line fitted without outliers | Line fitted with outliers |
-|---|:-:|:-:|
-| scored by **MSE** | 4,964 | **4,813** |
-| scored by **MAE** | **32.9** | 36.5 |
-
-: {tbl-colwidths="[34,33,33]"}
-
-By MSE the line fitted with the outliers wins. It has to: the MSE is exactly
-what the fitting function minimised. By MAE the line fitted without them wins,
-even on the data that contains the outliers. A glucose of 194 tripled to 582 is
-a very large residual, so its square is enormous and the line is dragged
-towards it. Under the MAE that person counts for their distance and no more,
-and three people out of eighty do not carry the vote.
-
-So "the best fit line" is not a property of the data alone. It is a property of
-the data **and the loss you chose**.
-
-::: {.callout-note}
-## Why is squared error the default, then?
-The functions we use to fit a linear regression minimise the MSE, so this is
-not a decision you will normally have to take. The reason is practical. The
-squared loss is a smooth curve with no corners, which makes its lowest point
-easy to find: Exercise 3.4 finds it by following the slope downhill, and
-Exercise 3.5 finds it with a formula. The absolute loss has a corner at zero and
-needs more specialised methods.
-:::
+The price is sensitivity to **outliers**. Part 1 showed why: person A was 80%
+of the total absolute error but 96% of the total squared error. A few patients
+with very large errors, for example a mistyped glucose, can therefore pull an
+MSE-fitted line towards them, while under the MAE each counts only for its
+distance.
 
 ::: {.callout-important}
 ## Learning points
@@ -521,14 +412,12 @@ one blood glucose measurement in mg/dL for 80 adults, taken from
 ```{python}
 # Packages for this exercise. If one is missing, install it once from a terminal
 # (in a Jupyter notebook, type %pip instead of pip):
-# pip install pandas numpy matplotlib scikit-learn
+# pip install pandas numpy matplotlib
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-
-from sklearn.linear_model import LinearRegression
 
 glu = pd.read_csv("data/glucose_study.csv")
 
@@ -551,9 +440,8 @@ into one number. The smaller that number, the better the line fits.
 
 ### Part 1 — Follow one prediction into a loss
 
-Take the line that linear regression fits to these 80 people (you will fit it
-yourself in Part 3), with its two parameters rounded so that the arithmetic is
-easy to do by hand:
+Take the line that linear regression fits to these 80 people, with its two
+parameters rounded so that the arithmetic is easy to do by hand:
 
 $$\widehat{\text{glucose}} = 110 + 0.3 \times \text{age}$$
 
@@ -693,8 +581,8 @@ plt.show()
 Person A's residual is much longer than the other two. As a length, A is 80% of
 the total absolute error. As a square, A is 96% of the total squared error: the
 other two squares almost disappear. Squaring gives
-large errors far more weight than small ones. Keep this picture in mind for
-Part 3.
+large errors far more weight than small ones. Keep this picture in mind: it
+comes back at the end of this exercise.
 
 ::: {.callout-important}
 ## Learning points
@@ -847,123 +735,19 @@ fits these 80 people better.
 
 ------------------------------------------------------------------------
 
-### Part 3 — What outliers do to each loss
+### The default loss: MSE
 
-Part 1 showed that squaring gives large errors far more weight. Here is what
-that does to a fitted line.
+The functions that fit a linear regression, such as `LinearRegression()`, choose the line
+with the lowest **MSE**, so this is not a decision you will normally have to
+take. The reason is practical: the squared loss is a smooth curve with no
+corners, which makes its lowest point easy to find. Exercise 3.4 finds it by
+following the slope downhill, and Exercise 3.5 finds it with a formula.
 
-First fit the line to the 80 people. `LinearRegression()` is the function from
-Exercise 3.1, and it returns the line with the lowest MSE:
-
-```{python}
-fit_clean = LinearRegression()
-fit_clean = fit_clean.fit(glu[["age"]], glu["glucose"])
-
-print(fit_clean.intercept_, fit_clean.coef_[0])
-```
-
-Now suppose three glucose values were recorded three times too large, which is
-a plausible unit or typing error. Multiply the glucose of the people in rows 1,
-3 and 5 by three, and fit the line again on the data with these outliers.
-Python counts rows from 0, so those three people are rows 0, 2 and 4.
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-glu_outliers = glu.copy()
-glu_outliers.loc[[0, 2, 4], "glucose"] = glu_outliers.loc[[0, 2, 4], "glucose"] * ______
-
-fit_outliers = LinearRegression()
-fit_outliers = fit_outliers.fit(______[["age"]], ______["glucose"])
-
-print(fit_outliers.intercept_, fit_outliers.coef_[0])
-```
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-glu_outliers = glu.copy()
-glu_outliers.loc[[0, 2, 4], "glucose"] = glu_outliers.loc[[0, 2, 4], "glucose"] * 3
-
-fit_outliers = LinearRegression()
-fit_outliers = fit_outliers.fit(glu_outliers[["age"]], glu_outliers["glucose"])
-
-print(fit_outliers.intercept_, fit_outliers.coef_[0])
-```
-:::
-:::
-
-Here are the two fitted lines, each drawn over the data it was fitted to. The
-three changed readings are in red.
-
-```{python}
-#| code-fold: true
-#| code-summary: "Code for this plot (optional)"
-ages = np.array([glu["age"].min(), glu["age"].max()])
-
-fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
-for ax, data, fit, title in [(axes[0], glu, fit_clean, "Without outliers"),
-                             (axes[1], glu_outliers, fit_outliers, "With three outliers")]:
-    colours = np.where(data["glucose"] > 250, "red", "blue")   # the outliers in red
-    ax.scatter(data["age"], data["glucose"], color=colours, alpha=0.7)
-    ax.plot(ages, fit.intercept_ + fit.coef_[0] * ages,
-            color="black", linestyle="--", linewidth=1.5)
-    ax.set_title(title)
-    ax.set_xlabel("Age (years)")
-axes[0].set_ylabel("Glucose (mg/dL)")
-plt.tight_layout()
-plt.show()
-```
-
-Three rows out of eighty, under four per cent of the data, moved the intercept
-from 110.3 to 135.3 and turned the slope from +0.289 to −0.136. The fitted line
-now says that glucose *falls* with age. Nothing warned you: the fit succeeded,
-as it always does.
-
-It is tempting to say that outliers break regression. They do not. They break
-*this loss*. You now have two lines, the one fitted without the outliers and
-the one fitted with them. Score both lines on the data that contains the
-outliers, once with the MSE and once with the MAE:
-
-```{python}
-r_clean    = glu_outliers["glucose"] - fit_clean.predict(glu_outliers[["age"]])
-r_outliers = glu_outliers["glucose"] - fit_outliers.predict(glu_outliers[["age"]])
-
-print("MSE, line fitted without outliers:", round((r_clean ** 2).mean(), 1))
-print("MSE, line fitted with outliers:   ", round((r_outliers ** 2).mean(), 1))
-print("MAE, line fitted without outliers:", round(r_clean.abs().mean(), 1))
-print("MAE, line fitted with outliers:   ", round(r_outliers.abs().mean(), 1))
-```
-
-The two losses disagree about which line is better:
-
-| On the data with outliers | Line fitted without outliers | Line fitted with outliers |
-|---|:-:|:-:|
-| scored by **MSE** | 4,964 | **4,813** |
-| scored by **MAE** | **32.9** | 36.5 |
-
-: {tbl-colwidths="[34,33,33]"}
-
-By MSE the line fitted with the outliers wins. It has to: the MSE is exactly
-what the fitting function minimised. By MAE the line fitted without them wins,
-even on the data that contains the outliers. A glucose of 194 tripled to 582 is
-a very large residual, so its square is enormous and the line is dragged
-towards it. Under the MAE that person counts for their distance and no more,
-and three people out of eighty do not carry the vote.
-
-So "the best fit line" is not a property of the data alone. It is a property of
-the data **and the loss you chose**.
-
-::: {.callout-note}
-## Why is squared error the default, then?
-The functions we use to fit a linear regression minimise the MSE, so this is
-not a decision you will normally have to take. The reason is practical. The
-squared loss is a smooth curve with no corners, which makes its lowest point
-easy to find: Exercise 3.4 finds it by following the slope downhill, and
-Exercise 3.5 finds it with a formula. The absolute loss has a corner at zero and
-needs more specialised methods.
-:::
+The price is sensitivity to **outliers**. Part 1 showed why: person A was 80%
+of the total absolute error but 96% of the total squared error. A few patients
+with very large errors, for example a mistyped glucose, can therefore pull an
+MSE-fitted line towards them, while under the MAE each counts only for its
+distance.
 
 ::: {.callout-important}
 ## Learning points
@@ -1019,24 +803,14 @@ and there is no breakpoint.
 **Expected values.** Line $110 + 0.3x$ on all 80: residuals sum to −6.3 (+888.4
 above the line, −894.7 below), SSR 67,804, MSE 847.55, RMSE 29.11, MAE 22.29.
 Hand-drawn line $120 + 0.5x$: SSR 90,868, MSE 1,135.85, RMSE 33.70, MAE 28.66.
-Fitted line: 110.30 and 0.289. Fitted with outliers: 135.28 and −0.136 (the
-sign flip is the point). Scored on the data with outliers: MSE 4,964 against
-4,813, MAE 32.9 against 36.5.
+Fitted line: 110.30 and 0.289.
 
 **Common failures.** (1) Writing the residual the wrong way round, predicted
 minus observed: the losses are unchanged and every sign is reversed, so check
-person A's residual is +75.6. (2) In Python, using rows 1, 3 and 5 for the
-outliers, which are the second, fourth and sixth people. (3) Reading the line
-fitted with outliers as a failure of the fitting function, rather than as the
-function doing exactly what it was asked to do. (4) Comparing an MSE with an
-MAE directly: they are in different units.
+person A's residual is +75.6. (2) Comparing an MSE with an MAE directly: they
+are in different units.
 
-**Plenary.** Put the two-by-two table up: on the same data, the MSE prefers one
-line and the MAE prefers the other. The sentence to land is that "best fit" is a
-property of the data and the loss, and that nobody asked them which loss they
-wanted.
-
-**Timing.** Give Part 1 a full fifteen minutes on paper. Parts 2 and 3 take no
-computing time; the time goes on the discussion of the two-by-two table.
+**Timing.** Give Part 1 a full fifteen minutes on paper. Part 2 takes little
+computing time; the time goes on comparing the two lines.
 :::
 :::
