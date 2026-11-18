@@ -1,0 +1,1095 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 3.1b — One workflow, two models {#sec-one-workflow}
+
+In R, you can fit a linear regression directly with `lm()`. In this practical
+you will use `lm()` as the engine inside the familiar tidymodels steps:
+**specify** a model, **fit** it on training patients, and call **`predict()`**
+for held-out patients. In Python the same three steps are
+`LinearRegression()`, `.fit()` and `.predict()` from scikit-learn.
+
+- **Part 1.** Predict blood glucose from age. Calculate the prediction for a
+  45-year-old by hand from the fitted equation, check it with `predict()`, and
+  see the point on the fitted line. Compare predictions with the measured
+  glucose of the test patients, then refit with different training patients
+  to see how the line and the predictions change.
+- **Part 2.** Add BMI, repeat the hand calculation, and find the prediction on
+  the fitted plane in a 3D plot you can turn.
+- **Part 3.** Keep the same steps, training patients and predictors, and fit a
+  decision tree instead. Follow the same patient through the splits, read the
+  prediction from the leaf, check it with `predict()`, and compare the tree's
+  stepped surface with the regression plane.
+
+::: {.callout-note appearance="simple"}
+## The plots are for looking at
+The code for the plots is folded away under **Code for this plot
+(optional)**. You do not need to write it, but it is in the download if you
+want it.
+:::
+
+:::::: {.panel-tabset group="language"}
+
+## R
+
+::: {.content-hidden when-meta="show-solutions"}
+[**Download this exercise as an R Markdown notebook (.Rmd)**](code/day3-01b-one-workflow.Rmd){download="day3-01b-one-workflow.Rmd"}: the text and every code cell of the R version, including the code for the plots, with the blanks left for you to fill in. Open it in Positron or RStudio and run it a chunk at a time.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+[**Download the R notebook with the solutions (.Rmd)**](code/day3-01b-one-workflow-solutions.Rmd){download="day3-01b-one-workflow-solutions.Rmd"}: the same notebook with the worked answers filled in.
+:::
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "rpart.plot", "plotly"))
+
+library(tidyverse)
+library(tidymodels)
+library(rpart.plot)
+
+theme_set(theme_bw())
+```
+
+`data/glucose_bmi_study.csv` holds 77 patients with three columns: age in
+years, BMI in kg/m² and blood glucose in mg/dL. If you do not have it yet, [**download `glucose_bmi_study.csv`**](data/glucose_bmi_study.csv){download="glucose_bmi_study.csv"}
+into your `data` folder.
+
+```{r}
+glu <- read_csv("data/glucose_bmi_study.csv")
+
+summary(glu)
+```
+
+Split the 77 patients into training and test patients, as on Day 1.
+
+```{r}
+set.seed(42)
+split <- initial_split(glu, prop = 0.8)
+
+train <- training(split)
+test <- testing(split)
+
+cat(nrow(train), "training patients,", nrow(test), "test patients\n")
+```
+
+### Part 1 — Predict glucose from age
+
+The same three steps as on Day 1: specify the model, fit it on the training
+patients, predict.
+
+```{r}
+# 1. Specify: linear regression, computed by lm()
+lm_model <- linear_reg() |>
+  set_engine("lm")
+
+# 2. Fit on the training patients
+line_fit <- lm_model |>
+  fit(glucose ~ age, data = train)
+
+# the learned parameters: intercept first, then the slope
+b <- line_fit$fit$coefficients
+b
+```
+
+The fitted equation is
+
+$$\widehat{\text{glucose}} = \hat\beta_0 + \hat\beta_1 \times \text{age}$$
+
+#### Task 1a — A 45-year-old, by hand
+
+Read the two parameters printed above, round them to two decimals, and
+calculate the predicted glucose for a 45-year-old.
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+predicted_45 <- ______ + ______ * 45
+predicted_45
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The first number is the intercept, $\hat\beta_0$. The second is the slope,
+$\hat\beta_1$, which multiplies the age.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+predicted_45 <- 111.80 + 0.25 * 45
+predicted_45
+```
+:::
+:::
+
+Now check it with `predict()`, which uses the unrounded parameters:
+
+```{r}
+# predict() wants a data frame: one row, one column per predictor
+predict(line_fit, new_data = tibble(age = 45))$.pred
+```
+
+The two agree to within a few hundredths: the difference is only the
+rounding.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+ggplot(train, aes(x = age, y = glucose)) +
+  geom_point(colour = "steelblue") +
+  geom_abline(intercept = b[1], slope = b[2],
+              colour = "red", linetype = "dashed", linewidth = 1) +
+  annotate("point", x = 45, y = predict(line_fit, new_data = tibble(age = 45))$.pred,
+           colour = "red", size = 4) +
+  labs(x = "Age (years)", y = "Glucose (mg/dL)",
+       title = "Training patients, the fitted line, and the 45-year-old")
+```
+
+#### Task 1b — Predictions against measured glucose
+
+The test patients were not used to fit the line. Predict their glucose and put
+it next to what was measured.
+
+```{r}
+test_results <- test |>
+  mutate(predicted = predict(line_fit, new_data = test)$.pred,
+         gap = glucose - predicted)
+
+test_results
+```
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+ggplot(test_results, aes(x = age)) +
+  geom_abline(intercept = b[1], slope = b[2],
+              colour = "red", linetype = "dashed", linewidth = 1) +
+  geom_segment(aes(xend = age, y = glucose, yend = predicted),
+               colour = "grey50") +
+  geom_point(aes(y = glucose), colour = "darkorange", size = 2) +
+  labs(x = "Age (years)", y = "Glucose (mg/dL)",
+       title = "Test patients: measured (orange) and predicted (on the line)")
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. How far are the predictions from the measured glucose, typically?
+2. All 16 predictions lie in a narrow band. Why?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+mean(abs(test_results$gap))
+range(test_results$predicted)
+```
+
+1. On average about 22 mg/dL away, in either direction; some patients are
+   much further.
+2. The slope is small, a quarter of a mg/dL per year, so even a 60-year
+   difference in age moves the prediction by only about 15 mg/dL. Age explains
+   very little of the differences in glucose between these patients, so the
+   line stays close to the average glucose for everyone.
+
+With 16 test patients, treat any summary of the gaps as rough.
+:::
+:::
+
+#### Task 1c — Different training patients
+
+Split again with a different seed, refit, and compare.
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+set.seed(1)
+split_1 <- initial_split(glu, prop = 0.8)
+train_1 <- training(split_1)
+
+line_fit_1 <- lm_model |>
+  fit(glucose ~ age, data = ______)
+
+line_fit_1$fit$coefficients
+predict(line_fit_1, new_data = tibble(age = ______))$.pred
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Nothing about the model changes: `lm_model` is the same specification. Only the
+training patients change, and the patient you predict for is the same
+45-year-old.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+set.seed(1)
+split_1 <- initial_split(glu, prop = 0.8)
+train_1 <- training(split_1)
+
+line_fit_1 <- lm_model |>
+  fit(glucose ~ age, data = train_1)
+
+line_fit_1$fit$coefficients
+predict(line_fit_1, new_data = tibble(age = 45))$.pred
+```
+
+The slope more than doubles, from 0.25 to 0.57, and the prediction for the
+45-year-old moves from 123.0 to 128.7 mg/dL. Same patients in the file, same
+model, same code: only the choice of training patients changed.
+:::
+:::
+
+Twenty different splits, twenty different lines:
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+lines_20 <- tibble()
+for (s in 1:20) {
+  set.seed(s)
+  train_s <- training(initial_split(glu, prop = 0.8))
+  fit_s <- lm_model |> fit(glucose ~ age, data = train_s)
+  lines_20 <- bind_rows(lines_20, tibble(
+    seed = s,
+    intercept = fit_s$fit$coefficients[1],
+    slope = fit_s$fit$coefficients[2]))
+}
+
+ggplot(glu, aes(x = age, y = glucose)) +
+  geom_point(colour = "grey60") +
+  geom_abline(data = lines_20, aes(intercept = intercept, slope = slope),
+              colour = "steelblue", alpha = 0.5) +
+  labs(x = "Age (years)", y = "Glucose (mg/dL)",
+       title = "The fitted line from 20 different training splits")
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+Where do the 20 lines agree most, and where do they spread out? What does that
+mean for a prediction at age 25 compared with age 75?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+The lines cross near the middle of the data, around the average age and
+average glucose, and fan out towards the ends. Most patients are in their
+twenties and thirties, so there the lines are pinned down by many points. Few
+patients are over 60, so whether one or two of them are in the training set
+swings the slope. A prediction at 75 depends far more on which patients
+happened to be chosen for training than a prediction at 25.
+:::
+:::
+
+### Part 2 — Add BMI
+
+The same specification, `lm_model`, with a second predictor:
+
+```{r}
+plane_fit <- lm_model |>
+  fit(glucose ~ age + BMI, data = train)
+
+plane_fit$fit$coefficients
+```
+
+$$\widehat{\text{glucose}} = \hat\beta_0 + \hat\beta_1 \times \text{age} + \hat\beta_2 \times \text{BMI}$$
+
+With two predictors the model is no longer a line but a flat **plane** above
+the age–BMI floor.
+
+#### Task 2a — The same patient, now with a BMI of 30
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+predicted_patient <- ______ + ______ * 45 + ______ * 30
+predicted_patient
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Three parameters, in the order printed: the intercept, the weight for age, the
+weight for BMI.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+predicted_patient <- 77.70 + 0.198 * 45 + 1.114 * 30
+predicted_patient
+```
+:::
+:::
+
+Check it with `predict()`:
+
+```{r}
+patient <- tibble(age = 45, BMI = 30)
+
+predict(plane_fit, new_data = patient)$.pred
+```
+
+Turn the plot with the mouse and scroll to zoom. The red point is the patient,
+sitting on the plane.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| eval: !expr requireNamespace("plotly", quietly = TRUE)
+# This plot needs the plotly package: install.packages("plotly")
+# every combination of age and BMI on a fine grid
+grid <- expand_grid(age = seq(20, 82, by = 0.5),
+                    BMI = seq(19, 47, by = 0.5))
+ages <- unique(grid$age)
+bmis <- unique(grid$BMI)
+
+# the plane's prediction at each grid point, as a matrix:
+# one row per BMI value, one column per age
+plane_matrix <- matrix(predict(plane_fit, new_data = grid)$.pred,
+                       nrow = length(bmis))
+
+fig_plane <- plotly::plot_ly() |>
+  plotly::add_markers(data = train, x = ~age, y = ~BMI, z = ~glucose,
+                      marker = list(size = 3, color = "steelblue"),
+                      name = "Training patients") |>
+  plotly::add_surface(x = ages, y = bmis, z = plane_matrix,
+                      opacity = 0.6, showscale = FALSE,
+                      colorscale = list(c(0, 1), c("lightgrey", "grey")),
+                      name = "Plane") |>
+  plotly::add_markers(x = 45, y = 30,
+                      z = predict(plane_fit, new_data = patient)$.pred,
+                      marker = list(size = 7, color = "red"),
+                      name = "Age 45, BMI 30") |>
+  plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
+                              yaxis = list(title = "BMI (kg/m²)"),
+                              zaxis = list(title = "Glucose (mg/dL)")))
+fig_plane
+```
+
+```{r}
+#| echo: false
+if (!exists("fig_plane")) knitr::asis_output(paste0(
+  "*The plot you can turn is missing from this copy of the page: it needs the R ",
+  "package `plotly`. Run `install.packages(\"plotly\")` and render again.*"))
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. In words, what does the BMI weight mean?
+2. Adding BMI moved this patient's prediction by how much? Does a second
+   predictor guarantee better predictions?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+1. For two patients of the same age, one BMI unit higher means a predicted
+   glucose about 1.1 mg/dL higher. Each weight is read with the other
+   predictor held fixed.
+2. From 123.0 to 120.1 mg/dL, about 3 mg/dL. A second predictor gives the
+   model more to work with, but no guarantee: if it carries little
+   information about the outcome, the plane is barely different from the
+   line, and on new patients it can even do slightly worse. Here BMI raises
+   the share of the training variation explained from about 2% to about 8%:
+   more, but still small.
+:::
+:::
+
+### Part 3 — The same steps, a decision tree
+
+Only the specification changes. The training patients, the predictors and the
+`fit()` and `predict()` calls stay the same.
+
+```{r}
+# 1. Specify: a regression tree, computed by rpart
+tree_model <- decision_tree() |>
+  set_engine("rpart") |>
+  set_mode("regression")
+
+# 2. Fit on the same training patients, with the same predictors
+tree_fit <- tree_model |>
+  fit(glucose ~ age + BMI, data = train)
+
+rpart.plot(tree_fit$fit, type = 3, fallen.leaves = TRUE,
+           box.palette = "Blues", roundint = FALSE)
+```
+
+Each box asks a yes/no question. **Yes goes left, no goes right.** The number in
+each leaf at the bottom is the prediction: the mean glucose of the training
+patients who ended up there.
+
+#### Task 3a — Follow the patient
+
+Start at the top with the patient aged 45 with a BMI of 30. At each question,
+go left or right. Which leaf do you reach, and what glucose does it predict?
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+`age < 24`? No, go right. `age >= 55`? No, go right. `age < 28`? No, go right.
+`age >= 30`? Yes, go left. The leaf predicts **129** mg/dL: the mean glucose of
+the 17 training patients aged 30 to 54.
+
+The plot rounds the split points; the exact values (23.5, 54.5, 27.5 and 29.5)
+are in `tree_fit$fit`.
+:::
+:::
+
+Check it with `predict()`:
+
+```{r}
+predict(tree_fit, new_data = patient)$.pred
+```
+
+Turn the plot. The orange surface is the tree, the grey one the plane from
+Part 2.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| eval: !expr requireNamespace("plotly", quietly = TRUE)
+# This plot needs the plotly package: install.packages("plotly")
+# the tree's prediction on the same grid as the plane
+tree_matrix <- matrix(predict(tree_fit, new_data = grid)$.pred,
+                      nrow = length(bmis))
+
+fig_tree <- plotly::plot_ly() |>
+  plotly::add_markers(data = train, x = ~age, y = ~BMI, z = ~glucose,
+                      marker = list(size = 3, color = "steelblue"),
+                      name = "Training patients") |>
+  plotly::add_surface(x = ages, y = bmis, z = tree_matrix,
+                      opacity = 0.8, showscale = FALSE,
+                      colorscale = list(c(0, 1), c("moccasin", "darkorange")),
+                      name = "Tree") |>
+  plotly::add_surface(x = ages, y = bmis, z = plane_matrix,
+                      opacity = 0.5, showscale = FALSE,
+                      colorscale = list(c(0, 1), c("lightgrey", "grey")),
+                      name = "Plane") |>
+  plotly::add_markers(x = 45, y = 30,
+                      z = predict(tree_fit, new_data = patient)$.pred,
+                      marker = list(size = 7, color = "red"),
+                      name = "Age 45, BMI 30 (tree)") |>
+  plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
+                              yaxis = list(title = "BMI (kg/m²)"),
+                              zaxis = list(title = "Glucose (mg/dL)")))
+fig_tree
+```
+
+```{r}
+#| echo: false
+if (!exists("fig_tree")) knitr::asis_output(paste0(
+  "*The plot you can turn is missing from this copy of the page: it needs the R ",
+  "package `plotly`. Run `install.packages(\"plotly\")` and render again.*"))
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Describe the shape of the tree's surface. Why is it made of flat steps?
+2. This tree never asks about BMI. What does that do to its surface, and why
+   might it have ignored BMI?
+3. A new patient is 90 years old, older than anyone in the training data. What
+   do the plane and the tree predict, and why do they behave differently?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+1. Flat terraces with vertical walls between them. Every patient in the same
+   leaf gets the same prediction, so the surface is constant inside each
+   rectangle of age and BMI and jumps at each split. The plane, by contrast,
+   changes smoothly everywhere.
+2. The surface is flat in the BMI direction: moving along BMI at a fixed age
+   never changes the prediction, so the steps run only along age. At every
+   split, rpart tried both predictors and a split on age reduced the error
+   more; a BMI split never helped enough to be kept. That fits Part 2, where
+   BMI added little.
+3. The plane keeps rising with age, because a plane has no edge. The tree puts
+   the patient in the oldest leaf and predicts the mean of those training
+   patients, so it never goes above or below what it saw in training:
+
+```{r}
+old <- tibble(age = 90, BMI = 30)
+predict(plane_fit, new_data = old)$.pred
+predict(tree_fit, new_data = old)$.pred
+```
+:::
+:::
+
+::: {.callout-important}
+## Learning points
+- The steps are the same whatever the model: specify, fit on the training
+  patients, predict for new ones. Swapping linear regression for a tree
+  changed one line.
+- A linear model's prediction can be worked out by hand from its parameters; a
+  tree's prediction is read by following the questions to a leaf.
+- The fitted model depends on which patients were used for training.
+- A line or plane changes smoothly and keeps going beyond the data; a tree
+  predicts in flat steps and stays within the values it saw.
+:::
+
+## Python
+
+::: {.content-hidden when-meta="show-solutions"}
+[**Download this exercise as a Jupyter notebook (.ipynb)**](code/day3-01b-one-workflow.ipynb){download="day3-01b-one-workflow.ipynb"}: the text and every code cell of the Python version, including the code for the plots, with the blanks left for you to fill in. Open it in Jupyter, VS Code or Positron and run it a cell at a time.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+[**Download the Jupyter notebook with the solutions (.ipynb)**](code/day3-01b-one-workflow-solutions.ipynb){download="day3-01b-one-workflow-solutions.ipynb"}: the same notebook with the worked answers filled in.
+:::
+
+### Packages and data
+
+```{python}
+# Packages for this exercise. If one is missing, install it once from a terminal
+# (in a Jupyter notebook, type %pip instead of pip):
+# pip install pandas numpy matplotlib scikit-learn plotly
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor, plot_tree, export_text
+```
+
+`data/glucose_bmi_study.csv` holds 77 patients with three columns: age in
+years, BMI in kg/m² and blood glucose in mg/dL. If you do not have it yet, [**download `glucose_bmi_study.csv`**](data/glucose_bmi_study.csv){download="glucose_bmi_study.csv"}
+into your `data` folder.
+
+```{python}
+glu = pd.read_csv("data/glucose_bmi_study.csv")
+
+glu.describe()
+```
+
+Split the 77 patients into training and test patients, as on Day 1.
+
+```{python}
+train, test = train_test_split(glu, test_size=0.2, random_state=42)
+
+print(len(train), "training patients,", len(test), "test patients")
+```
+
+::: {.callout-note appearance="simple"}
+## The numbers differ from the R tab
+Python and R shuffle with different random number generators, so
+`random_state=42` and `set.seed(42)` do not choose the same training patients.
+Expect different numbers from the R tab; the steps are the same.
+:::
+
+### Part 1 — Predict glucose from age
+
+The same three steps as on Day 1: specify the model, fit it on the training
+patients, predict.
+
+```{python}
+# 1. Specify: linear regression
+line_model = LinearRegression()
+
+# 2. Fit on the training patients: predictors (a table) and outcome
+line_model.fit(train[["age"]], train["glucose"])
+
+# the learned parameters
+print("intercept:", line_model.intercept_)
+print("slope:", line_model.coef_)
+```
+
+The fitted equation is
+
+$$\widehat{\text{glucose}} = \hat\beta_0 + \hat\beta_1 \times \text{age}$$
+
+#### Task 1a — A 45-year-old, by hand
+
+Read the two parameters printed above, round them to two decimals, and
+calculate the predicted glucose for a 45-year-old.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+predicted_45 = ______ + ______ * 45
+predicted_45
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The intercept is $\hat\beta_0$. The slope, $\hat\beta_1$, multiplies the age.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+predicted_45 = 100.82 + 0.49 * 45
+predicted_45
+```
+:::
+:::
+
+Now check it with `predict()`, which uses the unrounded parameters:
+
+```{python}
+# predict() wants a table: one row, one column per predictor
+line_model.predict(pd.DataFrame({"age": [45]}))
+```
+
+The two agree to within about a tenth: the difference is only the rounding.
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+ages_line = np.array([20, 82])
+fig, ax = plt.subplots()
+ax.scatter(train["age"], train["glucose"], color="steelblue")
+ax.plot(ages_line, line_model.intercept_ + line_model.coef_[0] * ages_line,
+        "r--", linewidth=1)
+ax.scatter([45], line_model.predict(pd.DataFrame({"age": [45]})),
+           color="red", s=60, zorder=3)
+ax.set_xlabel("Age (years)")
+ax.set_ylabel("Glucose (mg/dL)")
+ax.set_title("Training patients, the fitted line, and the 45-year-old")
+plt.show()
+```
+
+#### Task 1b — Predictions against measured glucose
+
+The test patients were not used to fit the line. Predict their glucose and put
+it next to what was measured.
+
+```{python}
+test_results = test.copy()
+test_results["predicted"] = line_model.predict(test[["age"]])
+test_results["gap"] = test_results["glucose"] - test_results["predicted"]
+
+test_results
+```
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+fig, ax = plt.subplots()
+ax.plot(ages_line, line_model.intercept_ + line_model.coef_[0] * ages_line,
+        "r--", linewidth=1)
+ax.vlines(test_results["age"], test_results["glucose"],
+          test_results["predicted"], color="grey")
+ax.scatter(test_results["age"], test_results["glucose"], color="darkorange")
+ax.set_xlabel("Age (years)")
+ax.set_ylabel("Glucose (mg/dL)")
+ax.set_title("Test patients: measured (orange) and predicted (on the line)")
+plt.show()
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. How far are the predictions from the measured glucose, typically?
+2. All 16 predictions lie in a narrow band. Why?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+print(test_results["gap"].abs().mean())
+print(test_results["predicted"].min(), test_results["predicted"].max())
+```
+
+1. On average about 22 mg/dL away, in either direction; some patients are
+   much further.
+2. The slope is small, about half a mg/dL per year, so even a 60-year
+   difference in age moves the prediction by about 30 mg/dL, while measured
+   glucose varies far more. Age explains very little of the differences
+   between these patients, so the line stays close to the average glucose.
+
+With 16 test patients, treat any summary of the gaps as rough.
+:::
+:::
+
+#### Task 1c — Different training patients
+
+Split again with a different seed, refit, and compare.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+train_1, test_1 = train_test_split(glu, test_size=0.2, random_state=1)
+
+line_model_1 = LinearRegression()
+line_model_1.fit(______[["age"]], ______["glucose"])
+
+print(line_model_1.intercept_, line_model_1.coef_)
+line_model_1.predict(pd.DataFrame({"age": [______]}))
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Nothing about the model changes. Only the training patients change, and the
+patient you predict for is the same 45-year-old.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+train_1, test_1 = train_test_split(glu, test_size=0.2, random_state=1)
+
+line_model_1 = LinearRegression()
+line_model_1.fit(train_1[["age"]], train_1["glucose"])
+
+print(line_model_1.intercept_, line_model_1.coef_)
+line_model_1.predict(pd.DataFrame({"age": [45]}))
+```
+
+The intercept moves from 100.8 to 102.8 and the slope from 0.49 to 0.35, and
+the prediction for the 45-year-old from 122.9 to 118.4 mg/dL. Same patients in
+the file, same model, same code: only the choice of training patients changed.
+:::
+:::
+
+Twenty different splits, twenty different lines:
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+fig, ax = plt.subplots()
+ax.scatter(glu["age"], glu["glucose"], color="grey")
+for s in range(1, 21):
+    train_s, _ = train_test_split(glu, test_size=0.2, random_state=s)
+    model_s = LinearRegression().fit(train_s[["age"]], train_s["glucose"])
+    ax.plot(ages_line, model_s.intercept_ + model_s.coef_[0] * ages_line,
+            color="steelblue", alpha=0.5)
+ax.set_xlabel("Age (years)")
+ax.set_ylabel("Glucose (mg/dL)")
+ax.set_title("The fitted line from 20 different training splits")
+plt.show()
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+Where do the 20 lines agree most, and where do they spread out? What does that
+mean for a prediction at age 25 compared with age 75?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+The lines cross near the middle of the data, around the average age and
+average glucose, and fan out towards the ends. Most patients are in their
+twenties and thirties, so there the lines are pinned down by many points. Few
+patients are over 60, so whether one or two of them are in the training set
+swings the slope. A prediction at 75 depends far more on which patients
+happened to be chosen for training than a prediction at 25.
+:::
+:::
+
+### Part 2 — Add BMI
+
+The same kind of model, with a second predictor:
+
+```{python}
+plane_model = LinearRegression()
+plane_model.fit(train[["age", "BMI"]], train["glucose"])
+
+print("intercept:", plane_model.intercept_)
+print("weights (age, BMI):", plane_model.coef_)
+```
+
+$$\widehat{\text{glucose}} = \hat\beta_0 + \hat\beta_1 \times \text{age} + \hat\beta_2 \times \text{BMI}$$
+
+With two predictors the model is no longer a line but a flat **plane** above
+the age–BMI floor.
+
+#### Task 2a — The same patient, now with a BMI of 30
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+predicted_patient = ______ + ______ * 45 + ______ * 30
+predicted_patient
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Three parameters: the intercept, then the two weights in the order of the
+columns, age first and BMI second.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+predicted_patient = 82.06 + 0.459 * 45 + 0.611 * 30
+predicted_patient
+```
+:::
+:::
+
+Check it with `predict()`:
+
+```{python}
+patient = pd.DataFrame({"age": [45], "BMI": [30]})
+
+plane_model.predict(patient)
+```
+
+Turn the plot with the mouse and scroll to zoom. The red point is the patient,
+sitting on the plane.
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| eval: false
+# This plot needs the plotly package: pip install plotly
+import plotly.graph_objects as go
+
+# every combination of age and BMI on a fine grid
+ages = np.arange(20, 82.5, 0.5)
+bmis = np.arange(19, 47.5, 0.5)
+A, B = np.meshgrid(ages, bmis)
+grid = pd.DataFrame({"age": A.ravel(), "BMI": B.ravel()})
+
+# the plane's prediction at each grid point: one row per BMI, one column per age
+plane_matrix = plane_model.predict(grid).reshape(A.shape)
+
+fig_plane = go.Figure()
+fig_plane.add_trace(go.Scatter3d(
+    x=train["age"], y=train["BMI"], z=train["glucose"], mode="markers",
+    marker={"size": 3, "color": "steelblue"}, name="Training patients"))
+fig_plane.add_trace(go.Surface(
+    x=ages, y=bmis, z=plane_matrix, opacity=0.6, showscale=False,
+    colorscale=[[0, "lightgrey"], [1, "grey"]], name="Plane"))
+fig_plane.add_trace(go.Scatter3d(
+    x=[45], y=[30], z=plane_model.predict(patient), mode="markers",
+    marker={"size": 7, "color": "red"}, name="Age 45, BMI 30"))
+fig_plane.update_layout(scene={"xaxis_title": "Age (years)",
+                               "yaxis_title": "BMI (kg/m²)",
+                               "zaxis_title": "Glucose (mg/dL)"})
+fig_plane.show()
+```
+
+```{python}
+#| echo: false
+# Same grid and predictions as the cell above, for the page's copy of the plot.
+ages = np.arange(20, 82.5, 0.5)
+bmis = np.arange(19, 47.5, 0.5)
+A, B = np.meshgrid(ages, bmis)
+grid = pd.DataFrame({"age": A.ravel(), "BMI": B.ravel()})
+plane_matrix = plane_model.predict(grid).reshape(A.shape)
+plane_patient = float(plane_model.predict(patient)[0])
+```
+
+```{r}
+#| echo: false
+# Draws the Python model's plane (values from the Python cell above).
+if (requireNamespace("plotly", quietly = TRUE)) {
+  plotly::plot_ly() |>
+    plotly::add_markers(data = reticulate::py$train, x = ~age, y = ~BMI,
+                        z = ~glucose,
+                        marker = list(size = 3, color = "steelblue"),
+                        name = "Training patients") |>
+    plotly::add_surface(x = reticulate::py$ages, y = reticulate::py$bmis,
+                        z = reticulate::py$plane_matrix, opacity = 0.6,
+                        showscale = FALSE,
+                        colorscale = list(c(0, 1), c("lightgrey", "grey")),
+                        name = "Plane") |>
+    plotly::add_markers(x = 45, y = 30, z = reticulate::py$plane_patient,
+                        marker = list(size = 7, color = "red"),
+                        name = "Age 45, BMI 30") |>
+    plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
+                                yaxis = list(title = "BMI (kg/m²)"),
+                                zaxis = list(title = "Glucose (mg/dL)")))
+} else knitr::asis_output(paste0(
+  "*The plot you can turn is missing from this copy of the page: it needs the R ",
+  "package `plotly`. Run `install.packages(\"plotly\")` and render again.*"))
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. In words, what does the BMI weight mean?
+2. Adding BMI moved this patient's prediction by how much? Does a second
+   predictor guarantee better predictions?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+1. For two patients of the same age, one BMI unit higher means a predicted
+   glucose about 0.6 mg/dL higher. Each weight is read with the other
+   predictor held fixed.
+2. From 122.9 to 121.0 mg/dL, about 2 mg/dL. A second predictor gives the
+   model more to work with, but no guarantee: if it carries little
+   information about the outcome, the plane is barely different from the
+   line, and on new patients it can even do slightly worse.
+:::
+:::
+
+### Part 3 — The same steps, a decision tree
+
+Only the specification changes. The training patients, the predictors and the
+`.fit()` and `.predict()` calls stay the same.
+
+```{python}
+# 1. Specify: a regression tree, kept small enough to follow by hand
+tree_model = DecisionTreeRegressor(max_depth=3, min_samples_leaf=7,
+                                   random_state=0)
+
+# 2. Fit on the same training patients, with the same predictors
+tree_model.fit(train[["age", "BMI"]], train["glucose"])
+
+fig, ax = plt.subplots(figsize=(10, 5))
+plot_tree(tree_model, feature_names=["age", "BMI"], filled=True,
+          impurity=False, precision=1, ax=ax)
+plt.show()
+```
+
+Each box asks a yes/no question. **True goes left, False goes right.** The
+`value` in each leaf at the bottom is the prediction: the mean glucose of the
+training patients who ended up there. `max_depth=3` allows at most three
+questions in a row, and `min_samples_leaf=7` requires at least seven training
+patients in every leaf; without them the tree would keep splitting until it was
+too large to follow.
+
+#### Task 3a — Follow the patient
+
+Start at the top with the patient aged 45 with a BMI of 30. At each question,
+go left or right. Which leaf do you reach, and what glucose does it predict?
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+`age <= 23.5`? False, go right. `BMI <= 41.0`? True, go left.
+`age <= 26.5`? False, go right. The leaf predicts **130.8** mg/dL: the mean
+glucose of the 29 training patients older than 26.5 with a BMI of at most 41.
+
+The plot rounds the split points to one decimal (`precision=1`); the BMI split
+is exactly 41.05. `print(export_text(tree_model, feature_names=["age", "BMI"]))`
+prints the same tree as text.
+:::
+:::
+
+Check it with `predict()`:
+
+```{python}
+tree_model.predict(patient)
+```
+
+Turn the plot. The orange surface is the tree, the grey one the plane from
+Part 2.
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| eval: false
+# the tree's prediction on the same grid as the plane
+tree_matrix = tree_model.predict(grid).reshape(A.shape)
+
+fig_tree = go.Figure()
+fig_tree.add_trace(go.Scatter3d(
+    x=train["age"], y=train["BMI"], z=train["glucose"], mode="markers",
+    marker={"size": 3, "color": "steelblue"}, name="Training patients"))
+fig_tree.add_trace(go.Surface(
+    x=ages, y=bmis, z=tree_matrix, opacity=0.8, showscale=False,
+    colorscale=[[0, "moccasin"], [1, "darkorange"]], name="Tree"))
+fig_tree.add_trace(go.Surface(
+    x=ages, y=bmis, z=plane_matrix, opacity=0.5, showscale=False,
+    colorscale=[[0, "lightgrey"], [1, "grey"]], name="Plane"))
+fig_tree.add_trace(go.Scatter3d(
+    x=[45], y=[30], z=tree_model.predict(patient), mode="markers",
+    marker={"size": 7, "color": "red"}, name="Age 45, BMI 30 (tree)"))
+fig_tree.update_layout(scene={"xaxis_title": "Age (years)",
+                              "yaxis_title": "BMI (kg/m²)",
+                              "zaxis_title": "Glucose (mg/dL)"})
+fig_tree.show()
+```
+
+```{python}
+#| echo: false
+tree_matrix = tree_model.predict(grid).reshape(A.shape)
+tree_patient = float(tree_model.predict(patient)[0])
+```
+
+```{r}
+#| echo: false
+# Draws the Python model's tree and plane (values from the Python cells above).
+if (requireNamespace("plotly", quietly = TRUE)) {
+  plotly::plot_ly() |>
+    plotly::add_markers(data = reticulate::py$train, x = ~age, y = ~BMI,
+                        z = ~glucose,
+                        marker = list(size = 3, color = "steelblue"),
+                        name = "Training patients") |>
+    plotly::add_surface(x = reticulate::py$ages, y = reticulate::py$bmis,
+                        z = reticulate::py$tree_matrix, opacity = 0.8,
+                        showscale = FALSE,
+                        colorscale = list(c(0, 1), c("moccasin", "darkorange")),
+                        name = "Tree") |>
+    plotly::add_surface(x = reticulate::py$ages, y = reticulate::py$bmis,
+                        z = reticulate::py$plane_matrix, opacity = 0.5,
+                        showscale = FALSE,
+                        colorscale = list(c(0, 1), c("lightgrey", "grey")),
+                        name = "Plane") |>
+    plotly::add_markers(x = 45, y = 30, z = reticulate::py$tree_patient,
+                        marker = list(size = 7, color = "red"),
+                        name = "Age 45, BMI 30 (tree)") |>
+    plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
+                                yaxis = list(title = "BMI (kg/m²)"),
+                                zaxis = list(title = "Glucose (mg/dL)")))
+} else knitr::asis_output(paste0(
+  "*The plot you can turn is missing from this copy of the page: it needs the R ",
+  "package `plotly`. Run `install.packages(\"plotly\")` and render again.*"))
+```
+
+::: {.callout-important appearance="simple"}
+## Think about it
+1. Describe the shape of the tree's surface. Why is it made of flat steps?
+2. Which predictor does the tree ask about first, and how often does it ask
+   about BMI? Compare with how much BMI changed the plane in Part 2.
+3. A new patient is 90 years old, older than anyone in the training data. What
+   do the plane and the tree predict, and why do they behave differently?
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+1. Flat terraces with vertical walls between them. Every patient in the same
+   leaf gets the same prediction, so the surface is constant inside each
+   rectangle of age and BMI and jumps at each split. The plane, by contrast,
+   changes smoothly everywhere.
+2. Age first, at 23.5, then BMI twice (27.7 for the youngest patients and
+   41.05 for the rest). The tree did use BMI, but the biggest step is between
+   the under-24s and everyone else. The R tab's tree, fitted on other training
+   patients, never asks about BMI at all: whether a weak predictor is used can
+   depend on which patients the tree happened to see.
+3. The plane keeps rising with age, because a plane has no edge. The tree puts
+   the patient in the oldest leaf and predicts the mean of those training
+   patients, so it never goes above or below what it saw in training:
+
+```{python}
+old = pd.DataFrame({"age": [90], "BMI": [30]})
+print(plane_model.predict(old), tree_model.predict(old))
+```
+:::
+:::
+
+::: {.callout-important}
+## Learning points
+- The steps are the same whatever the model: specify, fit on the training
+  patients, predict for new ones. Swapping linear regression for a tree
+  changed one line.
+- A linear model's prediction can be worked out by hand from its parameters; a
+  tree's prediction is read by following the questions to a leaf.
+- The fitted model depends on which patients were used for training.
+- A line or plane changes smoothly and keeps going beyond the data; a tree
+  predicts in flat steps and stays within the values it saw.
+:::
+
+::::::
