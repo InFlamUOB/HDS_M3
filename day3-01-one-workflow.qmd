@@ -69,7 +69,7 @@ summary(glu)
 Split the 77 patients into training and test patients, as on Day 1.
 
 ```{r}
-set.seed(42)
+set.seed(14)
 split <- initial_split(glu, prop = 0.8)
 
 train <- training(split)
@@ -123,7 +123,7 @@ $\hat\beta_1$, which multiplies the age.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-predicted_45 <- 111.80 + 0.25 * 45
+predicted_45 <- 106.41 + 0.35 * 45
 predicted_45
 ```
 :::
@@ -192,10 +192,10 @@ mean(abs(test_results$gap))
 range(test_results$predicted)
 ```
 
-1. On average about 22 mg/dL away, in either direction; some patients are
+1. On average about 23 mg/dL away, in either direction; some patients are
    much further.
-2. The slope is small, a quarter of a mg/dL per year, so even a 60-year
-   difference in age moves the prediction by only about 15 mg/dL. Age explains
+2. The slope is small, about a third of a mg/dL per year, so even a 60-year
+   difference in age moves the prediction by only about 20 mg/dL. Age explains
    very little of the differences in glucose between these patients, so the
    line stays close to the average glucose for everyone.
 
@@ -243,8 +243,8 @@ line_fit_1$fit$coefficients
 predict(line_fit_1, new_data = data.frame(age = 45))$.pred
 ```
 
-The slope more than doubles, from 0.25 to 0.57, and the prediction for the
-45-year-old moves from 123.0 to 128.7 mg/dL. Same patients in the file, same
+The slope rises from 0.35 to 0.57, and the prediction for the 45-year-old
+moves from 122.1 to 128.7 mg/dL. Same patients in the file, same
 model, same code: only the choice of training patients changed.
 :::
 :::
@@ -326,7 +326,7 @@ weight for BMI.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-predicted_patient <- 77.70 + 0.198 * 45 + 1.114 * 30
+predicted_patient <- 79.02 + 0.322 * 45 + 0.883 * 30
 predicted_patient
 ```
 :::
@@ -350,7 +350,7 @@ sitting on the plane.
 # This plot needs the plotly package: install.packages("plotly")
 # every combination of age and BMI on a fine grid
 grid <- expand_grid(age = seq(20, 82, by = 0.5),
-                    BMI = seq(19, 47, by = 0.5))
+                    BMI = seq(19, 58, by = 0.5))
 ages <- unique(grid$age)
 bmis <- unique(grid$BMI)
 
@@ -395,13 +395,13 @@ if (!exists("fig_plane")) knitr::asis_output(paste0(
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 1. For two patients of the same age, one BMI unit higher means a predicted
-   glucose about 1.1 mg/dL higher. Each weight is read with the other
+   glucose about 0.9 mg/dL higher. Each weight is read with the other
    predictor held fixed.
-2. From 123.0 to 120.1 mg/dL, about 3 mg/dL. A second predictor gives the
+2. From 122.1 to 120.0 mg/dL, about 2 mg/dL. A second predictor gives the
    model more to work with, but no guarantee: if it carries little
    information about the outcome, the plane is barely different from the
    line, and on new patients it can even do slightly worse. Here BMI raises
-   the share of the training variation explained from about 2% to about 8%:
+   the share of the training variation explained from about 3% to about 8%:
    more, but still small.
 :::
 :::
@@ -437,12 +437,12 @@ go left or right. Which leaf do you reach, and what glucose does it predict?
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-`age < 24`? No, go right. `age >= 55`? No, go right. `age < 28`? No, go right.
-`age >= 30`? Yes, go left. The leaf predicts **129** mg/dL: the mean glucose of
-the 17 training patients aged 30 to 54.
+`age < 24`? No, go right. `BMI < 28`? No, go right. `age >= 30`? Yes, go
+left. The leaf predicts **123** mg/dL: the mean glucose of the 17 training
+patients aged 30 or over with a BMI of at least 28.
 
-The plot rounds the split points; the exact values (23.5, 54.5, 27.5 and 29.5)
-are in `tree_fit$fit`.
+The plot rounds the split points and the leaf values; the exact values (age
+23.5, BMI 28.1, age 30, and a leaf mean of 123.5) are in `tree_fit$fit`.
 :::
 :::
 
@@ -496,8 +496,8 @@ if (!exists("fig_tree")) knitr::asis_output(paste0(
 ::: {.callout-important appearance="simple"}
 ## Think about it
 1. Describe the shape of the tree's surface. Why is it made of flat steps?
-2. This tree never asks about BMI. What does that do to its surface, and why
-   might it have ignored BMI?
+2. Which predictor does the tree ask about first, and for which patients does
+   BMI make a difference? Compare with the BMI weight of the plane in Part 2.
 3. A new patient is 90 years old, older than anyone in the training data. What
    do the plane and the tree predict, and why do they behave differently?
 :::
@@ -509,11 +509,11 @@ if (!exists("fig_tree")) knitr::asis_output(paste0(
    leaf gets the same prediction, so the surface is constant inside each
    rectangle of age and BMI and jumps at each split. The plane, by contrast,
    changes smoothly everywhere.
-2. The surface is flat in the BMI direction: moving along BMI at a fixed age
-   never changes the prediction, so the steps run only along age. At every
-   split, rpart tried both predictors and a split on age reduced the error
-   more; a BMI split never helped enough to be kept. That fits Part 2, where
-   BMI added little.
+2. Age first: everyone under 24 gets 99 mg/dL, whatever their BMI. BMI only
+   matters for patients aged 24 or over, where a BMI under 28 predicts 115
+   and a higher BMI leads to one more question about age. So the tree uses BMI
+   in one part of the data and ignores it in another, while the plane adds the
+   same 0.88 mg/dL per BMI unit for every patient.
 3. The plane keeps rising with age, because a plane has no edge. The tree puts
    the patient in the oldest leaf and predicts the mean of those training
    patients, so it never goes above or below what it saw in training:
@@ -584,9 +584,10 @@ print(len(train), "training patients,", len(test), "test patients")
 
 ::: {.callout-note appearance="simple"}
 ## The numbers differ from the R tab
-Python and R shuffle with different random number generators, so
-`random_state=42` and `set.seed(42)` do not choose the same training patients.
-Expect different numbers from the R tab; the steps are the same.
+The R tab splits with `set.seed(14)` and this tab with `random_state=42`, and
+the two languages shuffle with different random number generators, so they do
+not choose the same training patients. Expect different numbers from the R
+tab; the steps are the same.
 :::
 
 ### Part 1 — Predict glucose from age
@@ -854,7 +855,7 @@ import plotly.graph_objects as go
 
 # every combination of age and BMI on a fine grid
 ages = np.arange(20, 82.5, 0.5)
-bmis = np.arange(19, 47.5, 0.5)
+bmis = np.arange(19, 58.5, 0.5)
 A, B = np.meshgrid(ages, bmis)
 grid = pd.DataFrame({"age": A.ravel(), "BMI": B.ravel()})
 
@@ -881,7 +882,7 @@ fig_plane.show()
 #| echo: false
 # Same grid and predictions as the cell above, for the page's copy of the plot.
 ages = np.arange(20, 82.5, 0.5)
-bmis = np.arange(19, 47.5, 0.5)
+bmis = np.arange(19, 58.5, 0.5)
 A, B = np.meshgrid(ages, bmis)
 grid = pd.DataFrame({"age": A.ravel(), "BMI": B.ravel()})
 plane_matrix = plane_model.predict(grid).reshape(A.shape)
@@ -1067,8 +1068,8 @@ if (requireNamespace("plotly", quietly = TRUE)) {
 2. Age first, at 23.5, then BMI twice (27.7 for the youngest patients and
    41.05 for the rest). The tree did use BMI, but the biggest step is between
    the under-24s and everyone else. The R tab's tree, fitted on other training
-   patients, never asks about BMI at all: whether a weak predictor is used can
-   depend on which patients the tree happened to see.
+   patients, asks about BMI once, at 28: which questions a tree asks depends on
+   which patients it happened to see.
 3. The plane keeps rising with age, because a plane has no edge. The tree puts
    the patient in the oldest leaf and predicts the mean of those training
    patients, so it never goes above or below what it saw in training:
