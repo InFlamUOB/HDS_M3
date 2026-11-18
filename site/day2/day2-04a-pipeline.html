@@ -194,7 +194,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#the-scenario" id="toc-the-scenario" class="nav-link" data-scroll-target="#the-scenario">The scenario</a></li>
   <li><a href="#task-1-build-and-fit-a-pipeline" id="toc-task-1-build-and-fit-a-pipeline" class="nav-link" data-scroll-target="#task-1-build-and-fit-a-pipeline">Task 1 — Build and fit a pipeline</a>
   <ul class="collapse">
-  <li><a href="#from-exercise-1.2-to-this-pipeline" id="toc-from-exercise-1.2-to-this-pipeline" class="nav-link" data-scroll-target="#from-exercise-1.2-to-this-pipeline">From Exercise 1.2 to this pipeline</a></li>
+  <li><a href="#how-the-pieces-connect" id="toc-how-the-pieces-connect" class="nav-link" data-scroll-target="#how-the-pieces-connect">How the pieces connect</a></li>
   </ul></li>
   <li><a href="#task-2-look-inside-the-pipeline" id="toc-task-2-look-inside-the-pipeline" class="nav-link" data-scroll-target="#task-2-look-inside-the-pipeline">Task 2 — Look inside the pipeline</a>
   <ul class="collapse">
@@ -239,8 +239,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p><strong>Download this exercise as a notebook:</strong> <a href="code/day2-04a-pipeline.Rmd" download="day2-04a-pipeline.Rmd"><strong>R Markdown (.Rmd)</strong></a> for R, or <a href="code/day2-04a-pipeline.ipynb" download="day2-04a-pipeline.ipynb"><strong>Jupyter (.ipynb)</strong></a> for Python. Each holds the text and every code cell of that language, with the blanks left for you to fill in.</p>
 <section id="overview" class="level2">
 <h2 class="anchored" data-anchor-id="overview">Overview</h2>
-<p>Data preprocessing is a critical part of any data analysis workflow, as the choices we make when handling missing values, encoding variables, scaling features and transforming data can substantially influence downstream analyses and model performance.</p>
-<p>In the next exercise, you will explore how to bring these steps together using preprocessing pipelines. Frameworks such as <code>tidymodels</code> in R and <code>scikit-learn</code> in Python allow us to integrate preprocessing directly into the modelling workflow, making our analyses more reproducible, consistent and less prone to errors such as data leakage.</p>
+<p>In this exercise, we combine imputation, encoding, scaling and regression into one fitted workflow. We then inspect what the preprocessing learned from the training patients and apply it to unseen test patients.</p>
 </section>
 <section id="the-scenario" class="level2">
 <h2 class="anchored" data-anchor-id="the-scenario">The scenario</h2>
@@ -375,34 +374,52 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <p>A <strong>pipeline</strong> combines preprocessing and modelling into one sequence. This ensures that the same steps are applied consistently to training patients and any new patients. Here our preprocessing steps require imputing missing values, encoding categorical variables and standardising numerical variables. This is the part that was not included in your exercise 1.2 yesterday!</p>
+<section id="how-the-pieces-connect" class="level3">
+<h3 class="anchored" data-anchor-id="how-the-pieces-connect">How the pieces connect</h3>
+<p>In Python, we build the workflow in three parts:</p>
+<ol type="1">
+<li><strong>Two preprocessing pipelines:</strong> numerical variables are imputed and then scaled; categorical variables are imputed and then encoded.</li>
+<li><strong>A <code>ColumnTransformer</code>:</strong> applies each pipeline to its selected columns and joins the outputs side by side.</li>
+<li><strong>An outer <code>Pipeline</code>:</strong> passes the combined, prepared predictors to linear regression.</li>
+</ol>
+<p>Each entry in <code>ColumnTransformer</code> specifies a name, a transformer and the columns it should process:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>preprocessor <span class="op">=</span> ColumnTransformer([</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Name          Pipeline       Columns</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"numeric"</span>,     numeric,       num),</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"categorical"</span>, categorical,   cat),</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Within a <code>Pipeline</code>, each step receives the previous step’s output.</strong> The two branches inside <code>ColumnTransformer</code> work independently on different columns.</p>
+<p>The names in quotation marks, such as <code>"impute"</code> and <code>"regression"</code>, are labels we choose; we use them in Task 2 to look inside the fitted pipeline. <code>handle_unknown="ignore"</code> lets the pipeline process a new patient whose category was not seen in training: that patient’s columns for the variable are all zero.</p>
+<p>In R, the <code>recipe()</code> defines the preprocessing steps and selects the variables for each step. <code>length_of_stay ~ .</code> names the outcome, and <code>.</code> means every other column is a predictor. A <code>workflow()</code> connects that recipe to the model. Because the formula is already in the recipe, <code>fit()</code> needs only the data. (<code>|&gt;</code> is the base-R pipe; it does the same job as <code>%&gt;%</code> in Exercise 1.2.)</p>
+<p>See the <a href="https://scikit-learn.org/stable/modules/generated/sklearn.compose.ColumnTransformer.html">ColumnTransformer documentation</a> and the <a href="https://recipes.tidymodels.org/">recipes documentation</a> for further details.</p>
 <div class="columns">
 <div class="column" style="width:48%;">
 <p><strong>Python</strong></p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>numeric <span class="op">=</span> Pipeline([</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"impute"</span>, SimpleImputer(</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>        strategy<span class="op">=</span><span class="st">"median"</span>)),</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"scale"</span>, StandardScaler()),</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>])</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>categorical <span class="op">=</span> Pipeline([</span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"impute"</span>, SimpleImputer(</span>
-<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        strategy<span class="op">=</span><span class="st">"most_frequent"</span>)),</span>
-<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"encode"</span>, OneHotEncoder(</span>
-<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>        handle_unknown<span class="op">=</span><span class="st">"ignore"</span>)),</span>
-<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>])</span>
-<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>preprocessor <span class="op">=</span> ColumnTransformer([</span>
-<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"numeric"</span>, numeric, num),</span>
-<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"categorical"</span>, categorical, cat),</span>
-<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>])</span>
-<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> Pipeline([</span>
-<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"preprocess"</span>, preprocessor),</span>
-<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"regression"</span>, LinearRegression()),</span>
-<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>])</span>
-<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>model.fit(X_train, y_train)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>numeric <span class="op">=</span> Pipeline([</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"impute"</span>, SimpleImputer(</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>        strategy<span class="op">=</span><span class="st">"median"</span>)),</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"scale"</span>, StandardScaler()),</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>])</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>categorical <span class="op">=</span> Pipeline([</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"impute"</span>, SimpleImputer(</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>        strategy<span class="op">=</span><span class="st">"most_frequent"</span>)),</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"encode"</span>, OneHotEncoder(</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>        handle_unknown<span class="op">=</span><span class="st">"ignore"</span>)),</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>])</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>preprocessor <span class="op">=</span> ColumnTransformer([</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"numeric"</span>, numeric, num),</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"categorical"</span>, categorical, cat),</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>])</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> Pipeline([</span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"preprocess"</span>, preprocessor),</span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"regression"</span>, LinearRegression()),</span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>])</span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>model.fit(X_train, y_train)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <style>.sk-global {
   /* Definition of color scheme common for light and dark mode */
@@ -2740,38 +2757,36 @@ forceTheme('sk-container-id-1');</script>
 </div><div class="column" style="width:48%;">
 <p><strong>R</strong></p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># "." means every other column</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>rec <span class="ot">&lt;-</span> <span class="fu">recipe</span>(</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  length_of_stay <span class="sc">~</span> .,</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> train</span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_impute_median</span>(</span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">all_numeric_predictors</span>()</span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_impute_mode</span>(</span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">all_nominal_predictors</span>()</span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_dummy</span>(</span>
-<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">all_nominal_predictors</span>()</span>
-<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_normalize</span>(</span>
-<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">all_numeric_predictors</span>(),</span>
-<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>    <span class="sc">-</span><span class="fu">starts_with</span>(<span class="st">"admission_type_"</span>),</span>
-<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>    <span class="sc">-</span><span class="fu">starts_with</span>(<span class="st">"smoking_status_"</span>)</span>
-<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a><span class="co"># The model: as in Exercise 1.2</span></span>
-<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>los_model <span class="ot">&lt;-</span> <span class="fu">linear_reg</span>() <span class="sc">|&gt;</span></span>
-<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"lm"</span>)</span>
-<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a><span class="co"># The pipeline: recipe + model</span></span>
-<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>los_workflow <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">|&gt;</span></span>
-<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_recipe</span>(rec) <span class="sc">|&gt;</span></span>
-<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(los_model)</span>
-<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a><span class="co"># Fit on the training patients</span></span>
-<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a>los_fit <span class="ot">&lt;-</span> los_workflow <span class="sc">|&gt;</span></span>
-<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(<span class="at">data =</span> train)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># "." means every other column</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>rec <span class="ot">&lt;-</span> <span class="fu">recipe</span>(</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  length_of_stay <span class="sc">~</span> .,</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> train</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_impute_median</span>(</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">all_numeric_predictors</span>()</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_impute_mode</span>(</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">all_nominal_predictors</span>()</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_normalize</span>(</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">all_numeric_predictors</span>()</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_dummy</span>(</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">all_nominal_predictors</span>()</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a><span class="co"># The model: as in Exercise 1.2</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>los_model <span class="ot">&lt;-</span> <span class="fu">linear_reg</span>() <span class="sc">|&gt;</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"lm"</span>)</span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a><span class="co"># The pipeline: recipe + model</span></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>los_workflow <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">|&gt;</span></span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_recipe</span>(rec) <span class="sc">|&gt;</span></span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(los_model)</span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a><span class="co"># Fit on the training patients</span></span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a>los_fit <span class="ot">&lt;-</span> los_workflow <span class="sc">|&gt;</span></span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(<span class="at">data =</span> train)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div>
 </div>
@@ -2781,125 +2796,30 @@ forceTheme('sk-container-id-1');</script>
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>How to read this code: Python
+<span class="screen-reader-only">Note</span>The pipeline diagram: Python
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<ol type="1">
-<li><p><strong><code>numeric = Pipeline(...)</code></strong> defines the numerical preprocessing steps, in the order they will run: imputation, then scaling.</p></li>
-<li><p><strong><code>categorical = Pipeline(...)</code></strong> defines the categorical steps: imputation, then encoding. <code>handle_unknown="ignore"</code> allows the pipeline to process a new patient with a category absent from the training data; its encoded columns for that variable will all be zero.</p></li>
-<li><p><strong><code>ColumnTransformer(...)</code></strong> sends the columns listed in <code>num</code> through the numerical pipeline and those in <code>cat</code> through the categorical pipeline. It combines their outputs into one predictor matrix.</p></li>
-<li><p><strong><code>model = Pipeline(...)</code></strong> connects this preprocessing to linear regression: first prepare the predictors, then fit the model.</p></li>
-<li><p><strong><code>model.fit(X_train, y_train)</code></strong> runs the complete sequence. It learns the medians, most frequent categories, scaling parameters and category labels from <code>X_train</code>, then fits the regression to predict <code>y_train</code>.</p></li>
-</ol>
-<p>The names in quotation marks, such as <code>"impute"</code> and <code>"regression"</code>, are labels we choose for the steps. The objects beside them specify what each step does.</p>
-<p><strong>Defining a pipeline sets out the instructions. Calling <code>.fit()</code> learns from the training data.</strong></p>
-<p>When we later call <code>model.predict(X_test)</code>, the pipeline applies the preprocessing learned from the training patients before predicting. It does not recalculate medians or scaling parameters from the test set.</p>
-<p><strong>Compared with Exercise 1.2:</strong> <code>LinearRegression()</code>, <code>model.fit(X_train, y_train)</code> and <code>model.predict(X_test)</code> are exactly as before. What is new is the preprocessing, and wrapping it together with <code>LinearRegression()</code> in one <code>Pipeline</code>, so that <code>model</code> now means “preprocessing + regression”.</p>
+<p>In a Jupyter notebook, <code>model.fit()</code> also displays a diagram of the pipeline (click a box to see its settings). Read it from the input to the regression: the six numerical predictors go down one branch and the two categorical predictors down the other, and the branches are joined before the regression. Before Task 2C, predict how many columns each branch will produce.</p>
 </div>
 </div>
+<p><code>step_normalize()</code> standardises the numerical predictors before <code>step_dummy()</code> creates the indicator columns, so the new indicator columns keep their values of 0 and 1.</p>
 <div class="callout callout-style-simple callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>How to read this code: R
+<span class="screen-reader-only">Note</span>Defining, fitting and predicting
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<ol type="1">
-<li><p><strong><code>recipe(length_of_stay ~ ., data = train)</code></strong> defines what we want to predict and which variables to use. <code>length_of_stay</code> is the outcome; <code>.</code> means every other column is a predictor. Remove patient identifiers beforehand.</p></li>
-<li><p><strong><code>step_impute_median()</code></strong> replaces missing numerical values with the median of each variable.</p></li>
-<li><p><strong><code>step_impute_mode()</code></strong> replaces missing categorical values with the most frequent category.</p></li>
-<li><p><strong><code>step_dummy()</code></strong> converts categorical variables into numerical indicator columns. By default, one category is left out as the reference category for linear regression.</p></li>
-<li><p><strong><code>step_normalize()</code></strong> centres numerical predictors on their mean and divides by their standard deviation. The minus signs exclude the dummy columns whose names start with <code>admission_type_</code> or <code>smoking_status_</code>, keeping their values as 0 and 1.</p></li>
-<li><p><strong><code>los_model &lt;- linear_reg() |&gt; set_engine("lm")</code></strong> is the model, written exactly as in Exercise 1.2: <em>linear regression, computed by <code>lm</code></em>. It fits nothing yet and mentions no data.</p></li>
-<li><p><strong><code>los_workflow &lt;- workflow() |&gt; add_recipe(rec) |&gt; add_model(los_model)</code></strong> puts the two pieces together: first the recipe (the preprocessing), then the model. This is the new step compared with Exercise 1.2, and the R counterpart of Python’s <code>Pipeline</code>. We need it because the recipe and the model must be fitted together: otherwise we would have to learn the preprocessing and apply it by hand before every fit and every prediction.</p></li>
-<li><p><strong><code>los_fit &lt;- los_workflow |&gt; fit(data = train)</code></strong> is the same call as in Exercise 1.2, with the workflow in place of the model. It learns the preprocessing values (medians, most frequent categories, means and standard deviations) from the training patients, applies the steps and fits the regression. There is no formula in <code>fit()</code> this time: the formula, <code>length_of_stay ~ .</code>, is already in the recipe.</p></li>
-</ol>
-<p><strong>The recipe and the workflow set out the instructions; <code>fit()</code> learns from the training data.</strong></p>
-<p>When we later call <code>predict(los_fit, new_data = test)</code>, exactly as in Exercise 1.2, the fitted workflow applies the same preprocessing using the values learned from training, then predicts length of stay. Nothing is recalculated from the test patients.</p>
+<p><strong>Define:</strong> creating a pipeline or workflow sets out the instructions. No preprocessing parameters have been learned yet.</p>
+<p><strong>Fit:</strong> <code>model.fit(X_train, y_train)</code> in Python or <code>los_workflow |&gt; fit(data = train)</code> in R learns the preprocessing parameters (medians, most frequent categories, category labels, means and standard deviations) from the training patients, applies the transformations and fits the regression.</p>
+<p><strong>Predict:</strong> <code>model.predict(X_test)</code> or <code>predict(los_fit, test)</code> applies the stored training transformations before predicting. These parameters are not recalculated from the test patients.</p>
+<p>Compared with Exercise 1.2, the regression is familiar: the same model, <code>fit</code> and <code>predict</code>. The new part is the preprocessing and the object that connects it to the model (<code>Pipeline</code> in Python, <code>workflow()</code> in R).</p>
 </div>
 </div>
-<section id="from-exercise-1.2-to-this-pipeline" class="level3">
-<h3 class="anchored" data-anchor-id="from-exercise-1.2-to-this-pipeline">From Exercise 1.2 to this pipeline</h3>
-<p>In Exercise 1.2 there was no preprocessing: the model went straight onto the data. Here is what stays the same and what is new, in both languages:</p>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 33%">
-<col style="width: 33%">
-<col style="width: 33%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Step</th>
-<th>Exercise 1.2</th>
-<th>Exercise 2.6</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>The model, R</td>
-<td><code>los_model &lt;- linear_reg() %&gt;% set_engine("lm")</code></td>
-<td>the same <code>linear_reg()</code> and <code>set_engine("lm")</code></td>
-</tr>
-<tr class="even">
-<td>The model, Python</td>
-<td><code>model = LinearRegression()</code></td>
-<td>the same <code>LinearRegression()</code>, now the last step of the pipeline</td>
-</tr>
-<tr class="odd">
-<td>Preprocessing, R</td>
-<td>none</td>
-<td><code>rec &lt;- recipe(...)</code> followed by the <code>step_...()</code> functions</td>
-</tr>
-<tr class="even">
-<td>Preprocessing, Python</td>
-<td>none</td>
-<td><code>numeric</code>, <code>categorical</code> and <code>ColumnTransformer(...)</code></td>
-</tr>
-<tr class="odd">
-<td>Preprocessing + model together, R</td>
-<td>not needed</td>
-<td><code>workflow()</code>, then <code>add_recipe(rec)</code> and <code>add_model(los_model)</code></td>
-</tr>
-<tr class="even">
-<td>Preprocessing + model together, Python</td>
-<td>not needed</td>
-<td><code>Pipeline([("preprocess", ...), ("regression", LinearRegression())])</code></td>
-</tr>
-<tr class="odd">
-<td>Fit, R</td>
-<td><code>fit(LOS ~ Age + Severity, data = train)</code></td>
-<td><code>fit(data = train)</code>: the formula is now in the recipe</td>
-</tr>
-<tr class="even">
-<td>Fit, Python</td>
-<td><code>model.fit(X_train, y_train)</code></td>
-<td><code>model.fit(X_train, y_train)</code>: unchanged</td>
-</tr>
-<tr class="odd">
-<td>Predict, R</td>
-<td><code>predict(los_fit, test)</code></td>
-<td><code>predict(los_fit, test)</code>: unchanged</td>
-</tr>
-<tr class="even">
-<td>Predict, Python</td>
-<td><code>model.predict(X_test)</code></td>
-<td><code>model.predict(X_test)</code>: unchanged</td>
-</tr>
-</tbody>
-</table>
-<p><strong>In both languages</strong> the model, <code>fit</code> and <code>predict</code> are what you already know. The new part is the preprocessing and the single object that holds it together with the model (<code>workflow()</code> in R, <code>Pipeline</code> in Python). That object is what makes sure every value the preprocessing learns comes from the training patients only.</p>
-<p><strong>Where the two languages differ:</strong></p>
-<ul>
-<li>In R the formula moves into the recipe, so <code>fit()</code> takes only the data. In Python the predictors and the outcome are still passed separately, <code>fit(X_train, y_train)</code>, as in Exercise 1.2.</li>
-<li>R chooses columns for each step with selectors such as <code>all_numeric_predictors()</code>; Python lists them (<code>num</code>, <code>cat</code>) and sends them through <code>ColumnTransformer</code>.</li>
-<li>Python names every step in quotes (<code>"impute"</code>, <code>"regression"</code>); R steps have no names.</li>
-<li><code>step_dummy()</code> leaves out one category per variable and <code>OneHotEncoder()</code> does not, so R ends with 9 columns and Python with 11 (Task 2, part C).</li>
-<li><code>%&gt;%</code> (Exercise 1.2) and <code>|&gt;</code> (here) are two versions of the R pipe; they do the same job in this code.</li>
-</ul>
 <p>The same pipeline, read across the two columns:</p>
 <table class="caption-top table">
 <colgroup>
@@ -2947,8 +2867,8 @@ forceTheme('sk-container-id-1');</script>
 </tr>
 <tr class="odd">
 <td>learn from the training patients</td>
-<td><code>model.fit()</code></td>
-<td><code>fit()</code></td>
+<td><code>model.fit(X_train, y_train)</code></td>
+<td><code>fit(data = train)</code>: the formula is in the recipe</td>
 </tr>
 </tbody>
 </table>
@@ -2977,29 +2897,30 @@ forceTheme('sk-container-id-1');</script>
 <section id="a.-where-does-the-imputation-median-come-from" class="level3">
 <h3 class="anchored" data-anchor-id="a.-where-does-the-imputation-median-come-from">A. Where does the imputation median come from?</h3>
 <p>Compare the training and test medians for creatinine, then ask the fitted pipeline which median it stored.</p>
+<p>To inspect the stored median, we navigate through the fitted objects. In Python: the model’s <code>"preprocess"</code> step → its <code>"numeric"</code> branch → its <code>"impute"</code> step. <code>statistics_</code> contains the learned medians in the same order as <code>num</code>. In R: <code>extract_recipe()</code> takes the fitted recipe out of the workflow, and <code>tidy(..., number = 1)</code> shows what its first step learned.</p>
 <div class="columns">
 <div class="column" style="width:48%;">
 <p><strong>Python</strong></p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Training median:"</span>,</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>      X_train[<span class="st">"creatinine"</span>].median())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Training median:"</span>,</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>      X_train[<span class="st">"creatinine"</span>].median())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; Training median: 74.5</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Test median:"</span>,</span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>      X_test[<span class="st">"creatinine"</span>].median())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Test median:"</span>,</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>      X_test[<span class="st">"creatinine"</span>].median())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; Test median: 80.0</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>imputer <span class="op">=</span> (</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    model.named_steps[<span class="st">"preprocess"</span>]</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    .named_transformers_[<span class="st">"numeric"</span>]</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    .named_steps[<span class="st">"impute"</span>]</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Pipeline median:"</span>,</span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>      imputer.statistics_[</span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>          num.index(<span class="st">"creatinine"</span>)])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>imputer <span class="op">=</span> (</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    model.named_steps[<span class="st">"preprocess"</span>]</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    .named_transformers_[<span class="st">"numeric"</span>]</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    .named_steps[<span class="st">"impute"</span>]</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>position <span class="op">=</span> num.index(<span class="st">"creatinine"</span>)</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Pipeline median:"</span>,</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>      imputer.statistics_[position])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; Pipeline median: 74.5</code></pre>
 </div>
@@ -3009,22 +2930,22 @@ forceTheme('sk-container-id-1');</script>
 </div><div class="column" style="width:48%;">
 <p><strong>R</strong></p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">median</span>(train<span class="sc">$</span>creatinine, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">median</span>(train<span class="sc">$</span>creatinine, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; [1] 76</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">median</span>(test<span class="sc">$</span>creatinine, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">median</span>(test<span class="sc">$</span>creatinine, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; [1] 78</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the recipe fitted inside the workflow</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>trained_rec <span class="ot">&lt;-</span> <span class="fu">extract_recipe</span>(</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  los_fit, <span class="at">estimated =</span> <span class="cn">TRUE</span></span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="co"># step 1 is the median imputation</span></span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="fu">tidy</span>(trained_rec, <span class="at">number =</span> <span class="dv">1</span>) <span class="sc">|&gt;</span></span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(terms, value)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the recipe fitted inside the workflow</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>trained_rec <span class="ot">&lt;-</span> <span class="fu">extract_recipe</span>(</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  los_fit, <span class="at">estimated =</span> <span class="cn">TRUE</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="co"># step 1 is the median imputation</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="fu">tidy</span>(trained_rec, <span class="at">number =</span> <span class="dv">1</span>) <span class="sc">|&gt;</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(terms, value)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 6 × 2
 #&gt;   terms       value
@@ -3064,24 +2985,27 @@ forceTheme('sk-container-id-1');</script>
 <div class="column" style="width:48%;">
 <p><strong>Python</strong></p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>imputed_train <span class="op">=</span> imputer.transform(</span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>    X_train[num]</span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>plt.hist(</span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>    X_train[<span class="st">"creatinine"</span>].dropna(),</span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>    bins<span class="op">=</span><span class="dv">25</span>, alpha<span class="op">=</span><span class="fl">0.5</span>,</span>
-<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="st">"Original"</span>)</span>
-<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>plt.hist(</span>
-<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>    imputed_train[</span>
-<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>        :, num.index(<span class="st">"creatinine"</span>)],</span>
-<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>    bins<span class="op">=</span><span class="dv">25</span>, alpha<span class="op">=</span><span class="fl">0.5</span>,</span>
-<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="st">"Imputed"</span>)</span>
-<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>plt.legend()</span>
-<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">"Creatinine (µmol/L)"</span>)</span>
-<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>imputed_train <span class="op">=</span> imputer.transform(</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    X_train[num]</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="co"># the same bins for both: 0, 10, 20, ... 220</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>bins <span class="op">=</span> <span class="bu">range</span>(<span class="dv">0</span>, <span class="dv">230</span>, <span class="dv">10</span>)</span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>plt.hist(</span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>    X_train[<span class="st">"creatinine"</span>].dropna(),</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>    bins<span class="op">=</span>bins, alpha<span class="op">=</span><span class="fl">0.5</span>,</span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="st">"Original"</span>)</span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>plt.hist(</span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>    imputed_train[</span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>        :, num.index(<span class="st">"creatinine"</span>)],</span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>    bins<span class="op">=</span>bins, alpha<span class="op">=</span><span class="fl">0.5</span>,</span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="st">"Imputed"</span>)</span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>plt.legend()</span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">"Creatinine (µmol/L)"</span>)</span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -3095,33 +3019,35 @@ forceTheme('sk-container-id-1');</script>
 </div><div class="column" style="width:48%;">
 <p><strong>R</strong></p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>creatinine_median <span class="ot">&lt;-</span> <span class="fu">tidy</span>(</span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  trained_rec, <span class="at">number =</span> <span class="dv">1</span></span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(terms <span class="sc">==</span> <span class="st">"creatinine"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(value)</span>
-<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_rows</span>(</span>
-<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(</span>
-<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">creatinine =</span> train<span class="sc">$</span>creatinine,</span>
-<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">stage =</span> <span class="st">"Original"</span></span>
-<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>  ),</span>
-<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(</span>
-<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">creatinine =</span> <span class="fu">replace_na</span>(</span>
-<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>      train<span class="sc">$</span>creatinine,</span>
-<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>      creatinine_median</span>
-<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">stage =</span> <span class="st">"Imputed"</span></span>
-<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
-<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> creatinine)) <span class="sc">+</span></span>
-<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(</span>
-<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">bins =</span> <span class="dv">25</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span></span>
-<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(</span>
-<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a>    <span class="sc">~</span> <span class="fu">fct_inorder</span>(stage), <span class="at">ncol =</span> <span class="dv">1</span></span>
-<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Creatinine (µmol/L)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>creatinine_median <span class="ot">&lt;-</span> <span class="fu">tidy</span>(</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  trained_rec, <span class="at">number =</span> <span class="dv">1</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(terms <span class="sc">==</span> <span class="st">"creatinine"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(value)</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_rows</span>(</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">creatinine =</span> train<span class="sc">$</span>creatinine,</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">stage =</span> <span class="st">"Original"</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(</span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">creatinine =</span> <span class="fu">replace_na</span>(</span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>      train<span class="sc">$</span>creatinine,</span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>      creatinine_median</span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">stage =</span> <span class="st">"Imputed"</span></span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> creatinine)) <span class="sc">+</span></span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a>  <span class="co"># the same bins in both panels</span></span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(</span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">binwidth =</span> <span class="dv">10</span>, <span class="at">boundary =</span> <span class="dv">0</span>,</span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">na.rm =</span> <span class="cn">TRUE</span></span>
+<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb23-26"><a href="#cb23-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(</span>
+<span id="cb23-27"><a href="#cb23-27" aria-hidden="true" tabindex="-1"></a>    <span class="sc">~</span> <span class="fu">fct_inorder</span>(stage), <span class="at">ncol =</span> <span class="dv">1</span></span>
+<span id="cb23-28"><a href="#cb23-28" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb23-29"><a href="#cb23-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Creatinine (µmol/L)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -3165,27 +3091,27 @@ forceTheme('sk-container-id-1');</script>
 <div class="column" style="width:48%;">
 <p><strong>Python</strong></p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>processed <span class="op">=</span> (</span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    model.named_steps[<span class="st">"preprocess"</span>]</span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    .transform(X_train)</span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Original features:"</span>,</span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>      X_train.shape[<span class="dv">1</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>processed <span class="op">=</span> (</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>    model.named_steps[<span class="st">"preprocess"</span>]</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>    .transform(X_train)</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Original features:"</span>,</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>      X_train.shape[<span class="dv">1</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; Original features: 8</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Processed features:"</span>,</span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>      processed.shape[<span class="dv">1</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Processed features:"</span>,</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>      processed.shape[<span class="dv">1</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; Processed features: 11</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>names <span class="op">=</span> (</span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>    model.named_steps[<span class="st">"preprocess"</span>]</span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>    .get_feature_names_out()</span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name <span class="kw">in</span> names:</span>
-<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(name)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>names <span class="op">=</span> (</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    model.named_steps[<span class="st">"preprocess"</span>]</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    .get_feature_names_out()</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name <span class="kw">in</span> names:</span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(name)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; numeric__age
 #&gt; numeric__BMI
@@ -3205,22 +3131,22 @@ forceTheme('sk-container-id-1');</script>
 </div><div class="column" style="width:48%;">
 <p><strong>R</strong></p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>processed_train <span class="ot">&lt;-</span> <span class="fu">bake</span>(</span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>  trained_rec, <span class="at">new_data =</span> train</span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a><span class="co"># minus 1: the outcome is not a predictor</span></span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Original predictors:"</span>,</span>
-<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ncol</span>(train) <span class="sc">-</span> <span class="dv">1</span>, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>processed_train <span class="ot">&lt;-</span> <span class="fu">bake</span>(</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  trained_rec, <span class="at">new_data =</span> train</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a><span class="co"># minus 1: the outcome is not a predictor</span></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Original predictors:"</span>,</span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ncol</span>(train) <span class="sc">-</span> <span class="dv">1</span>, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; Original predictors: 8</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Processed predictors:"</span>,</span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ncol</span>(processed_train) <span class="sc">-</span> <span class="dv">1</span>, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Processed predictors:"</span>,</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ncol</span>(processed_train) <span class="sc">-</span> <span class="dv">1</span>, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; Processed predictors: 9</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(processed_train)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(processed_train)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;  [1] "age"                      "BMI"                     
 #&gt;  [3] "systolic_BP"              "heart_rate"              
@@ -3242,6 +3168,7 @@ forceTheme('sk-container-id-1');</script>
 </div>
 <div class="callout-body-container callout-body">
 <p>Neither is a mistake. <code>OneHotEncoder()</code> makes one column for every category. <code>step_dummy()</code> leaves out the first category of each variable, because it is implied by the others: a patient who is not <code>Emergency</code> is <code>Elective</code>. Both tables hold the same information.</p>
+<p>For linear regression with an intercept, keeping every category creates redundant predictors. Python can still fit this model and its predictions are unaffected, but the individual category coefficients are not uniquely identifiable; R’s reference-category encoding avoids this redundancy.</p>
 </div>
 </div>
 <div class="callout callout-style-simple callout-important callout-titled">
@@ -3271,10 +3198,10 @@ forceTheme('sk-container-id-1');</script>
 <div class="column" style="width:48%;">
 <p><strong>Python</strong></p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>predictions <span class="op">=</span> model.predict(X_test)</span>
-<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"First five predictions:"</span>,</span>
-<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>      predictions[:<span class="dv">5</span>].<span class="bu">round</span>(<span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>predictions <span class="op">=</span> model.predict(X_test)</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"First five predictions:"</span>,</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>      predictions[:<span class="dv">5</span>].<span class="bu">round</span>(<span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; First five predictions: [3.51 4.76 2.34 6.6  3.61]</code></pre>
 </div>
@@ -3284,11 +3211,11 @@ forceTheme('sk-container-id-1');</script>
 </div><div class="column" style="width:48%;">
 <p><strong>R</strong></p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(</span>
-<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>  los_fit, test</span>
-<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(predictions, <span class="dv">5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(</span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>  los_fit, test</span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(predictions, <span class="dv">5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 5 × 1
 #&gt;   .pred
@@ -3303,6 +3230,7 @@ forceTheme('sk-container-id-1');</script>
 </div>
 </div>
 <p>As you have seen, a key advantage of pipelines is that all preprocessing parameters, such as imputation medians, scaling means and standard deviations, and encoding categories, are learned from the training data only. These same parameters are then applied to the test data without being recalculated. This is essential to prevent data leakage, ensuring that information from the test set does not influence model training and that performance is evaluated on genuinely unseen data.</p>
+<p>Fitting the pipeline on the training data keeps the learned preprocessing parameters within the training set. Preprocessing performed on the full dataset beforehand can still introduce leakage.</p>
 <hr>
 </section>
 <section id="final-reflection-preprocessing-choices-and-order" class="level2">
