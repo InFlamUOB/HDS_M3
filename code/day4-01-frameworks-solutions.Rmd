@@ -1,5 +1,5 @@
 ---
-title: "Exercise 4.1 — Unified modelling frameworks in R and Python (with solutions)"
+title: "Exercise 4.1 — One workflow, two classifiers (with solutions)"
 output: html_document
 ---
 
@@ -7,135 +7,71 @@ output: html_document
 
 *Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
-In both R and Python there are many ways to fit a model:
+In Exercise 3.1 you predicted a number, blood glucose. Now the outcome is a
+**class**: does this person have diabetes, `pos` or `neg`? The steps are
+exactly the same: **specify** a model, **fit** it on the training patients, and
+**predict** for new ones. Two things are new:
 
-- **R:** `lm()`, `glm()`, `rpart()`, `randomForest()`, `xgboost()`, …
-- **Python:** `statsmodels`, your own NumPy code, or one of the many classes in
-  scikit-learn.
+- the specification says the model is for **classification**;
+- the prediction can be a **probability** for each class, as well as the class
+  itself.
 
-Each function or class tends to have its own syntax, its own argument names and
-its own way of returning a prediction. That becomes a problem as soon as we
-want to:
-
-- swap one model for another,
-- compare models fairly,
-- build a whole pipeline of preprocessing, model and evaluation,
-- tune a model without leaking information from the test data.
-
-Two ecosystems solve this: **tidymodels** in R and **scikit-learn** in Python.
-Both put one consistent interface in front of the models, the preprocessing,
-the pipelines and the tuning.
-
-| The question | tidymodels (R) | scikit-learn (Python) |
+|  | Exercise 3.1: glucose, a number | Exercise 4.1: diabetes, a class |
 |---|---|---|
-| what kind of model is this? | `logistic_reg()`, `decision_tree()` | the estimator class, `LogisticRegression` |
-| which code actually fits it? | `set_engine("glm")` | the class, plus `solver=` |
-| what happens to the data first? | a `recipe()` of `step_*()` | transformers, e.g. `StandardScaler` |
-| the two joined together | `workflow()` | `Pipeline` |
-| fit it, then use it | `fit()`, `predict()` | `.fit()`, `.predict()` |
+| specify (R) | `linear_reg()`, `decision_tree()` with `set_mode("regression")` | `logistic_reg()`, `decision_tree()` with `set_mode("classification")` |
+| specify (Python) | `LinearRegression()`, `DecisionTreeRegressor()` | `LogisticRegression()`, `DecisionTreeClassifier()` |
+| fit | `fit()` / `.fit()` | the same |
+| predict | a number | a class, or a probability for each class |
 
-**Theory:** model specification and engine; the fit/predict interface;
-predicted probabilities; pipelines that carry their preprocessing with them.
-
-Useful documentation: [Getting started with tidymodels](https://www.tidymodels.org/start/),
-the [parsnip list of models](https://parsnip.tidymodels.org/reference/index.html),
-and the [scikit-learn user guide](https://scikit-learn.org/stable/user_guide.html).
+- **Part 1.** Predict diabetes from glucose with a logistic regression. Get the
+  probability and the class for one patient, see the patient on the fitted
+  curve, and compare the predictions with what was measured in the test
+  patients.
+- **Part 2.** Add BMI and predict for the same patient again. See the
+  probability as a map over glucose and BMI.
+- **Part 3.** Keep the same steps, training patients and predictors, and fit a
+  decision tree instead. Follow the patient to a leaf, read the probability and
+  the class there, and compare the tree's map with the logistic regression's.
 
 > **The plots are for looking at**
 >
 > The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
 
-### Packages
-
-`library(tidymodels)` loads `parsnip` (the models), `recipes` (the
-preprocessing), `workflows` (the two joined together) and `yardstick` (the
-metrics), as well as the `rsample` functions you used on Day 1.
+### Packages and data
 
 ```{r}
 # Packages for this exercise. If one is missing, remove the # and run this line once:
-# install.packages(c("tidyverse", "tidymodels", "glmnet", "rpart"))
+# install.packages(c("tidyverse", "tidymodels", "rpart.plot"))
 
 library(tidyverse)
 library(tidymodels)
+library(rpart.plot)
 
-theme_set(theme_bw())          # white background for every plot
+theme_set(theme_bw())
 ```
 
-------------------------------------------------------------------------
-
-### Part 1 — What model, and which engine
-
-In tidymodels we separate two things:
-
-- **what kind of model** we want: the *specification*;
-- **how it is fitted**: the *engine*.
-
-We declare the specification with one function per kind of model, and say
-whether it is for classification or regression:
-
-```{r}
-log_spec  <- logistic_reg(mode = "classification")
-tree_spec <- decision_tree(mode = "classification")
-rf_spec   <- rand_forest(mode = "classification")
-knn_spec  <- nearest_neighbor(mode = "classification")
-
-log_spec
-```
-
-```{r}
-tree_spec
-```
-
-This does not fit anything yet. It only says "I want a logistic regression
-classifier", "I want a decision tree for classification", and so on. There is
-no data in it, and no coefficients.
-
-The **engine** is the code that actually fits the model, and we choose it with
-`set_engine()`. Different engines are different algorithms for the same kind of
-model:
-
-```{r}
-log_spec_glm <- logistic_reg(mode = "classification") |>
-  set_engine("glm")       # base R glm() with family = binomial
-
-log_spec_glmnet <- logistic_reg(mode = "classification") |>
-  set_engine("glmnet")    # penalised (regularised) regression
-
-tree_spec_rpart <- decision_tree(mode = "classification") |>
-  set_engine("rpart")     # rpart, the classic tree algorithm
-
-log_spec_glmnet
-```
-
-Writing a specification with `"glmnet"` does not need the `glmnet` package
-installed. You would only need it the moment you fit the model.
-
-> **Learning points**
->
-> - A **specification** says what kind of model you want; it has not seen any data.
-> - The **engine** (in Python, the estimator and its `solver`) is the code that fits it.
-> - Every model is then used with the same two verbs: fit it, then predict with it.
-
-------------------------------------------------------------------------
-
-### Part 2 — Fit and predict a logistic regression
-
-**The data.** `data/diabetes_clean.csv` holds 750 adults screened for type 2
-diabetes: eight measurements from a single visit, and `diabetes`, which is
-`pos` or `neg`. It is the Day 2 file with the impossible readings of 0 already
-taken out, so it is ready to use. We keep glucose, BMI (`mass`), age and the
-outcome.
-
-**The split.** We hold back every fifth person as the test set: 600 people to
-fit the models on, and 150 to test them. Splitting by a fixed rule rather than
-at random gives both languages exactly the same 150 people, so the R and the
-Python tabs print the same numbers. Every Day 4 exercise uses this split.
+`data/diabetes_clean.csv` holds 750 adults screened for type 2 diabetes: eight
+measurements from a single visit, and `diabetes`, which is `pos` or `neg`. It
+is ready to use. We keep glucose, BMI (the column `mass`) and the outcome. If
+you do not have it yet, [**download `diabetes_clean.csv`**](data/diabetes_clean.csv)
+into your `data` folder.
 
 ```{r}
 diabetes <- read_csv("data/diabetes_clean.csv") |>
-  select(glucose, mass, age, diabetes) |>
+  select(glucose, mass, diabetes) |>
   mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
 
+summary(diabetes)
+```
+
+The outcome is a factor with two levels, `neg` then `pos`. The probabilities
+are then about `pos`: having diabetes.
+
+We hold back every fifth person as the test set: 600 training patients and 150
+test patients. Splitting by a fixed rule rather than at random gives both
+languages the same 150 people. Every Day 4 exercise uses this split.
+
+```{r}
 test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
 train <- diabetes[-test_rows, ]
 test  <- diabetes[test_rows, ]
@@ -143,160 +79,316 @@ test  <- diabetes[test_rows, ]
 count(train, diabetes)
 ```
 
-The outcome is a factor with two levels, `neg` then `pos`. A logistic
-regression fitted with `glm` predicts the probability of the **second** level,
-so writing the levels in this order means the model is about `pos`: having
-diabetes.
+### Part 1 — Predict diabetes from glucose
 
-Now fit the model, predicting diabetes from glucose only, with `fit()` and a
-formula:
+The same three steps as in Exercise 3.1. The only change in the specification
+is the mode: classification instead of regression.
 
 ```{r}
-logistic_spec <- logistic_reg(mode = "classification") |>
-  set_engine("glm")
+# 1. Specify: logistic regression, computed by glm(), for classification
+log_model <- logistic_reg() |>
+  set_engine("glm") |>
+  set_mode("classification")
 
-logistic_fit <- logistic_spec |>
+# 2. Fit on the training patients
+log_fit <- log_model |>
   fit(diabetes ~ glucose, data = train)
 
-logistic_fit
+# the learned parameters: intercept first, then the weight for glucose
+log_fit$fit$coefficients
 ```
 
-Inspect the coefficients with `tidy()`. They are on the **log-odds** scale,
-which Exercise 4.2 explains:
+The two parameters are not on the glucose scale but on the **log-odds** scale.
+Exercise 4.2 shows how they turn into a probability. Here we let `predict()`
+do it.
 
-```{r}
-tidy(logistic_fit)
-```
+#### Task 1a — A patient with a glucose of 150
 
-**Predictions.** Every parsnip model is used with the same `predict()`.
-`type = "prob"` gives one column of probabilities per class, named after the
-levels. Here it is for the test set, with the test data alongside:
-
-```{r}
-test_preds <- predict(logistic_fit, new_data = test, type = "prob") |>
-  bind_cols(test)
-
-head(test_preds)
-```
-
-`.pred_pos` is the predicted probability of diabetes, $\hat{P}(\text{pos})$, and
-`.pred_neg` is $\hat{P}(\text{neg}) = 1 - \hat{P}(\text{pos})$. Plot the
-predicted probability against glucose:
-
-```{r}
-ggplot(test_preds, aes(x = glucose, y = .pred_pos)) +
-  geom_point(alpha = 0.5) +
-  labs(x = "Glucose (mg/dL)", y = "Predicted probability of diabetes")
-```
-
-The points lie on an S-shaped curve: the higher the glucose, the higher the
-predicted probability, but never below 0 or above 1.
-
-> **Learning points**
->
-> - One interface: the same `fit()` and `predict()` work for every model in the framework.
-> - A classifier can give a predicted **probability** for each class, not only a class.
-> - Check which class the probability is for: in R the second factor level, in Python the column of `classes_`.
-
-------------------------------------------------------------------------
-
-### Part 3 — Pipelines: recipes and workflows
-
-tidymodels also has tools for the steps before the model:
-
-- a **recipe** holds the preprocessing: scaling, imputation, one-hot encoding
-  and so on;
-- a **workflow** joins a recipe and a model into one object.
-
-Here the recipe standardises the three predictors, as on Day 2, and the
-workflow carries it together with the logistic regression:
-
-```{r}
-log_recipe <- recipe(diabetes ~ glucose + mass + age, data = train) |>
-  step_normalize(all_numeric_predictors())
-
-log_workflow <- workflow() |>
-  add_recipe(log_recipe) |>
-  add_model(logistic_spec)
-
-log_workflow_fit <- fit(log_workflow, data = train)
-
-log_workflow_fit
-```
-
-When you open `log_workflow_fit` in the Environment pane you will see that it
-holds the preprocessing as well as the model. That is the point: the
-standardisation was learned from the training rows, and `predict()` applies
-exactly the same standardisation to any new rows before the model sees them.
-
-How often is the workflow right on the 150 test patients? `predict()` without
-`type = "prob"` gives the predicted class, using a cut-off of 0.5. Compare it
-with a "model" that always says `neg`, which is the most common class:
-
-```{r}
-predict(log_workflow_fit, new_data = test) |>
-  bind_cols(test) |>
-  summarise(accuracy        = mean(.pred_class == diabetes),
-            always_says_neg = mean(diabetes == "neg"))
-```
-
-The logistic regression is right for 74.0% of the test patients. Always saying
-`neg` is right for 64.7%, because 97 of the 150 do not have diabetes. Three
-clinical measurements add about nine percentage points over a rule that looks
-at nothing.
-
-**Swap the model, keep everything else.** This is what the frameworks are for.
-Replace the logistic regression with a decision tree and change nothing else:
-the same recipe, the same rows, the same accuracy calculation.
+`predict()` gives the **class** by default. With `type = "prob"` it gives a
+**probability** for each class instead.
 
 > **Stuck?**
 >
-> The engine for trees in R is the recursive-partitioning package you used in
-> Exercise 3.1. The model you add to the workflow is the specification on the
-> line above.
+> The word in quotes is short for probability.
 
 > **Worked answer**
 
 ```{r}
-tree_spec <- decision_tree(mode = "classification") |>
-  set_engine("rpart")
+patient <- data.frame(glucose = 150)
 
-tree_workflow_fit <- workflow() |>
-  add_recipe(log_recipe) |>
-  add_model(tree_spec) |>
-  fit(data = train)
-
-predict(tree_workflow_fit, new_data = test) |>
-  bind_cols(test) |>
-  summarise(accuracy = mean(.pred_class == diabetes))
+predict(log_fit, new_data = patient, type = "prob")   # a probability for each class
+predict(log_fit, new_data = patient)                     # the class
 ```
 
-> The R tree is right for 78.7% of the test patients, the Python tree for 67.3%.
+> `.pred_neg` is 0.453 and `.pred_pos` is 0.547: they always add up to 1. The
+> class is `pos`, because the probability of `pos` is above 0.5.
 
-**Question!** The two trees are given the same 600 people and the same three
-predictors, and the word "decision tree" is the same in both languages. Why do
-they disagree by more than ten percentage points?
+The class is the probability cut at 0.5: `pos` if $\hat{P}(\text{pos}) > 0.5$,
+`neg` otherwise. The red point is the patient, on the fitted curve:
 
-The defaults differ. `rpart` stops growing the tree when a further split no
-longer pays for itself, and ends with 6 leaves. `DecisionTreeClassifier` keeps
-splitting until every leaf holds only one class, and ends with 171 leaves: it
-has learned the training patients almost one by one, and does worse on new
-ones. Same name, same data, different defaults, and the defaults are the whole
-difference. Always check what a model's defaults are before you compare it with
-anything.
+```{r}
+curve <- data.frame(glucose = seq(40, 200, by = 1))
+curve$prob <- predict(log_fit, new_data = curve, type = "prob")$.pred_pos
+
+ggplot() +
+  geom_jitter(data = train, aes(x = glucose, y = as.numeric(diabetes == "pos")),
+              width = 0, height = 0.03, alpha = 0.3, colour = "steelblue") +
+  geom_line(data = curve, aes(x = glucose, y = prob), colour = "red", linewidth = 1) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", colour = "grey40") +
+  annotate("point", x = 150,
+           y = predict(log_fit, new_data = patient, type = "prob")$.pred_pos,
+           colour = "red", size = 4) +
+  labs(x = "Glucose (mg/dL)", y = "Probability of diabetes",
+       title = "Training patients (0 = neg, 1 = pos), the fitted curve, and the patient")
+```
+
+> **Think about it**
+>
+> 1. The model says `pos` for this patient. How sure is it?
+> 2. At about what glucose does the predicted class change from `neg` to `pos`?
+
+> **Worked answer**
+>
+> 1. Hardly sure at all: 0.547 is only just above 0.5. The class `pos` on its own
+>    hides that; the probability shows it.
+> 2. Where the curve crosses the dashed line at 0.5: at a glucose of about 145
+>    mg/dL (144.6). Below that the class is `neg`, above it `pos`.
+
+#### Task 1b — Predictions against what was measured
+
+The test patients were not used to fit the model. Predict both the probability
+and the class for each of them, and put them next to what was measured.
+
+```{r}
+test_results <- test |>
+  bind_cols(predict(log_fit, new_data = test, type = "prob"),
+            predict(log_fit, new_data = test))
+
+head(test_results, 10)
+```
+
+How often is the predicted class right? Compare it with a "model" that always
+says `neg`, the most common class.
+
+> **Stuck?**
+>
+> Compare the predicted class with the column that holds what was measured.
+
+> **Worked answer**
+
+```{r}
+mean(test_results$.pred_class == test_results$diabetes)   # accuracy of the model
+mean(test_results$diabetes == "neg")                    # always saying neg
+```
+
+> The model is right for 76.0% of the test patients. Always saying `neg` is right
+> for 64.7%, because 97 of the 150 do not have diabetes.
+
+```{r}
+ggplot(test_results, aes(x = glucose, y = .pred_pos, colour = diabetes)) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", colour = "grey40") +
+  geom_point(size = 2, alpha = 0.7) +
+  scale_colour_manual(values = c(neg = "steelblue", pos = "darkorange")) +
+  labs(x = "Glucose (mg/dL)", y = "Predicted probability of diabetes",
+       colour = "Measured",
+       title = "Test patients: predicted probability, coloured by what was measured")
+```
+
+> **Think about it**
+>
+> 1. Every point lies on the same curve. What has the model got wrong for the
+>    orange points below the dashed line, and for the blue points above it?
+> 2. Which is more useful to a clinician: the class, or the probability?
+
+> **Worked answer**
+
+```{r}
+count(test_results, predicted = .pred_class, measured = diabetes)
+```
+
+> 1. The orange points below the line have diabetes but were called `neg`: 29
+>    patients. The blue points above it do not have diabetes but were called
+>    `pos`: 7 patients. With glucose as the only predictor, two patients with the
+>    same glucose get the same probability, whatever else is true of them.
+> 2. The probability. A patient at 0.52 and a patient at 0.85 are both `pos`, but
+>    they are not equally worrying. The cut-off of 0.5 is a choice, not part of
+>    the model; Exercise 4.3 is about choosing it.
+
+### Part 2 — Add BMI
+
+The same specification, `log_model`, with a second predictor:
+
+```{r}
+log_fit_2 <- log_model |>
+  fit(diabetes ~ glucose + mass, data = train)
+
+log_fit_2$fit$coefficients
+```
+
+#### Task 2a — The same patient, now with a BMI of 30
+
+> **Stuck?**
+>
+> The patient now needs a value for both predictors. Ask for the probabilities
+> exactly as in Task 1a.
+
+> **Worked answer**
+
+```{r}
+patient <- data.frame(glucose = 150, mass = 30)
+
+predict(log_fit_2, new_data = patient, type = "prob")
+predict(log_fit_2, new_data = patient)
+```
+
+> The probability of diabetes is now 0.490, and the class is `neg`.
+
+With two predictors, the probability is a **map** over glucose and BMI. The
+black line is where the probability is exactly 0.5: to its right the class is
+`pos`, to its left `neg`. Circles are test patients without diabetes, triangles
+test patients with it, and the red point is the patient.
+
+```{r}
+# every combination of glucose and BMI on a fine grid
+grid <- expand_grid(glucose = seq(40, 200, by = 1),
+                    mass = seq(18, 68, by = 0.5))
+
+prob_map <- function(fit, title) {
+  grid$prob <- predict(fit, new_data = grid, type = "prob")$.pred_pos
+  ggplot(grid, aes(x = glucose, y = mass)) +
+    geom_raster(aes(fill = prob)) +
+    geom_contour(aes(z = prob), breaks = 0.5, colour = "black", linewidth = 0.8) +
+    geom_point(data = test, aes(shape = diabetes), size = 1.5) +
+    annotate("point", x = 150, y = 30, colour = "red", size = 4) +
+    scale_fill_gradient2(low = "steelblue", mid = "white", high = "darkorange",
+                         midpoint = 0.5, limits = c(0, 1)) +
+    scale_shape_manual(values = c(neg = 1, pos = 17)) +
+    labs(x = "Glucose (mg/dL)", y = "BMI (kg/m²)",
+         fill = "Probability\nof diabetes", shape = "Test patients", title = title)
+}
+
+prob_map(log_fit_2, "Logistic regression: glucose and BMI")
+```
+
+> **Think about it**
+>
+> 1. The line where the class changes is straight but tilted. What does the tilt
+>    tell you about BMI?
+> 2. Adding BMI moved this patient from 0.547 to 0.490, and the class from `pos`
+>    to `neg`. Did BMI change much about this patient's prediction?
+
+> **Worked answer**
+>
+> 1. The higher the BMI, the lower the glucose at which the model switches to
+>    `pos`: at a BMI of 30 the line is at a glucose of about 151, at a BMI of 45
+>    at about 122. Both predictors push the probability the same way.
+> 2. Very little: the probability moved by less than 0.06. The class flipped
+>    only because the patient sits right next to the line. Near 0.5 a small
+>    change in the probability can change the class; the probability shows that,
+>    the class does not. On the 150 test patients both models are right 76.0% of
+>    the time.
+
+### Part 3 — The same steps, a decision tree
+
+Only the specification changes. The training patients, the predictors and the
+`fit()` and `predict()` calls stay the same.
+
+```{r}
+# 1. Specify: a classification tree, computed by rpart, kept small
+tree_model <- decision_tree(tree_depth = 2, cost_complexity = 0) |>
+  set_engine("rpart") |>
+  set_mode("classification")
+
+# 2. Fit on the same training patients, with the same predictors
+tree_fit <- tree_model |>
+  fit(diabetes ~ glucose + mass, data = train)
+
+rpart.plot(tree_fit$fit, type = 3, extra = 106, fallen.leaves = TRUE,
+           box.palette = "BuOr", roundint = FALSE)
+```
+
+`tree_depth = 2` allows at most two questions in a row, and
+`cost_complexity = 0` stops `rpart` from cutting the second question away.
+
+Each box asks a yes/no question. **Yes goes left, no goes right.** Each leaf at
+the bottom shows three things: the predicted class, the probability of `pos`
+(the share of training patients in that leaf who have diabetes) and the
+percentage of all training patients who ended up there.
+
+#### Task 3a — Follow the patient
+
+Start at the top with the patient with a glucose of 150 and a BMI of 30. At
+each question, go left or right. Which leaf do you reach? What probability and
+what class does it give?
+
+> **Worked answer**
+>
+> `glucose < 155`? Yes, go left. That is already a leaf: class `neg`,
+> probability of diabetes **0.25**. It holds 78% of the training patients, and
+> 117 of those 467 have diabetes: 117 / 467 = 0.25.
+>
+> The plot rounds the split point; the exact value, 154.5, is in `tree_fit$fit`.
+
+Check it with `predict()`:
+
+```{r}
+predict(tree_fit, new_data = patient, type = "prob")
+predict(tree_fit, new_data = patient)
+```
+
+The same map as for the logistic regression:
+
+```{r}
+prob_map(tree_fit, "Decision tree: glucose and BMI")
+```
+
+How often is each model right on the test patients?
+
+```{r}
+data.frame(
+  model = c("logistic, glucose", "logistic, glucose + BMI", "tree, glucose + BMI",
+            "always says neg"),
+  accuracy = c(mean(predict(log_fit,   new_data = test)$.pred_class == test$diabetes),
+               mean(predict(log_fit_2, new_data = test)$.pred_class == test$diabetes),
+               mean(predict(tree_fit,  new_data = test)$.pred_class == test$diabetes),
+               mean(test$diabetes == "neg")))
+```
+
+> **Think about it**
+>
+> 1. The logistic regression gives every patient their own probability. How many
+>    different probabilities can the tree give, and why?
+> 2. Compare the two maps. What shape is the region where each model says `pos`?
+> 3. The three models gave the patient 0.55, 0.49 and 0.25. Their accuracies on
+>    the test patients are close. What does that tell you?
+
+> **Worked answer**
+>
+> 1. Three, one per leaf: 0.25, 0.47 and 0.82. Every patient in the same leaf
+>    gets the same probability, the share of training patients in that leaf who
+>    had diabetes. Everyone with a glucose below 154.5 gets 0.25, whatever their
+>    BMI.
+> 2. The logistic regression changes smoothly, and its `pos` region is
+>    everything to the right of a straight line. The tree's map is made of flat
+>    rectangles, and its `pos` region is one rectangle: glucose of at least 154.5
+>    and a BMI of at least 27.75. The middle leaf, high glucose with a low BMI,
+>    gives 0.47: close to 0.5, but still `neg`.
+> 3. Models can agree on most classes and still give quite different
+>    probabilities for a single patient. Accuracy only counts classes; it says
+>    nothing about how good the probabilities are; the log loss in Exercise 4.5
+>    scores the probabilities themselves.
+>    With 150 test patients, a difference of four patients (76.0% against 73.3%)
+>    is too small to pick a winner.
 
 > **Learning points**
 >
-> - A recipe (R) or the steps of a Pipeline (Python) hold the preprocessing; a workflow or Pipeline joins it to the model.
-> - The preprocessing is learned from the training rows only and is reapplied, unchanged, to new rows.
-> - Swapping the model is one line; everything else stays the same, so the comparison is fair.
-> - Compare every model with a baseline that does no learning, such as always predicting the most common class.
-
-## Stretch
-
-> **Stretch — how much of the accuracy is the split?**
->
-> Change the first row of the test set: hold back every fifth person starting
-> from row 2, then from row 3, 4 and 5, and refit the logistic regression
-> workflow each time. Write down the five accuracies. How far apart are they, and
-> what does that say about quoting an accuracy from a single split of 150 people?
+> - The steps are the same as in Exercise 3.1: specify, fit on the training
+>   patients, predict for new ones. For a class instead of a number, only the
+>   mode in the specification changes.
+> - `predict()` gives the class; `predict(type = "prob")` gives a probability for
+>   each class. The class is the probability cut at 0.5.
+> - The probability carries more information than the class: near 0.5 a small
+>   change flips the class.
+> - A logistic regression's probability changes smoothly and its classes are
+>   split by a straight line; a tree gives one probability per leaf and splits
+>   the classes into rectangles.

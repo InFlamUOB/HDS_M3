@@ -1,0 +1,434 @@
+---
+title: "Exercise 4.4 — The decision boundary"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day4/day4-04-decision-boundary.html>.*
+
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+
+In Exercise 4.1 the map of the logistic regression's probability had a black
+line across it: to one side the model says `pos`, to the other `neg`. That line
+is the **decision boundary**. In this exercise you work it out from the
+coefficients, see why it is straight, move it with the threshold, and meet data
+where no straight line can do the job.
+
+Diabetes is diagnosed from blood glucose, so in Exercise 4.1 the boundary was
+almost a glucose cut-off and BMI barely tilted it. Here we use an example where
+two measurements both matter: age and blood pressure, and a cardiovascular
+event in the next ten years.
+
+- **Part 1.** Find the boundary by hand from the coefficients, draw it, and
+  see it as the line where a plane is cut, in 3D.
+- **Part 2.** Change the threshold, as in Exercise 4.3, and see the line move.
+- **Part 3.** A dataset where the risk is high at both ends of a measurement.
+  A straight boundary fails; a squared term or a tree gives a boundary that
+  bends.
+
+> **The plots are for looking at**
+>
+> The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "plotly"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())
+```
+
+`data/cvd_risk.csv` holds 500 adults aged 40 to 80 seen at a health check:
+their age, their systolic blood pressure in mmHg, and whether they had a
+cardiovascular event (a heart attack or a stroke) in the following ten years.
+If you do not have it yet, [**download `cvd_risk.csv`**](data/cvd_risk.csv)
+into your `data` folder.
+
+```{r}
+cvd <- read_csv("data/cvd_risk.csv") |>
+  mutate(cvd = factor(cvd, levels = c("no", "yes")))
+
+test_rows <- seq(1, nrow(cvd), by = 5)     # every fifth person is held back
+train <- cvd[-test_rows, ]
+test  <- cvd[test_rows, ]
+
+count(train, cvd)
+```
+
+### Part 1 — Where the class changes
+
+Fit a logistic regression with both measurements, the same way as in
+Exercise 4.1:
+
+```{r}
+log_model <- logistic_reg() |>
+  set_engine("glm") |>
+  set_mode("classification")
+
+log_fit <- log_model |>
+  fit(cvd ~ age + systolic_bp, data = train)
+
+b <- log_fit$fit$coefficients      # intercept, age, blood pressure
+b
+```
+
+The model is a straight line on the log-odds scale (Exercise 4.2):
+
+$$\text{log-odds} = \beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure}$$
+
+With a threshold of 0.5, the class changes where the probability is 0.5. A
+probability of 0.5 is odds of 1 and **log-odds of 0**. So the boundary is every
+combination of age and blood pressure where
+
+$$\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure} = 0$$
+
+For a given blood pressure, solve for age:
+
+$$\text{age} = \frac{-\beta_0 - \beta_2 \times \text{blood pressure}}{\beta_1}$$
+
+#### Task 1a — The boundary at a blood pressure of 120 and of 160
+
+Round the coefficients printed above to four significant figures and calculate,
+by hand, the age at which the class changes for a blood pressure of 120 mmHg.
+Then do the same for 160 mmHg.
+
+```{r}
+# Replace every ______ below, then run this cell.
+boundary_120 <- (-(______) - ______ * 120) / ______
+boundary_160 <- (-(______) - ______ * 160) / ______
+c(boundary_120, boundary_160)
+```
+
+> **Stuck?**
+>
+> In order: the intercept, the blood-pressure weight, and the age weight. The
+> intercept is negative, so minus the intercept is a positive number.
+
+Check it with `predict()`: a person on the boundary should get a probability
+of 0.5.
+
+```{r}
+predict(log_fit, new_data = data.frame(age = 75.6, systolic_bp = 120), type = "prob")
+```
+
+Every point on the boundary satisfies one linear equation in age and blood
+pressure, so the boundary is a **straight line**. Here it is, drawn from the
+coefficients, over the test patients:
+
+```{r}
+# the boundary written as blood pressure = a + s * age
+ggplot(test, aes(x = age, y = systolic_bp, shape = cvd, colour = cvd)) +
+  geom_point(size = 2) +
+  geom_abline(intercept = -b[1] / b[3], slope = -b[2] / b[3], linewidth = 1) +
+  annotate("point", x = c(75.6, 55.3), y = c(120, 160), colour = "red", size = 3) +
+  scale_shape_manual(values = c(no = 1, yes = 17)) +
+  scale_colour_manual(values = c(no = "steelblue", yes = "darkorange")) +
+  coord_cartesian(xlim = c(40, 80), ylim = c(80, 200)) +
+  labs(x = "Age (years)", y = "Systolic blood pressure (mmHg)",
+       shape = "Event", colour = "Event",
+       title = "The decision boundary at a threshold of 0.5")
+```
+
+Above and to the right of the line the model says `yes`; below and to the left,
+`no`. The line is tilted because both measurements count: an older person
+needs a lower blood pressure to cross it.
+
+#### The same line in three dimensions
+
+The log-odds, $\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure}$,
+are a flat, tilted **plane** above the age–blood pressure floor, like the plane
+in Exercise 3.1. The grey sheet is height 0. Where the plane passes through the
+sheet is the decision boundary, the black line: where the plane is above the
+sheet the model says `yes`, where it is below, `no`. The test patients are drawn
+on the grey sheet. Turn the plot with the mouse and scroll to zoom.
+
+```{r}
+#| eval: !expr requireNamespace("plotly", quietly = TRUE)
+# This plot needs the plotly package: install.packages("plotly")
+ages <- seq(40, 80, by = 1)
+bps  <- seq(80, 200, by = 2)
+
+# the log-odds at every grid point: one row per blood pressure, one column per age
+logodds_matrix <- outer(bps, ages, function(s, a) b[1] + b[2] * a + b[3] * s)
+
+# the boundary: the age where the log-odds are 0, for each blood pressure
+line_age <- (-b[1] - b[3] * bps) / b[2]
+on_floor <- line_age >= 40 & line_age <= 80
+
+no  <- filter(test, cvd == "no")
+yes <- filter(test, cvd == "yes")
+
+plotly::plot_ly() |>
+  plotly::add_surface(x = ages, y = bps, z = logodds_matrix, opacity = 0.75,
+                      colorscale = list(c(0, 1), c("steelblue", "darkorange")),
+                      showscale = FALSE, name = "log-odds") |>
+  plotly::add_surface(x = ages, y = bps, z = 0 * logodds_matrix, opacity = 0.4,
+                      colorscale = list(c(0, 1), c("grey", "grey")),
+                      showscale = FALSE, name = "height 0") |>
+  plotly::add_trace(type = "scatter3d", mode = "lines", x = line_age[on_floor],
+                    y = bps[on_floor], z = rep(0, sum(on_floor)),
+                    line = list(color = "black", width = 8), name = "boundary") |>
+  plotly::add_trace(type = "scatter3d", mode = "markers", x = no$age, y = no$systolic_bp,
+                    z = rep(0, nrow(no)), marker = list(size = 3, color = "steelblue"),
+                    name = "test: no") |>
+  plotly::add_trace(type = "scatter3d", mode = "markers", x = yes$age, y = yes$systolic_bp,
+                    z = rep(0, nrow(yes)), marker = list(size = 3, color = "darkorange"),
+                    name = "test: yes") |>
+  plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
+                              yaxis = list(title = "Systolic BP (mmHg)"),
+                              zaxis = list(title = "Log-odds of an event")))
+```
+
+The sigmoid turns each log-odds into a probability, which bends the flat plane
+into an S-shaped sheet between 0 and 1. A log-odds of 0 is a probability of
+0.5, so the sheet crosses the grey level at 0.5 along exactly the same black
+line. The test patients sit at 1 (an event) and at 0 (no event). Click
+**level 0.3** and **level 0.7** in the legend to show two more levels; Part 2
+is about them.
+
+```{r}
+#| eval: !expr requireNamespace("plotly", quietly = TRUE)
+# the probability at every grid point: the sigmoid of the log-odds
+prob_matrix <- 1 / (1 + exp(-logodds_matrix))
+
+fig_prob <- plotly::plot_ly() |>
+  plotly::add_surface(x = ages, y = bps, z = prob_matrix, opacity = 0.75,
+                      colorscale = list(c(0, 1), c("steelblue", "darkorange")),
+                      showscale = FALSE, name = "probability")
+for (t in c(0.3, 0.5, 0.7)) {
+  fig_prob <- fig_prob |>
+    plotly::add_surface(x = ages, y = bps, z = 0 * prob_matrix + t, opacity = 0.4,
+                        colorscale = list(c(0, 1), c("grey", "grey")), showscale = FALSE,
+                        showlegend = TRUE, name = paste("level", t),
+                        visible = if (t == 0.5) TRUE else "legendonly")
+}
+fig_prob |>
+  plotly::add_trace(type = "scatter3d", mode = "lines", x = line_age[on_floor],
+                    y = bps[on_floor], z = rep(0.5, sum(on_floor)),
+                    line = list(color = "black", width = 8), name = "boundary at 0.5") |>
+  plotly::add_trace(type = "scatter3d", mode = "markers", x = no$age, y = no$systolic_bp,
+                    z = rep(0, nrow(no)), marker = list(size = 3, color = "steelblue"),
+                    name = "test: no") |>
+  plotly::add_trace(type = "scatter3d", mode = "markers", x = yes$age, y = yes$systolic_bp,
+                    z = rep(1, nrow(yes)), marker = list(size = 3, color = "darkorange"),
+                    name = "test: yes") |>
+  plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
+                              yaxis = list(title = "Systolic BP (mmHg)"),
+                              zaxis = list(title = "Probability of an event")))
+```
+
+> **Think about it**
+>
+> 1. As far as the model is concerned, 10 mmHg more blood pressure is worth how
+>    many years of age? Where do you see that in the plot?
+> 2. Two people: one is 70 with a blood pressure of 130, the other 55 with 165.
+>    Which side of the line is each on?
+> 3. A model with three predictors (say age, blood pressure and cholesterol) also
+>    has a boundary. What shape would it be?
+
+### Part 2 — The threshold moves the line
+
+Exercise 4.3 changed the threshold. A threshold $t$ is a probability, so it has
+a log-odds, $\log\big(t / (1 - t)\big)$, and the boundary is where the model's
+log-odds equal it:
+
+$$\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure} = \log\left(\frac{t}{1-t}\right)$$
+
+Only the right-hand side changes, so the line keeps its tilt and moves
+sideways. In the 3D plot of Part 1 this is cutting the S-shaped sheet at a
+different height: the 0.3 level meets it further down and to the left, the 0.7
+level further up and to the right.
+
+#### Task 2a — The log-odds of three thresholds
+
+```{r}
+# Replace every ______ below, then run this cell.
+thresholds <- data.frame(t = c(0.3, 0.5, 0.7)) |>
+  mutate(log_odds = log(______ / (1 - ______)),
+         age_at_bp_140 = (log_odds - b[1] - b[3] * 140) / b[2])
+
+thresholds
+```
+
+> **Stuck?**
+>
+> Both blanks are the threshold column, `t`.
+
+```{r}
+lines_t <- data.frame(t = factor(c(0.3, 0.5, 0.7)),
+                      log_odds = log(c(0.3, 0.5, 0.7) / (1 - c(0.3, 0.5, 0.7)))) |>
+  mutate(intercept = (log_odds - b[1]) / b[3], slope = -b[2] / b[3])
+
+ggplot(test, aes(x = age, y = systolic_bp)) +
+  geom_point(aes(shape = cvd), size = 2, colour = "grey30") +
+  geom_abline(data = lines_t, aes(intercept = intercept, slope = slope, colour = t),
+              linewidth = 1) +
+  scale_shape_manual(values = c(no = 1, yes = 17)) +
+  scale_colour_manual(values = c("0.3" = "blue", "0.5" = "red", "0.7" = "purple")) +
+  coord_cartesian(xlim = c(40, 80), ylim = c(80, 200)) +
+  labs(x = "Age (years)", y = "Systolic blood pressure (mmHg)",
+       shape = "Event", colour = "Threshold",
+       title = "Three thresholds, three parallel boundaries")
+```
+
+Everyone above a line is predicted `yes` at that threshold. Count them:
+
+```{r}
+test_probs <- predict(log_fit, new_data = test, type = "prob")$.pred_yes
+
+c(t_0.3 = sum(test_probs >= 0.3), t_0.5 = sum(test_probs >= 0.5),
+  t_0.7 = sum(test_probs >= 0.7))
+```
+
+> **Think about it**
+>
+> Lowering the threshold from 0.5 to 0.3 calls many more test patients `yes`. In
+> the language of Exercise 4.3, what happens to the sensitivity and the
+> specificity, and where do you see that on the plot?
+
+### Part 3 — When a straight line cannot work
+
+`data/sodium_delirium.csv` holds 500 older patients admitted to hospital: their
+age, their blood sodium in mmol/L (normal is about 135 to 145), and whether
+they developed delirium during the admission. If you do not have it yet,
+[**download `sodium_delirium.csv`**](data/sodium_delirium.csv)
+into your `data` folder.
+
+```{r}
+delirium <- read_csv("data/sodium_delirium.csv") |>
+  mutate(delirium = factor(delirium, levels = c("no", "yes")))
+
+test_rows_d <- seq(1, nrow(delirium), by = 5)     # every fifth patient is held back
+train_d <- delirium[-test_rows_d, ]
+test_d  <- delirium[test_rows_d, ]
+
+count(train_d, delirium)
+```
+
+```{r}
+ggplot(train_d, aes(x = sodium, y = age, shape = delirium, colour = delirium)) +
+  geom_point(size = 2) +
+  scale_shape_manual(values = c(no = 1, yes = 17)) +
+  scale_colour_manual(values = c(no = "steelblue", yes = "darkorange")) +
+  labs(x = "Sodium (mmol/L)", y = "Age (years)", shape = "Delirium", colour = "Delirium",
+       title = "Training patients")
+```
+
+Delirium is common when sodium is **too low and when it is too high**, and
+rarer in between. Fit the same kind of model as before, with age and sodium:
+
+```{r}
+line_fit <- log_model |>
+  fit(delirium ~ age + sodium, data = train_d)
+
+line_fit$fit$coefficients
+```
+
+```{r}
+grid_d <- expand_grid(sodium = seq(114, 163, by = 0.5), age = seq(60, 98, by = 0.5)) |>
+  mutate(sodium_dev2 = (sodium - 140)^2)
+
+delirium_map <- function(fit, title) {
+  grid_d$prob <- predict(fit, new_data = grid_d, type = "prob")$.pred_yes
+  ggplot(grid_d, aes(x = sodium, y = age)) +
+    geom_raster(aes(fill = prob)) +
+    geom_contour(aes(z = prob), breaks = 0.5, colour = "black", linewidth = 0.8) +
+    geom_point(data = test_d, aes(shape = delirium), size = 1.5) +
+    scale_fill_gradient2(low = "steelblue", mid = "white", high = "darkorange",
+                         midpoint = 0.5, limits = c(0, 1)) +
+    scale_shape_manual(values = c(no = 1, yes = 17)) +
+    labs(x = "Sodium (mmol/L)", y = "Age (years)",
+         fill = "Probability\nof delirium", shape = "Test patients", title = title)
+}
+
+delirium_map(line_fit, "Logistic regression: age + sodium")
+```
+
+The weight for sodium is almost exactly 0, and the map has no boundary at all:
+the probability never reaches 0.5, so the model says `no` for every patient.
+A straight line has to put "high risk" on one side. Here the high-risk patients
+are on **both** sides, so the best straight line the model can find is one that
+hardly uses sodium.
+
+#### Task 3a — Give the model a predictor it can use
+
+How far sodium is from normal matters, not which direction. Make a new column,
+the squared distance from 140, and add it to the model. The model is still a
+logistic regression, linear in the predictors you give it, but one of those
+predictors is now curved in sodium.
+
+```{r}
+# Replace every ______ below, then run this cell.
+train_d <- train_d |> mutate(sodium_dev2 = (sodium - 140)^2)
+test_d  <- test_d  |> mutate(sodium_dev2 = (sodium - 140)^2)
+
+curve_fit <- log_model |>
+  fit(delirium ~ age + sodium + ______, data = train_d)
+
+curve_fit$fit$coefficients
+```
+
+> **Stuck?**
+>
+> Add the name of the new column to the formula, after a `+`.
+
+```{r}
+delirium_map(curve_fit, "Logistic regression: age + sodium + (sodium - 140)²")
+```
+
+A tree needs no new column: it can split on sodium twice.
+
+```{r}
+tree_fit <- decision_tree() |>
+  set_engine("rpart") |>
+  set_mode("classification") |>
+  fit(delirium ~ age + sodium, data = train_d)
+
+tree_fit
+```
+
+```{r}
+delirium_map(tree_fit, "Decision tree: age + sodium")
+```
+
+How often is each model right on the 100 test patients, and what does each say
+about an 80-year-old with a low, a normal and a high sodium?
+
+```{r}
+data.frame(
+  model = c("straight line", "with (sodium - 140)²", "tree", "always says no"),
+  accuracy = c(mean(predict(line_fit,  new_data = test_d)$.pred_class == test_d$delirium),
+               mean(predict(curve_fit, new_data = test_d)$.pred_class == test_d$delirium),
+               mean(predict(tree_fit,  new_data = test_d)$.pred_class == test_d$delirium),
+               mean(test_d$delirium == "no")))
+
+patients <- data.frame(age = 80, sodium = c(126, 140, 154)) |>
+  mutate(sodium_dev2 = (sodium - 140)^2)
+
+patients |>
+  mutate(straight_line = predict(line_fit,  new_data = patients, type = "prob")$.pred_yes,
+         with_squared  = predict(curve_fit, new_data = patients, type = "prob")$.pred_yes,
+         tree          = predict(tree_fit,  new_data = patients, type = "prob")$.pred_yes)
+```
+
+> **Think about it**
+>
+> 1. The straight-line model is right for 72% of the test patients. Is that a
+>    good model?
+> 2. The straight-line model says sodium hardly matters. Is that true?
+> 3. Describe the boundary of the model with the squared term, and of the tree.
+
+> **Learning points**
+>
+> - The decision boundary is where the predicted probability equals the
+>   threshold. For a logistic regression that is where the log-odds equal
+>   $\log\big(t/(1-t)\big)$: 0 for a threshold of 0.5.
+> - A logistic regression's boundary is straight (flat) in its predictors.
+>   Changing the threshold moves it without changing its tilt.
+> - When the risk is high at both ends of a measurement, no straight line can
+>   separate the classes, and a weight near 0 can hide a strong relationship.
+> - A boundary can bend if you give the model a curved predictor, such as a
+>   squared term, or use a model that bends on its own, such as a tree.
