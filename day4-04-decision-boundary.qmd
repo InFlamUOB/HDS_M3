@@ -152,6 +152,102 @@ ggplot(test, aes(x = glucose, y = mass, shape = diabetes, colour = diabetes)) +
        title = "The decision boundary at a threshold of 0.5")
 ```
 
+#### The same line in three dimensions
+
+The log-odds, $\beta_0 + \beta_1 \times \text{glucose} + \beta_2 \times \text{BMI}$,
+are a flat, tilted **plane** above the glucose–BMI floor, like the plane in
+Exercise 3.1. The grey sheet is height 0. Where the plane passes through the
+sheet is the decision boundary, the black line: where the plane is above the
+sheet the model says `pos`, where it is below, `neg`. The test patients are
+drawn on the grey sheet. Turn the plot with the mouse and scroll to zoom.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| eval: !expr requireNamespace("plotly", quietly = TRUE)
+# This plot needs the plotly package: install.packages("plotly")
+glucoses <- seq(40, 200, by = 2)
+bmis     <- seq(18, 68, by = 1)
+
+# the log-odds at every grid point: one row per BMI, one column per glucose
+logodds_matrix <- outer(bmis, glucoses, function(m, g) b[1] + b[2] * g + b[3] * m)
+
+# the boundary: the glucose where the log-odds are 0, for each BMI
+line_glucose <- (-b[1] - b[3] * bmis) / b[2]
+on_floor <- line_glucose >= 40 & line_glucose <= 200
+
+neg <- filter(test, diabetes == "neg")
+pos <- filter(test, diabetes == "pos")
+
+plotly::plot_ly() |>
+  plotly::add_surface(x = glucoses, y = bmis, z = logodds_matrix, opacity = 0.75,
+                      colorscale = list(c(0, 1), c("steelblue", "darkorange")),
+                      showscale = FALSE, name = "log-odds") |>
+  plotly::add_surface(x = glucoses, y = bmis, z = 0 * logodds_matrix, opacity = 0.4,
+                      colorscale = list(c(0, 1), c("grey", "grey")),
+                      showscale = FALSE, name = "height 0") |>
+  plotly::add_trace(type = "scatter3d", mode = "lines", x = line_glucose[on_floor],
+                    y = bmis[on_floor], z = rep(0, sum(on_floor)),
+                    line = list(color = "black", width = 8), name = "boundary") |>
+  plotly::add_trace(type = "scatter3d", mode = "markers", x = neg$glucose, y = neg$mass,
+                    z = rep(0, nrow(neg)), marker = list(size = 3, color = "steelblue"),
+                    name = "test: neg") |>
+  plotly::add_trace(type = "scatter3d", mode = "markers", x = pos$glucose, y = pos$mass,
+                    z = rep(0, nrow(pos)), marker = list(size = 3, color = "darkorange"),
+                    name = "test: pos") |>
+  plotly::layout(scene = list(xaxis = list(title = "Glucose (mg/dL)"),
+                              yaxis = list(title = "BMI (kg/m²)"),
+                              zaxis = list(title = "Log-odds of diabetes")))
+```
+
+
+The sigmoid turns each log-odds into a probability, which bends the flat plane
+into an S-shaped sheet between 0 and 1. A log-odds of 0 is a probability of
+0.5, so the sheet crosses the grey level at 0.5 along exactly the same black
+line. The test patients sit at 1 (diabetes) and at 0 (no diabetes). Click
+**0.3** and **0.7** in the legend to show two more levels; Part 2 is about
+them.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| eval: !expr requireNamespace("plotly", quietly = TRUE)
+# the probability at every grid point: the sigmoid of the log-odds
+prob_matrix <- 1 / (1 + exp(-logodds_matrix))
+
+fig_prob <- plotly::plot_ly() |>
+  plotly::add_surface(x = glucoses, y = bmis, z = prob_matrix, opacity = 0.75,
+                      colorscale = list(c(0, 1), c("steelblue", "darkorange")),
+                      showscale = FALSE, name = "probability")
+for (t in c(0.3, 0.5, 0.7)) {
+  fig_prob <- fig_prob |>
+    plotly::add_surface(x = glucoses, y = bmis, z = 0 * prob_matrix + t, opacity = 0.4,
+                        colorscale = list(c(0, 1), c("grey", "grey")), showscale = FALSE,
+                        showlegend = TRUE, name = paste("level", t),
+                        visible = if (t == 0.5) TRUE else "legendonly")
+}
+fig_prob |>
+  plotly::add_trace(type = "scatter3d", mode = "lines", x = line_glucose[on_floor],
+                    y = bmis[on_floor], z = rep(0.5, sum(on_floor)),
+                    line = list(color = "black", width = 8), name = "boundary at 0.5") |>
+  plotly::add_trace(type = "scatter3d", mode = "markers", x = neg$glucose, y = neg$mass,
+                    z = rep(0, nrow(neg)), marker = list(size = 3, color = "steelblue"),
+                    name = "test: neg") |>
+  plotly::add_trace(type = "scatter3d", mode = "markers", x = pos$glucose, y = pos$mass,
+                    z = rep(1, nrow(pos)), marker = list(size = 3, color = "darkorange"),
+                    name = "test: pos") |>
+  plotly::layout(scene = list(xaxis = list(title = "Glucose (mg/dL)"),
+                              yaxis = list(title = "BMI (kg/m²)"),
+                              zaxis = list(title = "Probability of diabetes")))
+```
+
+```{r}
+#| echo: false
+if (!requireNamespace("plotly", quietly = TRUE)) knitr::asis_output(paste0(
+  "*The plots you can turn are missing from this copy of the page: they need the R ",
+  "package `plotly`. Run `install.packages(\"plotly\")` and render again.*"))
+```
+
 ::: {.callout-important appearance="simple"}
 ## Think about it
 1. The model is right for 76% of the test patients. Looking at the plot, why
@@ -181,7 +277,9 @@ log-odds equal it:
 $$\beta_0 + \beta_1 \times \text{glucose} + \beta_2 \times \text{BMI} = \log\left(\frac{t}{1-t}\right)$$
 
 Only the right-hand side changes, so the line keeps its tilt and moves
-sideways.
+sideways. In the 3D plot of Part 1 this is cutting the S-shaped sheet at a
+different height: the 0.3 level meets it further to the left, the 0.7 level
+further to the right.
 
 #### Task 2a — The log-odds of three thresholds
 
@@ -586,6 +684,166 @@ ax.set_title("The decision boundary at a threshold of 0.5")
 plt.show()
 ```
 
+#### The same line in three dimensions
+
+The log-odds, $\beta_0 + \beta_1 \times \text{glucose} + \beta_2 \times \text{BMI}$,
+are a flat, tilted **plane** above the glucose–BMI floor, like the plane in
+Exercise 3.1. The grey sheet is height 0. Where the plane passes through the
+sheet is the decision boundary, the black line: where the plane is above the
+sheet the model says `pos`, where it is below, `neg`. The test patients are
+drawn on the grey sheet. Turn the plot with the mouse and scroll to zoom.
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| eval: false
+# This plot needs the plotly package: pip install plotly
+import plotly.graph_objects as go
+
+glucoses = np.arange(40, 201, 2)
+bmis = np.arange(18, 69, 1)
+G, M = np.meshgrid(glucoses, bmis)
+
+# the log-odds at every grid point: one row per BMI, one column per glucose
+logodds_matrix = b0 + b1 * G + b2 * M
+
+# the boundary: the glucose where the log-odds are 0, for each BMI
+line_glucose = (-b0 - b2 * bmis) / b1
+on_floor = (line_glucose >= 40) & (line_glucose <= 200)
+
+neg = test[test["diabetes"] == "neg"]
+pos = test[test["diabetes"] == "pos"]
+
+fig_logodds = go.Figure()
+fig_logodds.add_trace(go.Surface(x=glucoses, y=bmis, z=logodds_matrix, opacity=0.75,
+    colorscale=[[0, "steelblue"], [1, "darkorange"]], showscale=False, name="log-odds"))
+fig_logodds.add_trace(go.Surface(x=glucoses, y=bmis, z=0 * logodds_matrix, opacity=0.4,
+    colorscale=[[0, "grey"], [1, "grey"]], showscale=False, name="height 0"))
+fig_logodds.add_trace(go.Scatter3d(x=line_glucose[on_floor], y=bmis[on_floor],
+    z=np.zeros(on_floor.sum()), mode="lines", line={"color": "black", "width": 8},
+    name="boundary"))
+fig_logodds.add_trace(go.Scatter3d(x=neg["glucose"], y=neg["mass"], z=np.zeros(len(neg)),
+    mode="markers", marker={"size": 3, "color": "steelblue"}, name="test: neg"))
+fig_logodds.add_trace(go.Scatter3d(x=pos["glucose"], y=pos["mass"], z=np.zeros(len(pos)),
+    mode="markers", marker={"size": 3, "color": "darkorange"}, name="test: pos"))
+fig_logodds.update_layout(scene={"xaxis_title": "Glucose (mg/dL)",
+                                 "yaxis_title": "BMI (kg/m²)",
+                                 "zaxis_title": "Log-odds of diabetes"})
+fig_logodds.show()
+```
+
+```{python}
+#| echo: false
+# Same grid and values as the cell above, for the page's copy of the plots.
+glucoses = np.arange(40, 201, 2)
+bmis = np.arange(18, 69, 1)
+G, M = np.meshgrid(glucoses, bmis)
+logodds_matrix = b0 + b1 * G + b2 * M
+prob_matrix = 1 / (1 + np.exp(-logodds_matrix))
+line_glucose = (-b0 - b2 * bmis) / b1
+on_floor = (line_glucose >= 40) & (line_glucose <= 200)
+line_g = line_glucose[on_floor]
+line_b = bmis[on_floor].astype(float)
+neg = test[test["diabetes"] == "neg"]
+pos = test[test["diabetes"] == "pos"]
+```
+
+```{r}
+#| echo: false
+# Draws the Python model's log-odds plane (values from the Python cell above).
+if (requireNamespace("plotly", quietly = TRUE)) {
+  P <- reticulate::py
+  plotly::plot_ly() |>
+    plotly::add_surface(x = P$glucoses, y = P$bmis, z = P$logodds_matrix, opacity = 0.75,
+                        colorscale = list(c(0, 1), c("steelblue", "darkorange")),
+                        showscale = FALSE, name = "log-odds") |>
+    plotly::add_surface(x = P$glucoses, y = P$bmis, z = 0 * P$logodds_matrix, opacity = 0.4,
+                        colorscale = list(c(0, 1), c("grey", "grey")),
+                        showscale = FALSE, name = "height 0") |>
+    plotly::add_trace(type = "scatter3d", mode = "lines", x = P$line_g, y = P$line_b,
+                      z = rep(0, length(P$line_g)),
+                      line = list(color = "black", width = 8), name = "boundary") |>
+    plotly::add_trace(type = "scatter3d", mode = "markers", x = P$neg$glucose,
+                      y = P$neg$mass, z = rep(0, nrow(P$neg)),
+                      marker = list(size = 3, color = "steelblue"), name = "test: neg") |>
+    plotly::add_trace(type = "scatter3d", mode = "markers", x = P$pos$glucose,
+                      y = P$pos$mass, z = rep(0, nrow(P$pos)),
+                      marker = list(size = 3, color = "darkorange"), name = "test: pos") |>
+    plotly::layout(scene = list(xaxis = list(title = "Glucose (mg/dL)"),
+                                yaxis = list(title = "BMI (kg/m²)"),
+                                zaxis = list(title = "Log-odds of diabetes")))
+} else knitr::asis_output(paste0(
+  "*The plots you can turn are missing from this copy of the page: they need the R ",
+  "package `plotly`. Run `install.packages(\"plotly\")` and render again.*"))
+```
+
+
+The sigmoid turns each log-odds into a probability, which bends the flat plane
+into an S-shaped sheet between 0 and 1. A log-odds of 0 is a probability of
+0.5, so the sheet crosses the grey level at 0.5 along exactly the same black
+line. The test patients sit at 1 (diabetes) and at 0 (no diabetes). Click
+**0.3** and **0.7** in the legend to show two more levels; Part 2 is about
+them.
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+#| eval: false
+# the probability at every grid point: the sigmoid of the log-odds
+prob_matrix = 1 / (1 + np.exp(-logodds_matrix))
+
+fig_prob = go.Figure()
+fig_prob.add_trace(go.Surface(x=glucoses, y=bmis, z=prob_matrix, opacity=0.75,
+    colorscale=[[0, "steelblue"], [1, "darkorange"]], showscale=False, name="probability"))
+for t in [0.3, 0.5, 0.7]:
+    fig_prob.add_trace(go.Surface(x=glucoses, y=bmis, z=0 * prob_matrix + t, opacity=0.4,
+        colorscale=[[0, "grey"], [1, "grey"]], showscale=False, showlegend=True,
+        name=f"level {t}", visible=True if t == 0.5 else "legendonly"))
+fig_prob.add_trace(go.Scatter3d(x=line_glucose[on_floor], y=bmis[on_floor],
+    z=np.full(on_floor.sum(), 0.5), mode="lines", line={"color": "black", "width": 8},
+    name="boundary at 0.5"))
+fig_prob.add_trace(go.Scatter3d(x=neg["glucose"], y=neg["mass"], z=np.zeros(len(neg)),
+    mode="markers", marker={"size": 3, "color": "steelblue"}, name="test: neg"))
+fig_prob.add_trace(go.Scatter3d(x=pos["glucose"], y=pos["mass"], z=np.ones(len(pos)),
+    mode="markers", marker={"size": 3, "color": "darkorange"}, name="test: pos"))
+fig_prob.update_layout(scene={"xaxis_title": "Glucose (mg/dL)",
+                              "yaxis_title": "BMI (kg/m²)",
+                              "zaxis_title": "Probability of diabetes"})
+fig_prob.show()
+```
+
+```{r}
+#| echo: false
+# Draws the Python model's probability surface (values from the Python cell above).
+if (requireNamespace("plotly", quietly = TRUE)) {
+  P <- reticulate::py
+  fig_p <- plotly::plot_ly() |>
+    plotly::add_surface(x = P$glucoses, y = P$bmis, z = P$prob_matrix, opacity = 0.75,
+                        colorscale = list(c(0, 1), c("steelblue", "darkorange")),
+                        showscale = FALSE, name = "probability")
+  for (t in c(0.3, 0.5, 0.7)) {
+    fig_p <- fig_p |>
+      plotly::add_surface(x = P$glucoses, y = P$bmis, z = 0 * P$prob_matrix + t,
+                          opacity = 0.4, colorscale = list(c(0, 1), c("grey", "grey")),
+                          showscale = FALSE, showlegend = TRUE, name = paste("level", t),
+                          visible = if (t == 0.5) TRUE else "legendonly")
+  }
+  fig_p |>
+    plotly::add_trace(type = "scatter3d", mode = "lines", x = P$line_g, y = P$line_b,
+                      z = rep(0.5, length(P$line_g)),
+                      line = list(color = "black", width = 8), name = "boundary at 0.5") |>
+    plotly::add_trace(type = "scatter3d", mode = "markers", x = P$neg$glucose,
+                      y = P$neg$mass, z = rep(0, nrow(P$neg)),
+                      marker = list(size = 3, color = "steelblue"), name = "test: neg") |>
+    plotly::add_trace(type = "scatter3d", mode = "markers", x = P$pos$glucose,
+                      y = P$pos$mass, z = rep(1, nrow(P$pos)),
+                      marker = list(size = 3, color = "darkorange"), name = "test: pos") |>
+    plotly::layout(scene = list(xaxis = list(title = "Glucose (mg/dL)"),
+                                yaxis = list(title = "BMI (kg/m²)"),
+                                zaxis = list(title = "Probability of diabetes")))
+}
+```
+
 ::: {.callout-important appearance="simple"}
 ## Think about it
 1. The model is right for 76% of the test patients. Looking at the plot, why
@@ -615,7 +873,9 @@ log-odds equal it:
 $$\beta_0 + \beta_1 \times \text{glucose} + \beta_2 \times \text{BMI} = \log\left(\frac{t}{1-t}\right)$$
 
 Only the right-hand side changes, so the line keeps its tilt and moves
-sideways.
+sideways. In the 3D plot of Part 1 this is cutting the S-shaped sheet at a
+different height: the 0.3 level meets it further to the left, the 0.7 level
+further to the right.
 
 #### Task 2a — The log-odds of three thresholds
 
