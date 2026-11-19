@@ -7,7 +7,8 @@ engine: knitr
 # Exercise 4.1 — One workflow, two classifiers {#sec-frameworks}
 
 In Exercise 3.1 you predicted a number, blood glucose. Now the outcome is a
-**class**: does this person have diabetes, `pos` or `neg`? The steps are
+**class**: will this person have a heart attack or a stroke in the next ten
+years, `yes` or `no`? The steps are
 exactly the same: **specify** a model, **fit** it on the training patients, and
 **predict** for new ones. Two things are new:
 
@@ -15,7 +16,7 @@ exactly the same: **specify** a model, **fit** it on the training patients, and
 - the prediction can be a **probability** for each class, as well as the class
   itself.
 
-|  | Exercise 3.1: glucose, a number | Exercise 4.1: diabetes, a class |
+|  | Exercise 3.1: glucose, a number | Exercise 4.1: an event, a class |
 |---|---|---|
 | specify (R) | `linear_reg()`, `decision_tree()` with `set_mode("regression")` | `logistic_reg()`, `decision_tree()` with `set_mode("classification")` |
 | specify (Python) | `LinearRegression()`, `DecisionTreeRegressor()` | `LogisticRegression()`, `DecisionTreeClassifier()` |
@@ -24,14 +25,14 @@ exactly the same: **specify** a model, **fit** it on the training patients, and
 
 : {tbl-colwidths="[18,41,41]"}
 
-- **Part 1.** Predict diabetes from glucose with a logistic regression. Get the
-  probability and the class for one patient, see the patient on the fitted
+- **Part 1.** Predict an event from age with a logistic regression. Get the
+  probability and the class for one person, see the patient on the fitted
   curve, and compare the predictions with what was measured in the test
   patients.
-- **Part 2.** Add BMI and predict for the same patient again. See the
-  probability as a map over glucose and BMI.
+- **Part 2.** Add blood pressure and predict for the same person again. See
+  the probability as a map over age and blood pressure.
 - **Part 3.** Keep the same steps, training patients and predictors, and fit a
-  decision tree instead. Follow the patient to a leaf, read the probability and
+  decision tree instead. Follow the person to a leaf, read the probability and
   the class there, and compare the tree's map with the logistic regression's.
 
 ::: {.callout-note appearance="simple"}
@@ -66,36 +67,35 @@ library(rpart.plot)
 theme_set(theme_bw())
 ```
 
-`data/diabetes_clean.csv` holds 750 adults screened for type 2 diabetes: eight
-measurements from a single visit, and `diabetes`, which is `pos` or `neg`. It
-is ready to use. We keep glucose, BMI (the column `mass`) and the outcome. If
-you do not have it yet, [**download `diabetes_clean.csv`**](data/diabetes_clean.csv){download="diabetes_clean.csv"}
+`data/cvd_risk.csv` holds 500 adults aged 40 to 80 seen at a health check:
+their age, their systolic blood pressure in mmHg, and `cvd`, whether they had a
+cardiovascular event (a heart attack or a stroke) in the following ten years,
+`yes` or `no`. If you do not have it yet, [**download `cvd_risk.csv`**](data/cvd_risk.csv){download="cvd_risk.csv"}
 into your `data` folder.
 
 ```{r}
-diabetes <- read_csv("data/diabetes_clean.csv") |>
-  select(glucose, mass, diabetes) |>
-  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+cvd <- read_csv("data/cvd_risk.csv") |>
+  mutate(cvd = factor(cvd, levels = c("no", "yes")))
 
-summary(diabetes)
+summary(cvd)
 ```
 
-The outcome is a factor with two levels, `neg` then `pos`. The probabilities
-are then about `pos`: having diabetes.
+The outcome is a factor with two levels, `no` then `yes`. The probabilities
+are then about `yes`: having an event.
 
-We hold back every fifth person as the test set: 600 training patients and 150
+We hold back every fifth person as the test set: 400 training patients and 100
 test patients. Splitting by a fixed rule rather than at random gives both
-languages the same 150 people. Every Day 4 exercise uses this split.
+languages the same 100 people. Every Day 4 exercise uses this split.
 
 ```{r}
-test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
-train <- diabetes[-test_rows, ]
-test  <- diabetes[test_rows, ]
+test_rows <- seq(1, nrow(cvd), by = 5)     # every fifth person is held back
+train <- cvd[-test_rows, ]
+test  <- cvd[test_rows, ]
 
-count(train, diabetes)
+count(train, cvd)
 ```
 
-### Part 1 — Predict diabetes from glucose
+### Part 1 — Predict an event from age
 
 The same three steps as in Exercise 3.1. The only change in the specification
 is the mode: classification instead of regression.
@@ -108,17 +108,17 @@ log_model <- logistic_reg() |>
 
 # 2. Fit on the training patients
 log_fit <- log_model |>
-  fit(diabetes ~ glucose, data = train)
+  fit(cvd ~ age, data = train)
 
-# the learned parameters: intercept first, then the weight for glucose
+# the learned parameters: intercept first, then the weight for age
 log_fit$fit$coefficients
 ```
 
-The two parameters are not on the glucose scale but on the **log-odds** scale.
-Exercise 4.2 shows how they turn into a probability. Here we let `predict()`
-do it.
+The two parameters are not on the probability scale but on the **log-odds**
+scale. Exercise 4.2 shows how they turn into a probability. Here we let
+`predict()` do it.
 
-#### Task 1a — A patient with a glucose of 150
+#### Task 1a — A 70-year-old
 
 `predict()` gives the **class** by default. With `type = "prob"` it gives a
 **probability** for each class instead.
@@ -126,10 +126,10 @@ do it.
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-patient <- data.frame(glucose = 150)
+person <- data.frame(age = 70)
 
-predict(log_fit, new_data = patient, type = "______")   # a probability for each class
-predict(log_fit, new_data = patient)                     # the class
+predict(log_fit, new_data = person, type = "______")   # a probability for each class
+predict(log_fit, new_data = person)                     # the class
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -141,58 +141,58 @@ The word in quotes is short for probability.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-patient <- data.frame(glucose = 150)
+person <- data.frame(age = 70)
 
-predict(log_fit, new_data = patient, type = "prob")   # a probability for each class
-predict(log_fit, new_data = patient)                     # the class
+predict(log_fit, new_data = person, type = "prob")   # a probability for each class
+predict(log_fit, new_data = person)                     # the class
 ```
 
-`.pred_neg` is 0.453 and `.pred_pos` is 0.547: they always add up to 1. The
-class is `pos`, because the probability of `pos` is above 0.5.
+`.pred_no` is 0.453 and `.pred_yes` is 0.547: they always add up to 1. The
+class is `yes`, because the probability of `yes` is above 0.5.
 :::
 :::
 
-The class is the probability cut at 0.5: `pos` if $\hat{P}(\text{pos}) > 0.5$,
-`neg` otherwise. The red point is the patient, on the fitted curve:
+The class is the probability cut at 0.5: `yes` if $\hat{P}(\text{yes}) > 0.5$,
+`no` otherwise. The red point is the 70-year-old, on the fitted curve:
 
 ```{r}
 #| code-fold: true
 #| code-summary: "Code for this plot (optional)"
-curve <- data.frame(glucose = seq(40, 200, by = 1))
-curve$prob <- predict(log_fit, new_data = curve, type = "prob")$.pred_pos
+curve <- data.frame(age = seq(40, 80, by = 0.5))
+curve$prob <- predict(log_fit, new_data = curve, type = "prob")$.pred_yes
 
 ggplot() +
-  geom_jitter(data = train, aes(x = glucose, y = as.numeric(diabetes == "pos")),
-              width = 0, height = 0.03, alpha = 0.3, colour = "steelblue") +
-  geom_line(data = curve, aes(x = glucose, y = prob), colour = "red", linewidth = 1) +
+  geom_jitter(data = train, aes(x = age, y = as.numeric(cvd == "yes")),
+              width = 0.3, height = 0.03, alpha = 0.3, colour = "steelblue") +
+  geom_line(data = curve, aes(x = age, y = prob), colour = "red", linewidth = 1) +
   geom_hline(yintercept = 0.5, linetype = "dashed", colour = "grey40") +
-  annotate("point", x = 150,
-           y = predict(log_fit, new_data = patient, type = "prob")$.pred_pos,
+  annotate("point", x = 70,
+           y = predict(log_fit, new_data = person, type = "prob")$.pred_yes,
            colour = "red", size = 4) +
-  labs(x = "Glucose (mg/dL)", y = "Probability of diabetes",
-       title = "Training patients (0 = neg, 1 = pos), the fitted curve, and the patient")
+  labs(x = "Age (years)", y = "Probability of an event",
+       title = "Training patients (0 = no, 1 = yes), the fitted curve, and the 70-year-old")
 ```
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-1. The model says `pos` for this patient. How sure is it?
-2. At about what glucose does the predicted class change from `neg` to `pos`?
+1. The model says `yes` for this person. How sure is it?
+2. At about what age does the predicted class change from `no` to `yes`?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. Hardly sure at all: 0.547 is only just above 0.5. The class `pos` on its own
+1. Hardly sure at all: 0.547 is only just above 0.5. The class `yes` on its own
    hides that; the probability shows it.
-2. Where the curve crosses the dashed line at 0.5: at a glucose of about 145
-   mg/dL (144.6). Below that the class is `neg`, above it `pos`.
+2. Where the curve crosses the dashed line at 0.5: at about 68 years (67.7).
+   Below that the class is `no`, above it `yes`.
 :::
 :::
 
-#### Task 1b — Predictions against what was measured
+#### Task 1b — Predictions against what happened
 
 The test patients were not used to fit the model. Predict both the probability
-and the class for each of them, and put them next to what was measured.
+and the class for each of them, and put them next to what happened.
 
 ```{r}
 test_results <- test |>
@@ -203,43 +203,43 @@ head(test_results, 10)
 ```
 
 How often is the predicted class right? Compare it with a "model" that always
-says `neg`, the most common class.
+says `no`, the most common class.
 
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
 mean(test_results$.pred_class == test_results$______)   # accuracy of the model
-mean(test_results$diabetes == "neg")                    # always saying neg
+mean(test_results$cvd == "no")                          # always saying no
 ```
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-Compare the predicted class with the column that holds what was measured.
+Compare the predicted class with the column that holds what happened.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-mean(test_results$.pred_class == test_results$diabetes)   # accuracy of the model
-mean(test_results$diabetes == "neg")                    # always saying neg
+mean(test_results$.pred_class == test_results$cvd)   # accuracy of the model
+mean(test_results$cvd == "no")                          # always saying no
 ```
 
-The model is right for 76.0% of the test patients. Always saying `neg` is right
-for 64.7%, because 97 of the 150 do not have diabetes.
+The model is right for 81% of the test patients. Always saying `no` is right
+for 66%, because 66 of the 100 had no event.
 :::
 :::
 
 ```{r}
 #| code-fold: true
 #| code-summary: "Code for this plot (optional)"
-ggplot(test_results, aes(x = glucose, y = .pred_pos, colour = diabetes)) +
+ggplot(test_results, aes(x = age, y = .pred_yes, colour = cvd)) +
   geom_hline(yintercept = 0.5, linetype = "dashed", colour = "grey40") +
-  geom_point(size = 2, alpha = 0.7) +
-  scale_colour_manual(values = c(neg = "steelblue", pos = "darkorange")) +
-  labs(x = "Glucose (mg/dL)", y = "Predicted probability of diabetes",
-       colour = "Measured",
-       title = "Test patients: predicted probability, coloured by what was measured")
+  geom_jitter(width = 0.3, height = 0, size = 2, alpha = 0.7) +
+  scale_colour_manual(values = c(no = "steelblue", yes = "darkorange")) +
+  labs(x = "Age (years)", y = "Predicted probability of an event",
+       colour = "What happened",
+       title = "Test patients: predicted probability, coloured by what happened")
 ```
 
 ::: {.callout-important appearance="simple"}
@@ -253,44 +253,44 @@ ggplot(test_results, aes(x = glucose, y = .pred_pos, colour = diabetes)) +
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-count(test_results, predicted = .pred_class, measured = diabetes)
+count(test_results, predicted = .pred_class, happened = cvd)
 ```
 
-1. The orange points below the line have diabetes but were called `neg`: 29
-   patients. The blue points above it do not have diabetes but were called
-   `pos`: 7 patients. With glucose as the only predictor, two patients with the
-   same glucose get the same probability, whatever else is true of them.
-2. The probability. A patient at 0.52 and a patient at 0.85 are both `pos`, but
+1. The orange points below the line had an event but were called `no`: 12
+   people. The blue points above it had none but were called `yes`: 7 people.
+   With age as the only predictor, two people of the same age get the same
+   probability, whatever else is true of them.
+2. The probability. A person at 0.52 and a person at 0.72 are both `yes`, but
    they are not equally worrying. The cut-off of 0.5 is a choice, not part of
    the model; Exercise 4.3 is about choosing it.
 :::
 :::
 
-### Part 2 — Add BMI
+### Part 2 — Add blood pressure
 
 The same specification, `log_model`, with a second predictor:
 
 ```{r}
 log_fit_2 <- log_model |>
-  fit(diabetes ~ glucose + mass, data = train)
+  fit(cvd ~ age + systolic_bp, data = train)
 
 log_fit_2$fit$coefficients
 ```
 
-#### Task 2a — The same patient, now with a BMI of 30
+#### Task 2a — The same person, now with a blood pressure of 130
 
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-patient <- data.frame(glucose = 150, mass = ______)
+person <- data.frame(age = 70, systolic_bp = ______)
 
-predict(log_fit_2, new_data = patient, type = "______")
-predict(log_fit_2, new_data = patient)
+predict(log_fit_2, new_data = person, type = "______")
+predict(log_fit_2, new_data = person)
 ```
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-The patient now needs a value for both predictors. Ask for the probabilities
+The person now needs a value for both predictors. Ask for the probabilities
 exactly as in Task 1a.
 :::
 
@@ -298,64 +298,65 @@ exactly as in Task 1a.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-patient <- data.frame(glucose = 150, mass = 30)
+person <- data.frame(age = 70, systolic_bp = 130)
 
-predict(log_fit_2, new_data = patient, type = "prob")
-predict(log_fit_2, new_data = patient)
+predict(log_fit_2, new_data = person, type = "prob")
+predict(log_fit_2, new_data = person)
 ```
 
-The probability of diabetes is now 0.490, and the class is `neg`.
+The probability of an event is now 0.487, and the class is `no`.
 :::
 :::
 
-With two predictors, the probability is a **map** over glucose and BMI. The
-black line is where the probability is exactly 0.5: to its right the class is
-`pos`, to its left `neg`. Circles are test patients without diabetes, triangles
-test patients with it, and the red point is the patient.
+With two predictors, the probability is a **map** over age and blood pressure.
+The black line is where the probability is exactly 0.5: above it the class is
+`yes`, below it `no`. Circles are test patients without an event, triangles
+test patients with one, and the red point is the 70-year-old.
 
 ```{r}
 #| code-fold: true
 #| code-summary: "Code for this plot (optional)"
-# every combination of glucose and BMI on a fine grid
-grid <- expand_grid(glucose = seq(40, 200, by = 1),
-                    mass = seq(18, 68, by = 0.5))
+# every combination of age and blood pressure on a fine grid
+grid <- expand_grid(age = seq(40, 80, by = 0.5),
+                    systolic_bp = seq(80, 200, by = 1))
 
 prob_map <- function(fit, title) {
-  grid$prob <- predict(fit, new_data = grid, type = "prob")$.pred_pos
-  ggplot(grid, aes(x = glucose, y = mass)) +
+  grid$prob <- predict(fit, new_data = grid, type = "prob")$.pred_yes
+  ggplot(grid, aes(x = age, y = systolic_bp)) +
     geom_raster(aes(fill = prob)) +
     geom_contour(aes(z = prob), breaks = 0.5, colour = "black", linewidth = 0.8) +
-    geom_point(data = test, aes(shape = diabetes), size = 1.5) +
-    annotate("point", x = 150, y = 30, colour = "red", size = 4) +
+    geom_point(data = test, aes(shape = cvd), size = 1.5) +
+    annotate("point", x = 70, y = 130, colour = "red", size = 4) +
     scale_fill_gradient2(low = "steelblue", mid = "white", high = "darkorange",
                          midpoint = 0.5, limits = c(0, 1)) +
-    scale_shape_manual(values = c(neg = 1, pos = 17)) +
-    labs(x = "Glucose (mg/dL)", y = "BMI (kg/m²)",
-         fill = "Probability\nof diabetes", shape = "Test patients", title = title)
+    scale_shape_manual(values = c(no = 1, yes = 17)) +
+    labs(x = "Age (years)", y = "Systolic blood pressure (mmHg)",
+         fill = "Probability\nof an event", shape = "Test patients", title = title)
 }
 
-prob_map(log_fit_2, "Logistic regression: glucose and BMI")
+prob_map(log_fit_2, "Logistic regression: age and blood pressure")
 ```
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
 1. The line where the class changes is straight but tilted. What does the tilt
-   tell you about BMI?
-2. Adding BMI moved this patient from 0.547 to 0.490, and the class from `pos`
-   to `neg`. Did BMI change much about this patient's prediction?
+   tell you?
+2. Adding blood pressure moved this person from 0.547 to 0.487, and the class
+   from `yes` to `no`. Did it change much about this person's prediction?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. The higher the BMI, the lower the glucose at which the model switches to
-   `pos`: at a BMI of 30 the line is at a glucose of about 151, at a BMI of 45
-   at about 122. Both predictors push the probability the same way.
-2. Very little: the probability moved by less than 0.06. The class flipped
-   only because the patient sits right next to the line. Near 0.5 a small
-   change in the probability can change the class; the probability shows that,
-   the class does not. On the 150 test patients both models are right 76.0% of
-   the time.
+1. The higher the blood pressure, the younger the age at which the model
+   switches to `yes`: at 140 mmHg the line is at about 65 years, at 160 mmHg at
+   about 55. Both predictors push the probability the same way, and neither
+   decides alone. Exercise 4.4 works this line out from the coefficients.
+2. Very little: the probability moved by 0.06. The class flipped only because
+   the person sits right next to the line. Near 0.5 a small change in the
+   probability can change the class; the probability shows that, the class
+   does not. On the 100 test patients the model with both predictors is right
+   83% of the time, against 81% with age alone.
 :::
 :::
 
@@ -365,49 +366,48 @@ Only the specification changes. The training patients, the predictors and the
 `fit()` and `predict()` calls stay the same.
 
 ```{r}
-# 1. Specify: a classification tree, computed by rpart, kept small
-tree_model <- decision_tree(tree_depth = 2, cost_complexity = 0) |>
+# 1. Specify: a classification tree, computed by rpart
+tree_model <- decision_tree() |>
   set_engine("rpart") |>
   set_mode("classification")
 
 # 2. Fit on the same training patients, with the same predictors
 tree_fit <- tree_model |>
-  fit(diabetes ~ glucose + mass, data = train)
+  fit(cvd ~ age + systolic_bp, data = train)
 
 rpart.plot(tree_fit$fit, type = 3, extra = 106, fallen.leaves = TRUE,
            box.palette = "BuOr", roundint = FALSE)
 ```
 
-`tree_depth = 2` allows at most two questions in a row, and
-`cost_complexity = 0` stops `rpart` from cutting the second question away.
-
 Each box asks a yes/no question. **Yes goes left, no goes right.** Each leaf at
-the bottom shows three things: the predicted class, the probability of `pos`
-(the share of training patients in that leaf who have diabetes) and the
+the bottom shows three things: the predicted class, the probability of `yes`
+(the share of training patients in that leaf who had an event) and the
 percentage of all training patients who ended up there.
 
-#### Task 3a — Follow the patient
+#### Task 3a — Follow the person
 
-Start at the top with the patient with a glucose of 150 and a BMI of 30. At
-each question, go left or right. Which leaf do you reach? What probability and
-what class does it give?
+Start at the top with the 70-year-old with a blood pressure of 130. At each
+question, go left or right. Which leaf do you reach? What probability and what
+class does it give?
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-`glucose < 155`? Yes, go left. That is already a leaf: class `neg`,
-probability of diabetes **0.25**. It holds 78% of the training patients, and
-117 of those 467 have diabetes: 117 / 467 = 0.25.
+`age < 54`? No, go right. `systolic_bp < 136`? Yes, go left. `age < 72`? Yes,
+go left. That leaf gives class `no` and a probability of an event of **0.21**.
+It holds 22% of the training patients, and 19 of those 90 had an event:
+19 / 90 = 0.21.
 
-The plot rounds the split point; the exact value, 154.5, is in `tree_fit$fit`.
+The plot rounds the split points; the exact values (53.5, 135.5 and 71.5) are
+in `tree_fit$fit`.
 :::
 :::
 
 Check it with `predict()`:
 
 ```{r}
-predict(tree_fit, new_data = patient, type = "prob")
-predict(tree_fit, new_data = patient)
+predict(tree_fit, new_data = person, type = "prob")
+predict(tree_fit, new_data = person)
 ```
 
 The same map as for the logistic regression:
@@ -415,48 +415,47 @@ The same map as for the logistic regression:
 ```{r}
 #| code-fold: true
 #| code-summary: "Code for this plot (optional)"
-prob_map(tree_fit, "Decision tree: glucose and BMI")
+prob_map(tree_fit, "Decision tree: age and blood pressure")
 ```
 
 How often is each model right on the test patients?
 
 ```{r}
 data.frame(
-  model = c("logistic, glucose", "logistic, glucose + BMI", "tree, glucose + BMI",
-            "always says neg"),
-  accuracy = c(mean(predict(log_fit,   new_data = test)$.pred_class == test$diabetes),
-               mean(predict(log_fit_2, new_data = test)$.pred_class == test$diabetes),
-               mean(predict(tree_fit,  new_data = test)$.pred_class == test$diabetes),
-               mean(test$diabetes == "neg")))
+  model = c("logistic, age", "logistic, age + BP", "tree, age + BP",
+            "always says no"),
+  accuracy = c(mean(predict(log_fit,   new_data = test)$.pred_class == test$cvd),
+               mean(predict(log_fit_2, new_data = test)$.pred_class == test$cvd),
+               mean(predict(tree_fit,  new_data = test)$.pred_class == test$cvd),
+               mean(test$cvd == "no")))
 ```
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-1. The logistic regression gives every patient their own probability. How many
+1. The logistic regression gives every person their own probability. How many
    different probabilities can the tree give, and why?
-2. Compare the two maps. What shape is the region where each model says `pos`?
-3. The three models gave the patient 0.55, 0.49 and 0.25. Their accuracies on
-   the test patients are close. What does that tell you?
+2. Compare the two maps. What shape is the region where each model says `yes`?
+3. The three models gave the 70-year-old 0.55, 0.49 and 0.21. Their accuracies
+   on the test patients are close. What does that tell you?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. Three, one per leaf: 0.25, 0.47 and 0.82. Every patient in the same leaf
-   gets the same probability, the share of training patients in that leaf who
-   had diabetes. Everyone with a glucose below 154.5 gets 0.25, whatever their
-   BMI.
-2. The logistic regression changes smoothly, and its `pos` region is
-   everything to the right of a straight line. The tree's map is made of flat
-   rectangles, and its `pos` region is one rectangle: glucose of at least 154.5
-   and a BMI of at least 27.75. The middle leaf, high glucose with a low BMI,
-   gives 0.47: close to 0.5, but still `neg`.
+1. Five, one per leaf: 0.14, 0.21, 0.12, 0.70 and 0.67. Every person in the
+   same leaf gets the same probability, the share of training patients in that
+   leaf who had an event. Everyone under 53.5 gets 0.14, whatever their blood
+   pressure.
+2. The logistic regression changes smoothly, and its `yes` region is
+   everything above a straight line. The tree's map is made of flat rectangles:
+   it says `yes` for anyone 53.5 or older with a blood pressure of 135.5 or
+   more, and for anyone 71.5 or older with a blood pressure between 114.5 and
+   135.5.
 3. Models can agree on most classes and still give quite different
-   probabilities for a single patient. Accuracy only counts classes; it says
+   probabilities for a single person. Accuracy only counts classes; it says
    nothing about how good the probabilities are; the log loss in Exercise 4.5
-   scores the probabilities themselves.
-   With 150 test patients, a difference of four patients (76.0% against 73.3%)
-   is too small to pick a winner.
+   scores the probabilities themselves. With 100 test patients, a difference of
+   two people (83% against 81%) is far too small to pick a winner.
 :::
 :::
 
@@ -499,33 +498,32 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 ```
 
-`data/diabetes_clean.csv` holds 750 adults screened for type 2 diabetes: eight
-measurements from a single visit, and `diabetes`, which is `pos` or `neg`. It
-is ready to use. We keep glucose, BMI (the column `mass`) and the outcome. If
-you do not have it yet, [**download `diabetes_clean.csv`**](data/diabetes_clean.csv){download="diabetes_clean.csv"}
+`data/cvd_risk.csv` holds 500 adults aged 40 to 80 seen at a health check:
+their age, their systolic blood pressure in mmHg, and `cvd`, whether they had a
+cardiovascular event (a heart attack or a stroke) in the following ten years,
+`yes` or `no`. If you do not have it yet, [**download `cvd_risk.csv`**](data/cvd_risk.csv){download="cvd_risk.csv"}
 into your `data` folder.
 
 ```{python}
-diabetes = pd.read_csv("data/diabetes_clean.csv")
-diabetes = diabetes[["glucose", "mass", "diabetes"]]
+cvd = pd.read_csv("data/cvd_risk.csv")
 
-diabetes.describe()
+cvd.describe()
 ```
 
-We hold back every fifth person as the test set: 600 training patients and 150
+We hold back every fifth person as the test set: 400 training patients and 100
 test patients. Splitting by a fixed rule rather than at random gives both
-languages the same 150 people, so this tab prints the same numbers as the R
+languages the same 100 people, so this tab prints the same numbers as the R
 tab. Every Day 4 exercise uses this split.
 
 ```{python}
-is_test = diabetes.index % 5 == 0               # every fifth person is held back
-train = diabetes[~is_test]
-test  = diabetes[is_test]
+is_test = cvd.index % 5 == 0               # every fifth person is held back
+train = cvd[~is_test]
+test  = cvd[is_test]
 
-train["diabetes"].value_counts()
+train["cvd"].value_counts()
 ```
 
-### Part 1 — Predict diabetes from glucose
+### Part 1 — Predict an event from age
 
 The same three steps as in Exercise 3.1. The class name says that this model
 is for classification: `LogisticRegression` here, where Day 3 had
@@ -536,34 +534,34 @@ is for classification: `LogisticRegression` here, where Day 3 had
 log_model = LogisticRegression(C=np.inf)
 
 # 2. Fit on the training patients: predictors (a table) and outcome
-log_model.fit(train[["glucose"]], train["diabetes"])
+log_model.fit(train[["age"]], train["cvd"])
 
 # the classes, and the learned parameters
 print("classes:", log_model.classes_)
 print("intercept:", log_model.intercept_)
-print("weight for glucose:", log_model.coef_)
+print("weight for age:", log_model.coef_)
 ```
 
 `C=np.inf` switches off a penalty that scikit-learn adds to logistic regression
 by default; without it the parameters would not match the ones in the R tab.
 
-The two parameters are not on the glucose scale but on the **log-odds** scale.
-Exercise 4.2 shows how they turn into a probability. Here we let scikit-learn
-do it.
+The two parameters are not on the probability scale but on the **log-odds**
+scale. Exercise 4.2 shows how they turn into a probability. Here we let
+scikit-learn do it.
 
-#### Task 1a — A patient with a glucose of 150
+#### Task 1a — A 70-year-old
 
 `.predict()` gives the **class**. `.predict_proba()` gives a **probability** for
-each class instead, one column per class in the order of `classes_`: `neg`
-first, then `pos`.
+each class instead, one column per class in the order of `classes_`: `no`
+first, then `yes`.
 
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-patient = pd.DataFrame({"glucose": [150]})
+person = pd.DataFrame({"age": [70]})
 
-print(log_model.______(patient))   # a probability for each class: neg, pos
-print(log_model.predict(patient))  # the class
+print(log_model.______(person))   # a probability for each class: no, yes
+print(log_model.predict(person))  # the class
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -576,94 +574,94 @@ probability.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-patient = pd.DataFrame({"glucose": [150]})
+person = pd.DataFrame({"age": [70]})
 
-print(log_model.predict_proba(patient))   # a probability for each class: neg, pos
-print(log_model.predict(patient))  # the class
+print(log_model.predict_proba(person))   # a probability for each class: no, yes
+print(log_model.predict(person))  # the class
 ```
 
-The probability of `neg` is 0.453 and of `pos` 0.547: they always add up to 1.
-The class is `pos`, because the probability of `pos` is above 0.5.
+The probability of `no` is 0.453 and of `yes` 0.547: they always add up to 1.
+The class is `yes`, because the probability of `yes` is above 0.5.
 :::
 :::
 
-The class is the probability cut at 0.5: `pos` if $\hat{P}(\text{pos}) > 0.5$,
-`neg` otherwise. The red point is the patient, on the fitted curve:
+The class is the probability cut at 0.5: `yes` if $\hat{P}(\text{yes}) > 0.5$,
+`no` otherwise. The red point is the 70-year-old, on the fitted curve:
 
 ```{python}
 #| code-fold: true
 #| code-summary: "Code for this plot (optional)"
-curve = pd.DataFrame({"glucose": np.arange(40, 201, 1)})
+curve = pd.DataFrame({"age": np.arange(40, 80.5, 0.5)})
 curve_prob = log_model.predict_proba(curve)[:, 1]
-jitter = np.random.default_rng(1).uniform(-0.03, 0.03, len(train))
+rng = np.random.default_rng(1)
 
 fig, ax = plt.subplots()
-ax.scatter(train["glucose"], (train["diabetes"] == "pos") + jitter,
+ax.scatter(train["age"] + rng.uniform(-0.3, 0.3, len(train)),
+           (train["cvd"] == "yes") + rng.uniform(-0.03, 0.03, len(train)),
            alpha=0.3, color="steelblue")
-ax.plot(curve["glucose"], curve_prob, color="red", linewidth=2)
+ax.plot(curve["age"], curve_prob, color="red", linewidth=2)
 ax.axhline(0.5, linestyle="--", color="grey")
-ax.scatter([150], log_model.predict_proba(patient)[:, 1], color="red", s=80, zorder=3)
-ax.set_xlabel("Glucose (mg/dL)")
-ax.set_ylabel("Probability of diabetes")
-ax.set_title("Training patients (0 = neg, 1 = pos), the fitted curve, and the patient")
+ax.scatter([70], log_model.predict_proba(person)[:, 1], color="red", s=80, zorder=3)
+ax.set_xlabel("Age (years)")
+ax.set_ylabel("Probability of an event")
+ax.set_title("Training patients (0 = no, 1 = yes), the fitted curve, and the 70-year-old")
 plt.show()
 ```
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-1. The model says `pos` for this patient. How sure is it?
-2. At about what glucose does the predicted class change from `neg` to `pos`?
+1. The model says `yes` for this person. How sure is it?
+2. At about what age does the predicted class change from `no` to `yes`?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. Hardly sure at all: 0.547 is only just above 0.5. The class `pos` on its own
+1. Hardly sure at all: 0.547 is only just above 0.5. The class `yes` on its own
    hides that; the probability shows it.
-2. Where the curve crosses the dashed line at 0.5: at a glucose of about 145
-   mg/dL (144.6). Below that the class is `neg`, above it `pos`.
+2. Where the curve crosses the dashed line at 0.5: at about 68 years (67.7).
+   Below that the class is `no`, above it `yes`.
 :::
 :::
 
-#### Task 1b — Predictions against what was measured
+#### Task 1b — Predictions against what happened
 
 The test patients were not used to fit the model. Predict both the probability
-of `pos` and the class for each of them, and put them next to what was
-measured.
+of `yes` and the class for each of them, and put them next to what happened.
 
 ```{python}
 test_results = test.copy()
-test_results["prob_pos"] = log_model.predict_proba(test[["glucose"]])[:, 1]
-test_results["predicted"] = log_model.predict(test[["glucose"]])
+test_results["prob_yes"] = log_model.predict_proba(test[["age"]])[:, 1]
+test_results["predicted"] = log_model.predict(test[["age"]])
 
 test_results.head(10)
 ```
 
 How often is the predicted class right? Compare it with a "model" that always
-says `neg`, the most common class.
+says `no`, the most common class.
 
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
 print((test_results["predicted"] == test_results["______"]).mean())   # accuracy of the model
-print((test_results["diabetes"] == "neg").mean())                    # always saying neg
+print((test_results["cvd"] == "no").mean())                          # always saying no
 ```
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-Compare the predicted class with the column that holds what was measured.
+Compare the predicted class with the column that holds what happened.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-print((test_results["predicted"] == test_results["diabetes"]).mean())   # accuracy of the model
-print((test_results["diabetes"] == "neg").mean())                    # always saying neg
+print((test_results["predicted"] == test_results["cvd"]).mean())   # accuracy of the model
+print((test_results["cvd"] == "no").mean())                          # always saying no
 ```
 
-The model is right for 76.0% of the test patients. Always saying `neg` is right
-for 64.7%, because 97 of the 150 do not have diabetes.
+The model is right for 81% of the test patients. Always saying `no` is right
+for 66%, because 66 of the 100 had no event.
 :::
 :::
 
@@ -672,13 +670,14 @@ for 64.7%, because 97 of the 150 do not have diabetes.
 #| code-summary: "Code for this plot (optional)"
 fig, ax = plt.subplots()
 ax.axhline(0.5, linestyle="--", color="grey")
-for cls, colour in [("neg", "steelblue"), ("pos", "darkorange")]:
-    rows = test_results[test_results["diabetes"] == cls]
-    ax.scatter(rows["glucose"], rows["prob_pos"], color=colour, alpha=0.7, label=cls)
-ax.set_xlabel("Glucose (mg/dL)")
-ax.set_ylabel("Predicted probability of diabetes")
-ax.legend(title="Measured")
-ax.set_title("Test patients: predicted probability, coloured by what was measured")
+for cls, colour in [("no", "steelblue"), ("yes", "darkorange")]:
+    rows = test_results[test_results["cvd"] == cls]
+    ax.scatter(rows["age"] + rng.uniform(-0.3, 0.3, len(rows)), rows["prob_yes"],
+               color=colour, alpha=0.7, label=cls)
+ax.set_xlabel("Age (years)")
+ax.set_ylabel("Predicted probability of an event")
+ax.legend(title="What happened")
+ax.set_title("Test patients: predicted probability, coloured by what happened")
 plt.show()
 ```
 
@@ -693,46 +692,46 @@ plt.show()
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-pd.crosstab(test_results["predicted"], test_results["diabetes"],
-            rownames=["predicted"], colnames=["measured"])
+pd.crosstab(test_results["predicted"], test_results["cvd"],
+            rownames=["predicted"], colnames=["happened"])
 ```
 
-1. The orange points below the line have diabetes but were called `neg`: 29
-   patients. The blue points above it do not have diabetes but were called
-   `pos`: 7 patients. With glucose as the only predictor, two patients with the
-   same glucose get the same probability, whatever else is true of them.
-2. The probability. A patient at 0.52 and a patient at 0.85 are both `pos`, but
+1. The orange points below the line had an event but were called `no`: 12
+   people. The blue points above it had none but were called `yes`: 7 people.
+   With age as the only predictor, two people of the same age get the same
+   probability, whatever else is true of them.
+2. The probability. A person at 0.52 and a person at 0.72 are both `yes`, but
    they are not equally worrying. The cut-off of 0.5 is a choice, not part of
    the model; Exercise 4.3 is about choosing it.
 :::
 :::
 
-### Part 2 — Add BMI
+### Part 2 — Add blood pressure
 
 The same kind of model, with a second predictor:
 
 ```{python}
 log_model_2 = LogisticRegression(C=np.inf)
-log_model_2.fit(train[["glucose", "mass"]], train["diabetes"])
+log_model_2.fit(train[["age", "systolic_bp"]], train["cvd"])
 
 print("intercept:", log_model_2.intercept_)
-print("weights (glucose, mass):", log_model_2.coef_)
+print("weights (age, systolic_bp):", log_model_2.coef_)
 ```
 
-#### Task 2a — The same patient, now with a BMI of 30
+#### Task 2a — The same person, now with a blood pressure of 130
 
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-patient = pd.DataFrame({"glucose": [150], "mass": [______]})
+person = pd.DataFrame({"age": [70], "systolic_bp": [______]})
 
-print(log_model_2.______(patient))
-print(log_model_2.predict(patient))
+print(log_model_2.______(person))
+print(log_model_2.predict(person))
 ```
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-The patient now needs a value for both predictors. Ask for the probabilities
+The person now needs a value for both predictors. Ask for the probabilities
 exactly as in Task 1a.
 :::
 
@@ -740,71 +739,72 @@ exactly as in Task 1a.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-patient = pd.DataFrame({"glucose": [150], "mass": [30]})
+person = pd.DataFrame({"age": [70], "systolic_bp": [130]})
 
-print(log_model_2.predict_proba(patient))
-print(log_model_2.predict(patient))
+print(log_model_2.predict_proba(person))
+print(log_model_2.predict(person))
 ```
 
-The probability of diabetes is now 0.490, and the class is `neg`.
+The probability of an event is now 0.487, and the class is `no`.
 :::
 :::
 
-With two predictors, the probability is a **map** over glucose and BMI. The
-black line is where the probability is exactly 0.5: to its right the class is
-`pos`, to its left `neg`. Circles are test patients without diabetes, triangles
-test patients with it, and the red point is the patient.
+With two predictors, the probability is a **map** over age and blood pressure.
+The black line is where the probability is exactly 0.5: above it the class is
+`yes`, below it `no`. Circles are test patients without an event, triangles
+test patients with one, and the red point is the 70-year-old.
 
 ```{python}
 #| code-fold: true
 #| code-summary: "Code for this plot (optional)"
 from matplotlib.colors import LinearSegmentedColormap
 
-# every combination of glucose and BMI on a fine grid
-G, M = np.meshgrid(np.arange(40, 201, 1), np.arange(18, 68.5, 0.5))
-grid = pd.DataFrame({"glucose": G.ravel(), "mass": M.ravel()})
+# every combination of age and blood pressure on a fine grid
+A, S = np.meshgrid(np.arange(40, 80.5, 0.5), np.arange(80, 201, 1))
+grid = pd.DataFrame({"age": A.ravel(), "systolic_bp": S.ravel()})
 blue_orange = LinearSegmentedColormap.from_list("bo", ["steelblue", "white", "darkorange"])
 
 def prob_map(model, title):
-    prob = model.predict_proba(grid)[:, 1].reshape(G.shape)
+    prob = model.predict_proba(grid)[:, 1].reshape(A.shape)
     fig, ax = plt.subplots()
-    im = ax.pcolormesh(G, M, prob, cmap=blue_orange, vmin=0, vmax=1, shading="auto")
-    ax.contour(G, M, prob, levels=[0.5], colors="black")
-    neg, pos = test[test["diabetes"] == "neg"], test[test["diabetes"] == "pos"]
-    ax.scatter(neg["glucose"], neg["mass"], marker="o", facecolors="none",
-               edgecolors="black", s=20, label="test: neg")
-    ax.scatter(pos["glucose"], pos["mass"], marker="^", color="black", s=20,
-               label="test: pos")
-    ax.scatter([150], [30], color="red", s=80, zorder=3, label="patient")
-    fig.colorbar(im, ax=ax, label="Probability of diabetes")
-    ax.set_xlabel("Glucose (mg/dL)")
-    ax.set_ylabel("BMI (kg/m²)")
+    im = ax.pcolormesh(A, S, prob, cmap=blue_orange, vmin=0, vmax=1, shading="auto")
+    ax.contour(A, S, prob, levels=[0.5], colors="black")
+    no, yes = test[test["cvd"] == "no"], test[test["cvd"] == "yes"]
+    ax.scatter(no["age"], no["systolic_bp"], marker="o", facecolors="none",
+               edgecolors="black", s=20, label="test: no")
+    ax.scatter(yes["age"], yes["systolic_bp"], marker="^", color="black", s=20,
+               label="test: yes")
+    ax.scatter([70], [130], color="red", s=80, zorder=3, label="70-year-old")
+    fig.colorbar(im, ax=ax, label="Probability of an event")
+    ax.set_xlabel("Age (years)")
+    ax.set_ylabel("Systolic blood pressure (mmHg)")
     ax.set_title(title)
-    ax.legend(loc="upper left", fontsize=8)
+    ax.legend(loc="lower left", fontsize=8)
     plt.show()
 
-prob_map(log_model_2, "Logistic regression: glucose and BMI")
+prob_map(log_model_2, "Logistic regression: age and blood pressure")
 ```
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
 1. The line where the class changes is straight but tilted. What does the tilt
-   tell you about BMI?
-2. Adding BMI moved this patient from 0.547 to 0.490, and the class from `pos`
-   to `neg`. Did BMI change much about this patient's prediction?
+   tell you?
+2. Adding blood pressure moved this person from 0.547 to 0.487, and the class
+   from `yes` to `no`. Did it change much about this person's prediction?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. The higher the BMI, the lower the glucose at which the model switches to
-   `pos`: at a BMI of 30 the line is at a glucose of about 151, at a BMI of 45
-   at about 122. Both predictors push the probability the same way.
-2. Very little: the probability moved by less than 0.06. The class flipped
-   only because the patient sits right next to the line. Near 0.5 a small
-   change in the probability can change the class; the probability shows that,
-   the class does not. On the 150 test patients both models are right 76.0% of
-   the time.
+1. The higher the blood pressure, the younger the age at which the model
+   switches to `yes`: at 140 mmHg the line is at about 65 years, at 160 mmHg at
+   about 55. Both predictors push the probability the same way, and neither
+   decides alone. Exercise 4.4 works this line out from the coefficients.
+2. Very little: the probability moved by 0.06. The class flipped only because
+   the person sits right next to the line. Near 0.5 a small change in the
+   probability can change the class; the probability shows that, the class
+   does not. On the 100 test patients the model with both predictors is right
+   83% of the time, against 81% with age alone.
 :::
 :::
 
@@ -814,110 +814,99 @@ Only the specification changes. The training patients, the predictors and the
 `.fit()`, `.predict()` and `.predict_proba()` calls stay the same.
 
 ```{python}
-# 1. Specify: a classification tree, kept small
-tree_model = DecisionTreeClassifier(max_depth=2, random_state=0)
+# 1. Specify: a classification tree with at most five leaves
+tree_model = DecisionTreeClassifier(max_leaf_nodes=5, random_state=0)
 
 # 2. Fit on the same training patients, with the same predictors
-tree_model.fit(train[["glucose", "mass"]], train["diabetes"])
+tree_model.fit(train[["age", "systolic_bp"]], train["cvd"])
 
-fig, ax = plt.subplots(figsize=(10, 5))
-plot_tree(tree_model, feature_names=["glucose", "mass"], class_names=["neg", "pos"],
+fig, ax = plt.subplots(figsize=(11, 6))
+plot_tree(tree_model, feature_names=["age", "systolic_bp"], class_names=["no", "yes"],
           filled=False, impurity=False, proportion=True, precision=2, ax=ax)
 plt.show()
 ```
 
-`max_depth=2` allows at most two questions in a row. Without it the tree keeps
-splitting until every leaf holds patients of one class only: 205 leaves, which
-fit the training patients almost one by one and are right for only 64% of the
-test patients.
+`max_leaf_nodes=5` allows at most five leaves, which gives the same tree as the
+R tab. Without it the tree keeps splitting until every leaf holds people of one
+class only: 149 leaves, which fit the training patients almost one by one and
+are right for only 66% of the test patients, no better than always saying `no`.
 
 Each box asks a yes/no question. **True goes left, False goes right.** In each
 leaf at the bottom, `samples` is the percentage of all training patients who
-ended up there, `value` gives the share of them in each class (`neg`, `pos`),
-and `class` is the predicted class. The share of `pos` is the leaf's
-probability of diabetes.
+ended up there, `value` gives the share of them in each class (`no`, `yes`),
+and `class` is the predicted class. The share of `yes` is the leaf's
+probability of an event.
 
-#### Task 3a — Follow the patient
+#### Task 3a — Follow the person
 
-Start at the top with the patient with a glucose of 150 and a BMI of 30. At
-each question, go left or right. Which leaf do you reach? What probability and
-what class does it give?
+Start at the top with the 70-year-old with a blood pressure of 130. At each
+question, go left or right. Which leaf do you reach? What probability and what
+class does it give?
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-`glucose <= 154.5`? True, go left. `mass <= 27.35`? False, go right. The leaf
-holds 59.2% of the training patients (355 of 600); 31% of them have diabetes,
-so the probability is **0.31** and the class is `neg`.
+`age <= 53.5`? False, go right. `systolic_bp <= 135.5`? True, go left.
+`age <= 71.5`? True, go left. The leaf holds 22.5% of the training patients
+(90 of 400); 21% of them had an event, so the probability is **0.21** and the
+class is `no`.
 :::
 :::
 
 Check it with `.predict_proba()` and `.predict()`:
 
 ```{python}
-print(tree_model.predict_proba(patient))
-print(tree_model.predict(patient))
+print(tree_model.predict_proba(person))
+print(tree_model.predict(person))
 ```
-
-::: {.callout-note appearance="simple"}
-## Why the R tab's tree is smaller
-The R tab fits the same training patients and gets three leaves, not four: it
-does not ask about BMI for patients with a glucose up to 154.5. `rpart` keeps a
-question only if it changes the predicted class of some patients, and here both
-answers still say `neg`. scikit-learn keeps any question that makes the leaves
-purer: it separates patients with a low BMI (7% have diabetes) from the rest
-(31%). The probabilities change; the classes do not.
-:::
 
 The same map as for the logistic regression:
 
 ```{python}
 #| code-fold: true
 #| code-summary: "Code for this plot (optional)"
-prob_map(tree_model, "Decision tree: glucose and BMI")
+prob_map(tree_model, "Decision tree: age and blood pressure")
 ```
 
 How often is each model right on the test patients?
 
 ```{python}
 pd.DataFrame({
-    "model": ["logistic, glucose", "logistic, glucose + BMI", "tree, glucose + BMI",
-              "always says neg"],
-    "accuracy": [log_model.score(test[["glucose"]], test["diabetes"]),
-                 log_model_2.score(test[["glucose", "mass"]], test["diabetes"]),
-                 tree_model.score(test[["glucose", "mass"]], test["diabetes"]),
-                 (test["diabetes"] == "neg").mean()]})
+    "model": ["logistic, age", "logistic, age + BP", "tree, age + BP",
+              "always says no"],
+    "accuracy": [log_model.score(test[["age"]], test["cvd"]),
+                 log_model_2.score(test[["age", "systolic_bp"]], test["cvd"]),
+                 tree_model.score(test[["age", "systolic_bp"]], test["cvd"]),
+                 (test["cvd"] == "no").mean()]})
 ```
 
-`.score()` is the accuracy: the share of patients whose predicted class is
-right.
+`.score()` is the accuracy: the share of people whose predicted class is right.
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-1. The logistic regression gives every patient their own probability. How many
+1. The logistic regression gives every person their own probability. How many
    different probabilities can the tree give, and why?
-2. Compare the two maps. What shape is the region where each model says `pos`?
-3. The three models gave the patient 0.55, 0.49 and 0.31. Their accuracies on
-   the test patients are close. What does that tell you?
+2. Compare the two maps. What shape is the region where each model says `yes`?
+3. The three models gave the 70-year-old 0.55, 0.49 and 0.21. Their accuracies
+   on the test patients are close. What does that tell you?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. Four, one per leaf: 0.07, 0.31, 0.47 and 0.82. Every patient in the same
-   leaf gets the same probability, the share of training patients in that leaf
-   who had diabetes.
-2. The logistic regression changes smoothly, and its `pos` region is
-   everything to the right of a straight line. The tree's map is made of flat
-   rectangles, and its `pos` region is one rectangle: a glucose above 154.5 and
-   a BMI above 27.75. The leaf with a high glucose and a low BMI gives 0.47:
-   close to 0.5, but still `neg`.
+1. Five, one per leaf: 0.14, 0.21, 0.12, 0.70 and 0.67. Every person in the
+   same leaf gets the same probability, the share of training patients in that
+   leaf who had an event. Everyone up to 53.5 gets 0.14, whatever their blood
+   pressure.
+2. The logistic regression changes smoothly, and its `yes` region is
+   everything above a straight line. The tree's map is made of flat rectangles:
+   it says `yes` for anyone over 53.5 with a blood pressure over 135.5, and for
+   anyone over 71.5 with a blood pressure between 114.5 and 135.5.
 3. Models can agree on most classes and still give quite different
-   probabilities for a single patient. Accuracy only counts classes; it says
+   probabilities for a single person. Accuracy only counts classes; it says
    nothing about how good the probabilities are; the log loss in Exercise 4.5
-   scores the probabilities themselves.
-   With 150 test patients, a difference of four patients (76.0% against 73.3%)
-   is too small to pick a winner.
+   scores the probabilities themselves. With 100 test patients, a difference of
+   two people (83% against 81%) is far too small to pick a winner.
 :::
 :::
 
@@ -943,29 +932,31 @@ right.
 see that only the mode (R) or the estimator (Python) changes, and that the new
 thing is the output: a probability for each class as well as the class.
 Recipes and workflows are not used here; they were introduced on Day 2 and
-return on Day 5.
+return on Day 5. The data are simulated (`data/cvd_risk.csv`, see
+`data/PROVENANCE.txt`) so that both predictors matter and the outcome is not
+defined by either of them. The same
+data and split are used in Exercises 4.1 to 4.5.
 
-**Expected values.** 750 people, 600 training (220 pos, 36.7%), 150 test (53
-pos; majority baseline 0.647). Logistic on glucose: intercept −5.064, weight
-0.0350, identical in both languages; class changes at glucose 144.6. Patient
-(glucose 150): P(pos) 0.547, `pos`. Test: accuracy 0.760; 29 pos called neg, 7
-neg called pos. Logistic on glucose and BMI: −7.004, 0.0336, 0.0644; patient
-(150, BMI 30): 0.490, `neg`; boundary at glucose 151 for BMI 30, 122 for BMI
-45; accuracy 0.760. Tree, R (`tree_depth = 2, cost_complexity = 0`): glucose <
-154.5 → 0.25 neg (467 patients); else BMI < 27.75 → 0.47 neg (17), BMI ≥ 27.75
-→ 0.82 pos (116); accuracy 0.733; patient 0.25 `neg`. Tree, Python
-(`max_depth=2`): the same, plus BMI ≤ 27.35 in the low-glucose branch (0.07 vs
-0.31, both neg); accuracy 0.733; patient 0.31 `neg`. With `rpart` defaults the
-tree has a single split (glucose < 154.5); `DecisionTreeClassifier()` with
-defaults has 205 leaves and accuracy 0.64.
+**Expected values.** 500 people, 400 training (142 yes, 35.5%), 100 test (34
+yes; always `no` is right for 0.66). Logistic on age: intercept −5.638, weight
+0.0832, identical in both languages; class changes at age 67.7. Person aged 70:
+P(yes) 0.547, `yes`. Test: accuracy 0.81; 12 events called `no`, 7 non-events
+called `yes`. Logistic on age and blood pressure: −14.22, 0.1042, 0.0529; the
+70-year-old with 130 mmHg: 0.487, `no`; boundary at age 65 for 140 mmHg, 55
+for 160 mmHg; accuracy 0.83. Tree (R `decision_tree()` defaults; Python
+`max_leaf_nodes=5`, the identical tree): age < 53.5 → 0.14 (152); else BP <
+135.5 and age < 71.5 → 0.21 (90); age ≥ 71.5 and BP < 114.5 → 0.12 (8); age ≥
+71.5 and BP 114.5–135.5 → 0.70 (30); BP ≥ 135.5 → 0.67 (120); accuracy 0.81;
+the 70-year-old 0.21 `no`. `DecisionTreeClassifier()` with defaults: 149
+leaves, accuracy 0.66.
 
-**Common failures.** (1) In R, leaving the factor levels as `pos` then `neg`:
-`glm` then models the probability of `neg` and the coefficients change sign,
+**Common failures.** (1) In R, leaving the factor levels as `yes` then `no`:
+`glm` then models the probability of `no` and the coefficients change sign,
 though `predict()` still labels its columns correctly. (2) In Python,
-`train["glucose"]` instead of `train[["glucose"]]`, which gives a shape error.
-(3) Reading the first column of `predict_proba()` as the probability of
-diabetes; it is `neg`, the first entry of `classes_`. (4) Forgetting
-`C=np.inf`, which gives slightly smaller coefficients than R.
+`train["age"]` instead of `train[["age"]]`, which gives a shape error. (3)
+Reading the first column of `predict_proba()` as the probability of an event;
+it is `no`, the first entry of `classes_`. (4) Forgetting `C=np.inf`, which
+gives slightly smaller coefficients than R.
 
 **Timing.** Part 1 twenty minutes, Parts 2 and 3 fifteen minutes each.
 :::

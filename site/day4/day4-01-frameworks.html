@@ -235,7 +235,7 @@ window.Quarto = {
 </header>
 
 
-<p>In Exercise 3.1 you predicted a number, blood glucose. Now the outcome is a <strong>class</strong>: does this person have diabetes, <code>pos</code> or <code>neg</code>? The steps are exactly the same: <strong>specify</strong> a model, <strong>fit</strong> it on the training patients, and <strong>predict</strong> for new ones. Two things are new:</p>
+<p>In Exercise 3.1 you predicted a number, blood glucose. Now the outcome is a <strong>class</strong>: will this person have a heart attack or a stroke in the next ten years, <code>yes</code> or <code>no</code>? The steps are exactly the same: <strong>specify</strong> a model, <strong>fit</strong> it on the training patients, and <strong>predict</strong> for new ones. Two things are new:</p>
 <ul>
 <li>the specification says the model is for <strong>classification</strong>;</li>
 <li>the prediction can be a <strong>probability</strong> for each class, as well as the class itself.</li>
@@ -250,7 +250,7 @@ window.Quarto = {
 <tr class="header">
 <th></th>
 <th>Exercise 3.1: glucose, a number</th>
-<th>Exercise 4.1: diabetes, a class</th>
+<th>Exercise 4.1: an event, a class</th>
 </tr>
 </thead>
 <tbody>
@@ -277,9 +277,9 @@ window.Quarto = {
 </tbody>
 </table>
 <ul>
-<li><strong>Part 1.</strong> Predict diabetes from glucose with a logistic regression. Get the probability and the class for one patient, see the patient on the fitted curve, and compare the predictions with what was measured in the test patients.</li>
-<li><strong>Part 2.</strong> Add BMI and predict for the same patient again. See the probability as a map over glucose and BMI.</li>
-<li><strong>Part 3.</strong> Keep the same steps, training patients and predictors, and fit a decision tree instead. Follow the patient to a leaf, read the probability and the class there, and compare the tree’s map with the logistic regression’s.</li>
+<li><strong>Part 1.</strong> Predict an event from age with a logistic regression. Get the probability and the class for one person, see the patient on the fitted curve, and compare the predictions with what was measured in the test patients.</li>
+<li><strong>Part 2.</strong> Add blood pressure and predict for the same person again. See the probability as a map over age and blood pressure.</li>
+<li><strong>Part 3.</strong> Keep the same steps, training patients and predictors, and fit a decision tree instead. Follow the person to a leaf, read the probability and the class there, and compare the tree’s map with the logistic regression’s.</li>
 </ul>
 <div class="callout callout-style-simple callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -311,42 +311,41 @@ window.Quarto = {
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_bw</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p><code>data/diabetes_clean.csv</code> holds 750 adults screened for type 2 diabetes: eight measurements from a single visit, and <code>diabetes</code>, which is <code>pos</code> or <code>neg</code>. It is ready to use. We keep glucose, BMI (the column <code>mass</code>) and the outcome. If you do not have it yet, <a href="data/diabetes_clean.csv" download="diabetes_clean.csv"><strong>download <code>diabetes_clean.csv</code></strong></a> into your <code>data</code> folder.</p>
+<p><code>data/cvd_risk.csv</code> holds 500 adults aged 40 to 80 seen at a health check: their age, their systolic blood pressure in mmHg, and <code>cvd</code>, whether they had a cardiovascular event (a heart attack or a stroke) in the following ten years, <code>yes</code> or <code>no</code>. If you do not have it yet, <a href="data/cvd_risk.csv" download="cvd_risk.csv"><strong>download <code>cvd_risk.csv</code></strong></a> into your <code>data</code> folder.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/diabetes_clean.csv"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(glucose, mass, diabetes) <span class="sc">|&gt;</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">diabetes =</span> <span class="fu">factor</span>(diabetes, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"neg"</span>, <span class="st">"pos"</span>)))</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(diabetes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>cvd <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/cvd_risk.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">cvd =</span> <span class="fu">factor</span>(cvd, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"no"</span>, <span class="st">"yes"</span>)))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(cvd)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;     glucose           mass       diabetes 
-#&gt;  Min.   : 57.0   Min.   :18.20   neg:477  
-#&gt;  1st Qu.:101.0   1st Qu.:27.80   pos:273  
-#&gt;  Median :119.0   Median :32.80            
-#&gt;  Mean   :125.5   Mean   :32.89            
-#&gt;  3rd Qu.:145.0   3rd Qu.:37.00            
-#&gt;  Max.   :196.0   Max.   :59.40</code></pre>
+<pre><code>#&gt;       age         systolic_bp     cvd     
+#&gt;  Min.   :40.00   Min.   : 81.0   no :324  
+#&gt;  1st Qu.:49.00   1st Qu.:124.0   yes:176  
+#&gt;  Median :59.00   Median :135.5            
+#&gt;  Mean   :59.46   Mean   :135.8            
+#&gt;  3rd Qu.:69.00   3rd Qu.:147.2            
+#&gt;  Max.   :80.00   Max.   :189.0</code></pre>
 </div>
 </div>
-<p>The outcome is a factor with two levels, <code>neg</code> then <code>pos</code>. The probabilities are then about <code>pos</code>: having diabetes.</p>
-<p>We hold back every fifth person as the test set: 600 training patients and 150 test patients. Splitting by a fixed rule rather than at random gives both languages the same 150 people. Every Day 4 exercise uses this split.</p>
+<p>The outcome is a factor with two levels, <code>no</code> then <code>yes</code>. The probabilities are then about <code>yes</code>: having an event.</p>
+<p>We hold back every fifth person as the test set: 400 training patients and 100 test patients. Splitting by a fixed rule rather than at random gives both languages the same 100 people. Every Day 4 exercise uses this split.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(diabetes), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> diabetes[<span class="sc">-</span>test_rows, ]</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> diabetes[test_rows, ]</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(cvd), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> cvd[<span class="sc">-</span>test_rows, ]</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> cvd[test_rows, ]</span>
 <span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">count</span>(train, diabetes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">count</span>(train, cvd)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 2 × 2
-#&gt;   diabetes     n
-#&gt;   &lt;fct&gt;    &lt;int&gt;
-#&gt; 1 neg        380
-#&gt; 2 pos        220</code></pre>
+#&gt;   cvd       n
+#&gt;   &lt;fct&gt; &lt;int&gt;
+#&gt; 1 no      258
+#&gt; 2 yes     142</code></pre>
 </div>
 </div>
 </section>
-<section id="part-1-predict-diabetes-from-glucose" class="level3">
-<h3 class="anchored" data-anchor-id="part-1-predict-diabetes-from-glucose">Part 1 — Predict diabetes from glucose</h3>
+<section id="part-1-predict-an-event-from-age" class="level3">
+<h3 class="anchored" data-anchor-id="part-1-predict-an-event-from-age">Part 1 — Predict an event from age</h3>
 <p>The same three steps as in Exercise 3.1. The only change in the specification is the mode: classification instead of regression.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Specify: logistic regression, computed by glm(), for classification</span></span>
@@ -356,25 +355,25 @@ window.Quarto = {
 <span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Fit on the training patients</span></span>
 <span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>log_fit <span class="ot">&lt;-</span> log_model <span class="sc">|&gt;</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(diabetes <span class="sc">~</span> glucose, <span class="at">data =</span> train)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(cvd <span class="sc">~</span> age, <span class="at">data =</span> train)</span>
 <span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="co"># the learned parameters: intercept first, then the weight for glucose</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="co"># the learned parameters: intercept first, then the weight for age</span></span>
 <span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>log_fit<span class="sc">$</span>fit<span class="sc">$</span>coefficients</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; (Intercept)     glucose 
-#&gt; -5.06398801  0.03502657</code></pre>
+<pre><code>#&gt; (Intercept)         age 
+#&gt; -5.63801930  0.08321885</code></pre>
 </div>
 </div>
-<p>The two parameters are not on the glucose scale but on the <strong>log-odds</strong> scale. Exercise 4.2 shows how they turn into a probability. Here we let <code>predict()</code> do it.</p>
-<section id="task-1a-a-patient-with-a-glucose-of-150" class="level4">
-<h4 class="anchored" data-anchor-id="task-1a-a-patient-with-a-glucose-of-150">Task 1a — A patient with a glucose of 150</h4>
+<p>The two parameters are not on the probability scale but on the <strong>log-odds</strong> scale. Exercise 4.2 shows how they turn into a probability. Here we let <code>predict()</code> do it.</p>
+<section id="task-1a-a-70-year-old" class="level4">
+<h4 class="anchored" data-anchor-id="task-1a-a-70-year-old">Task 1a — A 70-year-old</h4>
 <p><code>predict()</code> gives the <strong>class</strong> by default. With <code>type = "prob"</code> it gives a <strong>probability</strong> for each class instead.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>patient <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">glucose =</span> <span class="dv">150</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>person <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">age =</span> <span class="dv">70</span>)</span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(log_fit, <span class="at">new_data =</span> patient, <span class="at">type =</span> <span class="st">"______"</span>)   <span class="co"># a probability for each class</span></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(log_fit, <span class="at">new_data =</span> patient)                     <span class="co"># the class</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(log_fit, <span class="at">new_data =</span> person, <span class="at">type =</span> <span class="st">"______"</span>)   <span class="co"># a probability for each class</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(log_fit, <span class="at">new_data =</span> person)                     <span class="co"># the class</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-2-contents" aria-controls="callout-2" aria-expanded="false" aria-label="Toggle callout">
@@ -392,23 +391,23 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>The class is the probability cut at 0.5: <code>pos</code> if <span class="math inline">\(\hat{P}(\text{pos}) &gt; 0.5\)</span>, <code>neg</code> otherwise. The red point is the patient, on the fitted curve:</p>
+<p>The class is the probability cut at 0.5: <code>yes</code> if <span class="math inline">\(\hat{P}(\text{yes}) &gt; 0.5\)</span>, <code>no</code> otherwise. The red point is the 70-year-old, on the fitted curve:</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>curve <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">glucose =</span> <span class="fu">seq</span>(<span class="dv">40</span>, <span class="dv">200</span>, <span class="at">by =</span> <span class="dv">1</span>))</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>curve<span class="sc">$</span>prob <span class="ot">&lt;-</span> <span class="fu">predict</span>(log_fit, <span class="at">new_data =</span> curve, <span class="at">type =</span> <span class="st">"prob"</span>)<span class="sc">$</span>.pred_pos</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>curve <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">age =</span> <span class="fu">seq</span>(<span class="dv">40</span>, <span class="dv">80</span>, <span class="at">by =</span> <span class="fl">0.5</span>))</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>curve<span class="sc">$</span>prob <span class="ot">&lt;-</span> <span class="fu">predict</span>(log_fit, <span class="at">new_data =</span> curve, <span class="at">type =</span> <span class="st">"prob"</span>)<span class="sc">$</span>.pred_yes</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>() <span class="sc">+</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="at">data =</span> train, <span class="fu">aes</span>(<span class="at">x =</span> glucose, <span class="at">y =</span> <span class="fu">as.numeric</span>(diabetes <span class="sc">==</span> <span class="st">"pos"</span>)),</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>              <span class="at">width =</span> <span class="dv">0</span>, <span class="at">height =</span> <span class="fl">0.03</span>, <span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">colour =</span> <span class="st">"steelblue"</span>) <span class="sc">+</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">data =</span> curve, <span class="fu">aes</span>(<span class="at">x =</span> glucose, <span class="at">y =</span> prob), <span class="at">colour =</span> <span class="st">"red"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="at">data =</span> train, <span class="fu">aes</span>(<span class="at">x =</span> age, <span class="at">y =</span> <span class="fu">as.numeric</span>(cvd <span class="sc">==</span> <span class="st">"yes"</span>)),</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>              <span class="at">width =</span> <span class="fl">0.3</span>, <span class="at">height =</span> <span class="fl">0.03</span>, <span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">colour =</span> <span class="st">"steelblue"</span>) <span class="sc">+</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">data =</span> curve, <span class="fu">aes</span>(<span class="at">x =</span> age, <span class="at">y =</span> prob), <span class="at">colour =</span> <span class="st">"red"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
 <span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.5</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">colour =</span> <span class="st">"grey40"</span>) <span class="sc">+</span></span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"point"</span>, <span class="at">x =</span> <span class="dv">150</span>,</span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>           <span class="at">y =</span> <span class="fu">predict</span>(log_fit, <span class="at">new_data =</span> patient, <span class="at">type =</span> <span class="st">"prob"</span>)<span class="sc">$</span>.pred_pos,</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"point"</span>, <span class="at">x =</span> <span class="dv">70</span>,</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>           <span class="at">y =</span> <span class="fu">predict</span>(log_fit, <span class="at">new_data =</span> person, <span class="at">type =</span> <span class="st">"prob"</span>)<span class="sc">$</span>.pred_yes,</span>
 <span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>           <span class="at">colour =</span> <span class="st">"red"</span>, <span class="at">size =</span> <span class="dv">4</span>) <span class="sc">+</span></span>
-<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Glucose (mg/dL)"</span>, <span class="at">y =</span> <span class="st">"Probability of diabetes"</span>,</span>
-<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"Training patients (0 = neg, 1 = pos), the fitted curve, and the patient"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Age (years)"</span>, <span class="at">y =</span> <span class="st">"Probability of an event"</span>,</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"Training patients (0 = no, 1 = yes), the fitted curve, and the 70-year-old"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
@@ -429,15 +428,15 @@ window.Quarto = {
 </div>
 <div class="callout-body-container callout-body">
 <ol type="1">
-<li>The model says <code>pos</code> for this patient. How sure is it?</li>
-<li>At about what glucose does the predicted class change from <code>neg</code> to <code>pos</code>?</li>
+<li>The model says <code>yes</code> for this person. How sure is it?</li>
+<li>At about what age does the predicted class change from <code>no</code> to <code>yes</code>?</li>
 </ol>
 </div>
 </div>
 </section>
-<section id="task-1b-predictions-against-what-was-measured" class="level4">
-<h4 class="anchored" data-anchor-id="task-1b-predictions-against-what-was-measured">Task 1b — Predictions against what was measured</h4>
-<p>The test patients were not used to fit the model. Predict both the probability and the class for each of them, and put them next to what was measured.</p>
+<section id="task-1b-predictions-against-what-happened" class="level4">
+<h4 class="anchored" data-anchor-id="task-1b-predictions-against-what-happened">Task 1b — Predictions against what happened</h4>
+<p>The test patients were not used to fit the model. Predict both the probability and the class for each of them, and put them next to what happened.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>test_results <span class="ot">&lt;-</span> test <span class="sc">|&gt;</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(<span class="fu">predict</span>(log_fit, <span class="at">new_data =</span> test, <span class="at">type =</span> <span class="st">"prob"</span>),</span>
@@ -446,25 +445,25 @@ window.Quarto = {
 <span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(test_results, <span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 10 × 6
-#&gt;    glucose  mass diabetes .pred_neg .pred_pos .pred_class
-#&gt;      &lt;dbl&gt; &lt;dbl&gt; &lt;fct&gt;        &lt;dbl&gt;     &lt;dbl&gt; &lt;fct&gt;      
-#&gt;  1     194  28.5 neg          0.150     0.850 pos        
-#&gt;  2     117  30.1 pos          0.724     0.276 neg        
-#&gt;  3     122  57.3 neg          0.688     0.312 neg        
-#&gt;  4     111  26.8 neg          0.764     0.236 neg        
-#&gt;  5     142  39.5 pos          0.523     0.477 neg        
-#&gt;  6     102  28.9 neg          0.816     0.184 neg        
-#&gt;  7     111  37.7 neg          0.764     0.236 neg        
-#&gt;  8     101  35.4 neg          0.821     0.179 neg        
-#&gt;  9     112  36.6 neg          0.758     0.242 neg        
-#&gt; 10     142  37.4 neg          0.523     0.477 neg</code></pre>
+#&gt;      age systolic_bp cvd   .pred_no .pred_yes .pred_class
+#&gt;    &lt;dbl&gt;       &lt;dbl&gt; &lt;fct&gt;    &lt;dbl&gt;     &lt;dbl&gt; &lt;fct&gt;      
+#&gt;  1    51         131 no       0.801     0.199 no         
+#&gt;  2    78         125 yes      0.299     0.701 yes        
+#&gt;  3    47         141 yes      0.849     0.151 no         
+#&gt;  4    63         146 yes      0.598     0.402 no         
+#&gt;  5    48         123 no       0.838     0.162 no         
+#&gt;  6    59         132 no       0.674     0.326 no         
+#&gt;  7    60         128 no       0.656     0.344 no         
+#&gt;  8    66         159 no       0.536     0.464 no         
+#&gt;  9    50         116 no       0.814     0.186 no         
+#&gt; 10    75         163 yes      0.354     0.646 yes</code></pre>
 </div>
 </div>
-<p>How often is the predicted class right? Compare it with a “model” that always says <code>neg</code>, the most common class.</p>
+<p>How often is the predicted class right? Compare it with a “model” that always says <code>no</code>, the most common class.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">mean</span>(test_results<span class="sc">$</span>.pred_class <span class="sc">==</span> test_results<span class="sc">$</span>______)   <span class="co"># accuracy of the model</span></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="fu">mean</span>(test_results<span class="sc">$</span>diabetes <span class="sc">==</span> <span class="st">"neg"</span>)                    <span class="co"># always saying neg</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="fu">mean</span>(test_results<span class="sc">$</span>cvd <span class="sc">==</span> <span class="st">"no"</span>)                          <span class="co"># always saying no</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-4-contents" aria-controls="callout-4" aria-expanded="false" aria-label="Toggle callout">
@@ -478,20 +477,20 @@ window.Quarto = {
 </div>
 <div id="callout-4" class="callout-4-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p>Compare the predicted class with the column that holds what was measured.</p>
+<p>Compare the predicted class with the column that holds what happened.</p>
 </div>
 </div>
 </div>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(test_results, <span class="fu">aes</span>(<span class="at">x =</span> glucose, <span class="at">y =</span> .pred_pos, <span class="at">colour =</span> diabetes)) <span class="sc">+</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(test_results, <span class="fu">aes</span>(<span class="at">x =</span> age, <span class="at">y =</span> .pred_yes, <span class="at">colour =</span> cvd)) <span class="sc">+</span></span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.5</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">colour =</span> <span class="st">"grey40"</span>) <span class="sc">+</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">2</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="at">neg =</span> <span class="st">"steelblue"</span>, <span class="at">pos =</span> <span class="st">"darkorange"</span>)) <span class="sc">+</span></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Glucose (mg/dL)"</span>, <span class="at">y =</span> <span class="st">"Predicted probability of diabetes"</span>,</span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">colour =</span> <span class="st">"Measured"</span>,</span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"Test patients: predicted probability, coloured by what was measured"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="at">width =</span> <span class="fl">0.3</span>, <span class="at">height =</span> <span class="dv">0</span>, <span class="at">size =</span> <span class="dv">2</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="at">no =</span> <span class="st">"steelblue"</span>, <span class="at">yes =</span> <span class="st">"darkorange"</span>)) <span class="sc">+</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Age (years)"</span>, <span class="at">y =</span> <span class="st">"Predicted probability of an event"</span>,</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">colour =</span> <span class="st">"What happened"</span>,</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"Test patients: predicted probability, coloured by what happened"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
@@ -519,27 +518,27 @@ window.Quarto = {
 </div>
 </section>
 </section>
-<section id="part-2-add-bmi" class="level3">
-<h3 class="anchored" data-anchor-id="part-2-add-bmi">Part 2 — Add BMI</h3>
+<section id="part-2-add-blood-pressure" class="level3">
+<h3 class="anchored" data-anchor-id="part-2-add-blood-pressure">Part 2 — Add blood pressure</h3>
 <p>The same specification, <code>log_model</code>, with a second predictor:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>log_fit_2 <span class="ot">&lt;-</span> log_model <span class="sc">|&gt;</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(diabetes <span class="sc">~</span> glucose <span class="sc">+</span> mass, <span class="at">data =</span> train)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(cvd <span class="sc">~</span> age <span class="sc">+</span> systolic_bp, <span class="at">data =</span> train)</span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>log_fit_2<span class="sc">$</span>fit<span class="sc">$</span>coefficients</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; (Intercept)     glucose        mass 
-#&gt; -7.00363758  0.03355403  0.06437328</code></pre>
+<pre><code>#&gt;  (Intercept)          age  systolic_bp 
+#&gt; -14.22258770   0.10415385   0.05291758</code></pre>
 </div>
 </div>
-<section id="task-2a-the-same-patient-now-with-a-bmi-of-30" class="level4">
-<h4 class="anchored" data-anchor-id="task-2a-the-same-patient-now-with-a-bmi-of-30">Task 2a — The same patient, now with a BMI of 30</h4>
+<section id="task-2a-the-same-person-now-with-a-blood-pressure-of-130" class="level4">
+<h4 class="anchored" data-anchor-id="task-2a-the-same-person-now-with-a-blood-pressure-of-130">Task 2a — The same person, now with a blood pressure of 130</h4>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>patient <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">glucose =</span> <span class="dv">150</span>, <span class="at">mass =</span> ______)</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>person <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">age =</span> <span class="dv">70</span>, <span class="at">systolic_bp =</span> ______)</span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(log_fit_2, <span class="at">new_data =</span> patient, <span class="at">type =</span> <span class="st">"______"</span>)</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(log_fit_2, <span class="at">new_data =</span> patient)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(log_fit_2, <span class="at">new_data =</span> person, <span class="at">type =</span> <span class="st">"______"</span>)</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(log_fit_2, <span class="at">new_data =</span> person)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-6-contents" aria-controls="callout-6" aria-expanded="false" aria-label="Toggle callout">
@@ -553,33 +552,33 @@ window.Quarto = {
 </div>
 <div id="callout-6" class="callout-6-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p>The patient now needs a value for both predictors. Ask for the probabilities exactly as in Task 1a.</p>
+<p>The person now needs a value for both predictors. Ask for the probabilities exactly as in Task 1a.</p>
 </div>
 </div>
 </div>
-<p>With two predictors, the probability is a <strong>map</strong> over glucose and BMI. The black line is where the probability is exactly 0.5: to its right the class is <code>pos</code>, to its left <code>neg</code>. Circles are test patients without diabetes, triangles test patients with it, and the red point is the patient.</p>
+<p>With two predictors, the probability is a <strong>map</strong> over age and blood pressure. The black line is where the probability is exactly 0.5: above it the class is <code>yes</code>, below it <code>no</code>. Circles are test patients without an event, triangles test patients with one, and the red point is the 70-year-old.</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># every combination of glucose and BMI on a fine grid</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>grid <span class="ot">&lt;-</span> <span class="fu">expand_grid</span>(<span class="at">glucose =</span> <span class="fu">seq</span>(<span class="dv">40</span>, <span class="dv">200</span>, <span class="at">by =</span> <span class="dv">1</span>),</span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>                    <span class="at">mass =</span> <span class="fu">seq</span>(<span class="dv">18</span>, <span class="dv">68</span>, <span class="at">by =</span> <span class="fl">0.5</span>))</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># every combination of age and blood pressure on a fine grid</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>grid <span class="ot">&lt;-</span> <span class="fu">expand_grid</span>(<span class="at">age =</span> <span class="fu">seq</span>(<span class="dv">40</span>, <span class="dv">80</span>, <span class="at">by =</span> <span class="fl">0.5</span>),</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>                    <span class="at">systolic_bp =</span> <span class="fu">seq</span>(<span class="dv">80</span>, <span class="dv">200</span>, <span class="at">by =</span> <span class="dv">1</span>))</span>
 <span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>prob_map <span class="ot">&lt;-</span> <span class="cf">function</span>(fit, title) {</span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  grid<span class="sc">$</span>prob <span class="ot">&lt;-</span> <span class="fu">predict</span>(fit, <span class="at">new_data =</span> grid, <span class="at">type =</span> <span class="st">"prob"</span>)<span class="sc">$</span>.pred_pos</span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(grid, <span class="fu">aes</span>(<span class="at">x =</span> glucose, <span class="at">y =</span> mass)) <span class="sc">+</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  grid<span class="sc">$</span>prob <span class="ot">&lt;-</span> <span class="fu">predict</span>(fit, <span class="at">new_data =</span> grid, <span class="at">type =</span> <span class="st">"prob"</span>)<span class="sc">$</span>.pred_yes</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(grid, <span class="fu">aes</span>(<span class="at">x =</span> age, <span class="at">y =</span> systolic_bp)) <span class="sc">+</span></span>
 <span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_raster</span>(<span class="fu">aes</span>(<span class="at">fill =</span> prob)) <span class="sc">+</span></span>
 <span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_contour</span>(<span class="fu">aes</span>(<span class="at">z =</span> prob), <span class="at">breaks =</span> <span class="fl">0.5</span>, <span class="at">colour =</span> <span class="st">"black"</span>, <span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
-<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_point</span>(<span class="at">data =</span> test, <span class="fu">aes</span>(<span class="at">shape =</span> diabetes), <span class="at">size =</span> <span class="fl">1.5</span>) <span class="sc">+</span></span>
-<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">annotate</span>(<span class="st">"point"</span>, <span class="at">x =</span> <span class="dv">150</span>, <span class="at">y =</span> <span class="dv">30</span>, <span class="at">colour =</span> <span class="st">"red"</span>, <span class="at">size =</span> <span class="dv">4</span>) <span class="sc">+</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_point</span>(<span class="at">data =</span> test, <span class="fu">aes</span>(<span class="at">shape =</span> cvd), <span class="at">size =</span> <span class="fl">1.5</span>) <span class="sc">+</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">annotate</span>(<span class="st">"point"</span>, <span class="at">x =</span> <span class="dv">70</span>, <span class="at">y =</span> <span class="dv">130</span>, <span class="at">colour =</span> <span class="st">"red"</span>, <span class="at">size =</span> <span class="dv">4</span>) <span class="sc">+</span></span>
 <span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_fill_gradient2</span>(<span class="at">low =</span> <span class="st">"steelblue"</span>, <span class="at">mid =</span> <span class="st">"white"</span>, <span class="at">high =</span> <span class="st">"darkorange"</span>,</span>
 <span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>                         <span class="at">midpoint =</span> <span class="fl">0.5</span>, <span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>)) <span class="sc">+</span></span>
-<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_shape_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="at">neg =</span> <span class="dv">1</span>, <span class="at">pos =</span> <span class="dv">17</span>)) <span class="sc">+</span></span>
-<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Glucose (mg/dL)"</span>, <span class="at">y =</span> <span class="st">"BMI (kg/m²)"</span>,</span>
-<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>         <span class="at">fill =</span> <span class="st">"Probability</span><span class="sc">\n</span><span class="st">of diabetes"</span>, <span class="at">shape =</span> <span class="st">"Test patients"</span>, <span class="at">title =</span> title)</span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_shape_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="at">no =</span> <span class="dv">1</span>, <span class="at">yes =</span> <span class="dv">17</span>)) <span class="sc">+</span></span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Age (years)"</span>, <span class="at">y =</span> <span class="st">"Systolic blood pressure (mmHg)"</span>,</span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>         <span class="at">fill =</span> <span class="st">"Probability</span><span class="sc">\n</span><span class="st">of an event"</span>, <span class="at">shape =</span> <span class="st">"Test patients"</span>, <span class="at">title =</span> title)</span>
 <span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a><span class="fu">prob_map</span>(log_fit_2, <span class="st">"Logistic regression: glucose and BMI"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a><span class="fu">prob_map</span>(log_fit_2, <span class="st">"Logistic regression: age and blood pressure"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
@@ -600,8 +599,8 @@ window.Quarto = {
 </div>
 <div class="callout-body-container callout-body">
 <ol type="1">
-<li>The line where the class changes is straight but tilted. What does the tilt tell you about BMI?</li>
-<li>Adding BMI moved this patient from 0.547 to 0.490, and the class from <code>pos</code> to <code>neg</code>. Did BMI change much about this patient’s prediction?</li>
+<li>The line where the class changes is straight but tilted. What does the tilt tell you?</li>
+<li>Adding blood pressure moved this person from 0.547 to 0.487, and the class from <code>yes</code> to <code>no</code>. Did it change much about this person’s prediction?</li>
 </ol>
 </div>
 </div>
@@ -611,14 +610,14 @@ window.Quarto = {
 <h3 class="anchored" data-anchor-id="part-3-the-same-steps-a-decision-tree">Part 3 — The same steps, a decision tree</h3>
 <p>Only the specification changes. The training patients, the predictors and the <code>fit()</code> and <code>predict()</code> calls stay the same.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Specify: a classification tree, computed by rpart, kept small</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>tree_model <span class="ot">&lt;-</span> <span class="fu">decision_tree</span>(<span class="at">tree_depth =</span> <span class="dv">2</span>, <span class="at">cost_complexity =</span> <span class="dv">0</span>) <span class="sc">|&gt;</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Specify: a classification tree, computed by rpart</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>tree_model <span class="ot">&lt;-</span> <span class="fu">decision_tree</span>() <span class="sc">|&gt;</span></span>
 <span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"rpart"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>)</span>
 <span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Fit on the same training patients, with the same predictors</span></span>
 <span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>tree_fit <span class="ot">&lt;-</span> tree_model <span class="sc">|&gt;</span></span>
-<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(diabetes <span class="sc">~</span> glucose <span class="sc">+</span> mass, <span class="at">data =</span> train)</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(cvd <span class="sc">~</span> age <span class="sc">+</span> systolic_bp, <span class="at">data =</span> train)</span>
 <span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a><span class="fu">rpart.plot</span>(tree_fit<span class="sc">$</span>fit, <span class="at">type =</span> <span class="dv">3</span>, <span class="at">extra =</span> <span class="dv">106</span>, <span class="at">fallen.leaves =</span> <span class="cn">TRUE</span>,</span>
 <span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>           <span class="at">box.palette =</span> <span class="st">"BuOr"</span>, <span class="at">roundint =</span> <span class="cn">FALSE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -630,33 +629,32 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p><code>tree_depth = 2</code> allows at most two questions in a row, and <code>cost_complexity = 0</code> stops <code>rpart</code> from cutting the second question away.</p>
-<p>Each box asks a yes/no question. <strong>Yes goes left, no goes right.</strong> Each leaf at the bottom shows three things: the predicted class, the probability of <code>pos</code> (the share of training patients in that leaf who have diabetes) and the percentage of all training patients who ended up there.</p>
-<section id="task-3a-follow-the-patient" class="level4">
-<h4 class="anchored" data-anchor-id="task-3a-follow-the-patient">Task 3a — Follow the patient</h4>
-<p>Start at the top with the patient with a glucose of 150 and a BMI of 30. At each question, go left or right. Which leaf do you reach? What probability and what class does it give?</p>
+<p>Each box asks a yes/no question. <strong>Yes goes left, no goes right.</strong> Each leaf at the bottom shows three things: the predicted class, the probability of <code>yes</code> (the share of training patients in that leaf who had an event) and the percentage of all training patients who ended up there.</p>
+<section id="task-3a-follow-the-person" class="level4">
+<h4 class="anchored" data-anchor-id="task-3a-follow-the-person">Task 3a — Follow the person</h4>
+<p>Start at the top with the 70-year-old with a blood pressure of 130. At each question, go left or right. Which leaf do you reach? What probability and what class does it give?</p>
 <p>Check it with <code>predict()</code>:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(tree_fit, <span class="at">new_data =</span> patient, <span class="at">type =</span> <span class="st">"prob"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(tree_fit, <span class="at">new_data =</span> person, <span class="at">type =</span> <span class="st">"prob"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 1 × 2
-#&gt;   .pred_neg .pred_pos
-#&gt;       &lt;dbl&gt;     &lt;dbl&gt;
-#&gt; 1     0.749     0.251</code></pre>
+#&gt;   .pred_no .pred_yes
+#&gt;      &lt;dbl&gt;     &lt;dbl&gt;
+#&gt; 1    0.789     0.211</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(tree_fit, <span class="at">new_data =</span> patient)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(tree_fit, <span class="at">new_data =</span> person)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 1 × 1
 #&gt;   .pred_class
 #&gt;   &lt;fct&gt;      
-#&gt; 1 neg</code></pre>
+#&gt; 1 no</code></pre>
 </div>
 </div>
 <p>The same map as for the logistic regression:</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">prob_map</span>(tree_fit, <span class="st">"Decision tree: glucose and BMI"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">prob_map</span>(tree_fit, <span class="st">"Decision tree: age and blood pressure"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
@@ -669,18 +667,18 @@ window.Quarto = {
 <p>How often is each model right on the test patients?</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="fu">data.frame</span>(</span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">model =</span> <span class="fu">c</span>(<span class="st">"logistic, glucose"</span>, <span class="st">"logistic, glucose + BMI"</span>, <span class="st">"tree, glucose + BMI"</span>,</span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>            <span class="st">"always says neg"</span>),</span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">accuracy =</span> <span class="fu">c</span>(<span class="fu">mean</span>(<span class="fu">predict</span>(log_fit,   <span class="at">new_data =</span> test)<span class="sc">$</span>.pred_class <span class="sc">==</span> test<span class="sc">$</span>diabetes),</span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>               <span class="fu">mean</span>(<span class="fu">predict</span>(log_fit_2, <span class="at">new_data =</span> test)<span class="sc">$</span>.pred_class <span class="sc">==</span> test<span class="sc">$</span>diabetes),</span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>               <span class="fu">mean</span>(<span class="fu">predict</span>(tree_fit,  <span class="at">new_data =</span> test)<span class="sc">$</span>.pred_class <span class="sc">==</span> test<span class="sc">$</span>diabetes),</span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>               <span class="fu">mean</span>(test<span class="sc">$</span>diabetes <span class="sc">==</span> <span class="st">"neg"</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">model =</span> <span class="fu">c</span>(<span class="st">"logistic, age"</span>, <span class="st">"logistic, age + BP"</span>, <span class="st">"tree, age + BP"</span>,</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>            <span class="st">"always says no"</span>),</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">accuracy =</span> <span class="fu">c</span>(<span class="fu">mean</span>(<span class="fu">predict</span>(log_fit,   <span class="at">new_data =</span> test)<span class="sc">$</span>.pred_class <span class="sc">==</span> test<span class="sc">$</span>cvd),</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>               <span class="fu">mean</span>(<span class="fu">predict</span>(log_fit_2, <span class="at">new_data =</span> test)<span class="sc">$</span>.pred_class <span class="sc">==</span> test<span class="sc">$</span>cvd),</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>               <span class="fu">mean</span>(<span class="fu">predict</span>(tree_fit,  <span class="at">new_data =</span> test)<span class="sc">$</span>.pred_class <span class="sc">==</span> test<span class="sc">$</span>cvd),</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>               <span class="fu">mean</span>(test<span class="sc">$</span>cvd <span class="sc">==</span> <span class="st">"no"</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;                     model  accuracy
-#&gt; 1       logistic, glucose 0.7600000
-#&gt; 2 logistic, glucose + BMI 0.7600000
-#&gt; 3     tree, glucose + BMI 0.7333333
-#&gt; 4         always says neg 0.6466667</code></pre>
+<pre><code>#&gt;                model accuracy
+#&gt; 1      logistic, age     0.81
+#&gt; 2 logistic, age + BP     0.83
+#&gt; 3     tree, age + BP     0.81
+#&gt; 4     always says no     0.66</code></pre>
 </div>
 </div>
 <div class="callout callout-style-simple callout-important callout-titled">
@@ -694,9 +692,9 @@ window.Quarto = {
 </div>
 <div class="callout-body-container callout-body">
 <ol type="1">
-<li>The logistic regression gives every patient their own probability. How many different probabilities can the tree give, and why?</li>
-<li>Compare the two maps. What shape is the region where each model says <code>pos</code>?</li>
-<li>The three models gave the patient 0.55, 0.49 and 0.25. Their accuracies on the test patients are close. What does that tell you?</li>
+<li>The logistic regression gives every person their own probability. How many different probabilities can the tree give, and why?</li>
+<li>Compare the two maps. What shape is the region where each model says <code>yes</code>?</li>
+<li>The three models gave the 70-year-old 0.55, 0.49 and 0.21. Their accuracies on the test patients are close. What does that tell you?</li>
 </ol>
 </div>
 </div>
@@ -737,48 +735,47 @@ window.Quarto = {
 <span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> LogisticRegression</span>
 <span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.tree <span class="im">import</span> DecisionTreeClassifier, plot_tree</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p><code>data/diabetes_clean.csv</code> holds 750 adults screened for type 2 diabetes: eight measurements from a single visit, and <code>diabetes</code>, which is <code>pos</code> or <code>neg</code>. It is ready to use. We keep glucose, BMI (the column <code>mass</code>) and the outcome. If you do not have it yet, <a href="data/diabetes_clean.csv" download="diabetes_clean.csv"><strong>download <code>diabetes_clean.csv</code></strong></a> into your <code>data</code> folder.</p>
+<p><code>data/cvd_risk.csv</code> holds 500 adults aged 40 to 80 seen at a health check: their age, their systolic blood pressure in mmHg, and <code>cvd</code>, whether they had a cardiovascular event (a heart attack or a stroke) in the following ten years, <code>yes</code> or <code>no</code>. If you do not have it yet, <a href="data/cvd_risk.csv" download="cvd_risk.csv"><strong>download <code>cvd_risk.csv</code></strong></a> into your <code>data</code> folder.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes_clean.csv"</span>)</span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes[[<span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"diabetes"</span>]]</span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>diabetes.describe()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>cvd <span class="op">=</span> pd.read_csv(<span class="st">"data/cvd_risk.csv"</span>)</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>cvd.describe()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;           glucose        mass
-#&gt; count  750.000000  750.000000
-#&gt; mean   125.496000   32.889467
-#&gt; std     31.405048    7.021630
-#&gt; min     57.000000   18.200000
-#&gt; 25%    101.000000   27.800000
-#&gt; 50%    119.000000   32.800000
-#&gt; 75%    145.000000   37.000000
-#&gt; max    196.000000   59.400000</code></pre>
+<pre><code>#&gt;              age  systolic_bp
+#&gt; count  500.00000   500.000000
+#&gt; mean    59.46400   135.752000
+#&gt; std     11.14887    18.066857
+#&gt; min     40.00000    81.000000
+#&gt; 25%     49.00000   124.000000
+#&gt; 50%     59.00000   135.500000
+#&gt; 75%     69.00000   147.250000
+#&gt; max     80.00000   189.000000</code></pre>
 </div>
 </div>
-<p>We hold back every fifth person as the test set: 600 training patients and 150 test patients. Splitting by a fixed rule rather than at random gives both languages the same 150 people, so this tab prints the same numbers as the R tab. Every Day 4 exercise uses this split.</p>
+<p>We hold back every fifth person as the test set: 400 training patients and 100 test patients. Splitting by a fixed rule rather than at random gives both languages the same 100 people, so this tab prints the same numbers as the R tab. Every Day 4 exercise uses this split.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> diabetes.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> diabetes[<span class="op">~</span>is_test]</span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>test  <span class="op">=</span> diabetes[is_test]</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> cvd.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> cvd[<span class="op">~</span>is_test]</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>test  <span class="op">=</span> cvd[is_test]</span>
 <span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>train[<span class="st">"diabetes"</span>].value_counts()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>train[<span class="st">"cvd"</span>].value_counts()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; diabetes
-#&gt; neg    380
-#&gt; pos    220
+<pre><code>#&gt; cvd
+#&gt; no     258
+#&gt; yes    142
 #&gt; Name: count, dtype: int64</code></pre>
 </div>
 </div>
 </section>
-<section id="part-1-predict-diabetes-from-glucose-1" class="level3">
-<h3 class="anchored" data-anchor-id="part-1-predict-diabetes-from-glucose-1">Part 1 — Predict diabetes from glucose</h3>
+<section id="part-1-predict-an-event-from-age-1" class="level3">
+<h3 class="anchored" data-anchor-id="part-1-predict-an-event-from-age-1">Part 1 — Predict an event from age</h3>
 <p>The same three steps as in Exercise 3.1. The class name says that this model is for classification: <code>LogisticRegression</code> here, where Day 3 had <code>LinearRegression</code>.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Specify: logistic regression</span></span>
 <span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>log_model <span class="op">=</span> LogisticRegression(C<span class="op">=</span>np.inf)</span>
 <span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Fit on the training patients: predictors (a table) and outcome</span></span>
-<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>log_model.fit(train[[<span class="st">"glucose"</span>]], train[<span class="st">"diabetes"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>log_model.fit(train[[<span class="st">"age"</span>]], train[<span class="st">"cvd"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <style>.sk-global {
   /* Definition of color scheme common for light and dark mode */
@@ -1781,7 +1778,7 @@ Does not have any effect.<br>
 <br>
 A list of class labels known to the classifier.</span></a></td>
 <td class="fitted-att-type">ndarray[object](2,)</td>
-<td>['neg','pos']</td>
+<td>['no','yes']</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LogisticRegression.html#:~:text=coef_,-ndarray%20or%20CSR%20matrix%20of%20shape%20%281%2C%20n_features%29%20or%20%28n_classes%2C%20n_features%29" class="param-doc-link" style="anchor-name: --doc-link-coef_;" rel="noreferrer" target="_blank">coef_ <span class="param-doc-description" style="position-anchor: --doc-link-coef_;"> coef_: ndarray or CSR matrix of shape (1, n_features) or (n_classes, n_features)<br>
@@ -1795,7 +1792,7 @@ sparse (CSR format) through :meth:`sparsify` (which can be beneficial<br>
 under L1 regularization when many coefficients are zero), and back to<br>
 dense through :meth:`densify`.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](1, 1)</td>
-<td>[[0.04]]</td>
+<td>[[0.08]]</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LogisticRegression.html#:~:text=feature_names_in_,-ndarray%20of%20shape%20%28n_features_in_%2C%29" class="param-doc-link" style="anchor-name: --doc-link-feature_names_in_;" rel="noreferrer" target="_blank">feature_names_in_ <span class="param-doc-description" style="position-anchor: --doc-link-feature_names_in_;"> feature_names_in_: ndarray of shape (`n_features_in_`,)<br>
@@ -1805,7 +1802,7 @@ has feature names that are all strings.<br>
 <br>
 .. versionadded:: 1.0</span></a></td>
 <td class="fitted-att-type">ndarray[object](1,)</td>
-<td>['glucose']</td>
+<td>['age']</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LogisticRegression.html#:~:text=intercept_,-ndarray%20of%20shape%20%281%2C%29%20or%20%28n_classes%2C%29" class="param-doc-link" style="anchor-name: --doc-link-intercept_;" rel="noreferrer" target="_blank">intercept_ <span class="param-doc-description" style="position-anchor: --doc-link-intercept_;"> intercept_: ndarray of shape (1,) or (n_classes,)<br>
@@ -1815,7 +1812,7 @@ Intercept (a.k.a. bias) added to the decision function.<br>
 If `fit_intercept` is set to False, the intercept is set to zero.<br>
 `intercept_` is of shape (1,) when the given problem is binary.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](1,)</td>
-<td>[-5.06]</td>
+<td>[-5.64]</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LogisticRegression.html#:~:text=n_features_in_,-int" class="param-doc-link" style="anchor-name: --doc-link-n_features_in_;" rel="noreferrer" target="_blank">n_features_in_ <span class="param-doc-description" style="position-anchor: --doc-link-n_features_in_;"> n_features_in_: int<br>
@@ -1836,7 +1833,7 @@ Actual number of iterations for all classes.<br>
 In SciPy &lt;= 1.0.0 the number of lbfgs iterations may exceed<br>
 ``max_iter``. ``n_iter_`` will now report at most ``max_iter``.</span></a></td>
 <td class="fitted-att-type">ndarray[int32](1,)</td>
-<td>[21]</td>
+<td>[19]</td>
 </tr>
 </tbody>
 </table>
@@ -2018,28 +2015,28 @@ forceTheme('sk-container-id-1');</script>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the classes, and the learned parameters</span></span>
 <span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"classes:"</span>, log_model.classes_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; classes: ['neg' 'pos']</code></pre>
+<pre><code>#&gt; classes: ['no' 'yes']</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"intercept:"</span>, log_model.intercept_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; intercept: [-5.0639797]</code></pre>
+<pre><code>#&gt; intercept: [-5.63802661]</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"weight for glucose:"</span>, log_model.coef_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"weight for age:"</span>, log_model.coef_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; weight for glucose: [[0.03502648]]</code></pre>
+<pre><code>#&gt; weight for age: [[0.08321897]]</code></pre>
 </div>
 </div>
 <p><code>C=np.inf</code> switches off a penalty that scikit-learn adds to logistic regression by default; without it the parameters would not match the ones in the R tab.</p>
-<p>The two parameters are not on the glucose scale but on the <strong>log-odds</strong> scale. Exercise 4.2 shows how they turn into a probability. Here we let scikit-learn do it.</p>
-<section id="task-1a-a-patient-with-a-glucose-of-150-1" class="level4">
-<h4 class="anchored" data-anchor-id="task-1a-a-patient-with-a-glucose-of-150-1">Task 1a — A patient with a glucose of 150</h4>
-<p><code>.predict()</code> gives the <strong>class</strong>. <code>.predict_proba()</code> gives a <strong>probability</strong> for each class instead, one column per class in the order of <code>classes_</code>: <code>neg</code> first, then <code>pos</code>.</p>
+<p>The two parameters are not on the probability scale but on the <strong>log-odds</strong> scale. Exercise 4.2 shows how they turn into a probability. Here we let scikit-learn do it.</p>
+<section id="task-1a-a-70-year-old-1" class="level4">
+<h4 class="anchored" data-anchor-id="task-1a-a-70-year-old-1">Task 1a — A 70-year-old</h4>
+<p><code>.predict()</code> gives the <strong>class</strong>. <code>.predict_proba()</code> gives a <strong>probability</strong> for each class instead, one column per class in the order of <code>classes_</code>: <code>no</code> first, then <code>yes</code>.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>patient <span class="op">=</span> pd.DataFrame({<span class="st">"glucose"</span>: [<span class="dv">150</span>]})</span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>person <span class="op">=</span> pd.DataFrame({<span class="st">"age"</span>: [<span class="dv">70</span>]})</span>
 <span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(log_model.______(patient))   <span class="co"># a probability for each class: neg, pos</span></span>
-<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(log_model.predict(patient))  <span class="co"># the class</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(log_model.______(person))   <span class="co"># a probability for each class: no, yes</span></span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(log_model.predict(person))  <span class="co"># the class</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-10-contents" aria-controls="callout-10" aria-expanded="false" aria-label="Toggle callout">
@@ -2057,24 +2054,25 @@ forceTheme('sk-container-id-1');</script>
 </div>
 </div>
 </div>
-<p>The class is the probability cut at 0.5: <code>pos</code> if <span class="math inline">\(\hat{P}(\text{pos}) &gt; 0.5\)</span>, <code>neg</code> otherwise. The red point is the patient, on the fitted curve:</p>
+<p>The class is the probability cut at 0.5: <code>yes</code> if <span class="math inline">\(\hat{P}(\text{yes}) &gt; 0.5\)</span>, <code>no</code> otherwise. The red point is the 70-year-old, on the fitted curve:</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>curve <span class="op">=</span> pd.DataFrame({<span class="st">"glucose"</span>: np.arange(<span class="dv">40</span>, <span class="dv">201</span>, <span class="dv">1</span>)})</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>curve <span class="op">=</span> pd.DataFrame({<span class="st">"age"</span>: np.arange(<span class="dv">40</span>, <span class="fl">80.5</span>, <span class="fl">0.5</span>)})</span>
 <span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>curve_prob <span class="op">=</span> log_model.predict_proba(curve)[:, <span class="dv">1</span>]</span>
-<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>jitter <span class="op">=</span> np.random.default_rng(<span class="dv">1</span>).uniform(<span class="op">-</span><span class="fl">0.03</span>, <span class="fl">0.03</span>, <span class="bu">len</span>(train))</span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>rng <span class="op">=</span> np.random.default_rng(<span class="dv">1</span>)</span>
 <span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
-<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a>ax.scatter(train[<span class="st">"glucose"</span>], (train[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"pos"</span>) <span class="op">+</span> jitter,</span>
-<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a>           alpha<span class="op">=</span><span class="fl">0.3</span>, color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
-<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a>ax.plot(curve[<span class="st">"glucose"</span>], curve_prob, color<span class="op">=</span><span class="st">"red"</span>, linewidth<span class="op">=</span><span class="dv">2</span>)</span>
-<span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a>ax.axhline(<span class="fl">0.5</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, color<span class="op">=</span><span class="st">"grey"</span>)</span>
-<span id="cb39-10"><a href="#cb39-10" aria-hidden="true" tabindex="-1"></a>ax.scatter([<span class="dv">150</span>], log_model.predict_proba(patient)[:, <span class="dv">1</span>], color<span class="op">=</span><span class="st">"red"</span>, s<span class="op">=</span><span class="dv">80</span>, zorder<span class="op">=</span><span class="dv">3</span>)</span>
-<span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Glucose (mg/dL)"</span>)</span>
-<span id="cb39-12"><a href="#cb39-12" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Probability of diabetes"</span>)</span>
-<span id="cb39-13"><a href="#cb39-13" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Training patients (0 = neg, 1 = pos), the fitted curve, and the patient"</span>)</span>
-<span id="cb39-14"><a href="#cb39-14" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a>ax.scatter(train[<span class="st">"age"</span>] <span class="op">+</span> rng.uniform(<span class="op">-</span><span class="fl">0.3</span>, <span class="fl">0.3</span>, <span class="bu">len</span>(train)),</span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a>           (train[<span class="st">"cvd"</span>] <span class="op">==</span> <span class="st">"yes"</span>) <span class="op">+</span> rng.uniform(<span class="op">-</span><span class="fl">0.03</span>, <span class="fl">0.03</span>, <span class="bu">len</span>(train)),</span>
+<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a>           alpha<span class="op">=</span><span class="fl">0.3</span>, color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
+<span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a>ax.plot(curve[<span class="st">"age"</span>], curve_prob, color<span class="op">=</span><span class="st">"red"</span>, linewidth<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb39-10"><a href="#cb39-10" aria-hidden="true" tabindex="-1"></a>ax.axhline(<span class="fl">0.5</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, color<span class="op">=</span><span class="st">"grey"</span>)</span>
+<span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a>ax.scatter([<span class="dv">70</span>], log_model.predict_proba(person)[:, <span class="dv">1</span>], color<span class="op">=</span><span class="st">"red"</span>, s<span class="op">=</span><span class="dv">80</span>, zorder<span class="op">=</span><span class="dv">3</span>)</span>
+<span id="cb39-12"><a href="#cb39-12" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Age (years)"</span>)</span>
+<span id="cb39-13"><a href="#cb39-13" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Probability of an event"</span>)</span>
+<span id="cb39-14"><a href="#cb39-14" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Training patients (0 = no, 1 = yes), the fitted curve, and the 70-year-old"</span>)</span>
+<span id="cb39-15"><a href="#cb39-15" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
@@ -2095,40 +2093,40 @@ forceTheme('sk-container-id-1');</script>
 </div>
 <div class="callout-body-container callout-body">
 <ol type="1">
-<li>The model says <code>pos</code> for this patient. How sure is it?</li>
-<li>At about what glucose does the predicted class change from <code>neg</code> to <code>pos</code>?</li>
+<li>The model says <code>yes</code> for this person. How sure is it?</li>
+<li>At about what age does the predicted class change from <code>no</code> to <code>yes</code>?</li>
 </ol>
 </div>
 </div>
 </section>
-<section id="task-1b-predictions-against-what-was-measured-1" class="level4">
-<h4 class="anchored" data-anchor-id="task-1b-predictions-against-what-was-measured-1">Task 1b — Predictions against what was measured</h4>
-<p>The test patients were not used to fit the model. Predict both the probability of <code>pos</code> and the class for each of them, and put them next to what was measured.</p>
+<section id="task-1b-predictions-against-what-happened-1" class="level4">
+<h4 class="anchored" data-anchor-id="task-1b-predictions-against-what-happened-1">Task 1b — Predictions against what happened</h4>
+<p>The test patients were not used to fit the model. Predict both the probability of <code>yes</code> and the class for each of them, and put them next to what happened.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>test_results <span class="op">=</span> test.copy()</span>
-<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>test_results[<span class="st">"prob_pos"</span>] <span class="op">=</span> log_model.predict_proba(test[[<span class="st">"glucose"</span>]])[:, <span class="dv">1</span>]</span>
-<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>test_results[<span class="st">"predicted"</span>] <span class="op">=</span> log_model.predict(test[[<span class="st">"glucose"</span>]])</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>test_results[<span class="st">"prob_yes"</span>] <span class="op">=</span> log_model.predict_proba(test[[<span class="st">"age"</span>]])[:, <span class="dv">1</span>]</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>test_results[<span class="st">"predicted"</span>] <span class="op">=</span> log_model.predict(test[[<span class="st">"age"</span>]])</span>
 <span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>test_results.head(<span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;     glucose  mass diabetes  prob_pos predicted
-#&gt; 0       194  28.5      neg  0.849561       pos
-#&gt; 5       117  30.1      pos  0.275702       neg
-#&gt; 10      122  57.3      neg  0.312008       neg
-#&gt; 15      111  26.8      neg  0.235765       neg
-#&gt; 20      142  39.5      pos  0.477461       neg
-#&gt; 25      102  28.9      neg  0.183730       neg
-#&gt; 30      111  37.7      neg  0.235765       neg
-#&gt; 35      101  35.4      neg  0.178535       neg
-#&gt; 40      112  36.6      neg  0.242134       neg
-#&gt; 45      142  37.4      neg  0.477461       neg</code></pre>
+<pre><code>#&gt;     age  systolic_bp  cvd  prob_yes predicted
+#&gt; 0    51          131   no  0.198792        no
+#&gt; 5    78          125  yes  0.701207       yes
+#&gt; 10   47          141  yes  0.151006        no
+#&gt; 15   63          146  yes  0.402459        no
+#&gt; 20   48          123   no  0.161987        no
+#&gt; 25   59          132   no  0.325610        no
+#&gt; 30   60          128   no  0.344142        no
+#&gt; 35   66          159   no  0.463671        no
+#&gt; 40   50          116   no  0.185869        no
+#&gt; 45   75          163  yes  0.646433       yes</code></pre>
 </div>
 </div>
-<p>How often is the predicted class right? Compare it with a “model” that always says <code>neg</code>, the most common class.</p>
+<p>How often is the predicted class right? Compare it with a “model” that always says <code>no</code>, the most common class.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>((test_results[<span class="st">"predicted"</span>] <span class="op">==</span> test_results[<span class="st">"______"</span>]).mean())   <span class="co"># accuracy of the model</span></span>
-<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>((test_results[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"neg"</span>).mean())                    <span class="co"># always saying neg</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>((test_results[<span class="st">"cvd"</span>] <span class="op">==</span> <span class="st">"no"</span>).mean())                          <span class="co"># always saying no</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-12-contents" aria-controls="callout-12" aria-expanded="false" aria-label="Toggle callout">
@@ -2142,7 +2140,7 @@ forceTheme('sk-container-id-1');</script>
 </div>
 <div id="callout-12" class="callout-12-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p>Compare the predicted class with the column that holds what was measured.</p>
+<p>Compare the predicted class with the column that holds what happened.</p>
 </div>
 </div>
 </div>
@@ -2151,14 +2149,15 @@ forceTheme('sk-container-id-1');</script>
 <summary>Code for this plot (optional)</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
 <span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>ax.axhline(<span class="fl">0.5</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, color<span class="op">=</span><span class="st">"grey"</span>)</span>
-<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> cls, colour <span class="kw">in</span> [(<span class="st">"neg"</span>, <span class="st">"steelblue"</span>), (<span class="st">"pos"</span>, <span class="st">"darkorange"</span>)]:</span>
-<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>    rows <span class="op">=</span> test_results[test_results[<span class="st">"diabetes"</span>] <span class="op">==</span> cls]</span>
-<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>    ax.scatter(rows[<span class="st">"glucose"</span>], rows[<span class="st">"prob_pos"</span>], color<span class="op">=</span>colour, alpha<span class="op">=</span><span class="fl">0.7</span>, label<span class="op">=</span>cls)</span>
-<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Glucose (mg/dL)"</span>)</span>
-<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Predicted probability of diabetes"</span>)</span>
-<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>ax.legend(title<span class="op">=</span><span class="st">"Measured"</span>)</span>
-<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Test patients: predicted probability, coloured by what was measured"</span>)</span>
-<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> cls, colour <span class="kw">in</span> [(<span class="st">"no"</span>, <span class="st">"steelblue"</span>), (<span class="st">"yes"</span>, <span class="st">"darkorange"</span>)]:</span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>    rows <span class="op">=</span> test_results[test_results[<span class="st">"cvd"</span>] <span class="op">==</span> cls]</span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>    ax.scatter(rows[<span class="st">"age"</span>] <span class="op">+</span> rng.uniform(<span class="op">-</span><span class="fl">0.3</span>, <span class="fl">0.3</span>, <span class="bu">len</span>(rows)), rows[<span class="st">"prob_yes"</span>],</span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>               color<span class="op">=</span>colour, alpha<span class="op">=</span><span class="fl">0.7</span>, label<span class="op">=</span>cls)</span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Age (years)"</span>)</span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Predicted probability of an event"</span>)</span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a>ax.legend(title<span class="op">=</span><span class="st">"What happened"</span>)</span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Test patients: predicted probability, coloured by what happened"</span>)</span>
+<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
@@ -2186,12 +2185,12 @@ forceTheme('sk-container-id-1');</script>
 </div>
 </section>
 </section>
-<section id="part-2-add-bmi-1" class="level3">
-<h3 class="anchored" data-anchor-id="part-2-add-bmi-1">Part 2 — Add BMI</h3>
+<section id="part-2-add-blood-pressure-1" class="level3">
+<h3 class="anchored" data-anchor-id="part-2-add-blood-pressure-1">Part 2 — Add blood pressure</h3>
 <p>The same kind of model, with a second predictor:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>log_model_2 <span class="op">=</span> LogisticRegression(C<span class="op">=</span>np.inf)</span>
-<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>log_model_2.fit(train[[<span class="st">"glucose"</span>, <span class="st">"mass"</span>]], train[<span class="st">"diabetes"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>log_model_2.fit(train[[<span class="st">"age"</span>, <span class="st">"systolic_bp"</span>]], train[<span class="st">"cvd"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <style>.sk-global {
   /* Definition of color scheme common for light and dark mode */
@@ -3194,7 +3193,7 @@ Does not have any effect.<br>
 <br>
 A list of class labels known to the classifier.</span></a></td>
 <td class="fitted-att-type">ndarray[object](2,)</td>
-<td>['neg','pos']</td>
+<td>['no','yes']</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LogisticRegression.html#:~:text=coef_,-ndarray%20or%20CSR%20matrix%20of%20shape%20%281%2C%20n_features%29%20or%20%28n_classes%2C%20n_features%29" class="param-doc-link" style="anchor-name: --doc-link-coef_;" rel="noreferrer" target="_blank">coef_ <span class="param-doc-description" style="position-anchor: --doc-link-coef_;"> coef_: ndarray or CSR matrix of shape (1, n_features) or (n_classes, n_features)<br>
@@ -3208,7 +3207,7 @@ sparse (CSR format) through :meth:`sparsify` (which can be beneficial<br>
 under L1 regularization when many coefficients are zero), and back to<br>
 dense through :meth:`densify`.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](1, 2)</td>
-<td>[[0.03,0.06]]</td>
+<td>[[0.1 ,0.05]]</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LogisticRegression.html#:~:text=feature_names_in_,-ndarray%20of%20shape%20%28n_features_in_%2C%29" class="param-doc-link" style="anchor-name: --doc-link-feature_names_in_;" rel="noreferrer" target="_blank">feature_names_in_ <span class="param-doc-description" style="position-anchor: --doc-link-feature_names_in_;"> feature_names_in_: ndarray of shape (`n_features_in_`,)<br>
@@ -3218,7 +3217,7 @@ has feature names that are all strings.<br>
 <br>
 .. versionadded:: 1.0</span></a></td>
 <td class="fitted-att-type">ndarray[object](2,)</td>
-<td>['glucose','mass']</td>
+<td>['age','systolic_bp']</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LogisticRegression.html#:~:text=intercept_,-ndarray%20of%20shape%20%281%2C%29%20or%20%28n_classes%2C%29" class="param-doc-link" style="anchor-name: --doc-link-intercept_;" rel="noreferrer" target="_blank">intercept_ <span class="param-doc-description" style="position-anchor: --doc-link-intercept_;"> intercept_: ndarray of shape (1,) or (n_classes,)<br>
@@ -3228,7 +3227,7 @@ Intercept (a.k.a. bias) added to the decision function.<br>
 If `fit_intercept` is set to False, the intercept is set to zero.<br>
 `intercept_` is of shape (1,) when the given problem is binary.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](1,)</td>
-<td>[-7.]</td>
+<td>[-14.22]</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LogisticRegression.html#:~:text=n_features_in_,-int" class="param-doc-link" style="anchor-name: --doc-link-n_features_in_;" rel="noreferrer" target="_blank">n_features_in_ <span class="param-doc-description" style="position-anchor: --doc-link-n_features_in_;"> n_features_in_: int<br>
@@ -3249,7 +3248,7 @@ Actual number of iterations for all classes.<br>
 In SciPy &lt;= 1.0.0 the number of lbfgs iterations may exceed<br>
 ``max_iter``. ``n_iter_`` will now report at most ``max_iter``.</span></a></td>
 <td class="fitted-att-type">ndarray[int32](1,)</td>
-<td>[29]</td>
+<td>[31]</td>
 </tr>
 </tbody>
 </table>
@@ -3430,21 +3429,21 @@ forceTheme('sk-container-id-2');</script>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"intercept:"</span>, log_model_2.intercept_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; intercept: [-7.00363719]</code></pre>
+<pre><code>#&gt; intercept: [-14.22259756]</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"weights (glucose, mass):"</span>, log_model_2.coef_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"weights (age, systolic_bp):"</span>, log_model_2.coef_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; weights (glucose, mass): [[0.03355403 0.06437328]]</code></pre>
+<pre><code>#&gt; weights (age, systolic_bp): [[0.1041545  0.05291738]]</code></pre>
 </div>
 </div>
-<section id="task-2a-the-same-patient-now-with-a-bmi-of-30-1" class="level4">
-<h4 class="anchored" data-anchor-id="task-2a-the-same-patient-now-with-a-bmi-of-30-1">Task 2a — The same patient, now with a BMI of 30</h4>
+<section id="task-2a-the-same-person-now-with-a-blood-pressure-of-130-1" class="level4">
+<h4 class="anchored" data-anchor-id="task-2a-the-same-person-now-with-a-blood-pressure-of-130-1">Task 2a — The same person, now with a blood pressure of 130</h4>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>patient <span class="op">=</span> pd.DataFrame({<span class="st">"glucose"</span>: [<span class="dv">150</span>], <span class="st">"mass"</span>: [______]})</span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>person <span class="op">=</span> pd.DataFrame({<span class="st">"age"</span>: [<span class="dv">70</span>], <span class="st">"systolic_bp"</span>: [______]})</span>
 <span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(log_model_2.______(patient))</span>
-<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(log_model_2.predict(patient))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(log_model_2.______(person))</span>
+<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(log_model_2.predict(person))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-14-contents" aria-controls="callout-14" aria-expanded="false" aria-label="Toggle callout">
@@ -3458,40 +3457,40 @@ forceTheme('sk-container-id-2');</script>
 </div>
 <div id="callout-14" class="callout-14-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p>The patient now needs a value for both predictors. Ask for the probabilities exactly as in Task 1a.</p>
+<p>The person now needs a value for both predictors. Ask for the probabilities exactly as in Task 1a.</p>
 </div>
 </div>
 </div>
-<p>With two predictors, the probability is a <strong>map</strong> over glucose and BMI. The black line is where the probability is exactly 0.5: to its right the class is <code>pos</code>, to its left <code>neg</code>. Circles are test patients without diabetes, triangles test patients with it, and the red point is the patient.</p>
+<p>With two predictors, the probability is a <strong>map</strong> over age and blood pressure. The black line is where the probability is exactly 0.5: above it the class is <code>yes</code>, below it <code>no</code>. Circles are test patients without an event, triangles test patients with one, and the red point is the 70-year-old.</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb50"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.colors <span class="im">import</span> LinearSegmentedColormap</span>
 <span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a><span class="co"># every combination of glucose and BMI on a fine grid</span></span>
-<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>G, M <span class="op">=</span> np.meshgrid(np.arange(<span class="dv">40</span>, <span class="dv">201</span>, <span class="dv">1</span>), np.arange(<span class="dv">18</span>, <span class="fl">68.5</span>, <span class="fl">0.5</span>))</span>
-<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>grid <span class="op">=</span> pd.DataFrame({<span class="st">"glucose"</span>: G.ravel(), <span class="st">"mass"</span>: M.ravel()})</span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a><span class="co"># every combination of age and blood pressure on a fine grid</span></span>
+<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>A, S <span class="op">=</span> np.meshgrid(np.arange(<span class="dv">40</span>, <span class="fl">80.5</span>, <span class="fl">0.5</span>), np.arange(<span class="dv">80</span>, <span class="dv">201</span>, <span class="dv">1</span>))</span>
+<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>grid <span class="op">=</span> pd.DataFrame({<span class="st">"age"</span>: A.ravel(), <span class="st">"systolic_bp"</span>: S.ravel()})</span>
 <span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a>blue_orange <span class="op">=</span> LinearSegmentedColormap.from_list(<span class="st">"bo"</span>, [<span class="st">"steelblue"</span>, <span class="st">"white"</span>, <span class="st">"darkorange"</span>])</span>
 <span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> prob_map(model, title):</span>
-<span id="cb50-9"><a href="#cb50-9" aria-hidden="true" tabindex="-1"></a>    prob <span class="op">=</span> model.predict_proba(grid)[:, <span class="dv">1</span>].reshape(G.shape)</span>
+<span id="cb50-9"><a href="#cb50-9" aria-hidden="true" tabindex="-1"></a>    prob <span class="op">=</span> model.predict_proba(grid)[:, <span class="dv">1</span>].reshape(A.shape)</span>
 <span id="cb50-10"><a href="#cb50-10" aria-hidden="true" tabindex="-1"></a>    fig, ax <span class="op">=</span> plt.subplots()</span>
-<span id="cb50-11"><a href="#cb50-11" aria-hidden="true" tabindex="-1"></a>    im <span class="op">=</span> ax.pcolormesh(G, M, prob, cmap<span class="op">=</span>blue_orange, vmin<span class="op">=</span><span class="dv">0</span>, vmax<span class="op">=</span><span class="dv">1</span>, shading<span class="op">=</span><span class="st">"auto"</span>)</span>
-<span id="cb50-12"><a href="#cb50-12" aria-hidden="true" tabindex="-1"></a>    ax.contour(G, M, prob, levels<span class="op">=</span>[<span class="fl">0.5</span>], colors<span class="op">=</span><span class="st">"black"</span>)</span>
-<span id="cb50-13"><a href="#cb50-13" aria-hidden="true" tabindex="-1"></a>    neg, pos <span class="op">=</span> test[test[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"neg"</span>], test[test[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"pos"</span>]</span>
-<span id="cb50-14"><a href="#cb50-14" aria-hidden="true" tabindex="-1"></a>    ax.scatter(neg[<span class="st">"glucose"</span>], neg[<span class="st">"mass"</span>], marker<span class="op">=</span><span class="st">"o"</span>, facecolors<span class="op">=</span><span class="st">"none"</span>,</span>
-<span id="cb50-15"><a href="#cb50-15" aria-hidden="true" tabindex="-1"></a>               edgecolors<span class="op">=</span><span class="st">"black"</span>, s<span class="op">=</span><span class="dv">20</span>, label<span class="op">=</span><span class="st">"test: neg"</span>)</span>
-<span id="cb50-16"><a href="#cb50-16" aria-hidden="true" tabindex="-1"></a>    ax.scatter(pos[<span class="st">"glucose"</span>], pos[<span class="st">"mass"</span>], marker<span class="op">=</span><span class="st">"^"</span>, color<span class="op">=</span><span class="st">"black"</span>, s<span class="op">=</span><span class="dv">20</span>,</span>
-<span id="cb50-17"><a href="#cb50-17" aria-hidden="true" tabindex="-1"></a>               label<span class="op">=</span><span class="st">"test: pos"</span>)</span>
-<span id="cb50-18"><a href="#cb50-18" aria-hidden="true" tabindex="-1"></a>    ax.scatter([<span class="dv">150</span>], [<span class="dv">30</span>], color<span class="op">=</span><span class="st">"red"</span>, s<span class="op">=</span><span class="dv">80</span>, zorder<span class="op">=</span><span class="dv">3</span>, label<span class="op">=</span><span class="st">"patient"</span>)</span>
-<span id="cb50-19"><a href="#cb50-19" aria-hidden="true" tabindex="-1"></a>    fig.colorbar(im, ax<span class="op">=</span>ax, label<span class="op">=</span><span class="st">"Probability of diabetes"</span>)</span>
-<span id="cb50-20"><a href="#cb50-20" aria-hidden="true" tabindex="-1"></a>    ax.set_xlabel(<span class="st">"Glucose (mg/dL)"</span>)</span>
-<span id="cb50-21"><a href="#cb50-21" aria-hidden="true" tabindex="-1"></a>    ax.set_ylabel(<span class="st">"BMI (kg/m²)"</span>)</span>
+<span id="cb50-11"><a href="#cb50-11" aria-hidden="true" tabindex="-1"></a>    im <span class="op">=</span> ax.pcolormesh(A, S, prob, cmap<span class="op">=</span>blue_orange, vmin<span class="op">=</span><span class="dv">0</span>, vmax<span class="op">=</span><span class="dv">1</span>, shading<span class="op">=</span><span class="st">"auto"</span>)</span>
+<span id="cb50-12"><a href="#cb50-12" aria-hidden="true" tabindex="-1"></a>    ax.contour(A, S, prob, levels<span class="op">=</span>[<span class="fl">0.5</span>], colors<span class="op">=</span><span class="st">"black"</span>)</span>
+<span id="cb50-13"><a href="#cb50-13" aria-hidden="true" tabindex="-1"></a>    no, yes <span class="op">=</span> test[test[<span class="st">"cvd"</span>] <span class="op">==</span> <span class="st">"no"</span>], test[test[<span class="st">"cvd"</span>] <span class="op">==</span> <span class="st">"yes"</span>]</span>
+<span id="cb50-14"><a href="#cb50-14" aria-hidden="true" tabindex="-1"></a>    ax.scatter(no[<span class="st">"age"</span>], no[<span class="st">"systolic_bp"</span>], marker<span class="op">=</span><span class="st">"o"</span>, facecolors<span class="op">=</span><span class="st">"none"</span>,</span>
+<span id="cb50-15"><a href="#cb50-15" aria-hidden="true" tabindex="-1"></a>               edgecolors<span class="op">=</span><span class="st">"black"</span>, s<span class="op">=</span><span class="dv">20</span>, label<span class="op">=</span><span class="st">"test: no"</span>)</span>
+<span id="cb50-16"><a href="#cb50-16" aria-hidden="true" tabindex="-1"></a>    ax.scatter(yes[<span class="st">"age"</span>], yes[<span class="st">"systolic_bp"</span>], marker<span class="op">=</span><span class="st">"^"</span>, color<span class="op">=</span><span class="st">"black"</span>, s<span class="op">=</span><span class="dv">20</span>,</span>
+<span id="cb50-17"><a href="#cb50-17" aria-hidden="true" tabindex="-1"></a>               label<span class="op">=</span><span class="st">"test: yes"</span>)</span>
+<span id="cb50-18"><a href="#cb50-18" aria-hidden="true" tabindex="-1"></a>    ax.scatter([<span class="dv">70</span>], [<span class="dv">130</span>], color<span class="op">=</span><span class="st">"red"</span>, s<span class="op">=</span><span class="dv">80</span>, zorder<span class="op">=</span><span class="dv">3</span>, label<span class="op">=</span><span class="st">"70-year-old"</span>)</span>
+<span id="cb50-19"><a href="#cb50-19" aria-hidden="true" tabindex="-1"></a>    fig.colorbar(im, ax<span class="op">=</span>ax, label<span class="op">=</span><span class="st">"Probability of an event"</span>)</span>
+<span id="cb50-20"><a href="#cb50-20" aria-hidden="true" tabindex="-1"></a>    ax.set_xlabel(<span class="st">"Age (years)"</span>)</span>
+<span id="cb50-21"><a href="#cb50-21" aria-hidden="true" tabindex="-1"></a>    ax.set_ylabel(<span class="st">"Systolic blood pressure (mmHg)"</span>)</span>
 <span id="cb50-22"><a href="#cb50-22" aria-hidden="true" tabindex="-1"></a>    ax.set_title(title)</span>
-<span id="cb50-23"><a href="#cb50-23" aria-hidden="true" tabindex="-1"></a>    ax.legend(loc<span class="op">=</span><span class="st">"upper left"</span>, fontsize<span class="op">=</span><span class="dv">8</span>)</span>
+<span id="cb50-23"><a href="#cb50-23" aria-hidden="true" tabindex="-1"></a>    ax.legend(loc<span class="op">=</span><span class="st">"lower left"</span>, fontsize<span class="op">=</span><span class="dv">8</span>)</span>
 <span id="cb50-24"><a href="#cb50-24" aria-hidden="true" tabindex="-1"></a>    plt.show()</span>
 <span id="cb50-25"><a href="#cb50-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb50-26"><a href="#cb50-26" aria-hidden="true" tabindex="-1"></a>prob_map(log_model_2, <span class="st">"Logistic regression: glucose and BMI"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb50-26"><a href="#cb50-26" aria-hidden="true" tabindex="-1"></a>prob_map(log_model_2, <span class="st">"Logistic regression: age and blood pressure"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
@@ -3512,8 +3511,8 @@ forceTheme('sk-container-id-2');</script>
 </div>
 <div class="callout-body-container callout-body">
 <ol type="1">
-<li>The line where the class changes is straight but tilted. What does the tilt tell you about BMI?</li>
-<li>Adding BMI moved this patient from 0.547 to 0.490, and the class from <code>pos</code> to <code>neg</code>. Did BMI change much about this patient’s prediction?</li>
+<li>The line where the class changes is straight but tilted. What does the tilt tell you?</li>
+<li>Adding blood pressure moved this person from 0.547 to 0.487, and the class from <code>yes</code> to <code>no</code>. Did it change much about this person’s prediction?</li>
 </ol>
 </div>
 </div>
@@ -3523,11 +3522,11 @@ forceTheme('sk-container-id-2');</script>
 <h3 class="anchored" data-anchor-id="part-3-the-same-steps-a-decision-tree-1">Part 3 — The same steps, a decision tree</h3>
 <p>Only the specification changes. The training patients, the predictors and the <code>.fit()</code>, <code>.predict()</code> and <code>.predict_proba()</code> calls stay the same.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Specify: a classification tree, kept small</span></span>
-<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>tree_model <span class="op">=</span> DecisionTreeClassifier(max_depth<span class="op">=</span><span class="dv">2</span>, random_state<span class="op">=</span><span class="dv">0</span>)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Specify: a classification tree with at most five leaves</span></span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>tree_model <span class="op">=</span> DecisionTreeClassifier(max_leaf_nodes<span class="op">=</span><span class="dv">5</span>, random_state<span class="op">=</span><span class="dv">0</span>)</span>
 <span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Fit on the same training patients, with the same predictors</span></span>
-<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a>tree_model.fit(train[[<span class="st">"glucose"</span>, <span class="st">"mass"</span>]], train[<span class="st">"diabetes"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a>tree_model.fit(train[[<span class="st">"age"</span>, <span class="st">"systolic_bp"</span>]], train[<span class="st">"cvd"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <style>.sk-global {
   /* Definition of color scheme common for light and dark mode */
@@ -4234,7 +4233,7 @@ a.param-doc-link::before {
   justify-content: center;
   margin-top: 0.5em;
 }
-</style><div id="sk-container-id-3" tabindex="0" class="sk-top-container sk-global"><div class="sk-text-repr-fallback"><pre>DecisionTreeClassifier(max_depth=2, random_state=0)</pre><b>In a Jupyter environment, please rerun this cell to show the HTML representation or trust the notebook. <br>On GitHub, the HTML representation is unable to render, please try loading this page with nbviewer.org.</b></div><div class="sk-container" hidden=""><div class="sk-item"><div class="sk-estimator fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually sk-global" id="sk-estimator-id-3" type="checkbox" checked=""><label for="sk-estimator-id-3" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>DecisionTreeClassifier</div></div><div><a class="sk-estimator-doc-link fitted" rel="noreferrer" target="_blank" href="https://scikit-learn.org/1.9/modules/generated/sklearn.tree.DecisionTreeClassifier.html">?<span>Documentation for DecisionTreeClassifier</span></a><span class="sk-estimator-doc-link fitted">i<span>Fitted</span></span></div></label><div class="sk-toggleable__content fitted" data-param-prefix="">
+</style><div id="sk-container-id-3" tabindex="0" class="sk-top-container sk-global"><div class="sk-text-repr-fallback"><pre>DecisionTreeClassifier(max_leaf_nodes=5, random_state=0)</pre><b>In a Jupyter environment, please rerun this cell to show the HTML representation or trust the notebook. <br>On GitHub, the HTML representation is unable to render, please try loading this page with nbviewer.org.</b></div><div class="sk-container" hidden=""><div class="sk-item"><div class="sk-estimator fitted sk-toggleable"><input class="sk-toggleable__control sk-hidden--visually sk-global" id="sk-estimator-id-3" type="checkbox" checked=""><label for="sk-estimator-id-3" class="sk-toggleable__label fitted sk-toggleable__label-arrow"><div><div>DecisionTreeClassifier</div></div><div><a class="sk-estimator-doc-link fitted" rel="noreferrer" target="_blank" href="https://scikit-learn.org/1.9/modules/generated/sklearn.tree.DecisionTreeClassifier.html">?<span>Documentation for DecisionTreeClassifier</span></a><span class="sk-estimator-doc-link fitted">i<span>Fitted</span></span></div></label><div class="sk-toggleable__content fitted" data-param-prefix="">
         <div class="estimator-table">
             <details>
                 <summary>Parameters</summary>
@@ -4247,17 +4246,6 @@ a.param-doc-link::before {
 </colgroup>
 <tbody>
 <tr class="user-set odd">
-<td><button type="button" class="copy-paste-icon" aria-label="Copy max_depth to clipboard" onclick="copyToClipboard('max_depth',
-                          this.parentElement.nextElementSibling)">
-</button></td>
-<td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.tree.DecisionTreeClassifier.html#:~:text=max_depth,-int%2C%20default%3DNone" class="param-doc-link" style="anchor-name: --doc-link-max_depth;" rel="noreferrer" target="_blank">max_depth <span class="param-doc-description" style="position-anchor: --doc-link-max_depth;"> max_depth: int, default=None<br>
-<br>
-The maximum depth of the tree. If None, then nodes are expanded until<br>
-all leaves are pure or until all leaves contain less than<br>
-min_samples_split samples.</span></a></td>
-<td class="value">2</td>
-</tr>
-<tr class="user-set even">
 <td><button type="button" class="copy-paste-icon" aria-label="Copy random_state to clipboard" onclick="copyToClipboard('random_state',
                           this.parentElement.nextElementSibling)">
 </button></td>
@@ -4274,6 +4262,17 @@ split has to be selected at random. To obtain a deterministic behaviour<br>
 during fitting, ``random_state`` has to be fixed to an integer.<br>
 See :term:`Glossary &lt;random_state&gt;` for details.</span></a></td>
 <td class="value">0</td>
+</tr>
+<tr class="user-set even">
+<td><button type="button" class="copy-paste-icon" aria-label="Copy max_leaf_nodes to clipboard" onclick="copyToClipboard('max_leaf_nodes',
+                          this.parentElement.nextElementSibling)">
+</button></td>
+<td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.tree.DecisionTreeClassifier.html#:~:text=max_leaf_nodes,-int%2C%20default%3DNone" class="param-doc-link" style="anchor-name: --doc-link-max_leaf_nodes;" rel="noreferrer" target="_blank">max_leaf_nodes <span class="param-doc-description" style="position-anchor: --doc-link-max_leaf_nodes;"> max_leaf_nodes: int, default=None<br>
+<br>
+Grow a tree with ``max_leaf_nodes`` in best-first fashion.<br>
+Best nodes are defined as relative reduction in impurity.<br>
+If None then unlimited number of leaf nodes.</span></a></td>
+<td class="value">5</td>
 </tr>
 <tr class="default odd">
 <td><button type="button" class="copy-paste-icon" aria-label="Copy criterion to clipboard" onclick="copyToClipboard('criterion',
@@ -4298,6 +4297,17 @@ the best random split among considered features for this split.</span></a></td>
 <td class="value">'best'</td>
 </tr>
 <tr class="default odd">
+<td><button type="button" class="copy-paste-icon" aria-label="Copy max_depth to clipboard" onclick="copyToClipboard('max_depth',
+                          this.parentElement.nextElementSibling)">
+</button></td>
+<td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.tree.DecisionTreeClassifier.html#:~:text=max_depth,-int%2C%20default%3DNone" class="param-doc-link" style="anchor-name: --doc-link-max_depth;" rel="noreferrer" target="_blank">max_depth <span class="param-doc-description" style="position-anchor: --doc-link-max_depth;"> max_depth: int, default=None<br>
+<br>
+The maximum depth of the tree. If None, then nodes are expanded until<br>
+all leaves are pure or until all leaves contain less than<br>
+min_samples_split samples.</span></a></td>
+<td class="value">None</td>
+</tr>
+<tr class="default even">
 <td><button type="button" class="copy-paste-icon" aria-label="Copy min_samples_split to clipboard" onclick="copyToClipboard('min_samples_split',
                           this.parentElement.nextElementSibling)">
 </button></td>
@@ -4314,7 +4324,7 @@ number of samples for each split.<br>
 Added float values for fractions.</span></a></td>
 <td class="value">2</td>
 </tr>
-<tr class="default even">
+<tr class="default odd">
 <td><button type="button" class="copy-paste-icon" aria-label="Copy min_samples_leaf to clipboard" onclick="copyToClipboard('min_samples_leaf',
                           this.parentElement.nextElementSibling)">
 </button></td>
@@ -4335,7 +4345,7 @@ number of samples for each node.<br>
 Added float values for fractions.</span></a></td>
 <td class="value">1</td>
 </tr>
-<tr class="default odd">
+<tr class="default even">
 <td><button type="button" class="copy-paste-icon" aria-label="Copy min_weight_fraction_leaf to clipboard" onclick="copyToClipboard('min_weight_fraction_leaf',
                           this.parentElement.nextElementSibling)">
 </button></td>
@@ -4346,7 +4356,7 @@ the input samples) required to be at a leaf node. Samples have<br>
 equal weight when sample_weight is not provided.</span></a></td>
 <td class="value">0.0</td>
 </tr>
-<tr class="default even">
+<tr class="default odd">
 <td><button type="button" class="copy-paste-icon" aria-label="Copy max_features to clipboard" onclick="copyToClipboard('max_features',
                           this.parentElement.nextElementSibling)">
 </button></td>
@@ -4364,17 +4374,6 @@ each split.<br>
 <br>
 Note: splitting may inspect more than ``max_features`` features if<br>
 needed to find a valid split.</span></a></td>
-<td class="value">None</td>
-</tr>
-<tr class="default odd">
-<td><button type="button" class="copy-paste-icon" aria-label="Copy max_leaf_nodes to clipboard" onclick="copyToClipboard('max_leaf_nodes',
-                          this.parentElement.nextElementSibling)">
-</button></td>
-<td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.tree.DecisionTreeClassifier.html#:~:text=max_leaf_nodes,-int%2C%20default%3DNone" class="param-doc-link" style="anchor-name: --doc-link-max_leaf_nodes;" rel="noreferrer" target="_blank">max_leaf_nodes <span class="param-doc-description" style="position-anchor: --doc-link-max_leaf_nodes;"> max_leaf_nodes: int, default=None<br>
-<br>
-Grow a tree with ``max_leaf_nodes`` in best-first fashion.<br>
-Best nodes are defined as relative reduction in impurity.<br>
-If None then unlimited number of leaf nodes.</span></a></td>
 <td class="value">None</td>
 </tr>
 <tr class="default even">
@@ -4496,7 +4495,7 @@ Read more in the :ref:`User Guide &lt;monotonic_cst_gbdt&gt;`.<br>
 The classes labels (single output problem),<br>
 or a list of arrays of class labels (multi-output problem).</span></a></td>
 <td class="fitted-att-type">ndarray[object](2,)</td>
-<td>['neg','pos']</td>
+<td>['no','yes']</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.tree.DecisionTreeClassifier.html#:~:text=feature_importances_,-ndarray%20of%20shape%20%28n_features%2C%29" class="param-doc-link" style="anchor-name: --doc-link-feature_importances_;" rel="noreferrer" target="_blank">feature_importances_ <span class="param-doc-description" style="position-anchor: --doc-link-feature_importances_;"> feature_importances_: ndarray of shape (n_features,)<br>
@@ -4511,7 +4510,7 @@ Warning: impurity-based feature importances can be misleading for<br>
 high cardinality features (many unique values). See<br>
 :func:`sklearn.inspection.permutation_importance` as an alternative.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](2,)</td>
-<td>[0.81,0.19]</td>
+<td>[0.61,0.39]</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.tree.DecisionTreeClassifier.html#:~:text=feature_names_in_,-ndarray%20of%20shape%20%28n_features_in_%2C%29" class="param-doc-link" style="anchor-name: --doc-link-feature_names_in_;" rel="noreferrer" target="_blank">feature_names_in_ <span class="param-doc-description" style="position-anchor: --doc-link-feature_names_in_;"> feature_names_in_: ndarray of shape (`n_features_in_`,)<br>
@@ -4521,7 +4520,7 @@ has feature names that are all strings.<br>
 <br>
 .. versionadded:: 1.0</span></a></td>
 <td class="fitted-att-type">ndarray[object](2,)</td>
-<td>['glucose','mass']</td>
+<td>['age','systolic_bp']</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.tree.DecisionTreeClassifier.html#:~:text=max_features_,-int" class="param-doc-link" style="anchor-name: --doc-link-max_features_;" rel="noreferrer" target="_blank">max_features_ <span class="param-doc-description" style="position-anchor: --doc-link-max_features_;"> max_features_: int<br>
@@ -4563,7 +4562,7 @@ The underlying Tree object. Please refer to<br>
 :ref:`sphx_glr_auto_examples_tree_plot_unveil_tree_structure.py`<br>
 for basic usage of these attributes.</span></a></td>
 <td class="fitted-att-type">Tree</td>
-<td>&lt;sklearn.tree...t 0x3143c23a0&gt;</td>
+<td>&lt;sklearn.tree...t 0x308b485e0&gt;</td>
 </tr>
 </tbody>
 </table>
@@ -4742,52 +4741,39 @@ function forceTheme(elementId) {
 
 forceTheme('sk-container-id-3');</script>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb52"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">10</span>, <span class="dv">5</span>))</span>
-<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a>plot_tree(tree_model, feature_names<span class="op">=</span>[<span class="st">"glucose"</span>, <span class="st">"mass"</span>], class_names<span class="op">=</span>[<span class="st">"neg"</span>, <span class="st">"pos"</span>],</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb52"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">11</span>, <span class="dv">6</span>))</span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a>plot_tree(tree_model, feature_names<span class="op">=</span>[<span class="st">"age"</span>, <span class="st">"systolic_bp"</span>], class_names<span class="op">=</span>[<span class="st">"no"</span>, <span class="st">"yes"</span>],</span>
 <span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>          filled<span class="op">=</span><span class="va">False</span>, impurity<span class="op">=</span><span class="va">False</span>, proportion<span class="op">=</span><span class="va">True</span>, precision<span class="op">=</span><span class="dv">2</span>, ax<span class="op">=</span>ax)</span>
 <span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day4-01-frameworks_files/figure-html/unnamed-chunk-38-7.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="960"></p>
+<p><img src="day4-01-frameworks_files/figure-html/unnamed-chunk-38-7.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1056"></p>
 </figure>
 </div>
 </div>
 </div>
-<p><code>max_depth=2</code> allows at most two questions in a row. Without it the tree keeps splitting until every leaf holds patients of one class only: 205 leaves, which fit the training patients almost one by one and are right for only 64% of the test patients.</p>
-<p>Each box asks a yes/no question. <strong>True goes left, False goes right.</strong> In each leaf at the bottom, <code>samples</code> is the percentage of all training patients who ended up there, <code>value</code> gives the share of them in each class (<code>neg</code>, <code>pos</code>), and <code>class</code> is the predicted class. The share of <code>pos</code> is the leaf’s probability of diabetes.</p>
-<section id="task-3a-follow-the-patient-1" class="level4">
-<h4 class="anchored" data-anchor-id="task-3a-follow-the-patient-1">Task 3a — Follow the patient</h4>
-<p>Start at the top with the patient with a glucose of 150 and a BMI of 30. At each question, go left or right. Which leaf do you reach? What probability and what class does it give?</p>
+<p><code>max_leaf_nodes=5</code> allows at most five leaves, which gives the same tree as the R tab. Without it the tree keeps splitting until every leaf holds people of one class only: 149 leaves, which fit the training patients almost one by one and are right for only 66% of the test patients, no better than always saying <code>no</code>.</p>
+<p>Each box asks a yes/no question. <strong>True goes left, False goes right.</strong> In each leaf at the bottom, <code>samples</code> is the percentage of all training patients who ended up there, <code>value</code> gives the share of them in each class (<code>no</code>, <code>yes</code>), and <code>class</code> is the predicted class. The share of <code>yes</code> is the leaf’s probability of an event.</p>
+<section id="task-3a-follow-the-person-1" class="level4">
+<h4 class="anchored" data-anchor-id="task-3a-follow-the-person-1">Task 3a — Follow the person</h4>
+<p>Start at the top with the 70-year-old with a blood pressure of 130. At each question, go left or right. Which leaf do you reach? What probability and what class does it give?</p>
 <p>Check it with <code>.predict_proba()</code> and <code>.predict()</code>:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(tree_model.predict_proba(patient))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(tree_model.predict_proba(person))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; [[0.69295775 0.30704225]]</code></pre>
+<pre><code>#&gt; [[0.78888889 0.21111111]]</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(tree_model.predict(patient))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(tree_model.predict(person))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; ['neg']</code></pre>
-</div>
-</div>
-<div class="callout callout-style-simple callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>Why the R tab’s tree is smaller
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>The R tab fits the same training patients and gets three leaves, not four: it does not ask about BMI for patients with a glucose up to 154.5. <code>rpart</code> keeps a question only if it changes the predicted class of some patients, and here both answers still say <code>neg</code>. scikit-learn keeps any question that makes the leaves purer: it separates patients with a low BMI (7% have diabetes) from the rest (31%). The probabilities change; the classes do not.</p>
+<pre><code>#&gt; ['no']</code></pre>
 </div>
 </div>
 <p>The same map as for the logistic regression:</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb57"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a>prob_map(tree_model, <span class="st">"Decision tree: glucose and BMI"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb57"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a>prob_map(tree_model, <span class="st">"Decision tree: age and blood pressure"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
@@ -4800,21 +4786,21 @@ forceTheme('sk-container-id-3');</script>
 <p>How often is each model right on the test patients?</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb58"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a>pd.DataFrame({</span>
-<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"model"</span>: [<span class="st">"logistic, glucose"</span>, <span class="st">"logistic, glucose + BMI"</span>, <span class="st">"tree, glucose + BMI"</span>,</span>
-<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>              <span class="st">"always says neg"</span>],</span>
-<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"accuracy"</span>: [log_model.score(test[[<span class="st">"glucose"</span>]], test[<span class="st">"diabetes"</span>]),</span>
-<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a>                 log_model_2.score(test[[<span class="st">"glucose"</span>, <span class="st">"mass"</span>]], test[<span class="st">"diabetes"</span>]),</span>
-<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a>                 tree_model.score(test[[<span class="st">"glucose"</span>, <span class="st">"mass"</span>]], test[<span class="st">"diabetes"</span>]),</span>
-<span id="cb58-7"><a href="#cb58-7" aria-hidden="true" tabindex="-1"></a>                 (test[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"neg"</span>).mean()]})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"model"</span>: [<span class="st">"logistic, age"</span>, <span class="st">"logistic, age + BP"</span>, <span class="st">"tree, age + BP"</span>,</span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>              <span class="st">"always says no"</span>],</span>
+<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"accuracy"</span>: [log_model.score(test[[<span class="st">"age"</span>]], test[<span class="st">"cvd"</span>]),</span>
+<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a>                 log_model_2.score(test[[<span class="st">"age"</span>, <span class="st">"systolic_bp"</span>]], test[<span class="st">"cvd"</span>]),</span>
+<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a>                 tree_model.score(test[[<span class="st">"age"</span>, <span class="st">"systolic_bp"</span>]], test[<span class="st">"cvd"</span>]),</span>
+<span id="cb58-7"><a href="#cb58-7" aria-hidden="true" tabindex="-1"></a>                 (test[<span class="st">"cvd"</span>] <span class="op">==</span> <span class="st">"no"</span>).mean()]})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;                      model  accuracy
-#&gt; 0        logistic, glucose  0.760000
-#&gt; 1  logistic, glucose + BMI  0.760000
-#&gt; 2      tree, glucose + BMI  0.733333
-#&gt; 3          always says neg  0.646667</code></pre>
+<pre><code>#&gt;                 model  accuracy
+#&gt; 0       logistic, age      0.81
+#&gt; 1  logistic, age + BP      0.83
+#&gt; 2      tree, age + BP      0.81
+#&gt; 3      always says no      0.66</code></pre>
 </div>
 </div>
-<p><code>.score()</code> is the accuracy: the share of patients whose predicted class is right.</p>
+<p><code>.score()</code> is the accuracy: the share of people whose predicted class is right.</p>
 <div class="callout callout-style-simple callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -4826,9 +4812,9 @@ forceTheme('sk-container-id-3');</script>
 </div>
 <div class="callout-body-container callout-body">
 <ol type="1">
-<li>The logistic regression gives every patient their own probability. How many different probabilities can the tree give, and why?</li>
-<li>Compare the two maps. What shape is the region where each model says <code>pos</code>?</li>
-<li>The three models gave the patient 0.55, 0.49 and 0.31. Their accuracies on the test patients are close. What does that tell you?</li>
+<li>The logistic regression gives every person their own probability. How many different probabilities can the tree give, and why?</li>
+<li>Compare the two maps. What shape is the region where each model says <code>yes</code>?</li>
+<li>The three models gave the 70-year-old 0.55, 0.49 and 0.21. Their accuracies on the test patients are close. What does that tell you?</li>
 </ol>
 </div>
 </div>

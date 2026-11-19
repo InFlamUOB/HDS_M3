@@ -8,14 +8,14 @@ engine: knitr
 
 In Exercise 3.4 you fitted a linear regression yourself: start with both
 coefficients at 0, measure which way is downhill on the MSE, take a step,
-repeat. How does `glm()` or `LogisticRegression()` find −5.064 and 0.0350 for
-the glucose model of Exercise 4.1? The same way, with one change: a different
+repeat. How does `glm()` or `LogisticRegression()` find −5.638 and 0.0832 for
+the age model of Exercise 4.1? The same way, with one change: a different
 **loss**.
 
 - **Part 1.** The log loss: what one patient costs the model, and why it is
   not the MSE.
 - **Part 2.** Gradient descent on the log loss, with the code from Exercise
-  3.4. On raw glucose it does not finish; standardise, and it lands on the same
+  3.4. On raw age it does not finish; standardise, and it lands on the same
   coefficients as `glm()` and `LogisticRegression()`.
 
 ::: {.callout-note appearance="simple"}
@@ -50,18 +50,17 @@ theme_set(theme_bw())
 ```
 
 The same 750 people and the same split as in Exercise 4.1. For the loss we need
-the outcome as a number: 1 for `pos`, 0 for `neg`.
+the outcome as a number: 1 for `yes`, 0 for `no`.
 
 ```{r}
-diabetes <- read_csv("data/diabetes_clean.csv") |>
-  select(glucose, diabetes) |>
-  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+cvd <- read_csv("data/cvd_risk.csv") |>
+  mutate(cvd = factor(cvd, levels = c("no", "yes")))
 
-test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
-train <- diabetes[-test_rows, ]
+test_rows <- seq(1, nrow(cvd), by = 5)     # every fifth person is held back
+train <- cvd[-test_rows, ]
 
-x <- train$glucose                         # the predictor
-y <- as.numeric(train$diabetes == "pos")   # the outcome: 1 = pos, 0 = neg
+x <- train$age                        # the predictor
+y <- as.numeric(train$cvd == "yes")   # the outcome: 1 = yes, 0 = no
 ```
 
 The answer to compare with, from `glm()`:
@@ -70,17 +69,17 @@ The answer to compare with, from `glm()`:
 glm_fit <- logistic_reg() |>
   set_engine("glm") |>
   set_mode("classification") |>
-  fit(diabetes ~ glucose, data = train)
+  fit(cvd ~ age, data = train)
 
 glm_fit$fit$coefficients
 ```
 
 ### Part 1 — The log loss
 
-A logistic regression predicts a probability $p$ of diabetes for each patient.
+A logistic regression predicts a probability $p$ of an event for each person.
 How much should a patient cost the model?
 
-- If the patient **has** diabetes ($y = 1$), the model should have given a high
+- If the person **had** an event ($y = 1$), the model should have given a high
   $p$. The loss is $-\log(p)$.
 - If the patient does **not** ($y = 0$), it should have given a low $p$. The
   loss is $-\log(1 - p)$.
@@ -93,7 +92,7 @@ $$\text{log loss} = -\frac{1}{n}\sum_{i=1}^{n} \Big[\, y_i \log(p_i) + (1 - y_i)
 For each patient only one of the two terms is switched on: $y_i$ or $1 - y_i$
 is 0.
 
-For a patient with diabetes, here is what the log loss and the squared error
+For a person who had an event, here is what the log loss and the squared error
 $(1 - p)^2$ charge for four predictions:
 
 ```{r}
@@ -111,14 +110,14 @@ data.frame(p = seq(0.005, 0.995, by = 0.005)) |>
   ggplot(aes(x = p, y = cost, colour = loss)) +
   geom_line(linewidth = 1) +
   scale_colour_manual(values = c("log loss" = "red", "squared error" = "grey40")) +
-  labs(x = "Predicted probability of diabetes, for a patient who has diabetes",
+  labs(x = "Predicted probability of an event, for a person who had one",
        y = "What the patient costs", colour = NULL)
 ```
 
 ::: {.callout-note appearance="simple"}
 ## Why not the MSE?
 The squared error of a probability can never be more than 1, however wrong the
-model is: a confident 0.01 for a patient with diabetes costs 0.98, hardly more
+model is: a confident 0.01 for a person who had an event costs 0.98, hardly more
 than an unsure 0.1 (0.81). The log loss charges 4.6 for the first and 2.3 for
 the second, so confident mistakes are what the model works hardest to avoid.
 And once the probability goes through the S-curve, the MSE over the two
@@ -130,8 +129,8 @@ what `glm()` does.
 #### Task 1a — The log loss of a model
 
 Complete the function, then use it on two models: `glm()`'s, and a model that
-gives every patient the same probability, the 36.7% of training patients who
-have diabetes.
+gives every patient the same probability, the 35.5% of training patients who
+had an event.
 
 ```{r}
 #| eval: false
@@ -140,7 +139,7 @@ log_loss <- function(y, p) {
   -mean(y * log(p) + (1 - y) * log(______))
 }
 
-p_glm <- predict(glm_fit, new_data = train, type = "prob")$.pred_pos
+p_glm <- predict(glm_fit, new_data = train, type = "prob")$.pred_yes
 p_same <- rep(mean(y), length(y))
 
 c(glm = log_loss(y, p_glm), same_for_everyone = log_loss(y, p_same))
@@ -148,8 +147,8 @@ c(glm = log_loss(y, p_glm), same_for_everyone = log_loss(y, p_same))
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-For a patient without diabetes the loss is the log of the probability of
-**not** having diabetes.
+For a person without an event the loss is the log of the probability of
+**not** having one.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
@@ -160,14 +159,14 @@ log_loss <- function(y, p) {
   -mean(y * log(p) + (1 - y) * log(1 - p))
 }
 
-p_glm <- predict(glm_fit, new_data = train, type = "prob")$.pred_pos
+p_glm <- predict(glm_fit, new_data = train, type = "prob")$.pred_yes
 p_same <- rep(mean(y), length(y))
 
 c(glm = log_loss(y, p_glm), same_for_everyone = log_loss(y, p_same))
 ```
 
-`glm()`'s model has a log loss of 0.541 on the training patients; giving
-everyone 36.7% has 0.657. Glucose lowers the loss, and no other pair of
+`glm()`'s model has a log loss of 0.565 on the training patients; giving
+everyone 35.5% has 0.650. Age lowers the loss, and no other pair of
 coefficients lowers it further: `glm()` found the bottom.
 :::
 :::
@@ -208,7 +207,7 @@ descend_log_loss <- function(x, y, alpha, n) {
   list(b0 = b0, b1 = b1, loss = loss)
 }
 
-raw <- descend_log_loss(x, y, alpha = 1e-4, n = 1000)
+raw <- descend_log_loss(x, y, alpha = 1e-3, n = 1000)
 c(intercept = raw$b0, slope = raw$b1, log_loss = tail(raw$loss, 1))
 ```
 
@@ -234,29 +233,29 @@ descend_log_loss <- function(x, y, alpha, n) {
   list(b0 = b0, b1 = b1, loss = loss)
 }
 
-raw <- descend_log_loss(x, y, alpha = 1e-4, n = 1000)
+raw <- descend_log_loss(x, y, alpha = 1e-3, n = 1000)
 c(intercept = raw$b0, slope = raw$b1, log_loss = tail(raw$loss, 1))
 ```
 :::
 :::
 
-After a thousand iterations the descent reports an intercept of −0.006 and a
-slope of −0.002, with a log loss of 0.682. `glm()` gives −5.064 and 0.0350,
-with a log loss of 0.541. The slope even has the wrong sign.
+After a thousand iterations the descent reports an intercept of −0.040 and a
+slope of −0.007, with a log loss of 0.669. `glm()` gives −5.638 and 0.0832,
+with a log loss of 0.565. The slope even has the wrong sign.
 
 **The same problem as in Exercise 3.4.** Both coefficients start at 0, which
 gives every patient a probability of 0.5. The quickest way to lower the loss
-from there is to bring everyone's probability down towards 37%. The derivative
-for the slope is multiplied by glucose, about 126 on average, so the slope
-reacts more than 100 times faster than the intercept and is pushed below 0 to
+from there is to bring everyone's probability down towards 36%. The derivative
+for the slope is multiplied by age, about 59 on average, so the slope
+reacts about 60 times faster than the intercept and is pushed below 0 to
 do that job. The learning rate must be small enough for the slope not to
-overshoot, and at that rate the intercept crawls towards −5: after 100,000
-iterations it has reached only −0.57. Make the learning rate ten times larger
-($10^{-3}$) and the loss goes up instead of down.
+overshoot, and at that rate the intercept crawls towards −5.6: after 100,000
+iterations it has reached only −2.8. Make the learning rate ten times larger
+($10^{-2}$) and the loss goes up instead of down.
 
 #### Task 2b — Standardise, descend, convert back
 
-The fix is the one from Exercise 3.4: standardise glucose, descend, and convert
+The fix is the one from Exercise 3.4: standardise age, descend, and convert
 the coefficients back. Only the predictor is standardised; the outcome is 0 or
 1 and stays as it is.
 
@@ -282,14 +281,14 @@ deviation.
 
 ::: {.callout-tip collapse="true"}
 ## How the conversion back works
-On the standardised scale glucose is measured in standard deviations (SDs). The
-descent finds a slope of 1.111: one SD more glucose adds 1.111 to the log-odds.
-One SD of glucose is 31.7 mg/dL, so one mg/dL adds 1.111 / 31.7 = 0.0350. That
+On the standardised scale age is measured in standard deviations (SDs). The
+descent finds a slope of 0.941: one SD more age adds 0.941 to the log-odds.
+One SD of age is 11.3 years, so one year adds 0.941 / 11.3 = 0.0832. That
 is the line `slope <- std$b1 / sd(x)`.
 
-The standardised intercept, −0.653, is the log-odds of a patient with the
-average glucose, 125.9 mg/dL. To get the log-odds at a glucose of 0, go back
-125.9 mg/dL along the slope: −0.653 − 0.0350 × 125.9 = −5.06. That is the
+The standardised intercept, −0.716, is the log-odds of a person of the
+average age, 59.1 years. To get the log-odds at an age of 0, go back 59.1
+years along the slope: −0.716 − 0.0832 × 59.1 = −5.63. That is the
 line `intercept <- std$b0 - slope * mean(x)`.
 :::
 
@@ -308,8 +307,8 @@ c(intercept = intercept, slope = slope)
 glm_fit$fit$coefficients    # the answer to compare with
 ```
 
-A hundred iterations, with a learning rate ten thousand times larger, give
-−5.064 and 0.0350: the same as `glm()`.
+A hundred iterations, with a learning rate a thousand times larger, give
+−5.638 and 0.0832: the same as `glm()`.
 :::
 :::
 
@@ -321,11 +320,11 @@ std_curve <- descend_log_loss((x - mean(x)) / sd(x), y, alpha = 1, n = 100)
 data.frame(iteration = 1:100, log_loss = std_curve$loss) |>
   ggplot(aes(x = iteration, y = log_loss)) +
   geom_line(colour = "firebrick", linewidth = 1) +
-  geom_hline(yintercept = 0.657, linetype = "dashed", colour = "grey50") +
-  annotate("text", x = 75, y = 0.65, label = "same probability for everyone",
+  geom_hline(yintercept = 0.650, linetype = "dashed", colour = "grey50") +
+  annotate("text", x = 75, y = 0.644, label = "same probability for everyone",
            colour = "grey40", size = 3.5) +
   labs(x = "Iteration", y = "Log loss (training patients)",
-       title = "Gradient descent on standardised glucose")
+       title = "Gradient descent on standardised age")
 ```
 
 `glm()` itself does not use plain gradient descent. It uses a version of
@@ -397,33 +396,33 @@ from sklearn.linear_model import LogisticRegression
 ```
 
 The same 750 people and the same split as in Exercise 4.1. For the loss we need
-the outcome as a number: 1 for `pos`, 0 for `neg`.
+the outcome as a number: 1 for `yes`, 0 for `no`.
 
 ```{python}
-diabetes = pd.read_csv("data/diabetes_clean.csv")
+cvd = pd.read_csv("data/cvd_risk.csv")
 
-is_test = diabetes.index % 5 == 0               # every fifth person is held back
-train = diabetes[~is_test]
+is_test = cvd.index % 5 == 0               # every fifth person is held back
+train = cvd[~is_test]
 
-x = train["glucose"].to_numpy()                       # the predictor
-y = (train["diabetes"] == "pos").astype(int).to_numpy()  # the outcome: 1 = pos, 0 = neg
+x = train["age"].to_numpy()                      # the predictor
+y = (train["cvd"] == "yes").astype(int).to_numpy()  # the outcome: 1 = yes, 0 = no
 ```
 
 The answer to compare with, from scikit-learn:
 
 ```{python}
 sk_model = LogisticRegression(C=np.inf)
-sk_model.fit(train[["glucose"]], train["diabetes"])
+sk_model.fit(train[["age"]], train["cvd"])
 
 print("intercept:", sk_model.intercept_, " slope:", sk_model.coef_)
 ```
 
 ### Part 1 — The log loss
 
-A logistic regression predicts a probability $p$ of diabetes for each patient.
+A logistic regression predicts a probability $p$ of an event for each person.
 How much should a patient cost the model?
 
-- If the patient **has** diabetes ($y = 1$), the model should have given a high
+- If the person **had** an event ($y = 1$), the model should have given a high
   $p$. The loss is $-\log(p)$.
 - If the patient does **not** ($y = 0$), it should have given a low $p$. The
   loss is $-\log(1 - p)$.
@@ -436,7 +435,7 @@ $$\text{log loss} = -\frac{1}{n}\sum_{i=1}^{n} \Big[\, y_i \log(p_i) + (1 - y_i)
 For each patient only one of the two terms is switched on: $y_i$ or $1 - y_i$
 is 0.
 
-For a patient with diabetes, here is what the log loss and the squared error
+For a person who had an event, here is what the log loss and the squared error
 $(1 - p)^2$ charge for four predictions:
 
 ```{python}
@@ -451,7 +450,7 @@ p_grid = np.arange(0.005, 1, 0.005)
 fig, ax = plt.subplots()
 ax.plot(p_grid, -np.log(p_grid), color="red", linewidth=2, label="log loss")
 ax.plot(p_grid, (1 - p_grid) ** 2, color="grey", linewidth=2, label="squared error")
-ax.set_xlabel("Predicted probability of diabetes, for a patient who has diabetes")
+ax.set_xlabel("Predicted probability of an event, for a person who had one")
 ax.set_ylabel("What the patient costs")
 ax.legend()
 plt.show()
@@ -460,7 +459,7 @@ plt.show()
 ::: {.callout-note appearance="simple"}
 ## Why not the MSE?
 The squared error of a probability can never be more than 1, however wrong the
-model is: a confident 0.01 for a patient with diabetes costs 0.98, hardly more
+model is: a confident 0.01 for a person who had an event costs 0.98, hardly more
 than an unsure 0.1 (0.81). The log loss charges 4.6 for the first and 2.3 for
 the second, so confident mistakes are what the model works hardest to avoid.
 And once the probability goes through the S-curve, the MSE over the two
@@ -471,8 +470,8 @@ log loss is also exactly what statisticians call maximum likelihood.
 #### Task 1a — The log loss of a model
 
 Complete the function, then use it on two models: scikit-learn's, and a model
-that gives every patient the same probability, the 36.7% of training patients
-who have diabetes.
+that gives every patient the same probability, the 35.5% of training patients
+who had an event.
 
 ```{python}
 #| eval: false
@@ -480,7 +479,7 @@ who have diabetes.
 def log_loss(y, p):
     return -np.mean(y * np.log(p) + (1 - y) * np.log(______))
 
-p_sk = sk_model.predict_proba(train[["glucose"]])[:, 1]
+p_sk = sk_model.predict_proba(train[["age"]])[:, 1]
 p_same = np.full(len(y), y.mean())
 
 print("scikit-learn:     ", log_loss(y, p_sk))
@@ -489,8 +488,8 @@ print("same for everyone:", log_loss(y, p_same))
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-For a patient without diabetes the loss is the log of the probability of
-**not** having diabetes.
+For a person without an event the loss is the log of the probability of
+**not** having one.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
@@ -500,15 +499,15 @@ For a patient without diabetes the loss is the log of the probability of
 def log_loss(y, p):
     return -np.mean(y * np.log(p) + (1 - y) * np.log(1 - p))
 
-p_sk = sk_model.predict_proba(train[["glucose"]])[:, 1]
+p_sk = sk_model.predict_proba(train[["age"]])[:, 1]
 p_same = np.full(len(y), y.mean())
 
 print("scikit-learn:     ", log_loss(y, p_sk))
 print("same for everyone:", log_loss(y, p_same))
 ```
 
-scikit-learn's model has a log loss of 0.541 on the training patients; giving
-everyone 36.7% has 0.657. Glucose lowers the loss, and no other pair of
+scikit-learn's model has a log loss of 0.565 on the training patients; giving
+everyone 35.5% has 0.650. Age lowers the loss, and no other pair of
 coefficients lowers it further: scikit-learn found the bottom.
 :::
 :::
@@ -547,7 +546,7 @@ def descend_log_loss(x, y, alpha, n):
         loss[i] = log_loss(y, 1 / (1 + np.exp(-(b0 + b1 * x))))
     return {"b0": b0, "b1": b1, "loss": loss}
 
-raw = descend_log_loss(x, y, alpha=1e-4, n=1000)
+raw = descend_log_loss(x, y, alpha=1e-3, n=1000)
 print("intercept:", raw["b0"], " slope:", raw["b1"], " log loss:", raw["loss"][-1])
 ```
 
@@ -571,29 +570,29 @@ def descend_log_loss(x, y, alpha, n):
         loss[i] = log_loss(y, 1 / (1 + np.exp(-(b0 + b1 * x))))
     return {"b0": b0, "b1": b1, "loss": loss}
 
-raw = descend_log_loss(x, y, alpha=1e-4, n=1000)
+raw = descend_log_loss(x, y, alpha=1e-3, n=1000)
 print("intercept:", raw["b0"], " slope:", raw["b1"], " log loss:", raw["loss"][-1])
 ```
 :::
 :::
 
-After a thousand iterations the descent reports an intercept of −0.006 and a
-slope of −0.002, with a log loss of 0.682. scikit-learn gives −5.064 and
-0.0350, with a log loss of 0.541. The slope even has the wrong sign.
+After a thousand iterations the descent reports an intercept of −0.040 and a
+slope of −0.007, with a log loss of 0.669. scikit-learn gives −5.638 and
+0.0832, with a log loss of 0.565. The slope even has the wrong sign.
 
 **The same problem as in Exercise 3.4.** Both coefficients start at 0, which
 gives every patient a probability of 0.5. The quickest way to lower the loss
-from there is to bring everyone's probability down towards 37%. The derivative
-for the slope is multiplied by glucose, about 126 on average, so the slope
-reacts more than 100 times faster than the intercept and is pushed below 0 to
+from there is to bring everyone's probability down towards 36%. The derivative
+for the slope is multiplied by age, about 59 on average, so the slope
+reacts about 60 times faster than the intercept and is pushed below 0 to
 do that job. The learning rate must be small enough for the slope not to
-overshoot, and at that rate the intercept crawls towards −5: after 100,000
-iterations it has reached only −0.57. Make the learning rate ten times larger
-($10^{-3}$) and the loss goes up instead of down.
+overshoot, and at that rate the intercept crawls towards −5.6: after 100,000
+iterations it has reached only −2.8. Make the learning rate ten times larger
+($10^{-2}$) and the loss goes up instead of down.
 
 #### Task 2b — Standardise, descend, convert back
 
-The fix is the one from Exercise 3.4: standardise glucose, descend, and convert
+The fix is the one from Exercise 3.4: standardise age, descend, and convert
 the coefficients back. Only the predictor is standardised; the outcome is 0 or
 1 and stays as it is.
 
@@ -620,14 +619,14 @@ deviation, which is already stored in `sx`.
 
 ::: {.callout-tip collapse="true"}
 ## How the conversion back works
-On the standardised scale glucose is measured in standard deviations (SDs). The
-descent finds a slope of 1.111: one SD more glucose adds 1.111 to the log-odds.
-One SD of glucose is 31.7 mg/dL, so one mg/dL adds 1.111 / 31.7 = 0.0350. That
+On the standardised scale age is measured in standard deviations (SDs). The
+descent finds a slope of 0.941: one SD more age adds 0.941 to the log-odds.
+One SD of age is 11.3 years, so one year adds 0.941 / 11.3 = 0.0832. That
 is the line `slope = std["b1"] / sx`.
 
-The standardised intercept, −0.653, is the log-odds of a patient with the
-average glucose, 125.9 mg/dL. To get the log-odds at a glucose of 0, go back
-125.9 mg/dL along the slope: −0.653 − 0.0350 × 125.9 = −5.06. That is the
+The standardised intercept, −0.716, is the log-odds of a person of the
+average age, 59.1 years. To get the log-odds at an age of 0, go back 59.1
+years along the slope: −0.716 − 0.0832 × 59.1 = −5.63. That is the
 line `intercept = std["b0"] - slope * mx`.
 :::
 
@@ -647,8 +646,8 @@ print(intercept, slope)
 print(sk_model.intercept_, sk_model.coef_)    # the answer to compare with
 ```
 
-A hundred iterations, with a learning rate ten thousand times larger, give
-−5.064 and 0.0350: the same as scikit-learn.
+A hundred iterations, with a learning rate a thousand times larger, give
+−5.638 and 0.0832: the same as scikit-learn.
 :::
 :::
 
@@ -659,11 +658,11 @@ std_curve = descend_log_loss((x - x.mean()) / x.std(ddof=1), y, alpha=1, n=100)
 
 fig, ax = plt.subplots()
 ax.plot(np.arange(1, 101), std_curve["loss"], color="firebrick", linewidth=2)
-ax.axhline(0.657, linestyle="--", color="grey")
-ax.text(60, 0.648, "same probability for everyone", color="grey")
+ax.axhline(0.650, linestyle="--", color="grey")
+ax.text(60, 0.645, "same probability for everyone", color="grey")
 ax.set_xlabel("Iteration")
 ax.set_ylabel("Log loss (training patients)")
-ax.set_title("Gradient descent on standardised glucose")
+ax.set_title("Gradient descent on standardised age")
 plt.show()
 ```
 
@@ -719,18 +718,19 @@ sk_model.n_iter_
 the same `descend_*` function with one changed line, so the only new idea is
 the loss. The scaling lesson repeats on purpose.
 
-**Expected values.** Training patients 600, 220 with diabetes (0.367).
-`glm()` / `LogisticRegression(C=np.inf)`: −5.064, 0.0350; log loss 0.541;
-constant 0.367 for everyone 0.657; log loss at the start (both coefficients
-0) 0.693. Raw glucose, α = 10⁻⁴, 1000 iterations: −0.0062, −0.0023, log loss
-0.682; after 100,000 iterations −0.57, 0.0020; α = 10⁻³: the loss rises (1.11
-after 1000). Standardised glucose (mean 125.94, SD 31.73), α = 1, 100
-iterations: standardised −0.6527, 1.1113; converted −5.064, 0.03503. `glm()` reports 3 IRLS iterations in `$iter`;
-scikit-learn's `lbfgs` reports 21 in `n_iter_`.
+**Expected values.** Data `data/cvd_risk.csv`, the Day 4 split: 400 training
+patients, 142 with an event (0.355). `glm()` / `LogisticRegression(C=np.inf)`
+on age: −5.638, 0.0832; log loss 0.565; 0.355 for everyone 0.650; log loss at
+the start (both coefficients 0) 0.693. Raw age, α = 10⁻³, 1000 iterations:
+−0.040, −0.0065, log loss 0.669; after 100,000 iterations −2.77, 0.0377; α =
+10⁻²: the loss rises (6.1 after 1000). Standardised age (mean 59.15, SD 11.31),
+α = 1, 100 iterations: standardised −0.7158, 0.9412; converted −5.638, 0.0832.
+`glm()` reports 3 IRLS iterations in `$iter`; scikit-learn's `lbfgs` reports 19
+in `n_iter_`.
 
 **Common failures.** (1) In Task 1a, writing `log(1 - y)` instead of
-`log(1 - p)`, which gives `NaN` (0 × log 0) for every patient with diabetes. (2) In Task 2b, standardising the outcome as well
-as glucose: `y` must stay 0/1, or the log loss is meaningless. (3) Converting
+`log(1 - p)`, which gives `NaN` (0 × log 0) for every person who had an event. (2) In Task 2b, standardising the outcome as well
+as age: `y` must stay 0/1, or the log loss is meaningless. (3) Converting
 back with the 3.4 formula, which multiplies by the SD of the outcome: here the
 outcome was not standardised.
 
