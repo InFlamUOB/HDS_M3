@@ -1,5 +1,5 @@
 ---
-title: "Exercise 4.2 — Fitting a logistic regression model (with solutions)"
+title: "Exercise 4.2 — Probability, odds and log-odds (with solutions)"
 output: html_document
 ---
 
@@ -7,11 +7,10 @@ output: html_document
 
 *Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
-Linear regression on Day 3 predicted a number, glucose. Logistic regression
-predicts a **probability**: the chance that a person has diabetes, given their
-glucose. A probability must stay between 0 and 1, and a straight line does not.
-The trick is to fit the straight line on a different scale, the **log-odds**,
-and convert back.
+In Exercise 4.1, `predict()` gave each patient a **probability** of diabetes.
+This exercise shows where it comes from. A probability must stay between 0 and
+1, and a straight line does not. Logistic regression fits the straight line on
+a different scale, the **log-odds**, and converts back.
 
 **Theory:** probability, odds and log-odds; the logistic (sigmoid) function;
 reading a logistic regression coefficient; from a fitted model to a
@@ -129,20 +128,11 @@ data.frame(log_odds = seq(-6, 6, by = 0.1)) |>
 
 ------------------------------------------------------------------------
 
-### Part 2 — Fit the model
+### Part 2 — The model on the log-odds scale
 
-Check the class balance of the training rows first:
-
-```{r}
-count(train, diabetes)
-```
-
-220 of the 600 have diabetes, 36.7%. The outcome is a factor with the levels
-`neg` then `pos`, and a logistic regression fitted with `glm` predicts the
-probability of the **second** level, so this model is about `pos`.
-
-Specify the model and the engine, and fit it with a formula: predict diabetes
-from glucose only.
+Fit the model from Exercise 4.1, Part 1: diabetes from glucose only. The
+outcome's levels are `neg` then `pos`, and `glm` predicts the probability of
+the **second** level, so the model is about `pos`.
 
 ```{r}
 logistic_spec <- logistic_reg(mode = "classification") |>
@@ -235,57 +225,18 @@ round(c(log_odds = unname(log_odds_160), odds = unname(odds_160),
 > probability 0.632. The 40 extra mg/dL multiplied the odds by
 > $1.716 / 0.423 = 4.06$, which is $1.42^4$: four steps of ten mg/dL.
 
-**Predictions for the test set.** `predict()` with `type = "prob"` gives one
-column per class. Join them to the test data:
-
-```{r}
-test_preds <- predict(logistic_fit_glucose, new_data = test, type = "prob") |>
-  rename(prob_pos = .pred_pos, prob_neg = .pred_neg) |>
-  bind_cols(test)
-
-test_preds |>
-  select(glucose, diabetes, prob_pos, prob_neg) |>
-  head()
-```
-
-**Question!** Which of the two probability columns do we want?
-
-The probability of diabetes, `prob_pos`. The two columns always add up to 1, so
-`prob_neg` holds no extra information; but taking the wrong one turns every
-statement about risk upside down, and nothing in the code will warn you.
-
-Here is the fitted curve drawn over the observed outcomes, coded 1 for diabetes
-and 0 for none:
-
-```{r}
-test_preds |>
-  mutate(diabetes_numeric = if_else(diabetes == "pos", 1, 0)) |>
-  ggplot(aes(x = glucose)) +
-  geom_point(aes(y = diabetes_numeric), alpha = 0.4) +
-  geom_line(aes(y = prob_pos), colour = "red", linewidth = 1) +
-  scale_y_continuous(breaks = c(0, 0.5, 1), limits = c(-0.05, 1.05)) +
-  labs(x = "Glucose (mg/dL)",
-       y = "Observed outcome (0/1) and predicted probability")
-```
-
-Most of the people with diabetes (the points at 1) sit where the curve is high,
-and most of those without (at 0) where it is low, but the two groups overlap a
-great deal between about 100 and 160 mg/dL. The curve crosses 0.5 at a glucose
-of about 145.
+**The patient from Exercise 4.1.** A glucose of 150 gives log-odds of
+$-5.064 + 0.0350 \times 150 = 0.19$: just above 0, so odds just above 1 and a
+probability just above 0.5 (0.547). That is why the model only just called this
+patient `pos`.
 
 > **Learning points**
 >
 > - From the fitted line to a probability: compute the log-odds, exponentiate to get the odds, then $p = \text{odds} / (1 + \text{odds})$.
 > - `predict(type = "prob")` and `.predict_proba()` do exactly this calculation for you.
-> - Make sure you take the probability of the class you care about.
+> - A log-odds of 0 is a probability of 0.5: that is where the predicted class changes, which Exercise 4.4 builds on.
 
 ## Stretch
-
-> **Stretch — where does the curve cross 0.5?**
->
-> The predicted probability is 0.5 exactly where the log-odds are 0. Use the two
-> coefficients to find that glucose value without plotting anything, then check
-> it with `predict()` or `.predict_proba()`.
 
 > **Stretch — add BMI and age**
 >

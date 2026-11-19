@@ -1,0 +1,290 @@
+---
+title: "Exercise 4.5 — Fitting logistic regression: gradient descent on the log loss (with solutions)"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day4/day4-05-log-loss.html>.*
+
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+
+In Exercise 3.4 you fitted a linear regression yourself: start with both
+coefficients at 0, measure which way is downhill on the MSE, take a step,
+repeat. How does `glm()` or `LogisticRegression()` find −5.064 and 0.0350 for
+the glucose model of Exercise 4.1? The same way, with one change: a different
+**loss**.
+
+- **Part 1.** The log loss: what one patient costs the model, and why it is
+  not the MSE.
+- **Part 2.** Gradient descent on the log loss, with the code from Exercise
+  3.4. On raw glucose it does not finish; standardise, and it lands on the same
+  coefficients as `glm()` and `LogisticRegression()`.
+
+> **The plots are for looking at**
+>
+> The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())
+```
+
+The same 750 people and the same split as in Exercise 4.1. For the loss we need
+the outcome as a number: 1 for `pos`, 0 for `neg`.
+
+```{r}
+diabetes <- read_csv("data/diabetes_clean.csv") |>
+  select(glucose, diabetes) |>
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+
+x <- train$glucose                         # the predictor
+y <- as.numeric(train$diabetes == "pos")   # the outcome: 1 = pos, 0 = neg
+```
+
+The answer to compare with, from `glm()`:
+
+```{r}
+glm_fit <- logistic_reg() |>
+  set_engine("glm") |>
+  set_mode("classification") |>
+  fit(diabetes ~ glucose, data = train)
+
+glm_fit$fit$coefficients
+```
+
+### Part 1 — The log loss
+
+A logistic regression predicts a probability $p$ of diabetes for each patient.
+How much should a patient cost the model?
+
+- If the patient **has** diabetes ($y = 1$), the model should have given a high
+  $p$. The loss is $-\log(p)$.
+- If the patient does **not** ($y = 0$), it should have given a low $p$. The
+  loss is $-\log(1 - p)$.
+
+Both cases in one formula, averaged over the patients, is the **log loss**
+(also called cross-entropy):
+
+$$\text{log loss} = -\frac{1}{n}\sum_{i=1}^{n} \Big[\, y_i \log(p_i) + (1 - y_i)\log(1 - p_i) \,\Big]$$
+
+For each patient only one of the two terms is switched on: $y_i$ or $1 - y_i$
+is 0.
+
+For a patient with diabetes, here is what the log loss and the squared error
+$(1 - p)^2$ charge for four predictions:
+
+```{r}
+data.frame(p = c(0.9, 0.5, 0.1, 0.01)) |>
+  mutate(log_loss = -log(p),
+         squared_error = (1 - p)^2)
+```
+
+```{r}
+data.frame(p = seq(0.005, 0.995, by = 0.005)) |>
+  mutate(`log loss` = -log(p), `squared error` = (1 - p)^2) |>
+  pivot_longer(-p, names_to = "loss", values_to = "cost") |>
+  ggplot(aes(x = p, y = cost, colour = loss)) +
+  geom_line(linewidth = 1) +
+  scale_colour_manual(values = c("log loss" = "red", "squared error" = "grey40")) +
+  labs(x = "Predicted probability of diabetes, for a patient who has diabetes",
+       y = "What the patient costs", colour = NULL)
+```
+
+> **Why not the MSE?**
+>
+> The squared error of a probability can never be more than 1, however wrong the
+> model is: a confident 0.01 for a patient with diabetes costs 0.98, hardly more
+> than an unsure 0.1 (0.81). The log loss charges 4.6 for the first and 2.3 for
+> the second, so confident mistakes are what the model works hardest to avoid.
+> And once the probability goes through the S-curve, the MSE over the two
+> coefficients is no longer a single bowl, while the log loss is. Minimising the
+> log loss is also exactly what statisticians call maximum likelihood, which is
+> what `glm()` does.
+
+#### Task 1a — The log loss of a model
+
+Complete the function, then use it on two models: `glm()`'s, and a model that
+gives every patient the same probability, the 36.7% of training patients who
+have diabetes.
+
+> **Stuck?**
+>
+> For a patient without diabetes the loss is the log of the probability of
+> **not** having diabetes.
+
+> **Worked answer**
+
+```{r}
+log_loss <- function(y, p) {
+  -mean(y * log(p) + (1 - y) * log(1 - p))
+}
+
+p_glm <- predict(glm_fit, new_data = train, type = "prob")$.pred_pos
+p_same <- rep(mean(y), length(y))
+
+c(glm = log_loss(y, p_glm), same_for_everyone = log_loss(y, p_same))
+```
+
+> `glm()`'s model has a log loss of 0.541 on the training patients; giving
+> everyone 36.7% has 0.657. Glucose lowers the loss, and no other pair of
+> coefficients lowers it further: `glm()` found the bottom.
+
+### Part 2 — Gradient descent on the log loss
+
+The update rule is the one from Exercise 3.4: move each coefficient against the
+derivative of the loss with respect to that coefficient, scaled by the learning
+rate $\alpha$. For the log loss the two derivatives are
+
+$$\frac{\partial\,\text{log loss}}{\partial \beta_0} = \frac{1}{n}\sum (p_i - y_i)
+\qquad
+\frac{\partial\,\text{log loss}}{\partial \beta_1} = \frac{1}{n}\sum (p_i - y_i)\, x_i$$
+
+with $p_i = 1 / \big(1 + e^{-(\beta_0 + \beta_1 x_i)}\big)$. Compare them with
+the MSE derivatives of Exercise 3.4, $-\frac{2}{n}\sum r_i$ and
+$-\frac{2}{n}\sum x_i r_i$ with $r_i = y_i - \hat{y}_i$: the same shape, the
+gap between what happened and what was predicted, with the prediction now a
+probability.
+
+So the code of Exercise 3.4 changes in one place: the prediction goes through
+the S-curve.
+
+#### Task 2a — The prediction line
+
+> **Stuck?**
+>
+> Inside the brackets goes the straight line on the log-odds scale, with the
+> current coefficients.
+
+> **Worked answer**
+
+```{r}
+descend_log_loss <- function(x, y, alpha, n) {
+  b0 <- 0; b1 <- 0
+  loss <- numeric(n)
+  for (i in seq_len(n)) {
+    p  <- 1 / (1 + exp(-(b0 + b1 * x)))          # the predicted probability
+    b0 <- b0 - alpha * mean(p - y)
+    b1 <- b1 - alpha * mean((p - y) * x)
+    loss[i] <- log_loss(y, 1 / (1 + exp(-(b0 + b1 * x))))
+  }
+  list(b0 = b0, b1 = b1, loss = loss)
+}
+
+raw <- descend_log_loss(x, y, alpha = 1e-4, n = 1000)
+c(intercept = raw$b0, slope = raw$b1, log_loss = tail(raw$loss, 1))
+```
+
+After a thousand iterations the descent reports an intercept of −0.006 and a
+slope of −0.002, with a log loss of 0.682. `glm()` gives −5.064 and 0.0350,
+with a log loss of 0.541. The slope even has the wrong sign.
+
+**The same problem as in Exercise 3.4.** Both coefficients start at 0, which
+gives every patient a probability of 0.5. The quickest way to lower the loss
+from there is to bring everyone's probability down towards 37%. The derivative
+for the slope is multiplied by glucose, about 126 on average, so the slope
+reacts more than 100 times faster than the intercept and is pushed below 0 to
+do that job. The learning rate must be small enough for the slope not to
+overshoot, and at that rate the intercept crawls towards −5: after 100,000
+iterations it has reached only −0.57. Make the learning rate ten times larger
+($10^{-3}$) and the loss goes up instead of down.
+
+#### Task 2b — Standardise, descend, convert back
+
+The fix is the one from Exercise 3.4: standardise glucose, descend, and convert
+the coefficients back. Only the predictor is standardised; the outcome is 0 or
+1 and stays as it is.
+
+> **Stuck?**
+>
+> Standardising means subtracting the mean and dividing by the standard
+> deviation.
+
+> **How the conversion back works**
+>
+> On the standardised scale glucose is measured in standard deviations (SDs). The
+> descent finds a slope of 1.111: one SD more glucose adds 1.111 to the log-odds.
+> One SD of glucose is 31.7 mg/dL, so one mg/dL adds 1.111 / 31.7 = 0.0350. That
+> is the line `slope <- std$b1 / sd(x)`.
+>
+> The standardised intercept, −0.653, is the log-odds of a patient with the
+> average glucose, 125.9 mg/dL. To get the log-odds at a glucose of 0, go back
+> 125.9 mg/dL along the slope: −0.653 − 0.0350 × 125.9 = −5.06. That is the
+> line `intercept <- std$b0 - slope * mean(x)`.
+
+> **Worked answer**
+
+```{r}
+z <- (x - mean(x)) / sd(x)
+
+std <- descend_log_loss(z, y, alpha = 1, n = 100)
+
+slope     <- std$b1 / sd(x)
+intercept <- std$b0 - slope * mean(x)
+
+c(intercept = intercept, slope = slope)
+glm_fit$fit$coefficients    # the answer to compare with
+```
+
+> A hundred iterations, with a learning rate ten thousand times larger, give
+> −5.064 and 0.0350: the same as `glm()`.
+
+```{r}
+std_curve <- descend_log_loss((x - mean(x)) / sd(x), y, alpha = 1, n = 100)
+
+data.frame(iteration = 1:100, log_loss = std_curve$loss) |>
+  ggplot(aes(x = iteration, y = log_loss)) +
+  geom_line(colour = "firebrick", linewidth = 1) +
+  geom_hline(yintercept = 0.657, linetype = "dashed", colour = "grey50") +
+  annotate("text", x = 75, y = 0.65, label = "same probability for everyone",
+           colour = "grey40", size = 3.5) +
+  labs(x = "Iteration", y = "Log loss (training patients)",
+       title = "Gradient descent on standardised glucose")
+```
+
+`glm()` itself does not use plain gradient descent. It uses a version of
+Newton's method, which also measures how the slope of the loss is changing and
+takes much bigger, better-aimed steps. It needs only a handful of iterations:
+
+```{r}
+glm_fit$fit$iter
+```
+
+> **Reflection**
+>
+> 1. Linear regression has a formula for its coefficients (the extra reading at
+>    the end of Day 3). Logistic regression does not. What does that mean for
+>    how every logistic regression is fitted?
+> 2. Both losses compare what happened with what was predicted. What is the
+>    main difference in how they treat a confident wrong prediction?
+
+> **Worked answer**
+>
+> 1. It is always fitted step by step, by an algorithm like the one you wrote:
+>    start somewhere, go downhill on the log loss, stop when the loss stops
+>    falling. That is why software can report that a logistic regression "did
+>    not converge", which a linear regression never does.
+> 2. The squared error of a probability is at most 1, so a confident wrong
+>    prediction costs little more than an unsure one. The log loss grows without
+>    limit as the probability given to what happened goes to 0, so confident
+>    wrong predictions are punished hardest.
+
+> **Learning points**
+>
+> - Logistic regression is fitted by minimising the **log loss**:
+>   $-\log(p)$ for a patient with the outcome, $-\log(1-p)$ for one without.
+> - The log loss is a single bowl, so gradient descent works, with derivatives
+>   of the same shape as for the MSE: the mean of $(p - y)$, and of $(p - y)$
+>   times the predictor.
+> - As in Exercise 3.4, unscaled predictors make the descent stop far from the
+>   answer; standardise first, then convert back.
+> - There is no formula for the coefficients: every logistic regression is found
+>   by an iterative algorithm, which is why it can fail to converge.

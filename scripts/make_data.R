@@ -457,3 +457,29 @@ if (file.exists("data/diabetes.csv")) {
   readr::write_csv(glucose_bmi, "data/glucose_bmi_study.csv")
   message("wrote glucose_bmi_study.csv: ", nrow(glucose_bmi), " rows")
 }
+
+
+# ---------------------------------------------------------------------------
+# data/sodium_delirium.csv - for Exercise 4.4 (decision boundaries). Simulated:
+# 500 older inpatients with age, serum sodium (mmol/L) and whether they
+# developed delirium. Risk rises with age and with the distance of sodium from
+# 140 in EITHER direction (hypo- and hypernatraemia), so the true boundary is
+# curved and no straight line in age and sodium can separate the classes:
+# a logistic regression on age + sodium gets a sodium coefficient near 0 and
+# the accuracy of always saying "no"; adding (sodium - 140)^2 fixes it.
+# True model: logit P(yes) = -2.6 + 0.06 (age - 75) + 0.022 (sodium - 140)^2.
+# ---------------------------------------------------------------------------
+set.seed(1)
+n_sd <- 500
+grp_sd <- sample(c("normal", "low", "high"), n_sd, replace = TRUE,
+                 prob = c(0.6, 0.2, 0.2))
+sodium_sd <- round(ifelse(grp_sd == "normal", rnorm(n_sd, 140, 3),
+                   ifelse(grp_sd == "low", rnorm(n_sd, 128, 4),
+                          rnorm(n_sd, 152, 4))))
+age_sd <- round(pmin(pmax(rnorm(n_sd, 76, 8), 60), 98))
+logit_sd <- -2.6 + 0.06 * (age_sd - 75) + 0.022 * (sodium_sd - 140)^2
+delirium_sd <- ifelse(runif(n_sd) < plogis(logit_sd), "yes", "no")
+sodium_delirium <- data.frame(age = age_sd, sodium = sodium_sd,
+                              delirium = delirium_sd)
+readr::write_csv(sodium_delirium, "data/sodium_delirium.csv")
+message("wrote sodium_delirium.csv: ", nrow(sodium_delirium), " rows")
