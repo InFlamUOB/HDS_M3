@@ -236,7 +236,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p><strong>Download this exercise as a notebook:</strong> <a href="code/day2-04a-pipeline.Rmd" download="day2-04a-pipeline.Rmd"><strong>R Markdown (.Rmd)</strong></a> for R, or <a href="code/day2-04a-pipeline.ipynb" download="day2-04a-pipeline.ipynb"><strong>Jupyter (.ipynb)</strong></a> for Python. Each holds the text and every code cell of that language, with the blanks left for you to fill in.</p>
+<p><strong>Download this exercise with the solutions:</strong> <a href="code/day2-04a-pipeline-solutions.Rmd" download="day2-04a-pipeline-solutions.Rmd"><strong>R Markdown (.Rmd)</strong></a> or <a href="code/day2-04a-pipeline-solutions.ipynb" download="day2-04a-pipeline-solutions.ipynb"><strong>Jupyter (.ipynb)</strong></a>, the same notebooks with the worked answers filled in.</p>
 <section id="overview" class="level2">
 <h2 class="anchored" data-anchor-id="overview">Overview</h2>
 <p>In this exercise, we combine imputation, encoding, scaling and regression into one fitted workflow. We then inspect what the preprocessing learned from the training patients and apply it to unseen test patients.</p>
@@ -2889,6 +2889,21 @@ forceTheme('sk-container-id-1');</script>
 </ol>
 </div>
 </div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>All of them.</strong> Median imputation learns one median per numeric column. Mode imputation learns the most common category. The encoder learns the list of categories. The scaler learns a mean and a standard deviation per numeric column. The regression learns its coefficients.</p>
+<p><strong>Because the operations only make sense for one kind of variable.</strong> There is no median of “Emergency” and “Elective”, and one-hot encoding age would create a column for every age. Python makes the division explicit with a <code>ColumnTransformer</code>. R does it inside one recipe, with selectors such as <code>all_numeric_predictors()</code>.</p>
+<p><strong><code>fit()</code> runs the steps in order on the training patients.</strong> Each step learns its numbers, transforms the training data and hands the result to the next step (in Python, the numerical and categorical branches run side by side and are joined). The regression is fitted last, on the fully processed table. Everything learned is stored inside the fitted object. The test patients are not looked at.</p>
+</div>
+</div>
 <hr>
 </section>
 </section>
@@ -2977,6 +2992,21 @@ forceTheme('sk-container-id-1');</script>
 </ol>
 </div>
 </div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>The training median</strong>: 74.5 in the Python column and 76 in the R column. The test medians, 80 and 78, appear nowhere inside the pipeline.</p>
+<p><strong>Yes.</strong> A test patient with no creatinine recorded receives the training median.</p>
+<p><strong>Because the test patients stand in for patients you have not met yet.</strong> A future patient arrives alone, and one patient has no median. Filling test gaps with the test median also means the preprocessing has learned from the very patients it is being judged on, so the reported error is no longer an honest estimate.</p>
+</div>
+</div>
 </section>
 <section id="b.-visualise-the-effect-of-imputation" class="level3">
 <h3 class="anchored" data-anchor-id="b.-visualise-the-effect-of-imputation">B. Visualise the effect of imputation</h3>
@@ -3026,11 +3056,11 @@ forceTheme('sk-container-id-1');</script>
 <span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(value)</span>
 <span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_rows</span>(</span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">data.frame</span>(</span>
 <span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">creatinine =</span> train<span class="sc">$</span>creatinine,</span>
 <span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">stage =</span> <span class="st">"Original"</span></span>
 <span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>  ),</span>
-<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">data.frame</span>(</span>
 <span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">creatinine =</span> <span class="fu">replace_na</span>(</span>
 <span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>      train<span class="sc">$</span>creatinine,</span>
 <span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>      creatinine_median</span>
@@ -3082,6 +3112,20 @@ forceTheme('sk-container-id-1');</script>
 </div>
 <div class="callout-body-container callout-body">
 <p>What happens to the distribution when several patients receive exactly the same median value?</p>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>One bar shoots up.</strong> About 30 of the 200 training patients had no creatinine recorded (32 in the Python split, 31 in the R split), and every one of them is now placed at exactly the same value. The rest of the histogram is untouched.</p>
+<p>The column looks more certain than it is: the spread has shrunk, and a block of patients now appear to have a perfectly typical creatinine that nobody measured. This is the same effect as in Exercise 2.4, now happening inside the pipeline where it is easy to forget.</p>
 </div>
 </div>
 </section>
@@ -3188,6 +3232,21 @@ forceTheme('sk-container-id-1');</script>
 </ol>
 </div>
 </div>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>Because a model needs numbers, and a category is not a number.</strong> Each categorical variable is replaced by a set of 0/1 columns.</p>
+<p><strong><code>admission_type</code> and <code>smoking_status</code>.</strong> The six numeric variables are still six columns. They were changed in value, not in number.</p>
+<p><strong>The table would explode.</strong> There are more than 60 different ages among the 200 training patients, and about 150 different CRP values. One-hot encoding CRP would give nearly one column per patient. The columns would also throw away what makes the variable useful: the model could no longer tell that a CRP of 40 lies between 30 and 50. And a new patient with a value never seen in training would match no column at all.</p>
+</div>
+</div>
 <hr>
 </section>
 </section>
@@ -3238,22 +3297,114 @@ forceTheme('sk-container-id-1');</script>
 <section id="imputation-and-scaling" class="level3">
 <h3 class="anchored" data-anchor-id="imputation-and-scaling">1. Imputation and scaling</h3>
 <p>Should we impute missing numerical values before standardising them? What would happen if we reversed the order?</p>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Imputing first is the usual order, and it is what both pipelines above do.</p>
+<p>Reversing the order is not automatically invalid. Both scalers support missing values: they skip the gaps when they compute a mean and a standard deviation. The result is slightly different, though: scaled first and filled second, training creatinine ends with a standard deviation of 0.92 instead of 1, because some 30 identical values were added after the spread was measured.</p>
+<p>With median imputation little is at stake. The order matters far more when the imputer uses distances between patients, as KNN does. Then scale first, or the variables with the largest numbers decide who counts as a neighbour.</p>
+</div>
+</div>
 </section>
 <section id="one-hot-encoding-continuous-features" class="level3">
 <h3 class="anchored" data-anchor-id="one-hot-encoding-continuous-features">2. One-hot encoding continuous features</h3>
 <p>If we accidentally one-hot encoded age, blood pressure and CRP, what would happen to the number of columns and the information they contain?</p>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Three columns would become roughly 270 to 280: more than 60 for age, about 60 for blood pressure and about 150 for CRP, for 200 training patients. Most of those columns would describe one or two patients each.</p>
+<p>The information that the values are ordered would be lost. To the model, a systolic pressure of 150 would be no closer to 151 than to 95.</p>
+</div>
+</div>
 </section>
 <section id="scaling-one-hot-encoded-features" class="level3">
 <h3 class="anchored" data-anchor-id="scaling-one-hot-encoded-features">3. Scaling one-hot encoded features</h3>
 <p>Would applying standard scaling to the resulting 0/1 categorical indicators be mathematically incorrect? Why might we prefer to leave them as 0 and 1?</p>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The meaning is lost! A 0/1 column says “emergency admission: no or yes”, and its coefficient is the difference between the two groups. After standard scaling the same column holds about −1.1 and 0.9, and the coefficient is no longer that difference.</p>
+<p>This is why the R recipe runs <code>step_normalize()</code> before <code>step_dummy()</code> creates the indicator columns, and why the Python pipeline never sends the categorical columns to the scaler.</p>
+</div>
+</div>
 </section>
 <section id="training-versus-test-data" class="level3">
 <h3 class="anchored" data-anchor-id="training-versus-test-data">4. Training versus test data</h3>
 <p>If the test-set creatinine median is very different from the training-set median, which should the pipeline use to impute test patients? Why?</p>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The training median, always.</p>
+<p>A large difference is worth investigating: the split may have been unlucky, or the two groups of patients may really differ. But it is not a reason to learn from the test patients. Once the model is in use there is no test median to borrow.</p>
+</div>
+</div>
 </section>
 <section id="what-does-a-pipeline-protect-us-from" class="level3">
 <h3 class="anchored" data-anchor-id="what-does-a-pipeline-protect-us-from">5. What does a pipeline protect us from?</h3>
 <p>Which aspects of preprocessing become more consistent when we use a fitted pipeline? What decisions still require clinical and statistical judgement? One decision to start with: this pipeline fills a missing smoking status with the most common value. What did Exercise 2.4 suggest instead?</p>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Worked answer
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>More consistent:</strong> every patient goes through the same steps, in the same order, with the same learned numbers, and comes out with the same columns. Nothing is learned from the test patients. The preprocessing and the model travel together as one object.</p>
+<p><strong>Still a judgement:</strong> which variables to use; whether the median is a reasonable stand-in for a missing creatinine; whether CRP should be log-transformed first (Exercise 2.5); whether an extreme value is an error or a very sick patient.</p>
+<p>The pipeline applies whatever you chose, faithfully. It cannot tell you whether the choice was right. Smoking status is the example: Exercise 2.4 argued that an <code>Unknown</code> category is more honest than the most common value. Changing the pipeline’s mind takes one line.</p>
+<div class="columns">
+<div class="column" style="width:48%;">
+<p><strong>Python</strong></p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>SimpleImputer(</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>    strategy<span class="op">=</span><span class="st">"constant"</span>,</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>    fill_value<span class="op">=</span><span class="st">"Unknown"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div><div class="column" style="width:4%;">
+
+</div><div class="column" style="width:48%;">
+<p><strong>R</strong></p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="fu">step_unknown</span>(</span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>  smoking_status,</span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_level =</span> <span class="st">"Unknown"</span></span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div>
+</div>
+</div>
+</div>
 
 
 </section>

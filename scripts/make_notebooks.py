@@ -357,9 +357,9 @@ def cells(items):
 def intro(stem, lang):
     day = day_of(stem)
     url = f"{SITE}day{day}/{stem}.html" if day else SITE
-    where = ("Open it in Positron or RStudio and run it a chunk at a time"
+    where = ("Open it in RStudio and run it a chunk at a time"
              if lang == "r" else
-             "Open it in Jupyter, VS Code or Positron and run it a cell at a time")
+             "Open it in Jupyter or VS Code and run it a cell at a time")
     return [f"*HDS MSc · Module 3 · the {LABEL[lang]} version of this exercise; "
             f"the web page is at <{url}>.*", "",
             f"*{where}. Keep it in the folder that holds your `data` folder. "

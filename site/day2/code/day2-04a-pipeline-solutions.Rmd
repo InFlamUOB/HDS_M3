@@ -1,0 +1,669 @@
+---
+title: "Exercise 2.6 — Understanding preprocessing pipelines (with solutions)"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day2/day2-04a-pipeline.html>.*
+
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+
+## Overview
+
+In this exercise, we combine imputation, encoding, scaling and regression
+into one fitted workflow. We then inspect what the preprocessing learned
+from the training patients and apply it to unseen test patients.
+
+## The scenario
+
+We want to predict how long patients will stay in hospital, using information
+available at admission.
+
+In Exercise 2.3, Exercise 2.4 and Exercise 2.5 we applied encoding,
+imputation and scaling separately. Now we combine them into a pipeline.
+
+But rather than treating a pipeline as a black box, we will look inside it to
+understand what is learned during training and what happens when it is applied
+to new patients.
+
+## Task 1 — Build and fit a pipeline 
+
+Load the hospital admissions data, add BMI as in Exercise 2.5, and keep the
+outcome and the eight predictors.
+
+This is the same file as in Exercise 2.4 and Exercise 2.5. If you do not
+have it yet, [**download `hospital_admissions.csv`**](data/hospital_admissions.csv) into your `data`
+folder.
+
+```{r}
+#| message: false
+#| warning: false
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels"))
+
+library(tidyverse)
+library(tidymodels)
+
+hospital <- read_csv(
+  "data/hospital_admissions.csv"
+) |>
+  mutate(
+    BMI = weight_kg / (height_cm / 100)^2,
+    admission_type = as.factor(admission_type), 
+    smoking_status =  as.factor(smoking_status)
+    ) |>
+  select(
+    length_of_stay,
+    age, BMI, systolic_BP,
+    heart_rate, creatinine,
+    CRP_mg_L,
+    admission_type, smoking_status
+  )
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+import pandas as pd
+from sklearn.model_selection import (
+    train_test_split,
+)
+from sklearn.pipeline import Pipeline
+from sklearn.compose import (
+    ColumnTransformer,
+)
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import (
+    OneHotEncoder,
+    StandardScaler,
+)
+from sklearn.linear_model import (
+    LinearRegression,
+)
+
+hospital = pd.read_csv(
+    "data/hospital_admissions.csv"
+)
+hospital["BMI"] = (
+    hospital["weight_kg"]
+    / (hospital["height_cm"] / 100) ** 2
+)
+
+num = ["age", "BMI", "systolic_BP",
+       "heart_rate", "creatinine",
+       "CRP_mg_L"]
+cat = ["admission_type",
+       "smoking_status"]
+
+X = hospital[num + cat]
+y = hospital["length_of_stay"]
+```
+
+Split into 80% training and 20% test patients.
+
+```{r}
+set.seed(42)
+split <- initial_split(
+  hospital, prop = 0.8
+)
+
+train <- training(split)
+test <- testing(split)
+
+cat(nrow(train), nrow(test), "\n")
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+X_train, X_test, y_train, y_test = (
+    train_test_split(
+        X, y,
+        test_size=0.2,
+        random_state=42,
+    )
+)
+
+print(len(X_train), len(X_test))
+```
+
+> **The two columns hold different patients**
+>
+> Python and R shuffle with different random number generators, so
+> `random_state=42` and `set.seed(42)` do not pick the same 50 test patients.
+> Expect the numbers in the two columns to be close, not identical. The steps,
+> and what they teach, are the same.
+
+A **pipeline** combines preprocessing and modelling into one sequence.
+This ensures that the same steps are applied consistently to training
+patients and any new patients. Here our preprocessing steps require imputing missing values, 
+encoding categorical variables and
+standardising numerical variables. This is the part that was not included in your exercise 1.2 yesterday!
+
+### How the pieces connect
+
+In Python, we build the workflow in three parts:
+
+1. **Two preprocessing pipelines:** numerical variables are imputed
+   and then scaled; categorical variables are imputed and then encoded.
+2. **A `ColumnTransformer`:** applies each pipeline to its selected
+   columns and joins the outputs side by side.
+3. **An outer `Pipeline`:** passes the combined, prepared predictors
+   to linear regression.
+
+Each entry in `ColumnTransformer` specifies a name, a transformer
+and the columns it should process:
+
+```python
+preprocessor = ColumnTransformer([
+    # Name          Pipeline       Columns
+    ("numeric",     numeric,       num),
+    ("categorical", categorical,   cat),
+])
+```
+
+**Within a `Pipeline`, each step receives the previous step's output.**
+The two branches inside `ColumnTransformer` work independently on
+different columns.
+
+The names in quotation marks, such as `"impute"` and `"regression"`, are
+labels we choose; we use them in Task 2 to look inside the fitted pipeline.
+`handle_unknown="ignore"` lets the pipeline process a new patient whose
+category was not seen in training: that patient's columns for the variable
+are all zero.
+
+In R, the `recipe()` defines the preprocessing steps and selects the
+variables for each step. `length_of_stay ~ .` names the outcome, and `.`
+means every other column is a predictor. A `workflow()` connects that recipe
+to the model. Because the formula is already in the recipe, `fit()` needs only
+the data. (`|>` is the base-R pipe; it does the same job as `%>%` in
+Exercise 1.2.)
+
+See the [ColumnTransformer documentation](https://scikit-learn.org/stable/modules/generated/sklearn.compose.ColumnTransformer.html)
+and the [recipes documentation](https://recipes.tidymodels.org/) for further
+details.
+
+```{r}
+# "." means every other column
+rec <- recipe(
+  length_of_stay ~ .,
+  data = train
+) |>
+  step_impute_median(
+    all_numeric_predictors()
+  ) |>
+  step_impute_mode(
+    all_nominal_predictors()
+  ) |>
+  step_normalize(
+    all_numeric_predictors()
+  ) |>
+  step_dummy(
+    all_nominal_predictors()
+  )
+
+# The model: as in Exercise 1.2
+los_model <- linear_reg() |>
+  set_engine("lm")
+
+# The pipeline: recipe + model
+los_workflow <- workflow() |>
+  add_recipe(rec) |>
+  add_model(los_model)
+
+# Fit on the training patients
+los_fit <- los_workflow |>
+  fit(data = train)
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+numeric = Pipeline([
+    ("impute", SimpleImputer(
+        strategy="median")),
+    ("scale", StandardScaler()),
+])
+
+categorical = Pipeline([
+    ("impute", SimpleImputer(
+        strategy="most_frequent")),
+    ("encode", OneHotEncoder(
+        handle_unknown="ignore")),
+])
+
+preprocessor = ColumnTransformer([
+    ("numeric", numeric, num),
+    ("categorical", categorical, cat),
+])
+
+model = Pipeline([
+    ("preprocess", preprocessor),
+    ("regression", LinearRegression()),
+])
+
+model.fit(X_train, y_train)
+```
+
+`step_normalize()` standardises the numerical predictors before
+`step_dummy()` creates the indicator columns, so the new indicator columns
+keep their values of 0 and 1.
+
+> **Defining, fitting and predicting**
+>
+> **Define:** creating a pipeline or workflow sets out the instructions.
+> No preprocessing parameters have been learned yet.
+>
+> **Fit:** `model.fit(X_train, y_train)` in Python or
+> `los_workflow |> fit(data = train)` in R learns the preprocessing
+> parameters (medians, most frequent categories, category labels, means and
+> standard deviations) from the training patients, applies the
+> transformations and fits the regression.
+>
+> **Predict:** `model.predict(X_test)` or `predict(los_fit, test)` applies
+> the stored training transformations before predicting. These parameters
+> are not recalculated from the test patients.
+>
+> Compared with Exercise 1.2, the regression is familiar: the same model,
+> `fit` and `predict`. The new part is the preprocessing and the object that
+> connects it to the model (`Pipeline` in Python, `workflow()` in R).
+
+The same pipeline, read across the two columns:
+
+| What it does | Python | R |
+|---|---|---|
+| fill numeric gaps | `SimpleImputer(strategy="median")` | `step_impute_median()` |
+| fill categorical gaps | `SimpleImputer(strategy="most_frequent")` | `step_impute_mode()` |
+| turn categories into columns | `OneHotEncoder()` | `step_dummy()` |
+| standardise | `StandardScaler()` | `step_normalize()` |
+| say which columns get which step | `ColumnTransformer` | selectors such as `all_numeric_predictors()` |
+| preprocessing and model as one object | `Pipeline` | `workflow()` |
+| learn from the training patients | `model.fit(X_train, y_train)` | `fit(data = train)`: the formula is in the recipe |
+
+> **Think about it**
+>
+> 1. Which steps need to learn something from the training data?
+> 2. Why do we use different pipelines for numerical and categorical variables?
+> 3. What does `fit()` actually do?
+
+> **Worked answer**
+>
+> **All of them.** Median imputation learns one median per numeric column. Mode
+> imputation learns the most common category. The encoder learns the list of
+> categories. The scaler learns a mean and a standard deviation per numeric
+> column. The regression learns its coefficients.
+>
+> **Because the operations only make sense for one kind of variable.** There is
+> no median of "Emergency" and "Elective", and one-hot encoding age would create
+> a column for every age. Python makes the division explicit with a
+> `ColumnTransformer`. R does it inside one recipe, with selectors such as
+> `all_numeric_predictors()`.
+>
+> **`fit()` runs the steps in order on the training patients.** Each step learns
+> its numbers, transforms the training data and hands the result to the next
+> step (in Python, the numerical and categorical branches run side by side and
+> are joined). The regression is fitted last, on the fully processed table. Everything
+> learned is stored inside the fitted object. The test patients are not looked at.
+
+------------------------------------------------------------------------
+
+## Task 2 — Look inside the pipeline 
+
+### A. Where does the imputation median come from?
+
+Compare the training and test medians for creatinine, then ask the fitted
+pipeline which median it stored.
+
+To inspect the stored median, we navigate through the fitted objects. In
+Python: the model's `"preprocess"` step → its `"numeric"` branch → its
+`"impute"` step. `statistics_` contains the learned medians in the same order
+as `num`. In R: `extract_recipe()` takes the fitted recipe out of the
+workflow, and `tidy(..., number = 1)` shows what its first step learned.
+
+```{r}
+median(train$creatinine, na.rm = TRUE)
+median(test$creatinine, na.rm = TRUE)
+
+# the recipe fitted inside the workflow
+trained_rec <- extract_recipe(
+  los_fit, estimated = TRUE
+)
+
+# step 1 is the median imputation
+tidy(trained_rec, number = 1) |>
+  select(terms, value)
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+print("Training median:",
+      X_train["creatinine"].median())
+print("Test median:",
+      X_test["creatinine"].median())
+
+imputer = (
+    model.named_steps["preprocess"]
+    .named_transformers_["numeric"]
+    .named_steps["impute"]
+)
+
+position = num.index("creatinine")
+print("Pipeline median:",
+      imputer.statistics_[position])
+```
+
+> **Think about it**
+>
+> 1. Which median did the pipeline learn?
+> 2. Will it use that same median when transforming the test patients?
+> 3. Why shouldn't the test median be used to fill missing values in the test
+>    set?
+
+> **Worked answer**
+>
+> **The training median**: 74.5 in the Python column and 76 in the R column. The
+> test medians, 80 and 78, appear nowhere inside the pipeline.
+>
+> **Yes.** A test patient with no creatinine recorded receives the training
+> median.
+>
+> **Because the test patients stand in for patients you have not met yet.** A
+> future patient arrives alone, and one patient has no median. Filling test gaps
+> with the test median also means the preprocessing has learned from the very
+> patients it is being judged on, so the reported error is no longer an honest
+> estimate.
+
+### B. Visualise the effect of imputation
+
+Compare the creatinine distribution before and after imputation.
+
+```{r}
+#| fig-width: 4.5
+#| fig-height: 3.6
+creatinine_median <- tidy(
+  trained_rec, number = 1
+) |>
+  filter(terms == "creatinine") |>
+  pull(value)
+
+bind_rows(
+  data.frame(
+    creatinine = train$creatinine,
+    stage = "Original"
+  ),
+  data.frame(
+    creatinine = replace_na(
+      train$creatinine,
+      creatinine_median
+    ),
+    stage = "Imputed"
+  )
+) |>
+  ggplot(aes(x = creatinine)) +
+  # the same bins in both panels
+  geom_histogram(
+    binwidth = 10, boundary = 0,
+    na.rm = TRUE
+  ) +
+  facet_wrap(
+    ~ fct_inorder(stage), ncol = 1
+  ) +
+  labs(x = "Creatinine (µmol/L)")
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+import matplotlib.pyplot as plt
+
+imputed_train = imputer.transform(
+    X_train[num]
+)
+
+# the same bins for both: 0, 10, 20, ... 220
+bins = range(0, 230, 10)
+
+plt.hist(
+    X_train["creatinine"].dropna(),
+    bins=bins, alpha=0.5,
+    label="Original")
+plt.hist(
+    imputed_train[
+        :, num.index("creatinine")],
+    bins=bins, alpha=0.5,
+    label="Imputed")
+plt.legend()
+plt.xlabel("Creatinine (µmol/L)")
+plt.show()
+```
+
+> **Why the R column fills the gaps by hand here**
+>
+> `bake(trained_rec, new_data = train)` returns creatinine after *all* the steps,
+> so it has already been standardised and is no longer in µmol/L. To see
+> imputation on its own, the R code takes the median the recipe learned and fills
+> the gaps with it. The Python imputer is a separate object, so it can be applied
+> on its own.
+
+> **Think about it**
+>
+> What happens to the distribution when several patients receive exactly the
+> same median value?
+
+> **Worked answer**
+>
+> **One bar shoots up.** About 30 of the 200 training patients had no creatinine
+> recorded (32 in the Python split, 31 in the R split), and every one of them is
+> now placed at exactly the same value. The rest of the histogram is untouched.
+>
+> The column looks more certain than it is: the spread has shrunk, and a block of
+> patients now appear to have a perfectly typical creatinine that nobody
+> measured. This is the same effect as in Exercise 2.4, now happening inside
+> the pipeline where it is easy to forget.
+
+### C. What happens to the number of columns?
+
+```{r}
+processed_train <- bake(
+  trained_rec, new_data = train
+)
+
+# minus 1: the outcome is not a predictor
+cat("Original predictors:",
+    ncol(train) - 1, "\n")
+cat("Processed predictors:",
+    ncol(processed_train) - 1, "\n")
+
+names(processed_train)
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+processed = (
+    model.named_steps["preprocess"]
+    .transform(X_train)
+)
+
+print("Original features:",
+      X_train.shape[1])
+print("Processed features:",
+      processed.shape[1])
+
+names = (
+    model.named_steps["preprocess"]
+    .get_feature_names_out()
+)
+for name in names:
+    print(name)
+```
+
+> **11 columns in Python, 9 in R**
+>
+> Neither is a mistake. `OneHotEncoder()` makes one column for every category.
+> `step_dummy()` leaves out the first category of each variable, because it is
+> implied by the others: a patient who is not `Emergency` is `Elective`. Both
+> tables hold the same information.
+>
+> For linear regression with an intercept, keeping every category creates
+> redundant predictors. Python can still fit this model and its predictions are
+> unaffected, but the individual category coefficients are not uniquely
+> identifiable; R's reference-category encoding avoids this redundancy.
+
+> **Think about it**
+>
+> 1. Why did the number of columns increase?
+> 2. Which original variables were responsible?
+> 3. What would happen if we one-hot encoded age or CRP instead?
+
+> **Worked answer**
+>
+> **Because a model needs numbers, and a category is not a number.** Each
+> categorical variable is replaced by a set of 0/1 columns.
+>
+> **`admission_type` and `smoking_status`.** The six numeric variables are still
+> six columns. They were changed in value, not in number.
+>
+> **The table would explode.** There are more than 60 different ages among the
+> 200 training patients, and about 150 different CRP values. One-hot encoding CRP
+> would give nearly one column per patient. The columns would also throw away
+> what makes the variable useful: the model could no longer tell that a CRP of 40
+> lies between 30 and 50. And a new patient with a value never seen in training
+> would match no column at all.
+
+------------------------------------------------------------------------
+
+## Task 3 — Apply the pipeline to new patients 
+
+A fitted pipeline should apply the same learned transformations to new
+patients.
+
+```{r}
+predictions <- predict(
+  los_fit, test
+)
+
+head(predictions, 5)
+```
+
+*For comparison, the same step in Python (not run here):*
+
+```python
+predictions = model.predict(X_test)
+
+print("First five predictions:",
+      predictions[:5].round(2))
+```
+
+As you have seen, a key advantage of pipelines is that all preprocessing parameters, such as imputation medians, scaling means and standard deviations, and encoding categories, are learned from the training data only. These same parameters are then applied to the test data without being recalculated. This is essential to prevent data leakage, ensuring that information from the test set does not influence model training and that performance is evaluated on genuinely unseen data.
+
+Fitting the pipeline on the training data keeps the learned preprocessing
+parameters within the training set. Preprocessing performed on the full
+dataset beforehand can still introduce leakage.
+
+---------------
+
+## Final reflection — Preprocessing choices and order
+
+### 1. Imputation and scaling
+
+Should we impute missing numerical values before standardising them? What
+would happen if we reversed the order?
+
+> **Worked answer**
+>
+> Imputing first is the usual order, and it is what both pipelines above do.
+>
+> Reversing the order is not automatically invalid. Both scalers support
+> missing values: they skip the gaps when they compute a mean
+> and a standard deviation. The result is slightly different, though: scaled
+> first and filled second, training creatinine ends with a standard deviation of
+> 0.92 instead of 1, because some 30 identical values were added after the
+> spread was measured.
+>
+> With median imputation little is at stake. The order matters far more when the
+> imputer uses distances between patients, as KNN does. Then scale first, or the
+> variables with the largest numbers decide who counts as a neighbour.
+
+### 2. One-hot encoding continuous features
+
+If we accidentally one-hot encoded age, blood pressure and CRP, what would
+happen to the number of columns and the information they contain?
+
+> **Worked answer**
+>
+> Three columns would become roughly 270 to 280: more than 60 for age, about 60 for
+> blood pressure and about 150 for CRP, for 200 training patients. Most of those
+> columns would describe one or two patients each.
+>
+> The information that the values are ordered would be lost. To the model, a
+> systolic pressure of 150 would be no closer to 151 than to 95.
+
+### 3. Scaling one-hot encoded features
+
+Would applying standard scaling to the resulting 0/1 categorical indicators be
+mathematically incorrect? Why might we prefer to leave them as 0 and 1?
+
+> **Worked answer**
+>
+> The meaning is lost!  A 0/1 column says "emergency admission: no or
+> yes", and its coefficient is the difference between the two groups. After
+> standard scaling the same column holds about −1.1 and 0.9, and the coefficient
+> is no longer that difference.
+>
+> This is why the R recipe runs `step_normalize()` before `step_dummy()`
+> creates the indicator columns, and why the Python pipeline never sends the categorical
+> columns to the scaler.
+
+### 4. Training versus test data
+
+If the test-set creatinine median is very different from the training-set
+median, which should the pipeline use to impute test patients? Why?
+
+> **Worked answer**
+>
+> The training median, always.
+>
+> A large difference is worth investigating: the split may have been unlucky, or
+> the two groups of patients may really differ. But it is not a reason to learn
+> from the test patients. Once the model is in use there is no test median to
+> borrow.
+
+### 5. What does a pipeline protect us from?
+
+Which aspects of preprocessing become more consistent when we use a fitted
+pipeline? What decisions still require clinical and statistical judgement? One decision to start with: this pipeline fills a missing smoking status with
+the most common value. What did Exercise 2.4 suggest instead?
+
+> **Worked answer**
+>
+> **More consistent:** every patient goes through the same steps, in the same
+> order, with the same learned numbers, and comes out with the same columns.
+> Nothing is learned from the test patients. The preprocessing and the model
+> travel together as one object.
+>
+> **Still a judgement:** which variables to use; whether the median is a
+> reasonable stand-in for a missing creatinine; whether CRP should be
+> log-transformed first (Exercise 2.5); whether an extreme value is an error or a
+> very sick patient.
+>
+> The pipeline applies whatever you chose, faithfully. It cannot tell you whether
+> the choice was right. Smoking status is the example: Exercise 2.4 argued
+> that an `Unknown` category is more honest than the most common value. Changing
+> the pipeline's mind takes one line.
+
+```{r}
+#| eval: false
+step_unknown(
+  smoking_status,
+  new_level = "Unknown"
+)
+```
+
+> *For comparison, the same step in Python (not run here):*
+>
+> ```python
+> SimpleImputer(
+>     strategy="constant",
+>     fill_value="Unknown")
+> ```

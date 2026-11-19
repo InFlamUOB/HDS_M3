@@ -445,7 +445,7 @@ if (file.exists("data/diabetes.csv")) {
   readr::write_csv(glucose_study, "data/glucose_study.csv")
   message("wrote glucose_study.csv: ", nrow(glucose_study), " rows")
 
-  # data/glucose_bmi_study.csv - for Exercise 3.1b: the 80 glucose_study.csv
+  # data/glucose_bmi_study.csv - for Exercise 3.1: the 80 glucose_study.csv
   # patients with BMI (diabetes.csv's `mass`) added, minus the 3 whose BMI is
   # recorded as 0, so the file is clean and students filter nothing: 77 rows.
   # Kept separate so glucose_study.csv does not change.
