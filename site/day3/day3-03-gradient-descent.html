@@ -516,7 +516,7 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 </section>
 <section id="task-2-make-it-converge" class="level3">
 <h3 class="anchored" data-anchor-id="task-2-make-it-converge">Task 2 — Make it converge</h3>
-<p>Standardise, descend with a learning rate a thousand times larger, and rescale the parameters to the original units.</p>
+<p>Standardise, descend with a learning rate a thousand times larger, and rescale the parameters to the original units (the box under the code explains how).</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>zx <span class="ot">&lt;-</span> (glu<span class="sc">$</span>age <span class="sc">-</span> <span class="fu">mean</span>(glu<span class="sc">$</span>age)) <span class="sc">/</span> <span class="fu">sd</span>(glu<span class="sc">$</span>age)</span>
@@ -525,7 +525,7 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 <span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>std <span class="ot">&lt;-</span> <span class="fu">descend_mse</span>(zx, zy, <span class="at">alpha =</span> <span class="fl">0.1</span>, <span class="at">n =</span> <span class="dv">50</span>)</span>
 <span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>slope     <span class="ot">&lt;-</span> std<span class="sc">$</span>b1 <span class="sc">*</span> <span class="fu">sd</span>(glu<span class="sc">$</span>glucose) <span class="sc">/</span> <span class="fu">sd</span>(glu<span class="sc">$</span>age)</span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>intercept <span class="ot">&lt;-</span> <span class="fu">mean</span>(glu<span class="sc">$</span>glucose) <span class="sc">+</span> <span class="fu">sd</span>(glu<span class="sc">$</span>glucose) <span class="sc">*</span> std<span class="sc">$</span>b0 <span class="sc">-</span> slope <span class="sc">*</span> <span class="fu">mean</span>(glu<span class="sc">$</span>age)</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>intercept <span class="ot">&lt;-</span> <span class="fu">mean</span>(glu<span class="sc">$</span>glucose) <span class="sc">-</span> slope <span class="sc">*</span> <span class="fu">mean</span>(glu<span class="sc">$</span>age)</span>
 <span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">intercept =</span> intercept, <span class="at">slope =</span> slope)</span>
 <span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="fu">coef</span>(<span class="fu">lm</span>(glucose <span class="sc">~</span> age, <span class="at">data =</span> glu))   <span class="co"># the answer to compare with</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -536,11 +536,29 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Tip</span>Stuck?
+<span class="screen-reader-only">Tip</span>How the conversion back works
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
 <div id="callout-4" class="callout-4-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>On the standardised scale both columns are measured in standard deviations (SDs). The descent finds a slope of 0.135: one SD more age goes with 0.135 SD more glucose. Its intercept is 0, because both columns are centred on their means.</p>
+<p><strong>Slope.</strong> One SD of age is 13.8 years and one SD of glucose is 29.6 mg/dL. So 13.8 more years go with 0.135 × 29.6 = 4.0 mg/dL more glucose, which is 4.0 / 13.8 = 0.289 mg/dL per year. That is the line <code>slope &lt;- std$b1 * sd(glu$glucose) / sd(glu$age)</code>.</p>
+<p><strong>Intercept.</strong> The fitted line always passes through the average patient: 33.3 years and 119.9 mg/dL. To find the intercept (the line at age 0), start at the average glucose and go back 33.3 years along the slope: 119.9 − 0.289 × 33.3 = 110.3. That is the line <code>intercept &lt;- mean(glu$glucose) - slope * mean(glu$age)</code>.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-5-contents" aria-controls="callout-5" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Stuck?
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-5" class="callout-5-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <p>Standardising a column means centring it on its own mean and dividing by its own standard deviation. The line above does it for age; do the same thing to glucose.</p>
 </div>
@@ -800,7 +818,7 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 </section>
 <section id="task-2-make-it-converge-1" class="level3">
 <h3 class="anchored" data-anchor-id="task-2-make-it-converge-1">Task 2 — Make it converge</h3>
-<p>Standardise, descend with a learning rate a thousand times larger, and rescale the parameters to the original units.</p>
+<p>Standardise, descend with a learning rate a thousand times larger, and rescale the parameters to the original units (the box under the code explains how).</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> LinearRegression</span>
@@ -813,11 +831,29 @@ x_n\)</span>. We know the answer is <span class="math inline">\(x = 0\)</span>, 
 <span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>std <span class="op">=</span> descend_mse(zx, zy, alpha<span class="op">=</span><span class="fl">0.1</span>, n<span class="op">=</span><span class="dv">50</span>)</span>
 <span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>slope     <span class="op">=</span> std[<span class="st">"b1"</span>] <span class="op">*</span> sy <span class="op">/</span> sx</span>
-<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>intercept <span class="op">=</span> my <span class="op">+</span> sy <span class="op">*</span> std[<span class="st">"b0"</span>] <span class="op">-</span> slope <span class="op">*</span> mx</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>intercept <span class="op">=</span> my <span class="op">-</span> slope <span class="op">*</span> mx</span>
 <span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>ref <span class="op">=</span> LinearRegression().fit(glu[[<span class="st">"age"</span>]], glu[<span class="st">"glucose"</span>])</span>
 <span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(intercept, slope)</span>
 <span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">round</span>(ref.intercept_, <span class="dv">3</span>), <span class="bu">round</span>(ref.coef_[<span class="dv">0</span>], <span class="dv">4</span>))   <span class="co"># the answer to compare with</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-8-contents" aria-controls="callout-8" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>How the conversion back works
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-8" class="callout-8-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>On the standardised scale both columns are measured in standard deviations (SDs). The descent finds a slope of 0.135: one SD more age goes with 0.135 SD more glucose. Its intercept is 0, because both columns are centred on their means.</p>
+<p><strong>Slope.</strong> One SD of age is 13.8 years and one SD of glucose is 29.6 mg/dL. So 13.8 more years go with 0.135 × 29.6 = 4.0 mg/dL more glucose, which is 4.0 / 13.8 = 0.289 mg/dL per year. That is the line <code>slope = std["b1"] * sy / sx</code>.</p>
+<p><strong>Intercept.</strong> The fitted line always passes through the average patient: 33.3 years and 119.9 mg/dL. To find the intercept (the line at age 0), start at the average glucose and go back 33.3 years along the slope: 119.9 − 0.289 × 33.3 = 110.3. That is the line <code>intercept = my - slope * mx</code>.</p>
+</div>
+</div>
 </div>
 <p>Fifty iterations on the standardised data give 110.298 and 0.28867, agreeing with <code>LinearRegression</code> to five significant figures. The same algorithm, the same data, the same loss; twenty times fewer iterations and a thousand times larger step. Scaling was not a tidying-up step, it was the difference between an answer and no answer.</p>
 <div class="cell" data-layout-align="center">

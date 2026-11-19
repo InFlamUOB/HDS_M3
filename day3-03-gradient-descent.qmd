@@ -278,7 +278,7 @@ there, and convert the answer back.
 ### Task 2 — Make it converge
 
 Standardise, descend with a learning rate a thousand times larger, and rescale
-the parameters to the original units.
+the parameters to the original units (the box under the code explains how).
 
 ```{r}
 #| eval: false
@@ -289,11 +289,30 @@ zy <- (glu$glucose - ______) / sd(glu$glucose)
 std <- descend_mse(zx, zy, alpha = 0.1, n = 50)
 
 slope     <- std$b1 * sd(glu$glucose) / sd(glu$age)
-intercept <- mean(glu$glucose) + sd(glu$glucose) * std$b0 - slope * mean(glu$age)
+intercept <- mean(glu$glucose) - slope * mean(glu$age)
 
 c(intercept = intercept, slope = slope)
 coef(lm(glucose ~ age, data = glu))   # the answer to compare with
 ```
+
+::: {.callout-tip collapse="true"}
+## How the conversion back works
+On the standardised scale both columns are measured in standard deviations
+(SDs). The descent finds a slope of 0.135: one SD more age goes with 0.135 SD
+more glucose. Its intercept is 0, because both columns are centred on their
+means.
+
+**Slope.** One SD of age is 13.8 years and one SD of glucose is 29.6 mg/dL. So
+13.8 more years go with 0.135 × 29.6 = 4.0 mg/dL more glucose, which is
+4.0 / 13.8 = 0.289 mg/dL per year. That is the line
+`slope <- std$b1 * sd(glu$glucose) / sd(glu$age)`.
+
+**Intercept.** The fitted line always passes through the average patient:
+33.3 years and 119.9 mg/dL. To find the intercept (the line at age 0), start at
+the average glucose and go back 33.3 years along the slope:
+119.9 − 0.289 × 33.3 = 110.3. That is the line
+`intercept <- mean(glu$glucose) - slope * mean(glu$age)`.
+:::
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
@@ -312,7 +331,7 @@ zy <- (glu$glucose - mean(glu$glucose)) / sd(glu$glucose)
 std <- descend_mse(zx, zy, alpha = 0.1, n = 50)
 
 slope     <- std$b1 * sd(glu$glucose) / sd(glu$age)
-intercept <- mean(glu$glucose) + sd(glu$glucose) * std$b0 - slope * mean(glu$age)
+intercept <- mean(glu$glucose) - slope * mean(glu$age)
 
 c(intercept = intercept, slope = slope)
 coef(lm(glucose ~ age, data = glu))   # the answer to compare with
@@ -581,7 +600,7 @@ there, and convert the answer back.
 ### Task 2 — Make it converge
 
 Standardise, descend with a learning rate a thousand times larger, and rescale
-the parameters to the original units.
+the parameters to the original units (the box under the code explains how).
 
 ```{python}
 #| eval: false
@@ -596,12 +615,31 @@ zy = (glu["glucose"] - ______) / sy
 std = descend_mse(zx, zy, alpha=0.1, n=50)
 
 slope     = std["b1"] * sy / sx
-intercept = my + sy * std["b0"] - slope * mx
+intercept = my - slope * mx
 
 ref = LinearRegression().fit(glu[["age"]], glu["glucose"])
 print(intercept, slope)
 print(round(ref.intercept_, 3), round(ref.coef_[0], 4))   # the answer to compare with
 ```
+
+::: {.callout-tip collapse="true"}
+## How the conversion back works
+On the standardised scale both columns are measured in standard deviations
+(SDs). The descent finds a slope of 0.135: one SD more age goes with 0.135 SD
+more glucose. Its intercept is 0, because both columns are centred on their
+means.
+
+**Slope.** One SD of age is 13.8 years and one SD of glucose is 29.6 mg/dL. So
+13.8 more years go with 0.135 × 29.6 = 4.0 mg/dL more glucose, which is
+4.0 / 13.8 = 0.289 mg/dL per year. That is the line
+`slope = std["b1"] * sy / sx`.
+
+**Intercept.** The fitted line always passes through the average patient:
+33.3 years and 119.9 mg/dL. To find the intercept (the line at age 0), start at
+the average glucose and go back 33.3 years along the slope:
+119.9 − 0.289 × 33.3 = 110.3. That is the line
+`intercept = my - slope * mx`.
+:::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
@@ -617,7 +655,7 @@ zy = (glu["glucose"] - my) / sy
 std = descend_mse(zx, zy, alpha=0.1, n=50)
 
 slope     = std["b1"] * sy / sx
-intercept = my + sy * std["b0"] - slope * mx
+intercept = my - slope * mx
 
 ref = LinearRegression().fit(glu[["age"]], glu["glucose"])
 print(intercept, slope)
