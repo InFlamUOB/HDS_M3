@@ -12,8 +12,13 @@ is the **decision boundary**. In this exercise you work it out from the
 coefficients, see why it is straight, move it with the threshold, and meet data
 where no straight line can do the job.
 
-- **Part 1.** Find the boundary of the glucose and BMI model by hand, and check
-  it on the map.
+Diabetes is diagnosed from blood glucose, so in Exercise 4.1 the boundary was
+almost a glucose cut-off and BMI barely tilted it. Here we use an example where
+two measurements both matter: age and blood pressure, and a cardiovascular
+event in the next ten years.
+
+- **Part 1.** Find the boundary by hand from the coefficients, draw it, and
+  see it as the line where a plane is cut, in 3D.
 - **Part 2.** Change the threshold, as in Exercise 4.3, and see the line move.
 - **Part 3.** A dataset where the risk is high at both ends of a measurement.
   A straight boundary fails; a squared term or a tree gives a boundary that
@@ -42,7 +47,7 @@ want it.
 
 ```{r}
 # Packages for this exercise. If one is missing, remove the # and run this line once:
-# install.packages(c("tidyverse", "tidymodels"))
+# install.packages(c("tidyverse", "tidymodels", "plotly"))
 
 library(tidyverse)
 library(tidymodels)
@@ -50,21 +55,27 @@ library(tidymodels)
 theme_set(theme_bw())
 ```
 
-The same 750 people and the same split as in Exercise 4.1.
+`data/cvd_risk.csv` holds 500 adults aged 40 to 80 seen at a health check:
+their age, their systolic blood pressure in mmHg, and whether they had a
+cardiovascular event (a heart attack or a stroke) in the following ten years.
+If you do not have it yet, [**download `cvd_risk.csv`**](data/cvd_risk.csv){download="cvd_risk.csv"}
+into your `data` folder.
 
 ```{r}
-diabetes <- read_csv("data/diabetes_clean.csv") |>
-  select(glucose, mass, diabetes) |>
-  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+cvd <- read_csv("data/cvd_risk.csv") |>
+  mutate(cvd = factor(cvd, levels = c("no", "yes")))
 
-test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
-train <- diabetes[-test_rows, ]
-test  <- diabetes[test_rows, ]
+test_rows <- seq(1, nrow(cvd), by = 5)     # every fifth person is held back
+train <- cvd[-test_rows, ]
+test  <- cvd[test_rows, ]
+
+count(train, cvd)
 ```
 
 ### Part 1 — Where the class changes
 
-Fit the model from Exercise 4.1, Part 2: diabetes from glucose and BMI.
+Fit a logistic regression with both measurements, the same way as in
+Exercise 4.1:
 
 ```{r}
 log_model <- logistic_reg() |>
@@ -72,141 +83,145 @@ log_model <- logistic_reg() |>
   set_mode("classification")
 
 log_fit <- log_model |>
-  fit(diabetes ~ glucose + mass, data = train)
+  fit(cvd ~ age + systolic_bp, data = train)
 
-b <- log_fit$fit$coefficients      # intercept, glucose, BMI
+b <- log_fit$fit$coefficients      # intercept, age, blood pressure
 b
 ```
 
 The model is a straight line on the log-odds scale (Exercise 4.2):
 
-$$\text{log-odds} = \beta_0 + \beta_1 \times \text{glucose} + \beta_2 \times \text{BMI}$$
+$$\text{log-odds} = \beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure}$$
 
 With a threshold of 0.5, the class changes where the probability is 0.5. A
 probability of 0.5 is odds of 1 and **log-odds of 0**. So the boundary is every
-combination of glucose and BMI where
+combination of age and blood pressure where
 
-$$\beta_0 + \beta_1 \times \text{glucose} + \beta_2 \times \text{BMI} = 0$$
+$$\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure} = 0$$
 
-For a given BMI, solve for glucose:
+For a given blood pressure, solve for age:
 
-$$\text{glucose} = \frac{-\beta_0 - \beta_2 \times \text{BMI}}{\beta_1}$$
+$$\text{age} = \frac{-\beta_0 - \beta_2 \times \text{blood pressure}}{\beta_1}$$
 
-#### Task 1a — The boundary at a BMI of 30 and of 45
+#### Task 1a — The boundary at a blood pressure of 120 and of 160
 
 Round the coefficients printed above to four significant figures and calculate,
-by hand, the glucose at which the class changes for a BMI of 30. Then do the
-same for a BMI of 45.
+by hand, the age at which the class changes for a blood pressure of 120 mmHg.
+Then do the same for 160 mmHg.
 
 ```{r}
 #| eval: false
 # Replace every ______ below, then run this cell.
-boundary_30 <- (-(______) - ______ * 30) / ______
-boundary_45 <- (-(______) - ______ * 45) / ______
-c(boundary_30, boundary_45)
+boundary_120 <- (-(______) - ______ * 120) / ______
+boundary_160 <- (-(______) - ______ * 160) / ______
+c(boundary_120, boundary_160)
 ```
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-In order: the intercept, the BMI weight, and the glucose weight. The intercept
-is negative, so minus the intercept is a positive number.
+In order: the intercept, the blood-pressure weight, and the age weight. The
+intercept is negative, so minus the intercept is a positive number.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-boundary_30 <- (-(-7.004) - 0.06437 * 30) / 0.03355
-boundary_45 <- (-(-7.004) - 0.06437 * 45) / 0.03355
-c(boundary_30, boundary_45)
+boundary_120 <- (-(-14.22) - 0.05292 * 120) / 0.1042
+boundary_160 <- (-(-14.22) - 0.05292 * 160) / 0.1042
+c(boundary_120, boundary_160)
 ```
 
-At a BMI of 30 the class changes at a glucose of about 151 mg/dL; at a BMI of
-45, at about 122.
+With a blood pressure of 120 the model predicts an event from about age 76;
+with 160, from about age 55.
 :::
 :::
 
-Check it with `predict()`: a patient on the boundary should get a probability
+Check it with `predict()`: a person on the boundary should get a probability
 of 0.5.
 
 ```{r}
-predict(log_fit, new_data = data.frame(glucose = 151.2, mass = 30), type = "prob")
+predict(log_fit, new_data = data.frame(age = 75.6, systolic_bp = 120), type = "prob")
 ```
 
-Every point on the boundary satisfies one linear equation in glucose and BMI,
-so the boundary is a **straight line**. Here it is, drawn from the
+Every point on the boundary satisfies one linear equation in age and blood
+pressure, so the boundary is a **straight line**. Here it is, drawn from the
 coefficients, over the test patients:
 
 ```{r}
 #| code-fold: true
 #| code-summary: "Code for this plot (optional)"
-# the boundary written as BMI = a + s * glucose
-ggplot(test, aes(x = glucose, y = mass, shape = diabetes, colour = diabetes)) +
+# the boundary written as blood pressure = a + s * age
+ggplot(test, aes(x = age, y = systolic_bp, shape = cvd, colour = cvd)) +
   geom_point(size = 2) +
   geom_abline(intercept = -b[1] / b[3], slope = -b[2] / b[3], linewidth = 1) +
-  annotate("point", x = c(151.2, 122.4), y = c(30, 45), colour = "red", size = 3) +
-  scale_shape_manual(values = c(neg = 1, pos = 17)) +
-  scale_colour_manual(values = c(neg = "steelblue", pos = "darkorange")) +
-  coord_cartesian(xlim = c(40, 200), ylim = c(18, 68)) +
-  labs(x = "Glucose (mg/dL)", y = "BMI (kg/m²)", shape = "Measured", colour = "Measured",
+  annotate("point", x = c(75.6, 55.3), y = c(120, 160), colour = "red", size = 3) +
+  scale_shape_manual(values = c(no = 1, yes = 17)) +
+  scale_colour_manual(values = c(no = "steelblue", yes = "darkorange")) +
+  coord_cartesian(xlim = c(40, 80), ylim = c(80, 200)) +
+  labs(x = "Age (years)", y = "Systolic blood pressure (mmHg)",
+       shape = "Event", colour = "Event",
        title = "The decision boundary at a threshold of 0.5")
 ```
 
+Above and to the right of the line the model says `yes`; below and to the left,
+`no`. The line is tilted because both measurements count: an older person
+needs a lower blood pressure to cross it.
+
 #### The same line in three dimensions
 
-The log-odds, $\beta_0 + \beta_1 \times \text{glucose} + \beta_2 \times \text{BMI}$,
-are a flat, tilted **plane** above the glucose–BMI floor, like the plane in
-Exercise 3.1. The grey sheet is height 0. Where the plane passes through the
+The log-odds, $\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure}$,
+are a flat, tilted **plane** above the age–blood pressure floor, like the plane
+in Exercise 3.1. The grey sheet is height 0. Where the plane passes through the
 sheet is the decision boundary, the black line: where the plane is above the
-sheet the model says `pos`, where it is below, `neg`. The test patients are
-drawn on the grey sheet. Turn the plot with the mouse and scroll to zoom.
+sheet the model says `yes`, where it is below, `no`. The test patients are drawn
+on the grey sheet. Turn the plot with the mouse and scroll to zoom.
 
 ```{r}
 #| code-fold: true
 #| code-summary: "Code for this plot (optional)"
 #| eval: !expr requireNamespace("plotly", quietly = TRUE)
 # This plot needs the plotly package: install.packages("plotly")
-glucoses <- seq(40, 200, by = 2)
-bmis     <- seq(18, 68, by = 1)
+ages <- seq(40, 80, by = 1)
+bps  <- seq(80, 200, by = 2)
 
-# the log-odds at every grid point: one row per BMI, one column per glucose
-logodds_matrix <- outer(bmis, glucoses, function(m, g) b[1] + b[2] * g + b[3] * m)
+# the log-odds at every grid point: one row per blood pressure, one column per age
+logodds_matrix <- outer(bps, ages, function(s, a) b[1] + b[2] * a + b[3] * s)
 
-# the boundary: the glucose where the log-odds are 0, for each BMI
-line_glucose <- (-b[1] - b[3] * bmis) / b[2]
-on_floor <- line_glucose >= 40 & line_glucose <= 200
+# the boundary: the age where the log-odds are 0, for each blood pressure
+line_age <- (-b[1] - b[3] * bps) / b[2]
+on_floor <- line_age >= 40 & line_age <= 80
 
-neg <- filter(test, diabetes == "neg")
-pos <- filter(test, diabetes == "pos")
+no  <- filter(test, cvd == "no")
+yes <- filter(test, cvd == "yes")
 
 plotly::plot_ly() |>
-  plotly::add_surface(x = glucoses, y = bmis, z = logodds_matrix, opacity = 0.75,
+  plotly::add_surface(x = ages, y = bps, z = logodds_matrix, opacity = 0.75,
                       colorscale = list(c(0, 1), c("steelblue", "darkorange")),
                       showscale = FALSE, name = "log-odds") |>
-  plotly::add_surface(x = glucoses, y = bmis, z = 0 * logodds_matrix, opacity = 0.4,
+  plotly::add_surface(x = ages, y = bps, z = 0 * logodds_matrix, opacity = 0.4,
                       colorscale = list(c(0, 1), c("grey", "grey")),
                       showscale = FALSE, name = "height 0") |>
-  plotly::add_trace(type = "scatter3d", mode = "lines", x = line_glucose[on_floor],
-                    y = bmis[on_floor], z = rep(0, sum(on_floor)),
+  plotly::add_trace(type = "scatter3d", mode = "lines", x = line_age[on_floor],
+                    y = bps[on_floor], z = rep(0, sum(on_floor)),
                     line = list(color = "black", width = 8), name = "boundary") |>
-  plotly::add_trace(type = "scatter3d", mode = "markers", x = neg$glucose, y = neg$mass,
-                    z = rep(0, nrow(neg)), marker = list(size = 3, color = "steelblue"),
-                    name = "test: neg") |>
-  plotly::add_trace(type = "scatter3d", mode = "markers", x = pos$glucose, y = pos$mass,
-                    z = rep(0, nrow(pos)), marker = list(size = 3, color = "darkorange"),
-                    name = "test: pos") |>
-  plotly::layout(scene = list(xaxis = list(title = "Glucose (mg/dL)"),
-                              yaxis = list(title = "BMI (kg/m²)"),
-                              zaxis = list(title = "Log-odds of diabetes")))
+  plotly::add_trace(type = "scatter3d", mode = "markers", x = no$age, y = no$systolic_bp,
+                    z = rep(0, nrow(no)), marker = list(size = 3, color = "steelblue"),
+                    name = "test: no") |>
+  plotly::add_trace(type = "scatter3d", mode = "markers", x = yes$age, y = yes$systolic_bp,
+                    z = rep(0, nrow(yes)), marker = list(size = 3, color = "darkorange"),
+                    name = "test: yes") |>
+  plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
+                              yaxis = list(title = "Systolic BP (mmHg)"),
+                              zaxis = list(title = "Log-odds of an event")))
 ```
-
 
 The sigmoid turns each log-odds into a probability, which bends the flat plane
 into an S-shaped sheet between 0 and 1. A log-odds of 0 is a probability of
 0.5, so the sheet crosses the grey level at 0.5 along exactly the same black
-line. The test patients sit at 1 (diabetes) and at 0 (no diabetes). Click
-**0.3** and **0.7** in the legend to show two more levels; Part 2 is about
-them.
+line. The test patients sit at 1 (an event) and at 0 (no event). Click
+**level 0.3** and **level 0.7** in the legend to show two more levels; Part 2
+is about them.
 
 ```{r}
 #| code-fold: true
@@ -216,29 +231,29 @@ them.
 prob_matrix <- 1 / (1 + exp(-logodds_matrix))
 
 fig_prob <- plotly::plot_ly() |>
-  plotly::add_surface(x = glucoses, y = bmis, z = prob_matrix, opacity = 0.75,
+  plotly::add_surface(x = ages, y = bps, z = prob_matrix, opacity = 0.75,
                       colorscale = list(c(0, 1), c("steelblue", "darkorange")),
                       showscale = FALSE, name = "probability")
 for (t in c(0.3, 0.5, 0.7)) {
   fig_prob <- fig_prob |>
-    plotly::add_surface(x = glucoses, y = bmis, z = 0 * prob_matrix + t, opacity = 0.4,
+    plotly::add_surface(x = ages, y = bps, z = 0 * prob_matrix + t, opacity = 0.4,
                         colorscale = list(c(0, 1), c("grey", "grey")), showscale = FALSE,
                         showlegend = TRUE, name = paste("level", t),
                         visible = if (t == 0.5) TRUE else "legendonly")
 }
 fig_prob |>
-  plotly::add_trace(type = "scatter3d", mode = "lines", x = line_glucose[on_floor],
-                    y = bmis[on_floor], z = rep(0.5, sum(on_floor)),
+  plotly::add_trace(type = "scatter3d", mode = "lines", x = line_age[on_floor],
+                    y = bps[on_floor], z = rep(0.5, sum(on_floor)),
                     line = list(color = "black", width = 8), name = "boundary at 0.5") |>
-  plotly::add_trace(type = "scatter3d", mode = "markers", x = neg$glucose, y = neg$mass,
-                    z = rep(0, nrow(neg)), marker = list(size = 3, color = "steelblue"),
-                    name = "test: neg") |>
-  plotly::add_trace(type = "scatter3d", mode = "markers", x = pos$glucose, y = pos$mass,
-                    z = rep(1, nrow(pos)), marker = list(size = 3, color = "darkorange"),
-                    name = "test: pos") |>
-  plotly::layout(scene = list(xaxis = list(title = "Glucose (mg/dL)"),
-                              yaxis = list(title = "BMI (kg/m²)"),
-                              zaxis = list(title = "Probability of diabetes")))
+  plotly::add_trace(type = "scatter3d", mode = "markers", x = no$age, y = no$systolic_bp,
+                    z = rep(0, nrow(no)), marker = list(size = 3, color = "steelblue"),
+                    name = "test: no") |>
+  plotly::add_trace(type = "scatter3d", mode = "markers", x = yes$age, y = yes$systolic_bp,
+                    z = rep(1, nrow(yes)), marker = list(size = 3, color = "darkorange"),
+                    name = "test: yes") |>
+  plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
+                              yaxis = list(title = "Systolic BP (mmHg)"),
+                              zaxis = list(title = "Probability of an event")))
 ```
 
 ```{r}
@@ -250,19 +265,30 @@ if (!requireNamespace("plotly", quietly = TRUE)) knitr::asis_output(paste0(
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-1. The model is right for 76% of the test patients. Looking at the plot, why
-   can no straight line do much better with these two measurements?
-2. A model with three predictors (glucose, BMI and age) also has a boundary.
-   What shape would it be?
+1. As far as the model is concerned, 10 mmHg more blood pressure is worth how
+   many years of age? Where do you see that in the plot?
+2. Two people: one is 70 with a blood pressure of 130, the other 55 with 165.
+   Which side of the line is each on?
+3. A model with three predictors (say age, blood pressure and cholesterol) also
+   has a boundary. What shape would it be?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. Patients with and without diabetes overlap heavily: there are triangles
-   well to the left of the line and circles well to the right. Glucose and BMI
-   do not hold enough information to separate them, whatever line you draw.
-2. Still flat: one linear equation in three measurements is a flat plane in
+```{r}
+predict(log_fit, new_data = data.frame(age = c(70, 55), systolic_bp = c(130, 165)),
+        type = "prob")
+```
+
+1. About 5 years: 10 × 0.0529 / 0.1042 = 5.1. Adding 10 mmHg raises the
+   log-odds as much as 5 extra years. That is the tilt of the line: going 10
+   mmHg up, the boundary moves 5 years younger (from 76 at 120 mmHg to 55 at
+   160 mmHg).
+2. The 70-year-old is just below the line (probability 0.49, `no`); the
+   55-year-old is above it (0.56, `yes`). The younger person is called `yes`
+   because of the blood pressure. Neither measurement decides alone.
+3. Still flat: one linear equation in three measurements is a flat plane in
    three dimensions. A logistic regression always has a flat boundary in the
    predictors you give it.
 :::
@@ -274,12 +300,12 @@ Exercise 4.3 changed the threshold. A threshold $t$ is a probability, so it has
 a log-odds, $\log\big(t / (1 - t)\big)$, and the boundary is where the model's
 log-odds equal it:
 
-$$\beta_0 + \beta_1 \times \text{glucose} + \beta_2 \times \text{BMI} = \log\left(\frac{t}{1-t}\right)$$
+$$\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure} = \log\left(\frac{t}{1-t}\right)$$
 
 Only the right-hand side changes, so the line keeps its tilt and moves
 sideways. In the 3D plot of Part 1 this is cutting the S-shaped sheet at a
-different height: the 0.3 level meets it further to the left, the 0.7 level
-further to the right.
+different height: the 0.3 level meets it further down and to the left, the 0.7
+level further up and to the right.
 
 #### Task 2a — The log-odds of three thresholds
 
@@ -288,7 +314,7 @@ further to the right.
 # Replace every ______ below, then run this cell.
 thresholds <- data.frame(t = c(0.3, 0.5, 0.7)) |>
   mutate(log_odds = log(______ / (1 - ______)),
-         glucose_at_BMI_30 = (log_odds - b[1] - b[3] * 30) / b[2])
+         age_at_bp_140 = (log_odds - b[1] - b[3] * 140) / b[2])
 
 thresholds
 ```
@@ -304,13 +330,13 @@ Both blanks are the threshold column, `t`.
 ```{r}
 thresholds <- data.frame(t = c(0.3, 0.5, 0.7)) |>
   mutate(log_odds = log(t / (1 - t)),
-         glucose_at_BMI_30 = (log_odds - b[1] - b[3] * 30) / b[2])
+         age_at_bp_140 = (log_odds - b[1] - b[3] * 140) / b[2])
 
 thresholds
 ```
 
-The log-odds are −0.847, 0 and 0.847. At a BMI of 30 the class changes at a
-glucose of 126, 151 and 176 mg/dL.
+The log-odds are −0.847, 0 and 0.847. For a blood pressure of 140 the class
+changes at age 57, 65 and 74.
 :::
 :::
 
@@ -321,22 +347,22 @@ lines_t <- data.frame(t = factor(c(0.3, 0.5, 0.7)),
                       log_odds = log(c(0.3, 0.5, 0.7) / (1 - c(0.3, 0.5, 0.7)))) |>
   mutate(intercept = (log_odds - b[1]) / b[3], slope = -b[2] / b[3])
 
-ggplot(test, aes(x = glucose, y = mass)) +
-  geom_point(aes(shape = diabetes), size = 2, colour = "grey30") +
+ggplot(test, aes(x = age, y = systolic_bp)) +
+  geom_point(aes(shape = cvd), size = 2, colour = "grey30") +
   geom_abline(data = lines_t, aes(intercept = intercept, slope = slope, colour = t),
               linewidth = 1) +
-  scale_shape_manual(values = c(neg = 1, pos = 17)) +
+  scale_shape_manual(values = c(no = 1, yes = 17)) +
   scale_colour_manual(values = c("0.3" = "blue", "0.5" = "red", "0.7" = "purple")) +
-  coord_cartesian(xlim = c(40, 200), ylim = c(18, 68)) +
-  labs(x = "Glucose (mg/dL)", y = "BMI (kg/m²)", shape = "Measured", colour = "Threshold",
+  coord_cartesian(xlim = c(40, 80), ylim = c(80, 200)) +
+  labs(x = "Age (years)", y = "Systolic blood pressure (mmHg)",
+       shape = "Event", colour = "Threshold",
        title = "Three thresholds, three parallel boundaries")
 ```
 
-Everyone to the right of a line is predicted `pos` at that threshold. Count
-them:
+Everyone above a line is predicted `yes` at that threshold. Count them:
 
 ```{r}
-test_probs <- predict(log_fit, new_data = test, type = "prob")$.pred_pos
+test_probs <- predict(log_fit, new_data = test, type = "prob")$.pred_yes
 
 c(t_0.3 = sum(test_probs >= 0.3), t_0.5 = sum(test_probs >= 0.5),
   t_0.7 = sum(test_probs >= 0.7))
@@ -344,19 +370,19 @@ c(t_0.3 = sum(test_probs >= 0.3), t_0.5 = sum(test_probs >= 0.5),
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-Lowering the threshold from 0.5 to 0.3 more than doubles the number of test
-patients called `pos`. In the language of Exercise 4.3, what happens to the
-sensitivity and the specificity, and where do you see that on the plot?
+Lowering the threshold from 0.5 to 0.3 calls many more test patients `yes`. In
+the language of Exercise 4.3, what happens to the sensitivity and the
+specificity, and where do you see that on the plot?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-74 patients are called `pos` at 0.3, 35 at 0.5 and 19 at 0.7. Moving the line
-to the left (0.3) brings more of the triangles onto the `pos` side, so the
-sensitivity rises, but it also brings over many circles, so the specificity
-falls. Moving it right (0.7) does the opposite. The model, its coefficients
-and the tilt of the line are the same; only the decision changed.
+52 patients are called `yes` at 0.3, 31 at 0.5 and 15 at 0.7. Moving the line
+down (0.3) brings more of the triangles onto the `yes` side, so the
+sensitivity rises, but it also brings over more circles, so the specificity
+falls. Moving it up (0.7) does the opposite. The model, its coefficients and
+the tilt of the line are the same; only the decision changed.
 :::
 :::
 
@@ -570,7 +596,7 @@ patients |>
 ```{python}
 # Packages for this exercise. If one is missing, install it once from a terminal
 # (in a Jupyter notebook, type %pip instead of pip):
-# pip install pandas numpy matplotlib scikit-learn
+# pip install pandas numpy matplotlib scikit-learn plotly
 
 import pandas as pd
 import numpy as np
@@ -580,118 +606,128 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier, export_text
 ```
 
-The same 750 people and the same split as in Exercise 4.1.
+`data/cvd_risk.csv` holds 500 adults aged 40 to 80 seen at a health check:
+their age, their systolic blood pressure in mmHg, and whether they had a
+cardiovascular event (a heart attack or a stroke) in the following ten years.
+If you do not have it yet, [**download `cvd_risk.csv`**](data/cvd_risk.csv){download="cvd_risk.csv"}
+into your `data` folder.
 
 ```{python}
-diabetes = pd.read_csv("data/diabetes_clean.csv")
-diabetes = diabetes[["glucose", "mass", "diabetes"]]
+cvd = pd.read_csv("data/cvd_risk.csv")
 
-is_test = diabetes.index % 5 == 0               # every fifth person is held back
-train = diabetes[~is_test]
-test  = diabetes[is_test]
+is_test = cvd.index % 5 == 0               # every fifth person is held back
+train = cvd[~is_test]
+test  = cvd[is_test]
+
+train["cvd"].value_counts()
 ```
 
 ### Part 1 — Where the class changes
 
-Fit the model from Exercise 4.1, Part 2: diabetes from glucose and BMI.
+Fit a logistic regression with both measurements, the same way as in
+Exercise 4.1:
 
 ```{python}
 log_model = LogisticRegression(C=np.inf)
-log_model.fit(train[["glucose", "mass"]], train["diabetes"])
+log_model.fit(train[["age", "systolic_bp"]], train["cvd"])
 
 b0 = log_model.intercept_[0]
-b1, b2 = log_model.coef_[0]          # glucose, BMI
+b1, b2 = log_model.coef_[0]          # age, blood pressure
 print("intercept:", b0)
-print("weights (glucose, BMI):", b1, b2)
+print("weights (age, blood pressure):", b1, b2)
 ```
 
 The model is a straight line on the log-odds scale (Exercise 4.2):
 
-$$\text{log-odds} = \beta_0 + \beta_1 \times \text{glucose} + \beta_2 \times \text{BMI}$$
+$$\text{log-odds} = \beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure}$$
 
 With a threshold of 0.5, the class changes where the probability is 0.5. A
 probability of 0.5 is odds of 1 and **log-odds of 0**. So the boundary is every
-combination of glucose and BMI where
+combination of age and blood pressure where
 
-$$\beta_0 + \beta_1 \times \text{glucose} + \beta_2 \times \text{BMI} = 0$$
+$$\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure} = 0$$
 
-For a given BMI, solve for glucose:
+For a given blood pressure, solve for age:
 
-$$\text{glucose} = \frac{-\beta_0 - \beta_2 \times \text{BMI}}{\beta_1}$$
+$$\text{age} = \frac{-\beta_0 - \beta_2 \times \text{blood pressure}}{\beta_1}$$
 
-#### Task 1a — The boundary at a BMI of 30 and of 45
+#### Task 1a — The boundary at a blood pressure of 120 and of 160
 
 Round the coefficients printed above to four significant figures and calculate,
-by hand, the glucose at which the class changes for a BMI of 30. Then do the
-same for a BMI of 45.
+by hand, the age at which the class changes for a blood pressure of 120 mmHg.
+Then do the same for 160 mmHg.
 
 ```{python}
 #| eval: false
 # Replace every ______ below, then run this cell.
-boundary_30 = (-(______) - ______ * 30) / ______
-boundary_45 = (-(______) - ______ * 45) / ______
-print(boundary_30, boundary_45)
+boundary_120 = (-(______) - ______ * 120) / ______
+boundary_160 = (-(______) - ______ * 160) / ______
+print(boundary_120, boundary_160)
 ```
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-In order: the intercept, the BMI weight, and the glucose weight. The intercept
-is negative, so minus the intercept is a positive number.
+In order: the intercept, the blood-pressure weight, and the age weight. The
+intercept is negative, so minus the intercept is a positive number.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-boundary_30 = (-(-7.004) - 0.06437 * 30) / 0.03355
-boundary_45 = (-(-7.004) - 0.06437 * 45) / 0.03355
-print(boundary_30, boundary_45)
+boundary_120 = (-(-14.22) - 0.05292 * 120) / 0.1042
+boundary_160 = (-(-14.22) - 0.05292 * 160) / 0.1042
+print(boundary_120, boundary_160)
 ```
 
-At a BMI of 30 the class changes at a glucose of about 151 mg/dL; at a BMI of
-45, at about 122.
+With a blood pressure of 120 the model predicts an event from about age 76;
+with 160, from about age 55.
 :::
 :::
 
-Check it with `.predict_proba()`: a patient on the boundary should get a
+Check it with `.predict_proba()`: a person on the boundary should get a
 probability of 0.5.
 
 ```{python}
-log_model.predict_proba(pd.DataFrame({"glucose": [151.2], "mass": [30]}))
+log_model.predict_proba(pd.DataFrame({"age": [75.6], "systolic_bp": [120]}))
 ```
 
-Every point on the boundary satisfies one linear equation in glucose and BMI,
-so the boundary is a **straight line**. Here it is, drawn from the
+Every point on the boundary satisfies one linear equation in age and blood
+pressure, so the boundary is a **straight line**. Here it is, drawn from the
 coefficients, over the test patients:
 
 ```{python}
 #| code-fold: true
 #| code-summary: "Code for this plot (optional)"
-glucose_line = np.array([40, 200])
+age_line = np.array([40, 80])
 fig, ax = plt.subplots()
-for cls, mk, colour in [("neg", "o", "steelblue"), ("pos", "^", "darkorange")]:
-    rows = test[test["diabetes"] == cls]
-    ax.scatter(rows["glucose"], rows["mass"], marker=mk, color=colour, s=20, label=cls)
-# the boundary written as BMI = (-b0 - b1 * glucose) / b2
-ax.plot(glucose_line, (-b0 - b1 * glucose_line) / b2, color="black", linewidth=2)
-ax.scatter([151.2, 122.4], [30, 45], color="red", s=50, zorder=3)
-ax.set_xlim(40, 200)
-ax.set_ylim(18, 68)
-ax.set_xlabel("Glucose (mg/dL)")
-ax.set_ylabel("BMI (kg/m²)")
-ax.legend(title="Measured")
+for cls, mk, colour in [("no", "o", "steelblue"), ("yes", "^", "darkorange")]:
+    rows = test[test["cvd"] == cls]
+    ax.scatter(rows["age"], rows["systolic_bp"], marker=mk, color=colour, s=20, label=cls)
+# the boundary written as blood pressure = (-b0 - b1 * age) / b2
+ax.plot(age_line, (-b0 - b1 * age_line) / b2, color="black", linewidth=2)
+ax.scatter([75.6, 55.3], [120, 160], color="red", s=50, zorder=3)
+ax.set_xlim(40, 80)
+ax.set_ylim(80, 200)
+ax.set_xlabel("Age (years)")
+ax.set_ylabel("Systolic blood pressure (mmHg)")
+ax.legend(title="Event")
 ax.set_title("The decision boundary at a threshold of 0.5")
 plt.show()
 ```
 
+Above and to the right of the line the model says `yes`; below and to the left,
+`no`. The line is tilted because both measurements count: an older person
+needs a lower blood pressure to cross it.
+
 #### The same line in three dimensions
 
-The log-odds, $\beta_0 + \beta_1 \times \text{glucose} + \beta_2 \times \text{BMI}$,
-are a flat, tilted **plane** above the glucose–BMI floor, like the plane in
-Exercise 3.1. The grey sheet is height 0. Where the plane passes through the
+The log-odds, $\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure}$,
+are a flat, tilted **plane** above the age–blood pressure floor, like the plane
+in Exercise 3.1. The grey sheet is height 0. Where the plane passes through the
 sheet is the decision boundary, the black line: where the plane is above the
-sheet the model says `pos`, where it is below, `neg`. The test patients are
-drawn on the grey sheet. Turn the plot with the mouse and scroll to zoom.
+sheet the model says `yes`, where it is below, `no`. The test patients are drawn
+on the grey sheet. Turn the plot with the mouse and scroll to zoom.
 
 ```{python}
 #| code-fold: true
@@ -700,52 +736,52 @@ drawn on the grey sheet. Turn the plot with the mouse and scroll to zoom.
 # This plot needs the plotly package: pip install plotly
 import plotly.graph_objects as go
 
-glucoses = np.arange(40, 201, 2)
-bmis = np.arange(18, 69, 1)
-G, M = np.meshgrid(glucoses, bmis)
+ages = np.arange(40, 81, 1)
+bps = np.arange(80, 201, 2)
+A, S = np.meshgrid(ages, bps)
 
-# the log-odds at every grid point: one row per BMI, one column per glucose
-logodds_matrix = b0 + b1 * G + b2 * M
+# the log-odds at every grid point: one row per blood pressure, one column per age
+logodds_matrix = b0 + b1 * A + b2 * S
 
-# the boundary: the glucose where the log-odds are 0, for each BMI
-line_glucose = (-b0 - b2 * bmis) / b1
-on_floor = (line_glucose >= 40) & (line_glucose <= 200)
+# the boundary: the age where the log-odds are 0, for each blood pressure
+line_age = (-b0 - b2 * bps) / b1
+on_floor = (line_age >= 40) & (line_age <= 80)
 
-neg = test[test["diabetes"] == "neg"]
-pos = test[test["diabetes"] == "pos"]
+no = test[test["cvd"] == "no"]
+yes = test[test["cvd"] == "yes"]
 
 fig_logodds = go.Figure()
-fig_logodds.add_trace(go.Surface(x=glucoses, y=bmis, z=logodds_matrix, opacity=0.75,
+fig_logodds.add_trace(go.Surface(x=ages, y=bps, z=logodds_matrix, opacity=0.75,
     colorscale=[[0, "steelblue"], [1, "darkorange"]], showscale=False, name="log-odds"))
-fig_logodds.add_trace(go.Surface(x=glucoses, y=bmis, z=0 * logodds_matrix, opacity=0.4,
+fig_logodds.add_trace(go.Surface(x=ages, y=bps, z=0 * logodds_matrix, opacity=0.4,
     colorscale=[[0, "grey"], [1, "grey"]], showscale=False, name="height 0"))
-fig_logodds.add_trace(go.Scatter3d(x=line_glucose[on_floor], y=bmis[on_floor],
+fig_logodds.add_trace(go.Scatter3d(x=line_age[on_floor], y=bps[on_floor],
     z=np.zeros(on_floor.sum()), mode="lines", line={"color": "black", "width": 8},
     name="boundary"))
-fig_logodds.add_trace(go.Scatter3d(x=neg["glucose"], y=neg["mass"], z=np.zeros(len(neg)),
-    mode="markers", marker={"size": 3, "color": "steelblue"}, name="test: neg"))
-fig_logodds.add_trace(go.Scatter3d(x=pos["glucose"], y=pos["mass"], z=np.zeros(len(pos)),
-    mode="markers", marker={"size": 3, "color": "darkorange"}, name="test: pos"))
-fig_logodds.update_layout(scene={"xaxis_title": "Glucose (mg/dL)",
-                                 "yaxis_title": "BMI (kg/m²)",
-                                 "zaxis_title": "Log-odds of diabetes"})
+fig_logodds.add_trace(go.Scatter3d(x=no["age"], y=no["systolic_bp"], z=np.zeros(len(no)),
+    mode="markers", marker={"size": 3, "color": "steelblue"}, name="test: no"))
+fig_logodds.add_trace(go.Scatter3d(x=yes["age"], y=yes["systolic_bp"], z=np.zeros(len(yes)),
+    mode="markers", marker={"size": 3, "color": "darkorange"}, name="test: yes"))
+fig_logodds.update_layout(scene={"xaxis_title": "Age (years)",
+                                 "yaxis_title": "Systolic BP (mmHg)",
+                                 "zaxis_title": "Log-odds of an event"})
 fig_logodds.show()
 ```
 
 ```{python}
 #| echo: false
 # Same grid and values as the cell above, for the page's copy of the plots.
-glucoses = np.arange(40, 201, 2)
-bmis = np.arange(18, 69, 1)
-G, M = np.meshgrid(glucoses, bmis)
-logodds_matrix = b0 + b1 * G + b2 * M
+ages = np.arange(40, 81, 1)
+bps = np.arange(80, 201, 2)
+A, S = np.meshgrid(ages, bps)
+logodds_matrix = b0 + b1 * A + b2 * S
 prob_matrix = 1 / (1 + np.exp(-logodds_matrix))
-line_glucose = (-b0 - b2 * bmis) / b1
-on_floor = (line_glucose >= 40) & (line_glucose <= 200)
-line_g = line_glucose[on_floor]
-line_b = bmis[on_floor].astype(float)
-neg = test[test["diabetes"] == "neg"]
-pos = test[test["diabetes"] == "pos"]
+line_age = (-b0 - b2 * bps) / b1
+on_floor = (line_age >= 40) & (line_age <= 80)
+line_a = line_age[on_floor]
+line_s = bps[on_floor].astype(float)
+no = test[test["cvd"] == "no"]
+yes = test[test["cvd"] == "yes"]
 ```
 
 ```{r}
@@ -754,36 +790,35 @@ pos = test[test["diabetes"] == "pos"]
 if (requireNamespace("plotly", quietly = TRUE)) {
   P <- reticulate::py
   plotly::plot_ly() |>
-    plotly::add_surface(x = P$glucoses, y = P$bmis, z = P$logodds_matrix, opacity = 0.75,
+    plotly::add_surface(x = P$ages, y = P$bps, z = P$logodds_matrix, opacity = 0.75,
                         colorscale = list(c(0, 1), c("steelblue", "darkorange")),
                         showscale = FALSE, name = "log-odds") |>
-    plotly::add_surface(x = P$glucoses, y = P$bmis, z = 0 * P$logodds_matrix, opacity = 0.4,
+    plotly::add_surface(x = P$ages, y = P$bps, z = 0 * P$logodds_matrix, opacity = 0.4,
                         colorscale = list(c(0, 1), c("grey", "grey")),
                         showscale = FALSE, name = "height 0") |>
-    plotly::add_trace(type = "scatter3d", mode = "lines", x = P$line_g, y = P$line_b,
-                      z = rep(0, length(P$line_g)),
+    plotly::add_trace(type = "scatter3d", mode = "lines", x = P$line_a, y = P$line_s,
+                      z = rep(0, length(P$line_a)),
                       line = list(color = "black", width = 8), name = "boundary") |>
-    plotly::add_trace(type = "scatter3d", mode = "markers", x = P$neg$glucose,
-                      y = P$neg$mass, z = rep(0, nrow(P$neg)),
-                      marker = list(size = 3, color = "steelblue"), name = "test: neg") |>
-    plotly::add_trace(type = "scatter3d", mode = "markers", x = P$pos$glucose,
-                      y = P$pos$mass, z = rep(0, nrow(P$pos)),
-                      marker = list(size = 3, color = "darkorange"), name = "test: pos") |>
-    plotly::layout(scene = list(xaxis = list(title = "Glucose (mg/dL)"),
-                                yaxis = list(title = "BMI (kg/m²)"),
-                                zaxis = list(title = "Log-odds of diabetes")))
+    plotly::add_trace(type = "scatter3d", mode = "markers", x = P$no$age,
+                      y = P$no$systolic_bp, z = rep(0, nrow(P$no)),
+                      marker = list(size = 3, color = "steelblue"), name = "test: no") |>
+    plotly::add_trace(type = "scatter3d", mode = "markers", x = P$yes$age,
+                      y = P$yes$systolic_bp, z = rep(0, nrow(P$yes)),
+                      marker = list(size = 3, color = "darkorange"), name = "test: yes") |>
+    plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
+                                yaxis = list(title = "Systolic BP (mmHg)"),
+                                zaxis = list(title = "Log-odds of an event")))
 } else knitr::asis_output(paste0(
   "*The plots you can turn are missing from this copy of the page: they need the R ",
   "package `plotly`. Run `install.packages(\"plotly\")` and render again.*"))
 ```
 
-
 The sigmoid turns each log-odds into a probability, which bends the flat plane
 into an S-shaped sheet between 0 and 1. A log-odds of 0 is a probability of
 0.5, so the sheet crosses the grey level at 0.5 along exactly the same black
-line. The test patients sit at 1 (diabetes) and at 0 (no diabetes). Click
-**0.3** and **0.7** in the legend to show two more levels; Part 2 is about
-them.
+line. The test patients sit at 1 (an event) and at 0 (no event). Click
+**level 0.3** and **level 0.7** in the legend to show two more levels; Part 2
+is about them.
 
 ```{python}
 #| code-fold: true
@@ -793,22 +828,22 @@ them.
 prob_matrix = 1 / (1 + np.exp(-logodds_matrix))
 
 fig_prob = go.Figure()
-fig_prob.add_trace(go.Surface(x=glucoses, y=bmis, z=prob_matrix, opacity=0.75,
+fig_prob.add_trace(go.Surface(x=ages, y=bps, z=prob_matrix, opacity=0.75,
     colorscale=[[0, "steelblue"], [1, "darkorange"]], showscale=False, name="probability"))
 for t in [0.3, 0.5, 0.7]:
-    fig_prob.add_trace(go.Surface(x=glucoses, y=bmis, z=0 * prob_matrix + t, opacity=0.4,
+    fig_prob.add_trace(go.Surface(x=ages, y=bps, z=0 * prob_matrix + t, opacity=0.4,
         colorscale=[[0, "grey"], [1, "grey"]], showscale=False, showlegend=True,
         name=f"level {t}", visible=True if t == 0.5 else "legendonly"))
-fig_prob.add_trace(go.Scatter3d(x=line_glucose[on_floor], y=bmis[on_floor],
+fig_prob.add_trace(go.Scatter3d(x=line_age[on_floor], y=bps[on_floor],
     z=np.full(on_floor.sum(), 0.5), mode="lines", line={"color": "black", "width": 8},
     name="boundary at 0.5"))
-fig_prob.add_trace(go.Scatter3d(x=neg["glucose"], y=neg["mass"], z=np.zeros(len(neg)),
-    mode="markers", marker={"size": 3, "color": "steelblue"}, name="test: neg"))
-fig_prob.add_trace(go.Scatter3d(x=pos["glucose"], y=pos["mass"], z=np.ones(len(pos)),
-    mode="markers", marker={"size": 3, "color": "darkorange"}, name="test: pos"))
-fig_prob.update_layout(scene={"xaxis_title": "Glucose (mg/dL)",
-                              "yaxis_title": "BMI (kg/m²)",
-                              "zaxis_title": "Probability of diabetes"})
+fig_prob.add_trace(go.Scatter3d(x=no["age"], y=no["systolic_bp"], z=np.zeros(len(no)),
+    mode="markers", marker={"size": 3, "color": "steelblue"}, name="test: no"))
+fig_prob.add_trace(go.Scatter3d(x=yes["age"], y=yes["systolic_bp"], z=np.ones(len(yes)),
+    mode="markers", marker={"size": 3, "color": "darkorange"}, name="test: yes"))
+fig_prob.update_layout(scene={"xaxis_title": "Age (years)",
+                              "yaxis_title": "Systolic BP (mmHg)",
+                              "zaxis_title": "Probability of an event"})
 fig_prob.show()
 ```
 
@@ -818,47 +853,57 @@ fig_prob.show()
 if (requireNamespace("plotly", quietly = TRUE)) {
   P <- reticulate::py
   fig_p <- plotly::plot_ly() |>
-    plotly::add_surface(x = P$glucoses, y = P$bmis, z = P$prob_matrix, opacity = 0.75,
+    plotly::add_surface(x = P$ages, y = P$bps, z = P$prob_matrix, opacity = 0.75,
                         colorscale = list(c(0, 1), c("steelblue", "darkorange")),
                         showscale = FALSE, name = "probability")
   for (t in c(0.3, 0.5, 0.7)) {
     fig_p <- fig_p |>
-      plotly::add_surface(x = P$glucoses, y = P$bmis, z = 0 * P$prob_matrix + t,
+      plotly::add_surface(x = P$ages, y = P$bps, z = 0 * P$prob_matrix + t,
                           opacity = 0.4, colorscale = list(c(0, 1), c("grey", "grey")),
                           showscale = FALSE, showlegend = TRUE, name = paste("level", t),
                           visible = if (t == 0.5) TRUE else "legendonly")
   }
   fig_p |>
-    plotly::add_trace(type = "scatter3d", mode = "lines", x = P$line_g, y = P$line_b,
-                      z = rep(0.5, length(P$line_g)),
+    plotly::add_trace(type = "scatter3d", mode = "lines", x = P$line_a, y = P$line_s,
+                      z = rep(0.5, length(P$line_a)),
                       line = list(color = "black", width = 8), name = "boundary at 0.5") |>
-    plotly::add_trace(type = "scatter3d", mode = "markers", x = P$neg$glucose,
-                      y = P$neg$mass, z = rep(0, nrow(P$neg)),
-                      marker = list(size = 3, color = "steelblue"), name = "test: neg") |>
-    plotly::add_trace(type = "scatter3d", mode = "markers", x = P$pos$glucose,
-                      y = P$pos$mass, z = rep(1, nrow(P$pos)),
-                      marker = list(size = 3, color = "darkorange"), name = "test: pos") |>
-    plotly::layout(scene = list(xaxis = list(title = "Glucose (mg/dL)"),
-                                yaxis = list(title = "BMI (kg/m²)"),
-                                zaxis = list(title = "Probability of diabetes")))
+    plotly::add_trace(type = "scatter3d", mode = "markers", x = P$no$age,
+                      y = P$no$systolic_bp, z = rep(0, nrow(P$no)),
+                      marker = list(size = 3, color = "steelblue"), name = "test: no") |>
+    plotly::add_trace(type = "scatter3d", mode = "markers", x = P$yes$age,
+                      y = P$yes$systolic_bp, z = rep(1, nrow(P$yes)),
+                      marker = list(size = 3, color = "darkorange"), name = "test: yes") |>
+    plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
+                                yaxis = list(title = "Systolic BP (mmHg)"),
+                                zaxis = list(title = "Probability of an event")))
 }
 ```
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-1. The model is right for 76% of the test patients. Looking at the plot, why
-   can no straight line do much better with these two measurements?
-2. A model with three predictors (glucose, BMI and age) also has a boundary.
-   What shape would it be?
+1. As far as the model is concerned, 10 mmHg more blood pressure is worth how
+   many years of age? Where do you see that in the plot?
+2. Two people: one is 70 with a blood pressure of 130, the other 55 with 165.
+   Which side of the line is each on?
+3. A model with three predictors (say age, blood pressure and cholesterol) also
+   has a boundary. What shape would it be?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. Patients with and without diabetes overlap heavily: there are triangles
-   well to the left of the line and circles well to the right. Glucose and BMI
-   do not hold enough information to separate them, whatever line you draw.
-2. Still flat: one linear equation in three measurements is a flat plane in
+```{python}
+log_model.predict_proba(pd.DataFrame({"age": [70, 55], "systolic_bp": [130, 165]}))
+```
+
+1. About 5 years: 10 × 0.0529 / 0.1042 = 5.1. Adding 10 mmHg raises the
+   log-odds as much as 5 extra years. That is the tilt of the line: going 10
+   mmHg up, the boundary moves 5 years younger (from 76 at 120 mmHg to 55 at
+   160 mmHg).
+2. The 70-year-old is just below the line (probability 0.49, `no`); the
+   55-year-old is above it (0.56, `yes`). The younger person is called `yes`
+   because of the blood pressure. Neither measurement decides alone.
+3. Still flat: one linear equation in three measurements is a flat plane in
    three dimensions. A logistic regression always has a flat boundary in the
    predictors you give it.
 :::
@@ -870,12 +915,12 @@ Exercise 4.3 changed the threshold. A threshold $t$ is a probability, so it has
 a log-odds, $\log\big(t / (1 - t)\big)$, and the boundary is where the model's
 log-odds equal it:
 
-$$\beta_0 + \beta_1 \times \text{glucose} + \beta_2 \times \text{BMI} = \log\left(\frac{t}{1-t}\right)$$
+$$\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure} = \log\left(\frac{t}{1-t}\right)$$
 
 Only the right-hand side changes, so the line keeps its tilt and moves
 sideways. In the 3D plot of Part 1 this is cutting the S-shaped sheet at a
-different height: the 0.3 level meets it further to the left, the 0.7 level
-further to the right.
+different height: the 0.3 level meets it further down and to the left, the 0.7
+level further up and to the right.
 
 #### Task 2a — The log-odds of three thresholds
 
@@ -884,7 +929,7 @@ further to the right.
 # Replace every ______ below, then run this cell.
 thresholds = pd.DataFrame({"t": [0.3, 0.5, 0.7]})
 thresholds["log_odds"] = np.log(______ / (1 - ______))
-thresholds["glucose_at_BMI_30"] = (thresholds["log_odds"] - b0 - b2 * 30) / b1
+thresholds["age_at_bp_140"] = (thresholds["log_odds"] - b0 - b2 * 140) / b1
 
 thresholds
 ```
@@ -900,13 +945,13 @@ Both blanks are the threshold column, `thresholds["t"]`.
 ```{python}
 thresholds = pd.DataFrame({"t": [0.3, 0.5, 0.7]})
 thresholds["log_odds"] = np.log(thresholds["t"] / (1 - thresholds["t"]))
-thresholds["glucose_at_BMI_30"] = (thresholds["log_odds"] - b0 - b2 * 30) / b1
+thresholds["age_at_bp_140"] = (thresholds["log_odds"] - b0 - b2 * 140) / b1
 
 thresholds
 ```
 
-The log-odds are −0.847, 0 and 0.847. At a BMI of 30 the class changes at a
-glucose of 126, 151 and 176 mg/dL.
+The log-odds are −0.847, 0 and 0.847. For a blood pressure of 140 the class
+changes at age 57, 65 and 74.
 :::
 :::
 
@@ -914,27 +959,26 @@ glucose of 126, 151 and 176 mg/dL.
 #| code-fold: true
 #| code-summary: "Code for this plot (optional)"
 fig, ax = plt.subplots()
-for cls, mk in [("neg", "o"), ("pos", "^")]:
-    rows = test[test["diabetes"] == cls]
-    ax.scatter(rows["glucose"], rows["mass"], marker=mk, color="grey", s=20, label=cls)
+for cls, mk in [("no", "o"), ("yes", "^")]:
+    rows = test[test["cvd"] == cls]
+    ax.scatter(rows["age"], rows["systolic_bp"], marker=mk, color="grey", s=20, label=cls)
 for t, colour in [(0.3, "blue"), (0.5, "red"), (0.7, "purple")]:
     lo = np.log(t / (1 - t))
-    ax.plot(glucose_line, (lo - b0 - b1 * glucose_line) / b2, color=colour,
+    ax.plot(age_line, (lo - b0 - b1 * age_line) / b2, color=colour,
             linewidth=2, label=f"threshold {t}")
-ax.set_xlim(40, 200)
-ax.set_ylim(18, 68)
-ax.set_xlabel("Glucose (mg/dL)")
-ax.set_ylabel("BMI (kg/m²)")
+ax.set_xlim(40, 80)
+ax.set_ylim(80, 200)
+ax.set_xlabel("Age (years)")
+ax.set_ylabel("Systolic blood pressure (mmHg)")
 ax.legend(fontsize=8)
 ax.set_title("Three thresholds, three parallel boundaries")
 plt.show()
 ```
 
-Everyone to the right of a line is predicted `pos` at that threshold. Count
-them:
+Everyone above a line is predicted `yes` at that threshold. Count them:
 
 ```{python}
-test_probs = log_model.predict_proba(test[["glucose", "mass"]])[:, 1]
+test_probs = log_model.predict_proba(test[["age", "systolic_bp"]])[:, 1]
 
 print("t = 0.3:", (test_probs >= 0.3).sum())
 print("t = 0.5:", (test_probs >= 0.5).sum())
@@ -943,19 +987,19 @@ print("t = 0.7:", (test_probs >= 0.7).sum())
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-Lowering the threshold from 0.5 to 0.3 more than doubles the number of test
-patients called `pos`. In the language of Exercise 4.3, what happens to the
-sensitivity and the specificity, and where do you see that on the plot?
+Lowering the threshold from 0.5 to 0.3 calls many more test patients `yes`. In
+the language of Exercise 4.3, what happens to the sensitivity and the
+specificity, and where do you see that on the plot?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-74 patients are called `pos` at 0.3, 35 at 0.5 and 19 at 0.7. Moving the line
-to the left (0.3) brings more of the triangles onto the `pos` side, so the
-sensitivity rises, but it also brings over many circles, so the specificity
-falls. Moving it right (0.7) does the opposite. The model, its coefficients
-and the tilt of the line are the same; only the decision changed.
+52 patients are called `yes` at 0.3, 31 at 0.5 and 15 at 0.7. Moving the line
+down (0.3) brings more of the triangles onto the `yes` side, so the
+sensitivity rises, but it also brings over more circles, so the specificity
+falls. Moving it up (0.7) does the opposite. The model, its coefficients and
+the tilt of the line are the same; only the decision changed.
 :::
 :::
 
@@ -1172,13 +1216,19 @@ patients
 ::: {.instructor}
 **Teaching choice.** Part 1 links the map students saw in Exercise 4.1 to the
 coefficients of Exercise 4.2; Part 2 links it to the thresholds of Exercise
-4.3. Part 3 uses a simulated dataset (`scripts/make_data.R`,
-`data/PROVENANCE.txt`) built so that the risk is U-shaped in sodium.
+4.3. Parts 1 and 2 use a simulated dataset in which age and blood pressure
+carry similar weight, so the boundary is clearly tilted (diabetes is defined by
+glucose, which makes its boundary almost vertical). Part 3 uses a second
+simulated dataset in which the risk is U-shaped in sodium. Both are generated
+in `scripts/make_data.R` and described in `data/PROVENANCE.txt`.
 
-**Expected values.** Glucose and BMI model: −7.004, 0.03355, 0.06437;
-boundary BMI = 108.8 − 0.521 × glucose; at BMI 30 glucose 151.2, at BMI 45
-122.4. Thresholds 0.3, 0.5, 0.7: log-odds −0.847, 0, 0.847; glucose at BMI 30
-125.9, 151.2, 176.4; test patients called `pos` 74, 35, 19. Sodium data: 500
+**Expected values.** CVD data: 500 people, 176 with an event; training 400
+(142), test 100 (34; baseline 0.66). Model: −14.22, age 0.1042, blood pressure
+0.05292; accuracy 0.83. Boundary: blood pressure = 268.8 − 1.968 × age; age
+75.6 at 120 mmHg, 55.3 at 160 mmHg; 10 mmHg ≈ 5.1 years. Age 70 / BP 130:
+0.49; age 55 / BP 165: 0.56. Thresholds 0.3, 0.5, 0.7: log-odds −0.847, 0,
+0.847; age at 140 mmHg 57.3, 65.4, 73.6; test patients called `yes` 52, 31,
+15. Sodium data: 500
 patients, 148 with delirium; training 400 (120 yes), test 100 (28 yes).
 Straight line: −2.112, age 0.0228, sodium −0.0034; predicted probabilities
 0.22 to 0.42, so `no` for everyone; accuracy 0.72 = baseline. With
@@ -1190,10 +1240,10 @@ split at 127.5, both `yes`); both 0.88. Patient aged 80, sodium 126 / 140 /
 0.90, its extra leaf) / 0.10 / 0.80.
 
 **Common failures.** (1) Forgetting that the boundary uses log-odds 0, not
-probability 0, and solving β0 + β1 glucose + β2 BMI = 0.5. (2) Dropping the
+probability 0, and solving β0 + β1 age + β2 BP = 0.5. (2) Dropping the
 minus sign of the intercept in Task 1a. (3) In Task 3a, adding the column to
 `train_d` but not to `test_d`, so prediction fails with a missing column.
 
-**Timing.** Part 1 fifteen minutes, Part 2 ten, Part 3 twenty.
+**Timing.** Part 1 twenty minutes, Part 2 ten, Part 3 twenty.
 :::
 :::

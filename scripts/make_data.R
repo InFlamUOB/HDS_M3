@@ -483,3 +483,23 @@ sodium_delirium <- data.frame(age = age_sd, sodium = sodium_sd,
                               delirium = delirium_sd)
 readr::write_csv(sodium_delirium, "data/sodium_delirium.csv")
 message("wrote sodium_delirium.csv: ", nrow(sodium_delirium), " rows")
+
+
+# ---------------------------------------------------------------------------
+# data/cvd_risk.csv - for Exercise 4.4, Parts 1 and 2 (decision boundaries).
+# Simulated: 500 adults aged 40-80 with systolic blood pressure (mmHg) and
+# whether they had a cardiovascular event within 10 years. Both predictors
+# matter by a similar amount (about 1 on the log-odds per SD), so the decision
+# boundary is a clearly tilted line that trades age against blood pressure -
+# unlike diabetes vs glucose, where the outcome is defined by one predictor.
+# True model: logit P(yes) = -1.0 + 0.09 (age - 60) + 0.05 (sbp - 135).
+# ---------------------------------------------------------------------------
+set.seed(11)
+n_cvd <- 500
+age_cvd <- round(runif(n_cvd, 40, 80))
+sbp_cvd <- round(rnorm(n_cvd, 135, 18))
+logit_cvd <- -1.0 + 0.09 * (age_cvd - 60) + 0.05 * (sbp_cvd - 135)
+cvd_event <- ifelse(runif(n_cvd) < plogis(logit_cvd), "yes", "no")
+cvd_risk <- data.frame(age = age_cvd, systolic_bp = sbp_cvd, cvd = cvd_event)
+readr::write_csv(cvd_risk, "data/cvd_risk.csv")
+message("wrote cvd_risk.csv: ", nrow(cvd_risk), " rows")
