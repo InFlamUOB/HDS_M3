@@ -447,17 +447,10 @@ tree_fit
 delirium_map(tree_fit, "Decision tree: age + sodium")
 ```
 
-How often is each model right on the 100 test patients, and what does each say
-about an 80-year-old with a low, a normal and a high sodium?
+What does each model say about an 80-year-old with a low, a normal and a high
+sodium?
 
 ```{r}
-data.frame(
-  model = c("straight line", "with (sodium - 140)²", "tree", "always says no"),
-  accuracy = c(mean(predict(line_fit,  new_data = test_d)$.pred_class == test_d$delirium),
-               mean(predict(curve_fit, new_data = test_d)$.pred_class == test_d$delirium),
-               mean(predict(tree_fit,  new_data = test_d)$.pred_class == test_d$delirium),
-               mean(test_d$delirium == "no")))
-
 patients <- data.frame(age = 80, sodium = c(126, 140, 154)) |>
   mutate(sodium_dev2 = (sodium - 140)^2)
 
@@ -469,16 +462,14 @@ patients |>
 
 > **Think about it**
 >
-> 1. The straight-line model is right for 72% of the test patients. Is that a
->    good model?
+> 1. Look at the straight-line model's map. Does it ever say `yes`?
 > 2. The straight-line model says sodium hardly matters. Is that true?
 > 3. Describe the boundary of the model with the squared term, and of the tree.
 
 > **Worked answer**
 >
-> 1. No. Always saying `no` is also right for 72%: the model says `no` to
->    everyone and has learned nothing useful. Compare every accuracy with that
->    baseline.
+> 1. No. Its probabilities stay between about 0.22 and 0.42, so it says `no` to
+>    everyone: no straight line separates the two classes.
 > 2. No. Sodium matters a great deal, but in both directions, which a straight
 >    line cannot express. An 80-year-old gets 0.33, 0.32 and 0.31 from the
 >    straight line whatever their sodium; the model with the squared term gives
@@ -488,8 +479,7 @@ patients |>
 >    is below about 130 or above about 150, and the normal band narrows slightly
 >    with age (about 128 to 151 at 65, about 131 to 149 at 95). The tree gives
 >    three vertical bands: sodium below 130.5, 130.5 to 149.5, and 149.5 or
->    above; it does not use age at all. Both are right for 88% of the test
->    patients.
+>    above; it does not use age at all.
 
 > **Learning points**
 >
