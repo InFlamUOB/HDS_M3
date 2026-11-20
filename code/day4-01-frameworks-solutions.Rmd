@@ -68,8 +68,7 @@ The outcome is a factor with two levels, `no` then `yes`. The probabilities
 are then about `yes`: having an event.
 
 We hold back every fifth person as the test set: 400 training patients and 100
-test patients. Splitting by a fixed rule rather than at random gives both
-languages the same 100 people. Every Day 4 exercise uses this split.
+test patients.
 
 ```{r}
 test_rows <- seq(1, nrow(cvd), by = 5)     # every fifth person is held back
@@ -99,8 +98,8 @@ log_fit$fit$coefficients
 ```
 
 The two parameters are not on the probability scale but on the **log-odds**
-scale. Exercise 4.2 shows how they turn into a probability. Here we let
-`predict()` do it.
+scale: an S-shaped function, the sigmoid, turns them into a probability. Here
+we let `predict()` do it.
 
 #### Task 1a — A 70-year-old
 
@@ -166,23 +165,6 @@ test_results <- test |>
 
 head(test_results, 10)
 ```
-
-How often is the predicted class right? Compare it with a "model" that always
-says `no`, the most common class.
-
-> **Stuck?**
->
-> Compare the predicted class with the column that holds what happened.
-
-> **Worked answer**
-
-```{r}
-mean(test_results$.pred_class == test_results$cvd)   # accuracy of the model
-mean(test_results$cvd == "no")                          # always saying no
-```
-
-> The model is right for 81% of the test patients. Always saying `no` is right
-> for 66%, because 66 of the 100 had no event.
 
 ```{r}
 ggplot(test_results, aes(x = age, y = .pred_yes, colour = cvd)) +
@@ -282,12 +264,11 @@ prob_map(log_fit_2, "Logistic regression: age and blood pressure")
 > 1. The higher the blood pressure, the younger the age at which the model
 >    switches to `yes`: at 140 mmHg the line is at about 65 years, at 160 mmHg at
 >    about 55. Both predictors push the probability the same way, and neither
->    decides alone. Exercise 4.4 works this line out from the coefficients.
+>    decides alone. Exercise 4.2 works this line out from the coefficients.
 > 2. Very little: the probability moved by 0.06. The class flipped only because
 >    the person sits right next to the line. Near 0.5 a small change in the
 >    probability can change the class; the probability shows that, the class
->    does not. On the 100 test patients the model with both predictors is right
->    83% of the time, against 81% with age alone.
+>    does not.
 
 ### Part 3 — The same steps, a decision tree
 
@@ -342,25 +323,13 @@ The same map as for the logistic regression:
 prob_map(tree_fit, "Decision tree: age and blood pressure")
 ```
 
-How often is each model right on the test patients?
-
-```{r}
-data.frame(
-  model = c("logistic, age", "logistic, age + BP", "tree, age + BP",
-            "always says no"),
-  accuracy = c(mean(predict(log_fit,   new_data = test)$.pred_class == test$cvd),
-               mean(predict(log_fit_2, new_data = test)$.pred_class == test$cvd),
-               mean(predict(tree_fit,  new_data = test)$.pred_class == test$cvd),
-               mean(test$cvd == "no")))
-```
-
 > **Think about it**
 >
 > 1. The logistic regression gives every person their own probability. How many
 >    different probabilities can the tree give, and why?
 > 2. Compare the two maps. What shape is the region where each model says `yes`?
-> 3. The three models gave the 70-year-old 0.55, 0.49 and 0.21. Their accuracies
->    on the test patients are close. What does that tell you?
+> 3. The three models gave the 70-year-old 0.55, 0.49 and 0.21. What does that
+>    tell you?
 
 > **Worked answer**
 >
@@ -373,11 +342,9 @@ data.frame(
 >    it says `yes` for anyone 53.5 or older with a blood pressure of 135.5 or
 >    more, and for anyone 71.5 or older with a blood pressure between 114.5 and
 >    135.5.
-> 3. Models can agree on most classes and still give quite different
->    probabilities for a single person. Accuracy only counts classes; it says
->    nothing about how good the probabilities are; the log loss in Exercise 4.5
->    scores the probabilities themselves. With 100 test patients, a difference of
->    two people (83% against 81%) is far too small to pick a winner.
+> 3. Models fitted to the same patients with the same predictors can give quite
+>    different probabilities for one person, and even different classes. Which
+>    model to trust needs a proper evaluation, which comes later in the module.
 
 > **Learning points**
 >

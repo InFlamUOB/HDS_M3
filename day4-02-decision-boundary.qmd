@@ -4,7 +4,7 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 4.4 — The decision boundary {#sec-decision-boundary}
+# Exercise 4.2 — The decision boundary {#sec-decision-boundary}
 
 In Exercise 4.1 the map of the logistic regression's probability had a black
 line across it: to one side the model says `yes`, to the other `no`. That line
@@ -12,13 +12,14 @@ is the **decision boundary**. In this exercise you work it out from the
 coefficients, see why it is straight, move it with the threshold, and meet data
 where no straight line can do the job.
 
-Parts 1 and 2 use the same people as Exercises 4.1 to 4.3: age, systolic blood
+Parts 1 and 2 use the same people as Exercise 4.1: age, systolic blood
 pressure, and whether they had a cardiovascular event in the next ten years.
 Both measurements matter, so the boundary is tilted.
 
 - **Part 1.** Find the boundary by hand from the coefficients, draw it, and
   see it as the line where a plane is cut, in 3D.
-- **Part 2.** Change the threshold, as in Exercise 4.3, and see the line move.
+- **Part 2.** Change the threshold and see the line move: every threshold
+  gives its own line.
 - **Part 3.** A dataset where the risk is high at both ends of a measurement.
   A straight boundary fails; a squared term or a tree gives a boundary that
   bends.
@@ -35,11 +36,11 @@ want it.
 ## R
 
 ::: {.content-hidden when-meta="show-solutions"}
-[**Download this exercise as an R Markdown notebook (.Rmd)**](code/day4-04-decision-boundary.Rmd){download="day4-04-decision-boundary.Rmd"}: the text and every code cell of the R version, including the code for the plots, with the blanks left for you to fill in. Open it in RStudio and run it a chunk at a time.
+[**Download this exercise as an R Markdown notebook (.Rmd)**](code/day4-02-decision-boundary.Rmd){download="day4-02-decision-boundary.Rmd"}: the text and every code cell of the R version, including the code for the plots, with the blanks left for you to fill in. Open it in RStudio and run it a chunk at a time.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
-[**Download the R notebook with the solutions (.Rmd)**](code/day4-04-decision-boundary-solutions.Rmd){download="day4-04-decision-boundary-solutions.Rmd"}: the same notebook with the worked answers filled in.
+[**Download the R notebook with the solutions (.Rmd)**](code/day4-02-decision-boundary-solutions.Rmd){download="day4-02-decision-boundary-solutions.Rmd"}: the same notebook with the worked answers filled in.
 :::
 
 ### Packages and data
@@ -88,12 +89,18 @@ b <- log_fit$fit$coefficients      # intercept, age, blood pressure
 b
 ```
 
-The model is a straight line on the log-odds scale (Exercise 4.2):
+The model is a straight line on the **log-odds** scale. Log-odds are another
+way of writing a probability $p$: $\log\big(p / (1 - p)\big)$. A probability of
+0.5 has log-odds 0; higher probabilities have positive log-odds, lower ones
+negative. The sigmoid turns log-odds back into a probability.
+
 
 $$\text{log-odds} = \beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure}$$
 
-With a threshold of 0.5, the class changes where the probability is 0.5. A
-probability of 0.5 is odds of 1 and **log-odds of 0**. So the boundary is every
+By default the model says `yes` when the probability is 0.5 or more. At 0.5
+the probability is shared equally between the two classes: 0.5 for an event and
+0.5 for no event. Above it `yes` is the more likely class, below it `no`. So
+the class changes where the probability is 0.5, which is **log-odds of 0**. So the boundary is every
 combination of age and blood pressure where
 
 $$\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure} = 0$$
@@ -295,7 +302,9 @@ predict(log_fit, new_data = data.frame(age = c(70, 55), systolic_bp = c(130, 165
 
 ### Part 2 — The threshold moves the line
 
-Exercise 4.3 changed the threshold. A threshold $t$ is a probability, so it has
+The cut-off of 0.5 is called the **decision threshold**. Nothing forces it to
+be 0.5: we could call someone `yes` from a probability of 0.3, or only from
+0.7. A threshold $t$ is a probability, so it has
 a log-odds, $\log\big(t / (1 - t)\big)$, and the boundary is where the model's
 log-odds equal it:
 
@@ -358,6 +367,13 @@ ggplot(test, aes(x = age, y = systolic_bp)) +
        title = "Three thresholds, three parallel boundaries")
 ```
 
+::: {.callout-important}
+## Key idea
+We could have picked another threshold, and we would have had a different line
+separating our classes in 2D: one line for each threshold. The 0.5 line,
+where both classes are equally likely, is only the default.
+:::
+
 Everyone above a line is predicted `yes` at that threshold. Count them:
 
 ```{r}
@@ -369,19 +385,20 @@ c(t_0.3 = sum(test_probs >= 0.3), t_0.5 = sum(test_probs >= 0.5),
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-Lowering the threshold from 0.5 to 0.3 calls many more test patients `yes`. In
-the language of Exercise 4.3, what happens to the sensitivity and the
-specificity, and where do you see that on the plot?
+Lowering the threshold from 0.5 to 0.3 calls many more test patients `yes`.
+On the plot, which patients change side when the line moves from 0.5 to 0.3:
+triangles (they had an event), circles (they did not), or both?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 52 patients are called `yes` at 0.3, 31 at 0.5 and 15 at 0.7. Moving the line
-down (0.3) brings more of the triangles onto the `yes` side, so the
-sensitivity rises, but it also brings over more circles, so the specificity
-falls. Moving it up (0.7) does the opposite. The model, its coefficients and
-the tilt of the line are the same; only the decision changed.
+down (0.3) brings more of the triangles onto the `yes` side, but it brings over
+circles too. Moving it up (0.7) does the opposite: fewer circles called `yes`,
+but more triangles missed. The model, its coefficients and the tilt of the line
+are the same; only the decision changed. Why you might want to move it is the
+subject of Exercise 4.3.
 :::
 :::
 
@@ -519,17 +536,10 @@ tree_fit
 delirium_map(tree_fit, "Decision tree: age + sodium")
 ```
 
-How often is each model right on the 100 test patients, and what does each say
-about an 80-year-old with a low, a normal and a high sodium?
+What does each model say about an 80-year-old with a low, a normal and a high
+sodium?
 
 ```{r}
-data.frame(
-  model = c("straight line", "with (sodium - 140)²", "tree", "always says no"),
-  accuracy = c(mean(predict(line_fit,  new_data = test_d)$.pred_class == test_d$delirium),
-               mean(predict(curve_fit, new_data = test_d)$.pred_class == test_d$delirium),
-               mean(predict(tree_fit,  new_data = test_d)$.pred_class == test_d$delirium),
-               mean(test_d$delirium == "no")))
-
 patients <- data.frame(age = 80, sodium = c(126, 140, 154)) |>
   mutate(sodium_dev2 = (sodium - 140)^2)
 
@@ -541,8 +551,7 @@ patients |>
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-1. The straight-line model is right for 72% of the test patients. Is that a
-   good model?
+1. Look at the straight-line model's map. Does it ever say `yes`?
 2. The straight-line model says sodium hardly matters. Is that true?
 3. Describe the boundary of the model with the squared term, and of the tree.
 :::
@@ -550,9 +559,8 @@ patients |>
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. No. Always saying `no` is also right for 72%: the model says `no` to
-   everyone and has learned nothing useful. Compare every accuracy with that
-   baseline.
+1. No. Its probabilities stay between about 0.22 and 0.42, so it says `no` to
+   everyone: no straight line separates the two classes.
 2. No. Sodium matters a great deal, but in both directions, which a straight
    line cannot express. An 80-year-old gets 0.33, 0.32 and 0.31 from the
    straight line whatever their sodium; the model with the squared term gives
@@ -562,8 +570,7 @@ patients |>
    is below about 130 or above about 150, and the normal band narrows slightly
    with age (about 128 to 151 at 65, about 131 to 149 at 95). The tree gives
    three vertical bands: sodium below 130.5, 130.5 to 149.5, and 149.5 or
-   above; it does not use age at all. Both are right for 88% of the test
-   patients.
+   above; it does not use age at all.
 :::
 :::
 
@@ -583,11 +590,11 @@ patients |>
 ## Python
 
 ::: {.content-hidden when-meta="show-solutions"}
-[**Download this exercise as a Jupyter notebook (.ipynb)**](code/day4-04-decision-boundary.ipynb){download="day4-04-decision-boundary.ipynb"}: the text and every code cell of the Python version, including the code for the plots, with the blanks left for you to fill in. Open it in Jupyter or VS Code and run it a cell at a time.
+[**Download this exercise as a Jupyter notebook (.ipynb)**](code/day4-02-decision-boundary.ipynb){download="day4-02-decision-boundary.ipynb"}: the text and every code cell of the Python version, including the code for the plots, with the blanks left for you to fill in. Open it in Jupyter or VS Code and run it a cell at a time.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
-[**Download the Jupyter notebook with the solutions (.ipynb)**](code/day4-04-decision-boundary-solutions.ipynb){download="day4-04-decision-boundary-solutions.ipynb"}: the same notebook with the worked answers filled in.
+[**Download the Jupyter notebook with the solutions (.ipynb)**](code/day4-02-decision-boundary-solutions.ipynb){download="day4-02-decision-boundary-solutions.ipynb"}: the same notebook with the worked answers filled in.
 :::
 
 ### Packages and data
@@ -636,12 +643,18 @@ print("intercept:", b0)
 print("weights (age, blood pressure):", b1, b2)
 ```
 
-The model is a straight line on the log-odds scale (Exercise 4.2):
+The model is a straight line on the **log-odds** scale. Log-odds are another
+way of writing a probability $p$: $\log\big(p / (1 - p)\big)$. A probability of
+0.5 has log-odds 0; higher probabilities have positive log-odds, lower ones
+negative. The sigmoid turns log-odds back into a probability.
+
 
 $$\text{log-odds} = \beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure}$$
 
-With a threshold of 0.5, the class changes where the probability is 0.5. A
-probability of 0.5 is odds of 1 and **log-odds of 0**. So the boundary is every
+By default the model says `yes` when the probability is 0.5 or more. At 0.5
+the probability is shared equally between the two classes: 0.5 for an event and
+0.5 for no event. Above it `yes` is the more likely class, below it `no`. So
+the class changes where the probability is 0.5, which is **log-odds of 0**. So the boundary is every
 combination of age and blood pressure where
 
 $$\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure} = 0$$
@@ -910,7 +923,9 @@ log_model.predict_proba(pd.DataFrame({"age": [70, 55], "systolic_bp": [130, 165]
 
 ### Part 2 — The threshold moves the line
 
-Exercise 4.3 changed the threshold. A threshold $t$ is a probability, so it has
+The cut-off of 0.5 is called the **decision threshold**. Nothing forces it to
+be 0.5: we could call someone `yes` from a probability of 0.3, or only from
+0.7. A threshold $t$ is a probability, so it has
 a log-odds, $\log\big(t / (1 - t)\big)$, and the boundary is where the model's
 log-odds equal it:
 
@@ -974,6 +989,13 @@ ax.set_title("Three thresholds, three parallel boundaries")
 plt.show()
 ```
 
+::: {.callout-important}
+## Key idea
+We could have picked another threshold, and we would have had a different line
+separating our classes in 2D: one line for each threshold. The 0.5 line,
+where both classes are equally likely, is only the default.
+:::
+
 Everyone above a line is predicted `yes` at that threshold. Count them:
 
 ```{python}
@@ -986,19 +1008,20 @@ print("t = 0.7:", (test_probs >= 0.7).sum())
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-Lowering the threshold from 0.5 to 0.3 calls many more test patients `yes`. In
-the language of Exercise 4.3, what happens to the sensitivity and the
-specificity, and where do you see that on the plot?
+Lowering the threshold from 0.5 to 0.3 calls many more test patients `yes`.
+On the plot, which patients change side when the line moves from 0.5 to 0.3:
+triangles (they had an event), circles (they did not), or both?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 52 patients are called `yes` at 0.3, 31 at 0.5 and 15 at 0.7. Moving the line
-down (0.3) brings more of the triangles onto the `yes` side, so the
-sensitivity rises, but it also brings over more circles, so the specificity
-falls. Moving it up (0.7) does the opposite. The model, its coefficients and
-the tilt of the line are the same; only the decision changed.
+down (0.3) brings more of the triangles onto the `yes` side, but it brings over
+circles too. Moving it up (0.7) does the opposite: fewer circles called `yes`,
+but more triangles missed. The model, its coefficients and the tilt of the line
+are the same; only the decision changed. Why you might want to move it is the
+subject of Exercise 4.3.
 :::
 :::
 
@@ -1149,17 +1172,10 @@ print(export_text(tree_model, feature_names=["age", "sodium"]))
 delirium_map(tree_model, ["age", "sodium"], "Decision tree: age + sodium")
 ```
 
-How often is each model right on the 100 test patients, and what does each say
-about an 80-year-old with a low, a normal and a high sodium?
+What does each model say about an 80-year-old with a low, a normal and a high
+sodium?
 
 ```{python}
-print(pd.DataFrame({
-    "model": ["straight line", "with (sodium - 140)²", "tree", "always says no"],
-    "accuracy": [line_model.score(test_d[["age", "sodium"]], test_d["delirium"]),
-                 curve_model.score(test_d[curve_columns], test_d["delirium"]),
-                 tree_model.score(test_d[["age", "sodium"]], test_d["delirium"]),
-                 (test_d["delirium"] == "no").mean()]}))
-
 patients = pd.DataFrame({"age": [80, 80, 80], "sodium": [126, 140, 154]})
 patients["sodium_dev2"] = (patients["sodium"] - 140) ** 2
 patients["straight_line"] = line_model.predict_proba(patients[["age", "sodium"]])[:, 1]
@@ -1170,8 +1186,7 @@ patients
 
 ::: {.callout-important appearance="simple"}
 ## Think about it
-1. The straight-line model is right for 72% of the test patients. Is that a
-   good model?
+1. Look at the straight-line model's map. Does it ever say `yes`?
 2. The straight-line model says sodium hardly matters. Is that true?
 3. Describe the boundary of the model with the squared term, and of the tree.
 :::
@@ -1179,9 +1194,8 @@ patients
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. No. Always saying `no` is also right for 72%: the model says `no` to
-   everyone and has learned nothing useful. Compare every accuracy with that
-   baseline.
+1. No. Its probabilities stay between about 0.22 and 0.42, so it says `no` to
+   everyone: no straight line separates the two classes.
 2. No. Sodium matters a great deal, but in both directions, which a straight
    line cannot express. An 80-year-old gets 0.33, 0.32 and 0.31 from the
    straight line whatever their sodium; the model with the squared term gives
@@ -1192,7 +1206,7 @@ patients
    with age (about 128 to 151 at 65, about 131 to 149 at 95). The tree gives
    three vertical bands of `yes`, `no`, `yes`, at sodium 130.5 and 149.5; it
    does not use age at all. (It also splits the low-sodium band at 127.5, but
-   both halves still say `yes`.) Both are right for 88% of the test patients.
+   both halves still say `yes`.)
 :::
 :::
 
@@ -1214,8 +1228,8 @@ patients
 ::: {.content-visible when-profile="instructor"}
 ::: {.instructor}
 **Teaching choice.** Part 1 links the map students saw in Exercise 4.1 to the
-coefficients of Exercise 4.2; Part 2 links it to the thresholds of Exercise
-4.3. Parts 1 and 2 use the Day 4 dataset (`data/cvd_risk.csv`, simulated), in
+coefficients; Part 2 introduces the threshold, which Exercise 4.3 then puts
+to use. No sensitivity or specificity here: that is Exercise 4.3. Parts 1 and 2 use the Day 4 dataset (`data/cvd_risk.csv`, simulated), in
 which age and blood pressure carry similar weight, so the boundary is clearly
 tilted. Part 3 uses a second
 simulated dataset in which the risk is U-shaped in sodium. Both are generated

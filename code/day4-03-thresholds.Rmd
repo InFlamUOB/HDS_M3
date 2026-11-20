@@ -7,6 +7,10 @@ output: html_document
 
 *Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
 
+In Exercise 4.2 every threshold gave a different line, and 0.5, where both
+classes are equally likely, was only the default. Why would anyone move it?
+This exercise answers that question, back on one measurement, age.
+
 A logistic regression outputs a probability,
 
 $$\hat{p}(x) = P(Y = 1 \mid x),$$
@@ -24,7 +28,7 @@ false positives, true negatives and false negatives the model makes, and so
 which mistakes it makes.
 
 **Theory:** decision threshold; confusion table; true and false positives and
-negatives; sensitivity and specificity; the cost of each kind of mistake.
+negatives; sensitivity and specificity; why you would move the threshold.
 
 > **The plots are for looking at**
 >
@@ -43,7 +47,7 @@ theme_set(theme_bw())          # white background for every plot
 options(pillar.sigfig = 4)     # show four significant figures in tables
 ```
 
-The same 500 people and the same split as Exercises 4.1 and 4.2. We add a
+The same 500 people and the same split as Exercise 4.1. We add a
 column `cvd_dummy`, the outcome coded 1 for `yes` and 0 for `no`, which
 makes the counting below easier to read.
 
@@ -61,7 +65,7 @@ test  <- cvd[test_rows, ]
 
 ### Part 1 — From a probability to a predicted class
 
-Fit the logistic regression from Exercise 4.2 on the training rows:
+Fit the age-only logistic regression from Exercise 4.1 on the training rows:
 
 ```{r}
 log_fit <- logistic_reg(mode = "classification") |>
@@ -103,8 +107,8 @@ prediction_15 |>
 
 Here are the 15 predicted probabilities, coloured by what is actually true, with
 the three thresholds as dashed lines. Everyone above a line is predicted to have
-an event at that threshold. The points follow the sigmoid curve from
-Exercise 4.2.
+an event at that threshold. The points follow the S-shaped curve from
+Exercise 4.1.
 
 ```{r}
 prediction_15 |>
@@ -196,7 +200,7 @@ seven people who had an event.
 
 ------------------------------------------------------------------------
 
-### Part 3 — The packaged version, on all 150 test patients
+### Part 3 — The packaged version, on all 100 test patients
 
 Fifteen people are enough to count by hand, not to judge a model. Whenever you
 report a classification model you will build a confusion table, and packages
@@ -230,46 +234,43 @@ At 0.5 the model finds 22 of the 34 people who had an event (sensitivity
 prevention, missing a third of the people who go on to have a heart attack or
 stroke is a poor result.
 
-**Putting a price on the two mistakes.** Suppose a missed case (a false
-negative) costs five times as much as unnecessary treatment (a false
-positive): a preventable heart attack or stroke happens, while unnecessary
-treatment costs a prescription and a review appointment. Then the
-cost of a threshold is
-
-$$\text{cost} = 5 \times FN + 1 \times FP$$
-
-Work out the cost of every threshold from 0.1 to 0.9 on the test patients, and
-find the cheapest:
+**Why move the threshold?** The two mistakes are not equally bad. A false
+negative is a person who was not offered treatment and then had a heart attack
+or stroke. A false positive is a person offered a tablet and a review
+appointment they did not need. A clinic that wants to miss fewer cases lowers
+the threshold. Compare three thresholds on all 100 test patients:
 
 ```{r}
-# Replace every ______ below, then run this cell.
-thresholds <- data.frame(threshold = seq(0.1, 0.9, by = 0.1))
-
-threshold_costs <- thresholds |>
+data.frame(threshold = c(0.3, 0.5, 0.7)) |>
   cross_join(test_preds) |>                      # every threshold with every patient
   group_by(threshold) |>
-  summarise(FN = sum(cvd == "yes" & .pred_yes <  threshold),
-            FP = sum(cvd == "no" & .pred_yes >= threshold)) |>
-  mutate(cost = ______)
-
-threshold_costs
+  summarise(sensitivity = sum(cvd == "yes" & .pred_yes >= threshold) / sum(cvd == "yes"),
+            specificity = sum(cvd == "no"  & .pred_yes <  threshold) / sum(cvd == "no"))
 ```
 
-**Question!** The cost ratio of five to one was an assumption. Who should decide
-it, and what happens to the best threshold if a missed case costs twenty times
-unnecessary treatment instead of five?
+At 0.3 the model finds 29 of the 34 people who had an event (sensitivity
+0.853) but leaves alone only 31 of the 66 without (specificity 0.470). At 0.7
+it leaves alone all 66 (specificity 1.000) but finds only 6 of the 34
+(sensitivity 0.176). Lowering the threshold buys sensitivity with specificity;
+raising it does the opposite. No threshold is best for every purpose: which
+mistake matters more depends on the decision, and that is a clinical choice,
+not a statistical one.
+
+**Question!** Would you move the threshold up or down for a cheap, safe blood
+test that only decides who gets a second, more accurate test? And for starting
+a treatment with serious side effects?
 
 > **Learning points**
 >
 > - Packages build the confusion table for you: `conf_mat()` in R, `confusion_matrix()` in Python. Check which way round the rows and columns are.
-> - The best threshold depends on what each kind of mistake costs, which is a clinical decision, not a statistical one.
+> - Lowering the threshold raises sensitivity and lowers specificity; raising it does the opposite. Which mistake matters more is a clinical decision, not a statistical one.
 > - Report the threshold together with sensitivity and specificity: a threshold on its own says nothing.
 
 ## Stretch
 
 > **Stretch — choose the threshold honestly**
 >
-> The cheapest threshold above was chosen by looking at the test patients, and
-> then judged on the same test patients. Choose it on the **training** rows
-> instead, then apply it once to the test patients. Is the cost still 49? Why is
-> this the honest way round?
+> A clinic wants to find at least 90% of the people who will have an event. Find
+> the highest threshold, in steps of 0.05, that reaches a sensitivity of 0.9 on
+> the **training** rows. Then apply it once to the test patients: what
+> sensitivity and specificity do you get there? Why is this the honest way round?
