@@ -83,13 +83,15 @@ summary(cvd)
 The outcome is a factor with two levels, `no` then `yes`. The probabilities
 are then about `yes`: having an event.
 
-We hold back every fifth person as the test set: 400 training patients and 100
-test patients.
+We split the patients into a training set and a test set, as in earlier
+exercises: 80% for training and 20% held back as the test set, 400 and 100
+patients. `set.seed(42)` makes the random split the same every time.
 
 ```{r}
-test_rows <- seq(1, nrow(cvd), by = 5)     # every fifth person is held back
-train <- cvd[-test_rows, ]
-test  <- cvd[test_rows, ]
+set.seed(42)
+split <- initial_split(cvd, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
 
 count(train, cvd)
 ```
@@ -146,7 +148,7 @@ predict(log_fit, new_data = person, type = "prob")   # a probability for each cl
 predict(log_fit, new_data = person)                     # the class
 ```
 
-`.pred_no` is 0.453 and `.pred_yes` is 0.547: they always add up to 1. The
+`.pred_no` is 0.460 and `.pred_yes` is 0.540: they always add up to 1. The
 class is `yes`, because the probability of `yes` is above 0.5.
 :::
 :::
@@ -181,9 +183,9 @@ ggplot() +
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. Hardly sure at all: 0.547 is only just above 0.5. The class `yes` on its own
+1. Hardly sure at all: 0.540 is only just above 0.5. The class `yes` on its own
    hides that; the probability shows it.
-2. Where the curve crosses the dashed line at 0.5: at about 68 years (67.7).
+2. Where the curve crosses the dashed line at 0.5: at about 68 years (68.1).
    Below that the class is `no`, above it `yes`.
 :::
 :::
@@ -227,8 +229,8 @@ ggplot(test_results, aes(x = age, y = .pred_yes, colour = cvd)) +
 count(test_results, predicted = .pred_class, happened = cvd)
 ```
 
-1. The orange points below the line had an event but were called `no`: 12
-   people. The blue points above it had none but were called `yes`: 7 people.
+1. The orange points below the line had an event but were called `no`: 17
+   people. The blue points above it had none but were called `yes`: 11 people.
    With age as the only predictor, two people of the same age get the same
    probability, whatever else is true of them.
 2. The probability. A person at 0.52 and a person at 0.72 are both `yes`, but
@@ -248,7 +250,7 @@ log_fit_2 <- log_model |>
 log_fit_2$fit$coefficients
 ```
 
-#### Task 2a — The same person, now with a blood pressure of 130
+#### Task 2a — The same person, now with a blood pressure of 128
 
 ```{r}
 #| eval: false
@@ -269,13 +271,13 @@ exactly as in Task 1a.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-person <- data.frame(age = 70, systolic_bp = 130)
+person <- data.frame(age = 70, systolic_bp = 128)
 
 predict(log_fit_2, new_data = person, type = "prob")
 predict(log_fit_2, new_data = person)
 ```
 
-The probability of an event is now 0.487, and the class is `no`.
+The probability of an event is now 0.453, and the class is `no`.
 :::
 :::
 
@@ -297,7 +299,7 @@ prob_map <- function(fit, title) {
     geom_raster(aes(fill = prob)) +
     geom_contour(aes(z = prob), breaks = 0.5, colour = "black", linewidth = 0.8) +
     geom_point(data = test, aes(shape = cvd), size = 1.5) +
-    annotate("point", x = 70, y = 130, colour = "red", size = 4) +
+    annotate("point", x = 70, y = 128, colour = "red", size = 4) +
     scale_fill_gradient2(low = "steelblue", mid = "white", high = "darkorange",
                          midpoint = 0.5, limits = c(0, 1)) +
     scale_shape_manual(values = c(no = 1, yes = 17)) +
@@ -312,7 +314,7 @@ prob_map(log_fit_2, "Logistic regression: age and blood pressure")
 ## Think about it
 1. The line where the class changes is straight but tilted. What does the tilt
    tell you?
-2. Adding blood pressure moved this person from 0.547 to 0.487, and the class
+2. Adding blood pressure moved this person from 0.540 to 0.453, and the class
    from `yes` to `no`. Did it change much about this person's prediction?
 :::
 
@@ -320,10 +322,10 @@ prob_map(log_fit_2, "Logistic regression: age and blood pressure")
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 1. The higher the blood pressure, the younger the age at which the model
-   switches to `yes`: at 140 mmHg the line is at about 65 years, at 160 mmHg at
-   about 55. Both predictors push the probability the same way, and neither
+   switches to `yes`: at 140 mmHg the line is at about 66 years, at 160 mmHg at
+   about 56. Both predictors push the probability the same way, and neither
    decides alone. Exercise 4.2 works this line out from the coefficients.
-2. Very little: the probability moved by 0.06. The class flipped only because
+2. Very little: the probability moved by 0.09. The class flipped only because
    the person sits right next to the line. Near 0.5 a small change in the
    probability can change the class; the probability shows that, the class
    does not.
@@ -336,8 +338,8 @@ Only the specification changes. The training patients, the predictors and the
 `fit()` and `predict()` calls stay the same.
 
 ```{r}
-# 1. Specify: a classification tree, computed by rpart
-tree_model <- decision_tree() |>
+# 1. Specify: a classification tree, two levels of questions deep, computed by rpart
+tree_model <- decision_tree(tree_depth = 2) |>
   set_engine("rpart") |>
   set_mode("classification")
 
@@ -349,6 +351,9 @@ rpart.plot(tree_fit$fit, type = 3, extra = 106, fallen.leaves = TRUE,
            box.palette = "BuOr", roundint = FALSE)
 ```
 
+`tree_depth = 2` allows two levels of questions, so the tree is small enough to
+read. Without it, rpart grows 11 leaves here.
+
 Each box asks a yes/no question. **Yes goes left, no goes right.** Each leaf at
 the bottom shows three things: the predicted class, the probability of `yes`
 (the share of training patients in that leaf who had an event) and the
@@ -356,20 +361,19 @@ percentage of all training patients who ended up there.
 
 #### Task 3a — Follow the person
 
-Start at the top with the 70-year-old with a blood pressure of 130. At each
+Start at the top with the 70-year-old with a blood pressure of 128. At each
 question, go left or right. Which leaf do you reach? What probability and what
 class does it give?
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-`age < 54`? No, go right. `systolic_bp < 136`? Yes, go left. `age < 72`? Yes,
-go left. That leaf gives class `no` and a probability of an event of **0.21**.
-It holds 22% of the training patients, and 19 of those 90 had an event:
-19 / 90 = 0.21.
+`age < 72`? Yes, go left. `systolic_bp < 157`? Yes, go left. That leaf gives
+class `no` and a probability of an event of **0.21**. It holds 71% of the
+training patients, and 60 of those 285 had an event: 60 / 285 = 0.21.
 
-The plot rounds the split points; the exact values (53.5, 135.5 and 71.5) are
-in `tree_fit$fit`.
+The plot rounds the split points; the exact values (71.5 and 156.5) are in
+`tree_fit$fit`.
 :::
 :::
 
@@ -393,22 +397,21 @@ prob_map(tree_fit, "Decision tree: age and blood pressure")
 1. The logistic regression gives every person their own probability. How many
    different probabilities can the tree give, and why?
 2. Compare the two maps. What shape is the region where each model says `yes`?
-3. The three models gave the 70-year-old 0.55, 0.49 and 0.21. What does that
+3. The three models gave the 70-year-old 0.54, 0.45 and 0.21. What does that
    tell you?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. Five, one per leaf: 0.14, 0.21, 0.12, 0.70 and 0.67. Every person in the
+1. Four, one per leaf: 0.21, 0.63, 0.13 and 0.78. Every person in the
    same leaf gets the same probability, the share of training patients in that
-   leaf who had an event. Everyone under 53.5 gets 0.14, whatever their blood
-   pressure.
+   leaf who had an event. Everyone under 71.5 with a blood pressure under
+   156.5 gets 0.21, whatever their exact age and blood pressure.
 2. The logistic regression changes smoothly, and its `yes` region is
    everything above a straight line. The tree's map is made of flat rectangles:
-   it says `yes` for anyone 53.5 or older with a blood pressure of 135.5 or
-   more, and for anyone 71.5 or older with a blood pressure between 114.5 and
-   135.5.
+   it says `yes` for anyone 71.5 or older with a blood pressure of 114.5 or
+   more, and for anyone younger with a blood pressure of 156.5 or more.
 3. Models fitted to the same patients with the same predictors can give quite
    different probabilities for one person, and even different classes. Which
    model to trust needs a proper evaluation, which comes later in the module.
@@ -450,6 +453,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 ```
@@ -466,13 +470,13 @@ cvd = pd.read_csv("data/cvd_risk.csv")
 cvd.describe()
 ```
 
-We hold back every fifth person as the test set: 400 training patients and 100
-test patients.
+We split the patients into a training set and a test set, as in earlier
+exercises: 80% for training and 20% held back as the test set, 400 and 100
+patients. `train_test_split()` can split the whole table at once, and
+`random_state=42` makes the random split the same every time.
 
 ```{python}
-is_test = cvd.index % 5 == 0               # every fifth person is held back
-train = cvd[~is_test]
-test  = cvd[is_test]
+train, test = train_test_split(cvd, test_size=0.2, random_state=42)
 
 train["cvd"].value_counts()
 ```
@@ -534,7 +538,7 @@ print(log_model.predict_proba(person))   # a probability for each class: no, yes
 print(log_model.predict(person))  # the class
 ```
 
-The probability of `no` is 0.453 and of `yes` 0.547: they always add up to 1.
+The probability of `no` is 0.428 and of `yes` 0.572: they always add up to 1.
 The class is `yes`, because the probability of `yes` is above 0.5.
 :::
 :::
@@ -571,9 +575,9 @@ plt.show()
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. Hardly sure at all: 0.547 is only just above 0.5. The class `yes` on its own
+1. Not very sure: 0.572 is not far above 0.5. The class `yes` on its own
    hides that; the probability shows it.
-2. Where the curve crosses the dashed line at 0.5: at about 68 years (67.7).
+2. Where the curve crosses the dashed line at 0.5: at about 67 years (67.0).
    Below that the class is `no`, above it `yes`.
 :::
 :::
@@ -622,8 +626,8 @@ pd.crosstab(test_results["predicted"], test_results["cvd"],
             rownames=["predicted"], colnames=["happened"])
 ```
 
-1. The orange points below the line had an event but were called `no`: 12
-   people. The blue points above it had none but were called `yes`: 7 people.
+1. The orange points below the line had an event but were called `no`: 18
+   people. The blue points above it had none but were called `yes`: 15 people.
    With age as the only predictor, two people of the same age get the same
    probability, whatever else is true of them.
 2. The probability. A person at 0.52 and a person at 0.72 are both `yes`, but
@@ -644,7 +648,7 @@ print("intercept:", log_model_2.intercept_)
 print("weights (age, systolic_bp):", log_model_2.coef_)
 ```
 
-#### Task 2a — The same person, now with a blood pressure of 130
+#### Task 2a — The same person, now with a blood pressure of 128
 
 ```{python}
 #| eval: false
@@ -665,13 +669,13 @@ exactly as in Task 1a.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-person = pd.DataFrame({"age": [70], "systolic_bp": [130]})
+person = pd.DataFrame({"age": [70], "systolic_bp": [128]})
 
 print(log_model_2.predict_proba(person))
 print(log_model_2.predict(person))
 ```
 
-The probability of an event is now 0.487, and the class is `no`.
+The probability of an event is now 0.481, and the class is `no`.
 :::
 :::
 
@@ -700,7 +704,7 @@ def prob_map(model, title):
                edgecolors="black", s=20, label="test: no")
     ax.scatter(yes["age"], yes["systolic_bp"], marker="^", color="black", s=20,
                label="test: yes")
-    ax.scatter([70], [130], color="red", s=80, zorder=3, label="70-year-old")
+    ax.scatter([70], [128], color="red", s=80, zorder=3, label="70-year-old")
     fig.colorbar(im, ax=ax, label="Probability of an event")
     ax.set_xlabel("Age (years)")
     ax.set_ylabel("Systolic blood pressure (mmHg)")
@@ -715,7 +719,7 @@ prob_map(log_model_2, "Logistic regression: age and blood pressure")
 ## Think about it
 1. The line where the class changes is straight but tilted. What does the tilt
    tell you?
-2. Adding blood pressure moved this person from 0.547 to 0.487, and the class
+2. Adding blood pressure moved this person from 0.572 to 0.481, and the class
    from `yes` to `no`. Did it change much about this person's prediction?
 :::
 
@@ -724,9 +728,9 @@ prob_map(log_model_2, "Logistic regression: age and blood pressure")
 ## Worked answer
 1. The higher the blood pressure, the younger the age at which the model
    switches to `yes`: at 140 mmHg the line is at about 65 years, at 160 mmHg at
-   about 55. Both predictors push the probability the same way, and neither
+   about 56. Both predictors push the probability the same way, and neither
    decides alone. Exercise 4.2 works this line out from the coefficients.
-2. Very little: the probability moved by 0.06. The class flipped only because
+2. Very little: the probability moved by 0.09. The class flipped only because
    the person sits right next to the line. Near 0.5 a small change in the
    probability can change the class; the probability shows that, the class
    does not.
@@ -739,8 +743,8 @@ Only the specification changes. The training patients, the predictors and the
 `.fit()`, `.predict()` and `.predict_proba()` calls stay the same.
 
 ```{python}
-# 1. Specify: a classification tree with at most five leaves
-tree_model = DecisionTreeClassifier(max_leaf_nodes=5, random_state=0)
+# 1. Specify: a classification tree, two levels of questions deep
+tree_model = DecisionTreeClassifier(max_depth=2, random_state=0)
 
 # 2. Fit on the same training patients, with the same predictors
 tree_model.fit(train[["age", "systolic_bp"]], train["cvd"])
@@ -751,10 +755,9 @@ plot_tree(tree_model, feature_names=["age", "systolic_bp"], class_names=["no", "
 plt.show()
 ```
 
-`max_leaf_nodes=5` allows at most five leaves, which gives the same tree as the
-R tab. Without it the tree keeps splitting until every leaf holds people of one
-class only: 149 leaves, which fit the training patients almost one by one and
-are right for only 66% of the test patients, no better than always saying `no`.
+`max_depth=2` allows two levels of questions, so the tree is small enough to
+read. Without it the tree keeps splitting until every leaf holds people of one
+class only: 141 leaves, which fit the training patients almost one by one.
 
 Each box asks a yes/no question. **True goes left, False goes right.** In each
 leaf at the bottom, `samples` is the percentage of all training patients who
@@ -764,17 +767,16 @@ probability of an event.
 
 #### Task 3a — Follow the person
 
-Start at the top with the 70-year-old with a blood pressure of 130. At each
+Start at the top with the 70-year-old with a blood pressure of 128. At each
 question, go left or right. Which leaf do you reach? What probability and what
 class does it give?
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-`age <= 53.5`? False, go right. `systolic_bp <= 135.5`? True, go left.
-`age <= 71.5`? True, go left. The leaf holds 22.5% of the training patients
-(90 of 400); 21% of them had an event, so the probability is **0.21** and the
-class is `no`.
+`age <= 62.5`? False, go right. `systolic_bp <= 115.5`? False, go right. The
+leaf holds 38% of the training patients (152 of 400); 64% of them had an
+event, so the probability is **0.64** and the class is `yes`.
 :::
 :::
 
@@ -798,21 +800,21 @@ prob_map(tree_model, "Decision tree: age and blood pressure")
 1. The logistic regression gives every person their own probability. How many
    different probabilities can the tree give, and why?
 2. Compare the two maps. What shape is the region where each model says `yes`?
-3. The three models gave the 70-year-old 0.55, 0.49 and 0.21. What does that
+3. The three models gave the 70-year-old 0.57, 0.48 and 0.64. What does that
    tell you?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-1. Five, one per leaf: 0.14, 0.21, 0.12, 0.70 and 0.67. Every person in the
+1. Four, one per leaf: 0.14, 0.53, 0.17 and 0.64. Every person in the
    same leaf gets the same probability, the share of training patients in that
-   leaf who had an event. Everyone up to 53.5 gets 0.14, whatever their blood
-   pressure.
+   leaf who had an event. Everyone aged 62.5 or under with a blood pressure up
+   to 156.5 gets 0.14, whatever their exact age and blood pressure.
 2. The logistic regression changes smoothly, and its `yes` region is
    everything above a straight line. The tree's map is made of flat rectangles:
-   it says `yes` for anyone over 53.5 with a blood pressure over 135.5, and for
-   anyone over 71.5 with a blood pressure between 114.5 and 135.5.
+   it says `yes` for anyone over 62.5 with a blood pressure over 115.5, and for
+   anyone younger with a blood pressure over 156.5.
 3. Models fitted to the same patients with the same predictors can give quite
    different probabilities for one person, and even different classes. Which
    model to trust needs a proper evaluation, which comes later in the module.
@@ -846,18 +848,26 @@ return on Day 5. The data are simulated (`data/cvd_risk.csv`, see
 defined by either of them. The same
 data and split are used in Exercises 4.1 to 4.3.
 
-**Expected values.** 500 people, 400 training (142 yes, 35.5%), 100 test (34
-yes; always `no` is right for 0.66). Logistic on age: intercept −5.638, weight
-0.0832, identical in both languages; class changes at age 67.7. Person aged 70:
-P(yes) 0.547, `yes`. Test: accuracy 0.81; 12 events called `no`, 7 non-events
-called `yes`. Logistic on age and blood pressure: −14.22, 0.1042, 0.0529; the
-70-year-old with 130 mmHg: 0.487, `no`; boundary at age 65 for 140 mmHg, 55
-for 160 mmHg; accuracy 0.83. Tree (R `decision_tree()` defaults; Python
-`max_leaf_nodes=5`, the identical tree): age < 53.5 → 0.14 (152); else BP <
-135.5 and age < 71.5 → 0.21 (90); age ≥ 71.5 and BP < 114.5 → 0.12 (8); age ≥
-71.5 and BP 114.5–135.5 → 0.70 (30); BP ≥ 135.5 → 0.67 (120); accuracy 0.81;
-the 70-year-old 0.21 `no`. `DecisionTreeClassifier()` with defaults: 149
-leaves, accuracy 0.66.
+**Expected values.** The split is random, so R (`set.seed(42)`,
+`initial_split(prop = 0.8)`) and Python (`train_test_split(test_size=0.2,
+random_state=42)`) hold back different patients and give different numbers;
+both are 400 training and 100 test patients. **R:** 138 training events (34.5%),
+38 test events. Logistic on age −5.880, 0.0863 (3 `glm` iterations); class
+changes at 68.1; person aged 70: 0.540 `yes`; test: 17 events called `no`, 11
+non-events called `yes`. Age and blood pressure: −13.83, 0.1019, 0.0508; person
+70 / 128 mmHg: 0.453 `no`; boundary at about 66 years for 140 mmHg, 56 for 160.
+Tree `tree_depth = 2`: age < 71.5 and BP < 156.5 → 0.21 (285); age < 71.5 and
+BP ≥ 156.5 → 0.63 (43); age ≥ 71.5 and BP < 114.5 → 0.13 (8); age ≥ 71.5 and BP
+≥ 114.5 → 0.78 (64); the person lands in 0.21 `no`. Default tree: 11 leaves.
+**Python:** 145 training events (36.3%), 31 test events. Logistic on age −6.433,
+0.0960 (`n_iter_` 20); class changes at 67.0; person aged 70: 0.572 `yes`;
+test: 18 events called `no`, 15 non-events called `yes`. Age and blood
+pressure: −15.06, 0.1159, 0.0537; person 70 / 128: 0.481 `no`; boundary at
+about 65 years for 140 mmHg, 56 for 160. Tree `max_depth=2`: age ≤ 62.5 and BP
+≤ 156.5 → 0.14 (198); age ≤ 62.5 and BP > 156.5 → 0.53 (32); age > 62.5 and BP
+≤ 115.5 → 0.17 (18); age > 62.5 and BP > 115.5 → 0.64 (152); the person lands in
+0.64 `yes`. Default tree: 141 leaves. Blood pressure 128 (not 130) is used for
+the person because at 130 the Python model gives 0.507, still `yes`.
 
 **Common failures.** (1) In R, leaving the factor levels as `yes` then `no`:
 `glm` then models the probability of `no` and the coefficients change sign,

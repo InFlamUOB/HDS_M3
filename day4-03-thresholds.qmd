@@ -70,9 +70,10 @@ cvd <- read_csv("data/cvd_risk.csv") |>
   mutate(cvd       = factor(cvd, levels = c("no", "yes")),
          cvd_dummy = if_else(cvd == "yes", 1, 0))
 
-test_rows <- seq(1, nrow(cvd), by = 5)     # every fifth person is held back
-train <- cvd[-test_rows, ]
-test  <- cvd[test_rows, ]
+set.seed(42)
+split <- initial_split(cvd, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
 ```
 
 ------------------------------------------------------------------------
@@ -90,11 +91,11 @@ tidy(log_fit)
 ```
 
 To make it easy to follow, predict the probability of an event for 15 people
-from the test set only: the patients in rows 68 to 82.
+from the test set only: the patients in rows 41 to 55.
 
 ```{r}
 patients15 <- test |>
-  slice(68:82)
+  slice(41:55)
 
 prediction_15 <- predict(log_fit, new_data = patients15, type = "prob") |>
   rename(prob = .pred_yes) |>
@@ -168,7 +169,7 @@ above to count TP, FP, FN and TN at the threshold 0.5. Then check with code.
 table(True = prediction_15$cvd_dummy, Predicted = prediction_15$class_0.5)
 ```
 
-At 0.5 there are 5 true positives, 2 false positives, 2 false negatives and 6
+At 0.5 there are 6 true positives, 2 false positives, 2 false negatives and 5
 true negatives. Now count all four boxes for the three thresholds side by side.
 Two summaries of the table are used everywhere in medicine:
 
@@ -227,9 +228,9 @@ threshold_compare
 
 | Threshold | TP | FP | FN | TN | Sensitivity | Specificity |
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| 0.3 | 6 | 4 | 1 | 4 | 0.857 | 0.500 |
-| 0.5 | 5 | 2 | 2 | 6 | 0.714 | 0.750 |
-| 0.7 | 1 | 0 | 6 | 8 | 0.143 | 1.000 |
+| 0.3 | 7 | 3 | 1 | 4 | 0.875 | 0.571 |
+| 0.5 | 6 | 2 | 2 | 5 | 0.750 | 0.714 |
+| 0.7 | 2 | 0 | 6 | 7 | 0.250 | 1.000 |
 :::
 :::
 
@@ -237,7 +238,7 @@ Changing the threshold changes the kind of mistakes the model makes. A **low**
 threshold catches more of the people who had an event (higher sensitivity) at the
 price of more false alarms. A **high** threshold raises fewer false alarms
 (higher specificity) but misses more cases. At 0.7 this model misses six of the
-seven people who had an event.
+eight people who had an event.
 
 ::: {.callout-important}
 ## Learning points
@@ -278,9 +279,9 @@ columns. scikit-learn's `confusion_matrix()` does the opposite. The numbers are
 the same; read the labels before you read the table.
 :::
 
-At 0.5 the model finds 22 of the 34 people who had an event (sensitivity
-0.647) and correctly leaves alone 59 of the 66 without (specificity 0.894). For
-prevention, missing a third of the people who go on to have a heart attack or
+At 0.5 the model finds 21 of the 38 people who had an event (sensitivity
+0.553) and correctly leaves alone 51 of the 62 without (specificity 0.823). For
+prevention, missing almost half of the people who go on to have a heart attack or
 stroke is a poor result.
 
 **Why move the threshold?** The two mistakes are not equally bad. A false
@@ -297,10 +298,10 @@ data.frame(threshold = c(0.3, 0.5, 0.7)) |>
             specificity = sum(cvd == "no"  & .pred_yes <  threshold) / sum(cvd == "no"))
 ```
 
-At 0.3 the model finds 29 of the 34 people who had an event (sensitivity
-0.853) but leaves alone only 31 of the 66 without (specificity 0.470). At 0.7
-it leaves alone all 66 (specificity 1.000) but finds only 6 of the 34
-(sensitivity 0.176). Lowering the threshold buys sensitivity with specificity;
+At 0.3 the model finds 32 of the 38 people who had an event (sensitivity
+0.842) but leaves alone only 36 of the 62 without (specificity 0.581). At 0.7
+it leaves alone all 62 (specificity 1.000) but finds only 5 of the 38
+(sensitivity 0.132). Lowering the threshold buys sensitivity with specificity;
 raising it does the opposite. No threshold is best for every purpose: which
 mistake matters more depends on the decision, and that is a clinical choice,
 not a statistical one.
@@ -337,6 +338,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 ```
 
@@ -348,9 +350,7 @@ makes the counting below easier to read.
 cvd = pd.read_csv("data/cvd_risk.csv")
 cvd["cvd_dummy"] = (cvd["cvd"] == "yes").astype(int) # 1 = yes, 0 = no
 
-is_test = cvd.index % 5 == 0               # every fifth person is held back
-train = cvd[~is_test]
-test  = cvd[is_test]
+train, test = train_test_split(cvd, test_size=0.2, random_state=42)
 ```
 
 ------------------------------------------------------------------------
@@ -368,11 +368,11 @@ print("slope:    ", round(log_fit.coef_[0, 0], 4))
 ```
 
 To make it easy to follow, predict the probability of an event for 15 people
-from the test set only: the patients in rows 68 to 82. Python counts from 0, so
-those are positions 67 to 81.
+from the test set only: the patients in rows 22 to 36. Python counts from 0, so
+those are positions 21 to 35.
 
 ```{python}
-patients15 = test.iloc[67:82].copy()
+patients15 = test.iloc[21:36].copy()
 
 prediction_15 = patients15.copy()
 prediction_15["prob"] = log_fit.predict_proba(patients15[["age"]])[:, 1]
@@ -447,7 +447,7 @@ pd.crosstab(prediction_15["cvd_dummy"], prediction_15["class_0.5"],
             rownames=["True"], colnames=["Predicted"])
 ```
 
-At 0.5 there are 5 true positives, 2 false positives, 2 false negatives and 6
+At 0.5 there are 3 true positives, 3 false positives, 4 false negatives and 5
 true negatives. Now count all four boxes for the three thresholds side by side.
 Two summaries of the table are used everywhere in medicine:
 
@@ -512,8 +512,8 @@ threshold_compare.round(3)
 
 | Threshold | TP | FP | FN | TN | Sensitivity | Specificity |
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| 0.3 | 6 | 4 | 1 | 4 | 0.857 | 0.500 |
-| 0.5 | 5 | 2 | 2 | 6 | 0.714 | 0.750 |
+| 0.3 | 6 | 6 | 1 | 2 | 0.857 | 0.250 |
+| 0.5 | 3 | 3 | 4 | 5 | 0.429 | 0.625 |
 | 0.7 | 1 | 0 | 6 | 8 | 0.143 | 1.000 |
 :::
 :::
@@ -563,9 +563,9 @@ the columns. tidymodels' `conf_mat()` does the opposite. The numbers are the
 same; read the labels before you read the table.
 :::
 
-At 0.5 the model finds 22 of the 34 people who had an event (sensitivity
-0.647) and correctly leaves alone 59 of the 66 without (specificity 0.894). For
-prevention, missing a third of the people who go on to have a heart attack or
+At 0.5 the model finds 13 of the 31 people who had an event (sensitivity
+0.419) and correctly leaves alone 54 of the 69 without (specificity 0.783). For
+prevention, missing more than half of the people who go on to have a heart attack or
 stroke is a poor result.
 
 **Why move the threshold?** The two mistakes are not equally bad. A false
@@ -583,10 +583,10 @@ for threshold in [0.3, 0.5, 0.7]:
     print(threshold, "sensitivity:", round(sensitivity, 3), "specificity:", round(specificity, 3))
 ```
 
-At 0.3 the model finds 29 of the 34 people who had an event (sensitivity
-0.853) but leaves alone only 31 of the 66 without (specificity 0.470). At 0.7
-it leaves alone all 66 (specificity 1.000) but finds only 6 of the 34
-(sensitivity 0.176). Lowering the threshold buys sensitivity with specificity;
+At 0.3 the model finds 20 of the 31 people who had an event (sensitivity
+0.645) but leaves alone only 35 of the 69 without (specificity 0.507). At 0.7
+it leaves alone 68 of the 69 (specificity 0.986) but finds only 4 of the 31
+(sensitivity 0.129). Lowering the threshold buys sensitivity with specificity;
 raising it does the opposite. No threshold is best for every purpose: which
 mistake matters more depends on the decision, and that is a clinical choice,
 not a statistical one.
@@ -620,19 +620,23 @@ sensitivity and specificity do you get there? Why is this the honest way round?
 the 0.5 confusion table on paper before running the code. The by-hand count is
 the point of Part 2.
 
-**Expected values.** Data `data/cvd_risk.csv`, the Day 4 split; coefficients
-−5.638 and 0.0832 (as in 4.1, Part 1). Test patients 68 to 82 (positions 67 to 81 in
-Python) are used because they hold 7 people who had an event, enough to show
-what a threshold does. On those 15: 0.3 → TP 6, FP 4, FN 1, TN 4 (sensitivity
-0.857, specificity 0.500); 0.5 → 5, 2, 2, 6 (0.714, 0.750); 0.7 → 1, 0, 6, 8
-(0.143, 1.000). All 100 test patients (34 events): 0.3 → 29, 35, 5, 31 (0.853,
-0.470); 0.5 → 22, 7, 12, 59 (0.647, 0.894, accuracy 0.81); 0.7 → 6, 0, 28, 66
-(0.176, 1.000). Stretch: on the training rows the highest threshold with a
-sensitivity of at least 0.9 is 0.15 (sensitivity 0.972, specificity 0.248; at
-0.2 the sensitivity is 0.894). Applied once to the test patients, 0.15 gives
-sensitivity 1.000 and specificity 0.152: almost everyone is offered treatment.
-The threshold was chosen without looking at the test patients, so the test
-numbers are an honest estimate.
+**Expected values.** Random split (R `set.seed(42)` + `initial_split(prop =
+0.8)`; Python `train_test_split(test_size=0.2, random_state=42)`), so the two
+tabs have different numbers. The 15-person windows were chosen so that the
+three thresholds give clearly different counts. **R:** coefficients −5.880,
+0.0863. Test rows 41 to 55 (8 events): 0.3 → TP 7, FP 3, FN 1, TN 4
+(sensitivity 0.875, specificity 0.571); 0.5 → 6, 2, 2, 5 (0.750, 0.714); 0.7 →
+2, 0, 6, 7 (0.250, 1.000). All 100 test patients (38 events): 0.3 → 32, 26, 6,
+36 (0.842, 0.581); 0.5 → 21, 11, 17, 51 (0.553, 0.823); 0.7 → 5, 0, 33, 62
+(0.132, 1.000). Stretch: highest threshold with training sensitivity ≥ 0.9 is
+0.15 (0.942, specificity 0.313; at 0.2 sensitivity 0.862); on the test patients
+0.15 gives sensitivity 0.974, specificity 0.339. **Python:** −6.433, 0.0960.
+Positions 21 to 35 (7 events): 0.3 → 6, 6, 1, 2 (0.857, 0.250); 0.5 → 3, 3, 4,
+5 (0.429, 0.625); 0.7 → 1, 0, 6, 8 (0.143, 1.000). All 100 (31 events): 0.3 →
+20, 34, 11, 35 (0.645, 0.507); 0.5 → 13, 15, 18, 54 (0.419, 0.783); 0.7 → 4, 1,
+27, 68 (0.129, 0.986). Stretch: 0.15 (training 0.945, 0.322; at 0.2 0.883); on
+the test patients 0.968, 0.304. In both, the threshold was chosen without
+looking at the test patients, so the test numbers are an honest estimate.
 
 **Common failures.** (1) Reading `conf_mat()` and `confusion_matrix()` the same
 way round. (2) Using `>` in one place and `>=` in another, which moves a person

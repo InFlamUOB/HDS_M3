@@ -56,9 +56,10 @@ cvd <- read_csv("data/cvd_risk.csv") |>
   mutate(cvd       = factor(cvd, levels = c("no", "yes")),
          cvd_dummy = if_else(cvd == "yes", 1, 0))
 
-test_rows <- seq(1, nrow(cvd), by = 5)     # every fifth person is held back
-train <- cvd[-test_rows, ]
-test  <- cvd[test_rows, ]
+set.seed(42)
+split <- initial_split(cvd, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
 ```
 
 ------------------------------------------------------------------------
@@ -76,11 +77,11 @@ tidy(log_fit)
 ```
 
 To make it easy to follow, predict the probability of an event for 15 people
-from the test set only: the patients in rows 68 to 82.
+from the test set only: the patients in rows 41 to 55.
 
 ```{r}
 patients15 <- test |>
-  slice(68:82)
+  slice(41:55)
 
 prediction_15 <- predict(log_fit, new_data = patients15, type = "prob") |>
   rename(prob = .pred_yes) |>
@@ -149,7 +150,7 @@ above to count TP, FP, FN and TN at the threshold 0.5. Then check with code.
 table(True = prediction_15$cvd_dummy, Predicted = prediction_15$class_0.5)
 ```
 
-At 0.5 there are 5 true positives, 2 false positives, 2 false negatives and 6
+At 0.5 there are 6 true positives, 2 false positives, 2 false negatives and 5
 true negatives. Now count all four boxes for the three thresholds side by side.
 Two summaries of the table are used everywhere in medicine:
 
@@ -189,15 +190,15 @@ threshold_compare
 
 > | Threshold | TP | FP | FN | TN | Sensitivity | Specificity |
 > |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-> | 0.3 | 6 | 4 | 1 | 4 | 0.857 | 0.500 |
-> | 0.5 | 5 | 2 | 2 | 6 | 0.714 | 0.750 |
-> | 0.7 | 1 | 0 | 6 | 8 | 0.143 | 1.000 |
+> | 0.3 | 7 | 3 | 1 | 4 | 0.875 | 0.571 |
+> | 0.5 | 6 | 2 | 2 | 5 | 0.750 | 0.714 |
+> | 0.7 | 2 | 0 | 6 | 7 | 0.250 | 1.000 |
 
 Changing the threshold changes the kind of mistakes the model makes. A **low**
 threshold catches more of the people who had an event (higher sensitivity) at the
 price of more false alarms. A **high** threshold raises fewer false alarms
 (higher specificity) but misses more cases. At 0.7 this model misses six of the
-seven people who had an event.
+eight people who had an event.
 
 > **Learning points**
 >
@@ -236,9 +237,9 @@ autoplot(cm, type = "heatmap")
 > columns. scikit-learn's `confusion_matrix()` does the opposite. The numbers are
 > the same; read the labels before you read the table.
 
-At 0.5 the model finds 22 of the 34 people who had an event (sensitivity
-0.647) and correctly leaves alone 59 of the 66 without (specificity 0.894). For
-prevention, missing a third of the people who go on to have a heart attack or
+At 0.5 the model finds 21 of the 38 people who had an event (sensitivity
+0.553) and correctly leaves alone 51 of the 62 without (specificity 0.823). For
+prevention, missing almost half of the people who go on to have a heart attack or
 stroke is a poor result.
 
 **Why move the threshold?** The two mistakes are not equally bad. A false
@@ -255,10 +256,10 @@ data.frame(threshold = c(0.3, 0.5, 0.7)) |>
             specificity = sum(cvd == "no"  & .pred_yes <  threshold) / sum(cvd == "no"))
 ```
 
-At 0.3 the model finds 29 of the 34 people who had an event (sensitivity
-0.853) but leaves alone only 31 of the 66 without (specificity 0.470). At 0.7
-it leaves alone all 66 (specificity 1.000) but finds only 6 of the 34
-(sensitivity 0.176). Lowering the threshold buys sensitivity with specificity;
+At 0.3 the model finds 32 of the 38 people who had an event (sensitivity
+0.842) but leaves alone only 36 of the 62 without (specificity 0.581). At 0.7
+it leaves alone all 62 (specificity 1.000) but finds only 5 of the 38
+(sensitivity 0.132). Lowering the threshold buys sensitivity with specificity;
 raising it does the opposite. No threshold is best for every purpose: which
 mistake matters more depends on the decision, and that is a clinical choice,
 not a statistical one.
