@@ -17,7 +17,8 @@ pressure, and whether they had a cardiovascular event in the next ten years.
 Both measurements matter, so the boundary is tilted.
 
 - **Part 1.** Find the boundary by hand from the coefficients, draw it, and
-  see it as the line where a plane is cut, in 3D.
+  see it in 3D as the line where the S-shaped probability sheet cuts the
+  plane P = 0.5.
 - **Part 2.** Change the threshold and see the line move: every threshold
   gives its own line.
 
@@ -140,12 +141,13 @@ needs a lower blood pressure to cross it.
 
 #### The same line in three dimensions
 
-The log-odds, $\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure}$,
-are a flat, tilted **plane** above the age–blood pressure floor, like the plane
-in Exercise 3.1. The grey sheet is height 0. Where the plane passes through the
-sheet is the decision boundary, the black line: where the plane is above the
-sheet the model says `yes`, where it is below, `no`. The test patients are drawn
-on the grey sheet. Turn the plot with the mouse and scroll to zoom.
+The model turns age and blood pressure into a probability with the sigmoid.
+Drawn above the age–blood pressure floor, that probability is an S-shaped
+**sheet** between 0 and 1. The flat grey plane is the level P = 0.5. The
+decision boundary, the black line, is nothing more than where the sheet cuts
+through that plane: where the sheet is above the plane the model says `yes`,
+where it is below, `no`. Seen from above, it is the line you drew in Task 1a.
+Turn the plot with the mouse and scroll to zoom.
 
 ```{r}
 #| eval: !expr requireNamespace("plotly", quietly = TRUE)
@@ -153,70 +155,25 @@ on the grey sheet. Turn the plot with the mouse and scroll to zoom.
 ages <- seq(40, 80, by = 1)
 bps  <- seq(80, 200, by = 2)
 
-# the log-odds at every grid point: one row per blood pressure, one column per age
+# the probability at every grid point (one row per blood pressure, one column
+# per age): the sigmoid of the log-odds
 logodds_matrix <- outer(bps, ages, function(s, a) b[1] + b[2] * a + b[3] * s)
+prob_matrix <- 1 / (1 + exp(-logodds_matrix))
 
-# the boundary: the age where the log-odds are 0, for each blood pressure
+# the boundary: the age where the probability is 0.5 (log-odds 0), for each blood pressure
 line_age <- (-b[1] - b[3] * bps) / b[2]
 on_floor <- line_age >= 40 & line_age <= 80
 
-no  <- filter(test, cvd == "no")
-yes <- filter(test, cvd == "yes")
-
 plotly::plot_ly() |>
-  plotly::add_surface(x = ages, y = bps, z = logodds_matrix, opacity = 0.75,
-                      colorscale = list(c(0, 1), c("steelblue", "darkorange")),
-                      showscale = FALSE, name = "log-odds") |>
-  plotly::add_surface(x = ages, y = bps, z = 0 * logodds_matrix, opacity = 0.4,
-                      colorscale = list(c(0, 1), c("grey", "grey")),
-                      showscale = FALSE, name = "height 0") |>
-  plotly::add_trace(type = "scatter3d", mode = "lines", x = line_age[on_floor],
-                    y = bps[on_floor], z = rep(0, sum(on_floor)),
-                    line = list(color = "black", width = 8), name = "boundary") |>
-  plotly::add_trace(type = "scatter3d", mode = "markers", x = no$age, y = no$systolic_bp,
-                    z = rep(0, nrow(no)), marker = list(size = 3, color = "steelblue"),
-                    name = "test: no") |>
-  plotly::add_trace(type = "scatter3d", mode = "markers", x = yes$age, y = yes$systolic_bp,
-                    z = rep(0, nrow(yes)), marker = list(size = 3, color = "darkorange"),
-                    name = "test: yes") |>
-  plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
-                              yaxis = list(title = "Systolic BP (mmHg)"),
-                              zaxis = list(title = "Log-odds of an event")))
-```
-
-The sigmoid turns each log-odds into a probability, which bends the flat plane
-into an S-shaped sheet between 0 and 1. A log-odds of 0 is a probability of
-0.5, so the sheet crosses the grey level at 0.5 along exactly the same black
-line. The test patients sit at 1 (an event) and at 0 (no event). Click
-**level 0.3** and **level 0.7** in the legend to show two more levels; Part 2
-is about them.
-
-```{r}
-#| eval: !expr requireNamespace("plotly", quietly = TRUE)
-# the probability at every grid point: the sigmoid of the log-odds
-prob_matrix <- 1 / (1 + exp(-logodds_matrix))
-
-fig_prob <- plotly::plot_ly() |>
   plotly::add_surface(x = ages, y = bps, z = prob_matrix, opacity = 0.75,
                       colorscale = list(c(0, 1), c("steelblue", "darkorange")),
-                      showscale = FALSE, name = "probability")
-for (t in c(0.3, 0.5, 0.7)) {
-  fig_prob <- fig_prob |>
-    plotly::add_surface(x = ages, y = bps, z = 0 * prob_matrix + t, opacity = 0.4,
-                        colorscale = list(c(0, 1), c("grey", "grey")), showscale = FALSE,
-                        showlegend = TRUE, name = paste("level", t),
-                        visible = if (t == 0.5) TRUE else "legendonly")
-}
-fig_prob |>
+                      showscale = FALSE, name = "probability") |>
+  plotly::add_surface(x = ages, y = bps, z = 0 * prob_matrix + 0.5, opacity = 0.4,
+                      colorscale = list(c(0, 1), c("grey", "grey")), showscale = FALSE,
+                      name = "P = 0.5") |>
   plotly::add_trace(type = "scatter3d", mode = "lines", x = line_age[on_floor],
                     y = bps[on_floor], z = rep(0.5, sum(on_floor)),
                     line = list(color = "black", width = 8), name = "boundary at 0.5") |>
-  plotly::add_trace(type = "scatter3d", mode = "markers", x = no$age, y = no$systolic_bp,
-                    z = rep(0, nrow(no)), marker = list(size = 3, color = "steelblue"),
-                    name = "test: no") |>
-  plotly::add_trace(type = "scatter3d", mode = "markers", x = yes$age, y = yes$systolic_bp,
-                    z = rep(1, nrow(yes)), marker = list(size = 3, color = "darkorange"),
-                    name = "test: yes") |>
   plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
                               yaxis = list(title = "Systolic BP (mmHg)"),
                               zaxis = list(title = "Probability of an event")))
@@ -231,35 +188,15 @@ fig_prob |>
 > 3. A model with three predictors (say age, blood pressure and cholesterol) also
 >    has a boundary. What shape would it be?
 
-### Part 2 — The threshold moves the line
+### Part 2 — Other thresholds, other lines
 
 The cut-off of 0.5 is called the **decision threshold**. Nothing forces it to
 be 0.5: we could call someone `yes` from a probability of 0.3, or only from
-0.7. A threshold $t$ is a probability, so it has
-a log-odds, $\log\big(t / (1 - t)\big)$, and the boundary is where the model's
-log-odds equal it:
-
-$$\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure} = \log\left(\frac{t}{1-t}\right)$$
-
-Only the right-hand side changes, so the line keeps its tilt and moves
-sideways. In the 3D plot of Part 1 this is cutting the S-shaped sheet at a
-different height: the 0.3 level meets it further down and to the left, the 0.7
-level further up and to the right.
-
-#### Task 2a — The log-odds of three thresholds
-
-```{r}
-# Replace every ______ below, then run this cell.
-thresholds <- data.frame(t = c(0.3, 0.5, 0.7)) |>
-  mutate(log_odds = log(______ / (1 - ______)),
-         age_at_bp_140 = (log_odds - b[1] - b[3] * 140) / b[2])
-
-thresholds
-```
-
-> **Stuck?**
->
-> Both blanks are the threshold column, `t`.
+0.7. Each threshold gives its own line. Each line is where the S-shaped sheet
+of Part 1 is cut by a flat plane at that height: the plane at 0.3 sits lower
+and cuts the sheet at younger ages and lower blood pressures; the plane at 0.7
+sits higher and cuts it further up. Seen from above, the three lines are
+parallel: the same tilt, shifted.
 
 ```{r}
 lines_t <- data.frame(t = factor(c(0.3, 0.5, 0.7)),
@@ -302,7 +239,7 @@ c(t_0.3 = sum(test_probs >= 0.3), t_0.5 = sum(test_probs >= 0.5),
 > **Learning points**
 >
 > - The decision boundary is where the predicted probability equals the
->   threshold. For a logistic regression that is where the log-odds equal
->   $\log\big(t/(1-t)\big)$: 0 for a threshold of 0.5.
+>   threshold: where the S-shaped sheet cuts a flat plane at that height. At
+>   0.5 the two classes are equally likely, and the log-odds are 0.
 > - A logistic regression's boundary is straight (flat) in its predictors.
->   Changing the threshold moves it without changing its tilt.
+>   Another threshold gives another, parallel line: the same tilt, shifted.
