@@ -4,7 +4,11 @@ engine: knitr
 
 {{< include _common.qmd >}}
 
-# Exercise 4.2 — The decision threshold {#sec-thresholds}
+# Exercise 4.3 — The decision threshold {#sec-thresholds}
+
+In Exercise 4.2 every threshold gave a different line, and 0.5, where both
+classes are equally likely, was only the default. Why would anyone move it?
+This exercise answers that question, back on one measurement, age.
 
 A logistic regression outputs a probability,
 
@@ -23,7 +27,7 @@ false positives, true negatives and false negatives the model makes, and so
 which mistakes it makes.
 
 **Theory:** decision threshold; confusion table; true and false positives and
-negatives; sensitivity and specificity; the cost of each kind of mistake.
+negatives; sensitivity and specificity; why you would move the threshold.
 
 ::: {.callout-note}
 ## The plots are for looking at
@@ -37,11 +41,11 @@ expected to write it yourself.
 ## R
 
 ::: {.content-hidden when-meta="show-solutions"}
-[**Download this exercise as an R Markdown notebook (.Rmd)**](code/day4-02-thresholds.Rmd){download="day4-02-thresholds.Rmd"}: the text and every code cell of the R version, including the code for the plots, with the blanks left for you to fill in. Open it in RStudio and run it a chunk at a time.
+[**Download this exercise as an R Markdown notebook (.Rmd)**](code/day4-03-thresholds.Rmd){download="day4-03-thresholds.Rmd"}: the text and every code cell of the R version, including the code for the plots, with the blanks left for you to fill in. Open it in RStudio and run it a chunk at a time.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
-[**Download the R notebook with the solutions (.Rmd)**](code/day4-02-thresholds-solutions.Rmd){download="day4-02-thresholds-solutions.Rmd"}: the same notebook with the worked answers filled in.
+[**Download the R notebook with the solutions (.Rmd)**](code/day4-03-thresholds-solutions.Rmd){download="day4-03-thresholds-solutions.Rmd"}: the same notebook with the worked answers filled in.
 :::
 
 ### Packages and data
@@ -244,7 +248,7 @@ seven people who had an event.
 
 ------------------------------------------------------------------------
 
-### Part 3 — The packaged version, on all 150 test patients
+### Part 3 — The packaged version, on all 100 test patients
 
 Fifteen people are enough to count by hand, not to judge a model. Whenever you
 report a classification model you will build a confusion table, and packages
@@ -279,73 +283,47 @@ At 0.5 the model finds 22 of the 34 people who had an event (sensitivity
 prevention, missing a third of the people who go on to have a heart attack or
 stroke is a poor result.
 
-**Putting a price on the two mistakes.** Suppose a missed case (a false
-negative) costs five times as much as unnecessary treatment (a false
-positive): a preventable heart attack or stroke happens, while unnecessary
-treatment costs a prescription and a review appointment. Then the
-cost of a threshold is
-
-$$\text{cost} = 5 \times FN + 1 \times FP$$
-
-Work out the cost of every threshold from 0.1 to 0.9 on the test patients, and
-find the cheapest:
+**Why move the threshold?** The two mistakes are not equally bad. A false
+negative is a person who was not offered treatment and then had a heart attack
+or stroke. A false positive is a person offered a tablet and a review
+appointment they did not need. A clinic that wants to miss fewer cases lowers
+the threshold. Compare three thresholds on all 100 test patients:
 
 ```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-thresholds <- data.frame(threshold = seq(0.1, 0.9, by = 0.1))
-
-threshold_costs <- thresholds |>
+data.frame(threshold = c(0.3, 0.5, 0.7)) |>
   cross_join(test_preds) |>                      # every threshold with every patient
   group_by(threshold) |>
-  summarise(FN = sum(cvd == "yes" & .pred_yes <  threshold),
-            FP = sum(cvd == "no" & .pred_yes >= threshold)) |>
-  mutate(cost = ______)
-
-threshold_costs
+  summarise(sensitivity = sum(cvd == "yes" & .pred_yes >= threshold) / sum(cvd == "yes"),
+            specificity = sum(cvd == "no"  & .pred_yes <  threshold) / sum(cvd == "no"))
 ```
 
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-thresholds <- data.frame(threshold = seq(0.1, 0.9, by = 0.1))
+At 0.3 the model finds 29 of the 34 people who had an event (sensitivity
+0.853) but leaves alone only 31 of the 66 without (specificity 0.470). At 0.7
+it leaves alone all 66 (specificity 1.000) but finds only 6 of the 34
+(sensitivity 0.176). Lowering the threshold buys sensitivity with specificity;
+raising it does the opposite. No threshold is best for every purpose: which
+mistake matters more depends on the decision, and that is a clinical choice,
+not a statistical one.
 
-threshold_costs <- thresholds |>
-  cross_join(test_preds) |>
-  group_by(threshold) |>
-  summarise(FN = sum(cvd == "yes" & .pred_yes <  threshold),
-            FP = sum(cvd == "no" & .pred_yes >= threshold)) |>
-  mutate(cost = 5 * FN + 1 * FP)
-
-threshold_costs
-```
-
-The cheapest threshold is **0.2**, with a cost of 49 (1 missed case and 44
-people treated unnecessarily). The default of 0.5 costs 67. Treating
-everybody, with no model at all, would cost 66, and treating nobody 170.
-:::
-:::
-
-**Question!** The cost ratio of five to one was an assumption. Who should decide
-it, and what happens to the best threshold if a missed case costs twenty times
-unnecessary treatment instead of five?
+**Question!** Would you move the threshold up or down for a cheap, safe blood
+test that only decides who gets a second, more accurate test? And for starting
+a treatment with serious side effects?
 
 ::: {.callout-important}
 ## Learning points
 - Packages build the confusion table for you: `conf_mat()` in R, `confusion_matrix()` in Python. Check which way round the rows and columns are.
-- The best threshold depends on what each kind of mistake costs, which is a clinical decision, not a statistical one.
+- Lowering the threshold raises sensitivity and lowers specificity; raising it does the opposite. Which mistake matters more is a clinical decision, not a statistical one.
 - Report the threshold together with sensitivity and specificity: a threshold on its own says nothing.
 :::
 
 ## Python
 
 ::: {.content-hidden when-meta="show-solutions"}
-[**Download this exercise as a Jupyter notebook (.ipynb)**](code/day4-02-thresholds.ipynb){download="day4-02-thresholds.ipynb"}: the text and every code cell of the Python version, including the code for the plots, with the blanks left for you to fill in. Open it in Jupyter or VS Code and run it a cell at a time.
+[**Download this exercise as a Jupyter notebook (.ipynb)**](code/day4-03-thresholds.ipynb){download="day4-03-thresholds.ipynb"}: the text and every code cell of the Python version, including the code for the plots, with the blanks left for you to fill in. Open it in Jupyter or VS Code and run it a cell at a time.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
-[**Download the Jupyter notebook with the solutions (.ipynb)**](code/day4-02-thresholds-solutions.ipynb){download="day4-02-thresholds-solutions.ipynb"}: the same notebook with the worked answers filled in.
+[**Download the Jupyter notebook with the solutions (.ipynb)**](code/day4-03-thresholds-solutions.ipynb){download="day4-03-thresholds-solutions.ipynb"}: the same notebook with the worked answers filled in.
 :::
 
 ### Packages and data
@@ -555,7 +533,7 @@ seven people who had an event.
 
 ------------------------------------------------------------------------
 
-### Part 3 — The packaged version, on all 150 test patients
+### Part 3 — The packaged version, on all 100 test patients
 
 Fifteen people are enough to count by hand, not to judge a model. Whenever you
 report a classification model you will build a confusion table, and packages
@@ -590,62 +568,37 @@ At 0.5 the model finds 22 of the 34 people who had an event (sensitivity
 prevention, missing a third of the people who go on to have a heart attack or
 stroke is a poor result.
 
-**Putting a price on the two mistakes.** Suppose a missed case (a false
-negative) costs five times as much as unnecessary treatment (a false
-positive): a preventable heart attack or stroke happens, while unnecessary
-treatment costs a prescription and a review appointment. Then the
-cost of a threshold is
-
-$$\text{cost} = 5 \times FN + 1 \times FP$$
-
-Work out the cost of every threshold from 0.1 to 0.9 on the test patients, and
-find the cheapest:
+**Why move the threshold?** The two mistakes are not equally bad. A false
+negative is a person who was not offered treatment and then had a heart attack
+or stroke. A false positive is a person offered a tablet and a review
+appointment they did not need. A clinic that wants to miss fewer cases lowers
+the threshold. Compare three thresholds on all 100 test patients:
 
 ```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-rows = []
-for threshold in np.round(np.arange(0.1, 1.0, 0.1), 1):
-    truth = test_preds["cvd_dummy"]
-    prob  = test_preds["prob"]
-    FN = ((truth == 1) & (prob <  threshold)).sum()
-    FP = ((truth == 0) & (prob >= threshold)).sum()
-    rows.append({"threshold": threshold, "FN": FN, "FP": FP, "cost": ______})
-
-threshold_costs = pd.DataFrame(rows)
-threshold_costs
+had_event = test_preds["cvd_dummy"] == 1
+for threshold in [0.3, 0.5, 0.7]:
+    called_yes = test_preds["prob"] >= threshold
+    sensitivity = (called_yes & had_event).sum() / had_event.sum()
+    specificity = (~called_yes & ~had_event).sum() / (~had_event).sum()
+    print(threshold, "sensitivity:", round(sensitivity, 3), "specificity:", round(specificity, 3))
 ```
 
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-rows = []
-for threshold in np.round(np.arange(0.1, 1.0, 0.1), 1):
-    truth = test_preds["cvd_dummy"]
-    prob  = test_preds["prob"]
-    FN = ((truth == 1) & (prob <  threshold)).sum()
-    FP = ((truth == 0) & (prob >= threshold)).sum()
-    rows.append({"threshold": threshold, "FN": FN, "FP": FP, "cost": 5 * FN + 1 * FP})
+At 0.3 the model finds 29 of the 34 people who had an event (sensitivity
+0.853) but leaves alone only 31 of the 66 without (specificity 0.470). At 0.7
+it leaves alone all 66 (specificity 1.000) but finds only 6 of the 34
+(sensitivity 0.176). Lowering the threshold buys sensitivity with specificity;
+raising it does the opposite. No threshold is best for every purpose: which
+mistake matters more depends on the decision, and that is a clinical choice,
+not a statistical one.
 
-threshold_costs = pd.DataFrame(rows)
-threshold_costs
-```
-
-The cheapest threshold is **0.2**, with a cost of 49 (1 missed case and 44
-people treated unnecessarily). The default of 0.5 costs 67. Treating
-everybody, with no model at all, would cost 66, and treating nobody 170.
-:::
-:::
-
-**Question!** The cost ratio of five to one was an assumption. Who should decide
-it, and what happens to the best threshold if a missed case costs twenty times
-unnecessary treatment instead of five?
+**Question!** Would you move the threshold up or down for a cheap, safe blood
+test that only decides who gets a second, more accurate test? And for starting
+a treatment with serious side effects?
 
 ::: {.callout-important}
 ## Learning points
 - Packages build the confusion table for you: `conf_mat()` in R, `confusion_matrix()` in Python. Check which way round the rows and columns are.
-- The best threshold depends on what each kind of mistake costs, which is a clinical decision, not a statistical one.
+- Lowering the threshold raises sensitivity and lowers specificity; raising it does the opposite. Which mistake matters more is a clinical decision, not a statistical one.
 - Report the threshold together with sensitivity and specificity: a threshold on its own says nothing.
 :::
 
@@ -655,10 +608,10 @@ unnecessary treatment instead of five?
 
 ::: {.callout-note appearance="simple"}
 ## Stretch — choose the threshold honestly
-The cheapest threshold above was chosen by looking at the test patients, and
-then judged on the same test patients. Choose it on the **training** rows
-instead, then apply it once to the test patients. Is the cost still 49? Why is
-this the honest way round?
+A clinic wants to find at least 90% of the people who will have an event. Find
+the highest threshold, in steps of 0.05, that reaches a sensitivity of 0.9 on
+the **training** rows. Then apply it once to the test patients: what
+sensitivity and specificity do you get there? Why is this the honest way round?
 :::
 
 ::: {.content-visible when-profile="instructor"}
@@ -674,12 +627,12 @@ what a threshold does. On those 15: 0.3 → TP 6, FP 4, FN 1, TN 4 (sensitivity
 0.857, specificity 0.500); 0.5 → 5, 2, 2, 6 (0.714, 0.750); 0.7 → 1, 0, 6, 8
 (0.143, 1.000). All 100 test patients (34 events): 0.3 → 29, 35, 5, 31 (0.853,
 0.470); 0.5 → 22, 7, 12, 59 (0.647, 0.894, accuracy 0.81); 0.7 → 6, 0, 28, 66
-(0.176, 1.000). Cost 5 × FN + FP for thresholds 0.1 to 0.9: 66, 49, 60, 62, 67,
-91, 140, 170, 170; minimum 49 at 0.2; treating everybody 66, nobody 170. With a
-cost ratio of 20 the best threshold is still 0.2 (cost 64), only just cheaper
-than treating everybody (66). Stretch: on the training rows the cheapest
-threshold is also 0.2 (cost 221), so applied once to the test patients it still
-costs 49.
+(0.176, 1.000). Stretch: on the training rows the highest threshold with a
+sensitivity of at least 0.9 is 0.15 (sensitivity 0.972, specificity 0.248; at
+0.2 the sensitivity is 0.894). Applied once to the test patients, 0.15 gives
+sensitivity 1.000 and specificity 0.152: almost everyone is offered treatment.
+The threshold was chosen without looking at the test patients, so the test
+numbers are an honest estimate.
 
 **Common failures.** (1) Reading `conf_mat()` and `confusion_matrix()` the same
 way round. (2) Using `>` in one place and `>=` in another, which moves a person

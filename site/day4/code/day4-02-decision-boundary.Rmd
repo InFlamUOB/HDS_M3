@@ -1,11 +1,11 @@
 ---
-title: "Exercise 4.3 — The decision boundary (with solutions)"
+title: "Exercise 4.2 — The decision boundary"
 output: html_document
 ---
 
-*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day4/day4-03-decision-boundary.html>.*
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day4/day4-02-decision-boundary.html>.*
 
-*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
 
 In Exercise 4.1 the map of the logistic regression's probability had a black
 line across it: to one side the model says `yes`, to the other `no`. That line
@@ -13,14 +13,14 @@ is the **decision boundary**. In this exercise you work it out from the
 coefficients, see why it is straight, move it with the threshold, and meet data
 where no straight line can do the job.
 
-Parts 1 and 2 use the same people as Exercises 4.1 and 4.2: age, systolic blood
+Parts 1 and 2 use the same people as Exercise 4.1: age, systolic blood
 pressure, and whether they had a cardiovascular event in the next ten years.
 Both measurements matter, so the boundary is tilted.
 
 - **Part 1.** Find the boundary by hand from the coefficients, draw it, and
   see it as the line where a plane is cut, in 3D.
-- **Part 2.** Change the threshold, as in Exercise 4.2, and see the line move:
-  every threshold gives its own line.
+- **Part 2.** Change the threshold and see the line move: every threshold
+  gives its own line.
 - **Part 3.** A dataset where the risk is high at both ends of a measurement.
   A straight boundary fails; a squared term or a tree gives a boundary that
   bends.
@@ -82,8 +82,10 @@ negative. The sigmoid turns log-odds back into a probability.
 
 $$\text{log-odds} = \beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure}$$
 
-With a threshold of 0.5, the class changes where the probability is 0.5. A
-probability of 0.5 is odds of 1 and **log-odds of 0**. So the boundary is every
+By default the model says `yes` when the probability is 0.5 or more. At 0.5
+the probability is shared equally between the two classes: 0.5 for an event and
+0.5 for no event. Above it `yes` is the more likely class, below it `no`. So
+the class changes where the probability is 0.5, which is **log-odds of 0**. So the boundary is every
 combination of age and blood pressure where
 
 $$\beta_0 + \beta_1 \times \text{age} + \beta_2 \times \text{blood pressure} = 0$$
@@ -98,21 +100,17 @@ Round the coefficients printed above to four significant figures and calculate,
 by hand, the age at which the class changes for a blood pressure of 120 mmHg.
 Then do the same for 160 mmHg.
 
+```{r}
+# Replace every ______ below, then run this cell.
+boundary_120 <- (-(______) - ______ * 120) / ______
+boundary_160 <- (-(______) - ______ * 160) / ______
+c(boundary_120, boundary_160)
+```
+
 > **Stuck?**
 >
 > In order: the intercept, the blood-pressure weight, and the age weight. The
 > intercept is negative, so minus the intercept is a positive number.
-
-> **Worked answer**
-
-```{r}
-boundary_120 <- (-(-14.22) - 0.05292 * 120) / 0.1042
-boundary_160 <- (-(-14.22) - 0.05292 * 160) / 0.1042
-c(boundary_120, boundary_160)
-```
-
-> With a blood pressure of 120 the model predicts an event from about age 76;
-> with 160, from about age 55.
 
 Check it with `predict()`: a person on the boundary should get a probability
 of 0.5.
@@ -236,27 +234,11 @@ fig_prob |>
 > 3. A model with three predictors (say age, blood pressure and cholesterol) also
 >    has a boundary. What shape would it be?
 
-> **Worked answer**
-
-```{r}
-predict(log_fit, new_data = data.frame(age = c(70, 55), systolic_bp = c(130, 165)),
-        type = "prob")
-```
-
-> 1. About 5 years: 10 × 0.0529 / 0.1042 = 5.1. Adding 10 mmHg raises the
->    log-odds as much as 5 extra years. That is the tilt of the line: going 10
->    mmHg up, the boundary moves 5 years younger (from 76 at 120 mmHg to 55 at
->    160 mmHg).
-> 2. The 70-year-old is just below the line (probability 0.49, `no`); the
->    55-year-old is above it (0.56, `yes`). The younger person is called `yes`
->    because of the blood pressure. Neither measurement decides alone.
-> 3. Still flat: one linear equation in three measurements is a flat plane in
->    three dimensions. A logistic regression always has a flat boundary in the
->    predictors you give it.
-
 ### Part 2 — The threshold moves the line
 
-Exercise 4.2 changed the threshold. A threshold $t$ is a probability, so it has
+The cut-off of 0.5 is called the **decision threshold**. Nothing forces it to
+be 0.5: we could call someone `yes` from a probability of 0.3, or only from
+0.7. A threshold $t$ is a probability, so it has
 a log-odds, $\log\big(t / (1 - t)\big)$, and the boundary is where the model's
 log-odds equal it:
 
@@ -269,22 +251,18 @@ level further up and to the right.
 
 #### Task 2a — The log-odds of three thresholds
 
-> **Stuck?**
->
-> Both blanks are the threshold column, `t`.
-
-> **Worked answer**
-
 ```{r}
+# Replace every ______ below, then run this cell.
 thresholds <- data.frame(t = c(0.3, 0.5, 0.7)) |>
-  mutate(log_odds = log(t / (1 - t)),
+  mutate(log_odds = log(______ / (1 - ______)),
          age_at_bp_140 = (log_odds - b[1] - b[3] * 140) / b[2])
 
 thresholds
 ```
 
-> The log-odds are −0.847, 0 and 0.847. For a blood pressure of 140 the class
-> changes at age 57, 65 and 74.
+> **Stuck?**
+>
+> Both blanks are the threshold column, `t`.
 
 ```{r}
 lines_t <- data.frame(t = factor(c(0.3, 0.5, 0.7)),
@@ -306,8 +284,8 @@ ggplot(test, aes(x = age, y = systolic_bp)) +
 > **Key idea**
 >
 > We could have picked another threshold, and we would have had a different line
-> separating our classes in 2D: one line for each threshold. The 0.5 line is
-> only the default.
+> separating our classes in 2D: one line for each threshold. The 0.5 line,
+> where both classes are equally likely, is only the default.
 
 Everyone above a line is predicted `yes` at that threshold. Count them:
 
@@ -320,17 +298,9 @@ c(t_0.3 = sum(test_probs >= 0.3), t_0.5 = sum(test_probs >= 0.5),
 
 > **Think about it**
 >
-> Lowering the threshold from 0.5 to 0.3 calls many more test patients `yes`. In
-> the language of Exercise 4.2, what happens to the sensitivity and the
-> specificity, and where do you see that on the plot?
-
-> **Worked answer**
->
-> 52 patients are called `yes` at 0.3, 31 at 0.5 and 15 at 0.7. Moving the line
-> down (0.3) brings more of the triangles onto the `yes` side, so the
-> sensitivity rises, but it also brings over more circles, so the specificity
-> falls. Moving it up (0.7) does the opposite. The model, its coefficients and
-> the tilt of the line are the same; only the decision changed.
+> Lowering the threshold from 0.5 to 0.3 calls many more test patients `yes`.
+> On the plot, which patients change side when the line moves from 0.5 to 0.3:
+> triangles (they had an event), circles (they did not), or both?
 
 ### Part 3 — When a straight line cannot work
 
@@ -403,25 +373,20 @@ the squared distance from 140, and add it to the model. The model is still a
 logistic regression, linear in the predictors you give it, but one of those
 predictors is now curved in sodium.
 
-> **Stuck?**
->
-> Add the name of the new column to the formula, after a `+`.
-
-> **Worked answer**
-
 ```{r}
+# Replace every ______ below, then run this cell.
 train_d <- train_d |> mutate(sodium_dev2 = (sodium - 140)^2)
 test_d  <- test_d  |> mutate(sodium_dev2 = (sodium - 140)^2)
 
 curve_fit <- log_model |>
-  fit(delirium ~ age + sodium + sodium_dev2, data = train_d)
+  fit(delirium ~ age + sodium + ______, data = train_d)
 
 curve_fit$fit$coefficients
 ```
 
-> The weight for `sodium_dev2` is positive (0.023): the further sodium is from
-> 140, in either direction, the higher the log-odds of delirium. Age now has a
-> clear positive weight too (0.039).
+> **Stuck?**
+>
+> Add the name of the new column to the formula, after a `+`.
 
 ```{r}
 delirium_map(curve_fit, "Logistic regression: age + sodium + (sodium - 140)²")
@@ -468,23 +433,6 @@ patients |>
 >    good model?
 > 2. The straight-line model says sodium hardly matters. Is that true?
 > 3. Describe the boundary of the model with the squared term, and of the tree.
-
-> **Worked answer**
->
-> 1. No. Always saying `no` is also right for 72%: the model says `no` to
->    everyone and has learned nothing useful. Compare every accuracy with that
->    baseline.
-> 2. No. Sodium matters a great deal, but in both directions, which a straight
->    line cannot express. An 80-year-old gets 0.33, 0.32 and 0.31 from the
->    straight line whatever their sodium; the model with the squared term gives
->    0.88, 0.08 and 0.91. A weight near 0 means "no straight-line relationship",
->    not "no relationship".
-> 3. The squared term gives two curved lines: delirium is predicted when sodium
->    is below about 130 or above about 150, and the normal band narrows slightly
->    with age (about 128 to 151 at 65, about 131 to 149 at 95). The tree gives
->    three vertical bands: sodium below 130.5, 130.5 to 149.5, and 149.5 or
->    above; it does not use age at all. Both are right for 88% of the test
->    patients.
 
 > **Learning points**
 >
