@@ -59,13 +59,13 @@ options(pillar.sigfig = 4)     # show four significant figures in tables
 ```
 
 The same 500 people and the same split as Exercise 4.1. We add a
-column `cvd_dummy`, the outcome coded 1 for `yes` and 0 for `no`, which
+column `cvd_true`, the outcome coded 1 for `yes` and 0 for `no`, which
 makes the counting below easier to read.
 
 ```{r}
 cvd <- read_csv("data/cvd_risk.csv") |>
   mutate(cvd       = factor(cvd, levels = c("no", "yes")),
-         cvd_dummy = if_else(cvd == "yes", 1, 0))
+         cvd_true = if_else(cvd == "yes", 1, 0))
 
 set.seed(42)
 split <- initial_split(cvd, prop = 0.8)
@@ -100,7 +100,7 @@ prediction_15 <- predict(log_fit, new_data = patients15, type = "prob") |>
   bind_cols(patients15)
 
 prediction_15 |>
-  select(age, cvd_dummy, prob)
+  select(age, cvd_true, prob)
 ```
 
 Now turn each probability into a predicted class at three thresholds: 0.3, 0.5
@@ -114,7 +114,7 @@ prediction_15 <- prediction_15 |>
          class_0.7 = if_else(prob >= 0.7, 1, 0))
 
 prediction_15 |>
-  select(age, cvd_dummy, prob, class_0.3, class_0.5, class_0.7)
+  select(age, cvd_true, prob, class_0.3, class_0.5, class_0.7)
 ```
 
 ::: {.callout-important}
@@ -142,7 +142,7 @@ This is the **confusion table**. **On paper first:** use the table of 15 people
 above to count TP, FP, FN and TN at the threshold 0.5. Then check with code.
 
 ```{r}
-table(True = prediction_15$cvd_dummy, Predicted = prediction_15$class_0.5)
+table(True = prediction_15$cvd_true, Predicted = prediction_15$class_0.5)
 ```
 
 At 0.5 there are 6 true positives, 2 false positives, 2 false negatives and 5
@@ -167,10 +167,10 @@ threshold_compare <- prediction_15 |>
   pivot_longer(c(class_0.3, class_0.5, class_0.7),
                names_to = "threshold", values_to = "predicted") |>
   group_by(threshold) |>
-  summarise(TP = sum(cvd_dummy == 1 & predicted == 1),
-            FP = sum(cvd_dummy == 0 & predicted == 1),
+  summarise(TP = sum(cvd_true == 1 & predicted == 1),
+            FP = sum(cvd_true == 0 & predicted == 1),
             FN = sum(______),
-            TN = sum(cvd_dummy == 0 & predicted == 0)) |>
+            TN = sum(cvd_true == 0 & predicted == 0)) |>
   mutate(sensitivity = TP / (TP + FN),
          specificity = ______)
 
@@ -179,7 +179,7 @@ threshold_compare
 
 ::: {.callout-tip collapse="true"}
 ## Stuck?
-A false negative is a person who truly had an event (`cvd_dummy == 1`) but
+A false negative is a person who truly had an event (`cvd_true == 1`) but
 was predicted not to (`predicted == 0`). Specificity uses TN and FP, in the
 same way as sensitivity uses TP and FN.
 :::
@@ -192,10 +192,10 @@ threshold_compare <- prediction_15 |>
   pivot_longer(c(class_0.3, class_0.5, class_0.7),
                names_to = "threshold", values_to = "predicted") |>
   group_by(threshold) |>
-  summarise(TP = sum(cvd_dummy == 1 & predicted == 1),
-            FP = sum(cvd_dummy == 0 & predicted == 1),
-            FN = sum(cvd_dummy == 1 & predicted == 0),
-            TN = sum(cvd_dummy == 0 & predicted == 0)) |>
+  summarise(TP = sum(cvd_true == 1 & predicted == 1),
+            FP = sum(cvd_true == 0 & predicted == 1),
+            FN = sum(cvd_true == 1 & predicted == 0),
+            TN = sum(cvd_true == 0 & predicted == 0)) |>
   mutate(sensitivity = TP / (TP + FN),
          specificity = TN / (TN + FP))
 
@@ -282,10 +282,10 @@ all_compare <- test_preds |>
   pivot_longer(c(class_0.3, class_0.5, class_0.7),
                names_to = "threshold", values_to = "predicted") |>
   group_by(threshold) |>
-  summarise(TP = sum(cvd_dummy == 1 & predicted == 1),
-            FP = sum(cvd_dummy == 0 & predicted == 1),
-            FN = sum(cvd_dummy == 1 & predicted == 0),
-            TN = sum(cvd_dummy == 0 & predicted == 0))
+  summarise(TP = sum(cvd_true == 1 & predicted == 1),
+            FP = sum(cvd_true == 0 & predicted == 1),
+            FN = sum(cvd_true == 1 & predicted == 0),
+            TN = sum(cvd_true == 0 & predicted == 0))
 
 all_compare
 ```
@@ -343,12 +343,12 @@ from sklearn.linear_model import LogisticRegression
 ```
 
 The same 500 people and the same split as Exercise 4.1. We add a
-column `cvd_dummy`, the outcome coded 1 for `yes` and 0 for `no`, which
+column `cvd_true`, the outcome coded 1 for `yes` and 0 for `no`, which
 makes the counting below easier to read.
 
 ```{python}
 cvd = pd.read_csv("data/cvd_risk.csv")
-cvd["cvd_dummy"] = (cvd["cvd"] == "yes").astype(int) # 1 = yes, 0 = no
+cvd["cvd_true"] = (cvd["cvd"] == "yes").astype(int) # 1 = yes, 0 = no
 
 train, test = train_test_split(cvd, test_size=0.2, random_state=42)
 ```
@@ -361,7 +361,7 @@ Fit the age-only logistic regression from Exercise 4.1 on the training rows:
 
 ```{python}
 log_fit = LogisticRegression(C=np.inf)
-log_fit = log_fit.fit(train[["age"]], train["cvd_dummy"])
+log_fit = log_fit.fit(train[["age"]], train["cvd_true"])
 
 print("intercept:", round(log_fit.intercept_[0], 4))
 print("slope:    ", round(log_fit.coef_[0, 0], 4))
@@ -377,7 +377,7 @@ patients15 = test.iloc[21:36].copy()
 prediction_15 = patients15.copy()
 prediction_15["prob"] = log_fit.predict_proba(patients15[["age"]])[:, 1]
 
-prediction_15[["age", "cvd_dummy", "prob"]].round(3)
+prediction_15[["age", "cvd_true", "prob"]].round(3)
 ```
 
 Now turn each probability into a predicted class at three thresholds: 0.3, 0.5
@@ -389,7 +389,7 @@ prediction_15["class_0.3"] = (prediction_15["prob"] >= 0.3).astype(int)
 prediction_15["class_0.5"] = (prediction_15["prob"] >= 0.5).astype(int)
 prediction_15["class_0.7"] = (prediction_15["prob"] >= 0.7).astype(int)
 
-prediction_15[["age", "cvd_dummy", "prob",
+prediction_15[["age", "cvd_true", "prob",
                "class_0.3", "class_0.5", "class_0.7"]].round(3)
 ```
 
@@ -421,7 +421,7 @@ This is the **confusion table**. **On paper first:** use the table of 15 people
 above to count TP, FP, FN and TN at the threshold 0.5. Then check with code.
 
 ```{python}
-pd.crosstab(prediction_15["cvd_dummy"], prediction_15["class_0.5"],
+pd.crosstab(prediction_15["cvd_true"], prediction_15["class_0.5"],
             rownames=["True"], colnames=["Predicted"])
 ```
 
@@ -445,7 +445,7 @@ specificity:
 # Replace every ______ below, then run this cell.
 rows = []
 for threshold in ["0.3", "0.5", "0.7"]:
-    truth     = prediction_15["cvd_dummy"]
+    truth     = prediction_15["cvd_true"]
     predicted = prediction_15["class_" + threshold]
     rows.append({"threshold": threshold,
                  "TP": ((truth == 1) & (predicted == 1)).sum(),
@@ -473,7 +473,7 @@ the same way as sensitivity uses TP and FN.
 ```{python}
 rows = []
 for threshold in ["0.3", "0.5", "0.7"]:
-    truth     = prediction_15["cvd_dummy"]
+    truth     = prediction_15["cvd_true"]
     predicted = prediction_15["class_" + threshold]
     rows.append({"threshold": threshold,
                  "TP": ((truth == 1) & (predicted == 1)).sum(),
@@ -524,7 +524,7 @@ test_preds = test.copy()
 test_preds["prob"] = log_fit.predict_proba(test[["age"]])[:, 1]
 test_preds["predicted_0.5"] = (test_preds["prob"] >= 0.5).astype(int)
 
-cm = confusion_matrix(test_preds["cvd_dummy"], test_preds["predicted_0.5"])
+cm = confusion_matrix(test_preds["cvd_true"], test_preds["predicted_0.5"])
 cm
 ```
 
@@ -565,7 +565,7 @@ Then count the four boxes for each threshold, as in Part 2:
 ```{python}
 rows = []
 for threshold in ["0.3", "0.5", "0.7"]:
-    truth     = test_preds["cvd_dummy"]
+    truth     = test_preds["cvd_true"]
     predicted = test_preds["class_" + threshold]
     rows.append({"threshold": threshold,
                  "TP": ((truth == 1) & (predicted == 1)).sum(),
@@ -644,7 +644,7 @@ looking at the test patients, so the test numbers are an honest estimate.
 **Common failures.** (1) Reading `conf_mat()` and `confusion_matrix()` the same
 way round. (2) Using `>` in one place and `>=` in another, which moves a person
 whose probability equals the threshold. (3) In R, comparing a factor with 1 or
-0 instead of `"yes"`/`"no"`; that is why this page adds `cvd_dummy`.
+0 instead of `"yes"`/`"no"`; that is why this page adds `cvd_true`.
 
 **Timing.** Part 1 fifteen minutes, Part 2 twenty, Part 3 twenty.
 :::
