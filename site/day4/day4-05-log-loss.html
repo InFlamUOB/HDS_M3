@@ -234,10 +234,10 @@ window.Quarto = {
 </header>
 
 
-<p>In Exercise 3.4 you fitted a linear regression yourself: start with both coefficients at 0, measure which way is downhill on the MSE, take a step, repeat. How does <code>glm()</code> or <code>LogisticRegression()</code> find −5.064 and 0.0350 for the glucose model of Exercise 4.1? The same way, with one change: a different <strong>loss</strong>.</p>
+<p>In Exercise 3.4 you fitted a linear regression yourself: start with both coefficients at 0, measure which way is downhill on the MSE, take a step, repeat. How does <code>glm()</code> or <code>LogisticRegression()</code> find −5.638 and 0.0832 for the age model of Exercise 4.1? The same way, with one change: a different <strong>loss</strong>.</p>
 <ul>
 <li><strong>Part 1.</strong> The log loss: what one patient costs the model, and why it is not the MSE.</li>
-<li><strong>Part 2.</strong> Gradient descent on the log loss, with the code from Exercise 3.4. On raw glucose it does not finish; standardise, and it lands on the same coefficients as <code>glm()</code> and <code>LogisticRegression()</code>.</li>
+<li><strong>Part 2.</strong> Gradient descent on the log loss, with the code from Exercise 3.4. On raw age it does not finish; standardise, and it lands on the same coefficients as <code>glm()</code> and <code>LogisticRegression()</code>.</li>
 </ul>
 <div class="callout callout-style-simple callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -268,43 +268,42 @@ window.Quarto = {
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_bw</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The same 750 people and the same split as in Exercise 4.1. For the loss we need the outcome as a number: 1 for <code>pos</code>, 0 for <code>neg</code>.</p>
+<p>The same 750 people and the same split as in Exercise 4.1. For the loss we need the outcome as a number: 1 for <code>yes</code>, 0 for <code>no</code>.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/diabetes_clean.csv"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(glucose, diabetes) <span class="sc">|&gt;</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">diabetes =</span> <span class="fu">factor</span>(diabetes, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"neg"</span>, <span class="st">"pos"</span>)))</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(diabetes), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> diabetes[<span class="sc">-</span>test_rows, ]</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>x <span class="ot">&lt;-</span> train<span class="sc">$</span>glucose                         <span class="co"># the predictor</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>y <span class="ot">&lt;-</span> <span class="fu">as.numeric</span>(train<span class="sc">$</span>diabetes <span class="sc">==</span> <span class="st">"pos"</span>)   <span class="co"># the outcome: 1 = pos, 0 = neg</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>cvd <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/cvd_risk.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">cvd =</span> <span class="fu">factor</span>(cvd, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"no"</span>, <span class="st">"yes"</span>)))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(cvd), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> cvd[<span class="sc">-</span>test_rows, ]</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>x <span class="ot">&lt;-</span> train<span class="sc">$</span>age                        <span class="co"># the predictor</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>y <span class="ot">&lt;-</span> <span class="fu">as.numeric</span>(train<span class="sc">$</span>cvd <span class="sc">==</span> <span class="st">"yes"</span>)   <span class="co"># the outcome: 1 = yes, 0 = no</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>The answer to compare with, from <code>glm()</code>:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>glm_fit <span class="ot">&lt;-</span> <span class="fu">logistic_reg</span>() <span class="sc">|&gt;</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"glm"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(diabetes <span class="sc">~</span> glucose, <span class="at">data =</span> train)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(cvd <span class="sc">~</span> age, <span class="at">data =</span> train)</span>
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>glm_fit<span class="sc">$</span>fit<span class="sc">$</span>coefficients</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; (Intercept)     glucose 
-#&gt; -5.06398801  0.03502657</code></pre>
+<pre><code>#&gt; (Intercept)         age 
+#&gt; -5.63801930  0.08321885</code></pre>
 </div>
 </div>
 </section>
 <section id="part-1-the-log-loss" class="level3">
 <h3 class="anchored" data-anchor-id="part-1-the-log-loss">Part 1 — The log loss</h3>
-<p>A logistic regression predicts a probability <span class="math inline">\(p\)</span> of diabetes for each patient. How much should a patient cost the model?</p>
+<p>A logistic regression predicts a probability <span class="math inline">\(p\)</span> of an event for each person. How much should a patient cost the model?</p>
 <ul>
-<li>If the patient <strong>has</strong> diabetes (<span class="math inline">\(y = 1\)</span>), the model should have given a high <span class="math inline">\(p\)</span>. The loss is <span class="math inline">\(-\log(p)\)</span>.</li>
+<li>If the person <strong>had</strong> an event (<span class="math inline">\(y = 1\)</span>), the model should have given a high <span class="math inline">\(p\)</span>. The loss is <span class="math inline">\(-\log(p)\)</span>.</li>
 <li>If the patient does <strong>not</strong> (<span class="math inline">\(y = 0\)</span>), it should have given a low <span class="math inline">\(p\)</span>. The loss is <span class="math inline">\(-\log(1 - p)\)</span>.</li>
 </ul>
 <p>Both cases in one formula, averaged over the patients, is the <strong>log loss</strong> (also called cross-entropy):</p>
 <p><span class="math display">\[\text{log loss} = -\frac{1}{n}\sum_{i=1}^{n} \Big[\, y_i \log(p_i) + (1 - y_i)\log(1 - p_i) \,\Big]\]</span></p>
 <p>For each patient only one of the two terms is switched on: <span class="math inline">\(y_i\)</span> or <span class="math inline">\(1 - y_i\)</span> is 0.</p>
-<p>For a patient with diabetes, here is what the log loss and the squared error <span class="math inline">\((1 - p)^2\)</span> charge for four predictions:</p>
+<p>For a person who had an event, here is what the log loss and the squared error <span class="math inline">\((1 - p)^2\)</span> charge for four predictions:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">data.frame</span>(<span class="at">p =</span> <span class="fu">c</span>(<span class="fl">0.9</span>, <span class="fl">0.5</span>, <span class="fl">0.1</span>, <span class="fl">0.01</span>)) <span class="sc">|&gt;</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">log_loss =</span> <span class="sc">-</span><span class="fu">log</span>(p),</span>
@@ -326,7 +325,7 @@ window.Quarto = {
 <span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> p, <span class="at">y =</span> cost, <span class="at">colour =</span> loss)) <span class="sc">+</span></span>
 <span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
 <span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"log loss"</span> <span class="ot">=</span> <span class="st">"red"</span>, <span class="st">"squared error"</span> <span class="ot">=</span> <span class="st">"grey40"</span>)) <span class="sc">+</span></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Predicted probability of diabetes, for a patient who has diabetes"</span>,</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Predicted probability of an event, for a person who had one"</span>,</span>
 <span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"What the patient costs"</span>, <span class="at">colour =</span> <span class="cn">NULL</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
@@ -347,19 +346,19 @@ window.Quarto = {
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>The squared error of a probability can never be more than 1, however wrong the model is: a confident 0.01 for a patient with diabetes costs 0.98, hardly more than an unsure 0.1 (0.81). The log loss charges 4.6 for the first and 2.3 for the second, so confident mistakes are what the model works hardest to avoid. And once the probability goes through the S-curve, the MSE over the two coefficients is no longer a single bowl, while the log loss is. Minimising the log loss is also exactly what statisticians call maximum likelihood, which is what <code>glm()</code> does.</p>
+<p>The squared error of a probability can never be more than 1, however wrong the model is: a confident 0.01 for a person who had an event costs 0.98, hardly more than an unsure 0.1 (0.81). The log loss charges 4.6 for the first and 2.3 for the second, so confident mistakes are what the model works hardest to avoid. And once the probability goes through the S-curve, the MSE over the two coefficients is no longer a single bowl, while the log loss is. Minimising the log loss is also exactly what statisticians call maximum likelihood, which is what <code>glm()</code> does.</p>
 </div>
 </div>
 <section id="task-1a-the-log-loss-of-a-model" class="level4">
 <h4 class="anchored" data-anchor-id="task-1a-the-log-loss-of-a-model">Task 1a — The log loss of a model</h4>
-<p>Complete the function, then use it on two models: <code>glm()</code>’s, and a model that gives every patient the same probability, the 36.7% of training patients who have diabetes.</p>
+<p>Complete the function, then use it on two models: <code>glm()</code>’s, and a model that gives every patient the same probability, the 35.5% of training patients who had an event.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>log_loss <span class="ot">&lt;-</span> <span class="cf">function</span>(y, p) {</span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="sc">-</span><span class="fu">mean</span>(y <span class="sc">*</span> <span class="fu">log</span>(p) <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">-</span> y) <span class="sc">*</span> <span class="fu">log</span>(______))</span>
 <span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>p_glm <span class="ot">&lt;-</span> <span class="fu">predict</span>(glm_fit, <span class="at">new_data =</span> train, <span class="at">type =</span> <span class="st">"prob"</span>)<span class="sc">$</span>.pred_pos</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>p_glm <span class="ot">&lt;-</span> <span class="fu">predict</span>(glm_fit, <span class="at">new_data =</span> train, <span class="at">type =</span> <span class="st">"prob"</span>)<span class="sc">$</span>.pred_yes</span>
 <span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>p_same <span class="ot">&lt;-</span> <span class="fu">rep</span>(<span class="fu">mean</span>(y), <span class="fu">length</span>(y))</span>
 <span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">glm =</span> <span class="fu">log_loss</span>(y, p_glm), <span class="at">same_for_everyone =</span> <span class="fu">log_loss</span>(y, p_same))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -376,7 +375,7 @@ window.Quarto = {
 </div>
 <div id="callout-3" class="callout-3-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p>For a patient without diabetes the loss is the log of the probability of <strong>not</strong> having diabetes.</p>
+<p>For a person without an event the loss is the log of the probability of <strong>not</strong> having one.</p>
 </div>
 </div>
 </div>
@@ -406,7 +405,7 @@ window.Quarto = {
 <span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">b0 =</span> b0, <span class="at">b1 =</span> b1, <span class="at">loss =</span> loss)</span>
 <span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>raw <span class="ot">&lt;-</span> <span class="fu">descend_log_loss</span>(x, y, <span class="at">alpha =</span> <span class="fl">1e-4</span>, <span class="at">n =</span> <span class="dv">1000</span>)</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>raw <span class="ot">&lt;-</span> <span class="fu">descend_log_loss</span>(x, y, <span class="at">alpha =</span> <span class="fl">1e-3</span>, <span class="at">n =</span> <span class="dv">1000</span>)</span>
 <span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">intercept =</span> raw<span class="sc">$</span>b0, <span class="at">slope =</span> raw<span class="sc">$</span>b1, <span class="at">log_loss =</span> <span class="fu">tail</span>(raw<span class="sc">$</span>loss, <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
@@ -425,12 +424,12 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>After a thousand iterations the descent reports an intercept of −0.006 and a slope of −0.002, with a log loss of 0.682. <code>glm()</code> gives −5.064 and 0.0350, with a log loss of 0.541. The slope even has the wrong sign.</p>
-<p><strong>The same problem as in Exercise 3.4.</strong> Both coefficients start at 0, which gives every patient a probability of 0.5. The quickest way to lower the loss from there is to bring everyone’s probability down towards 37%. The derivative for the slope is multiplied by glucose, about 126 on average, so the slope reacts more than 100 times faster than the intercept and is pushed below 0 to do that job. The learning rate must be small enough for the slope not to overshoot, and at that rate the intercept crawls towards −5: after 100,000 iterations it has reached only −0.57. Make the learning rate ten times larger (<span class="math inline">\(10^{-3}\)</span>) and the loss goes up instead of down.</p>
+<p>After a thousand iterations the descent reports an intercept of −0.040 and a slope of −0.007, with a log loss of 0.669. <code>glm()</code> gives −5.638 and 0.0832, with a log loss of 0.565. The slope even has the wrong sign.</p>
+<p><strong>The same problem as in Exercise 3.4.</strong> Both coefficients start at 0, which gives every patient a probability of 0.5. The quickest way to lower the loss from there is to bring everyone’s probability down towards 36%. The derivative for the slope is multiplied by age, about 59 on average, so the slope reacts about 60 times faster than the intercept and is pushed below 0 to do that job. The learning rate must be small enough for the slope not to overshoot, and at that rate the intercept crawls towards −5.6: after 100,000 iterations it has reached only −2.8. Make the learning rate ten times larger (<span class="math inline">\(10^{-2}\)</span>) and the loss goes up instead of down.</p>
 </section>
 <section id="task-2b-standardise-descend-convert-back" class="level4">
 <h4 class="anchored" data-anchor-id="task-2b-standardise-descend-convert-back">Task 2b — Standardise, descend, convert back</h4>
-<p>The fix is the one from Exercise 3.4: standardise glucose, descend, and convert the coefficients back. Only the predictor is standardised; the outcome is 0 or 1 and stays as it is.</p>
+<p>The fix is the one from Exercise 3.4: standardise age, descend, and convert the coefficients back. Only the predictor is standardised; the outcome is 0 or 1 and stays as it is.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>z <span class="ot">&lt;-</span> (x <span class="sc">-</span> <span class="fu">mean</span>(x)) <span class="sc">/</span> ______</span>
@@ -471,8 +470,8 @@ window.Quarto = {
 </div>
 <div id="callout-6" class="callout-6-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p>On the standardised scale glucose is measured in standard deviations (SDs). The descent finds a slope of 1.111: one SD more glucose adds 1.111 to the log-odds. One SD of glucose is 31.7 mg/dL, so one mg/dL adds 1.111 / 31.7 = 0.0350. That is the line <code>slope &lt;- std$b1 / sd(x)</code>.</p>
-<p>The standardised intercept, −0.653, is the log-odds of a patient with the average glucose, 125.9 mg/dL. To get the log-odds at a glucose of 0, go back 125.9 mg/dL along the slope: −0.653 − 0.0350 × 125.9 = −5.06. That is the line <code>intercept &lt;- std$b0 - slope * mean(x)</code>.</p>
+<p>On the standardised scale age is measured in standard deviations (SDs). The descent finds a slope of 0.941: one SD more age adds 0.941 to the log-odds. One SD of age is 11.3 years, so one year adds 0.941 / 11.3 = 0.0832. That is the line <code>slope &lt;- std$b1 / sd(x)</code>.</p>
+<p>The standardised intercept, −0.716, is the log-odds of a person of the average age, 59.1 years. To get the log-odds at an age of 0, go back 59.1 years along the slope: −0.716 − 0.0832 × 59.1 = −5.63. That is the line <code>intercept &lt;- std$b0 - slope * mean(x)</code>.</p>
 </div>
 </div>
 </div>
@@ -484,11 +483,11 @@ window.Quarto = {
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="fu">data.frame</span>(<span class="at">iteration =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">100</span>, <span class="at">log_loss =</span> std_curve<span class="sc">$</span>loss) <span class="sc">|&gt;</span></span>
 <span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> iteration, <span class="at">y =</span> log_loss)) <span class="sc">+</span></span>
 <span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">colour =</span> <span class="st">"firebrick"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.657</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">colour =</span> <span class="st">"grey50"</span>) <span class="sc">+</span></span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"text"</span>, <span class="at">x =</span> <span class="dv">75</span>, <span class="at">y =</span> <span class="fl">0.65</span>, <span class="at">label =</span> <span class="st">"same probability for everyone"</span>,</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.650</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">colour =</span> <span class="st">"grey50"</span>) <span class="sc">+</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"text"</span>, <span class="at">x =</span> <span class="dv">75</span>, <span class="at">y =</span> <span class="fl">0.644</span>, <span class="at">label =</span> <span class="st">"same probability for everyone"</span>,</span>
 <span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>           <span class="at">colour =</span> <span class="st">"grey40"</span>, <span class="at">size =</span> <span class="fl">3.5</span>) <span class="sc">+</span></span>
 <span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Iteration"</span>, <span class="at">y =</span> <span class="st">"Log loss (training patients)"</span>,</span>
-<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"Gradient descent on standardised glucose"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"Gradient descent on standardised age"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
@@ -557,20 +556,20 @@ window.Quarto = {
 <span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> LogisticRegression</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The same 750 people and the same split as in Exercise 4.1. For the loss we need the outcome as a number: 1 for <code>pos</code>, 0 for <code>neg</code>.</p>
+<p>The same 750 people and the same split as in Exercise 4.1. For the loss we need the outcome as a number: 1 for <code>yes</code>, 0 for <code>no</code>.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes_clean.csv"</span>)</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>cvd <span class="op">=</span> pd.read_csv(<span class="st">"data/cvd_risk.csv"</span>)</span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> diabetes.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> diabetes[<span class="op">~</span>is_test]</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> cvd.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> cvd[<span class="op">~</span>is_test]</span>
 <span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> train[<span class="st">"glucose"</span>].to_numpy()                       <span class="co"># the predictor</span></span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> (train[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"pos"</span>).astype(<span class="bu">int</span>).to_numpy()  <span class="co"># the outcome: 1 = pos, 0 = neg</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> train[<span class="st">"age"</span>].to_numpy()                      <span class="co"># the predictor</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> (train[<span class="st">"cvd"</span>] <span class="op">==</span> <span class="st">"yes"</span>).astype(<span class="bu">int</span>).to_numpy()  <span class="co"># the outcome: 1 = yes, 0 = no</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>The answer to compare with, from scikit-learn:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>sk_model <span class="op">=</span> LogisticRegression(C<span class="op">=</span>np.inf)</span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>sk_model.fit(train[[<span class="st">"glucose"</span>]], train[<span class="st">"diabetes"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>sk_model.fit(train[[<span class="st">"age"</span>]], train[<span class="st">"cvd"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <style>.sk-global {
   /* Definition of color scheme common for light and dark mode */
@@ -1573,7 +1572,7 @@ Does not have any effect.<br>
 <br>
 A list of class labels known to the classifier.</span></a></td>
 <td class="fitted-att-type">ndarray[object](2,)</td>
-<td>['neg','pos']</td>
+<td>['no','yes']</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LogisticRegression.html#:~:text=coef_,-ndarray%20or%20CSR%20matrix%20of%20shape%20%281%2C%20n_features%29%20or%20%28n_classes%2C%20n_features%29" class="param-doc-link" style="anchor-name: --doc-link-coef_;" rel="noreferrer" target="_blank">coef_ <span class="param-doc-description" style="position-anchor: --doc-link-coef_;"> coef_: ndarray or CSR matrix of shape (1, n_features) or (n_classes, n_features)<br>
@@ -1587,7 +1586,7 @@ sparse (CSR format) through :meth:`sparsify` (which can be beneficial<br>
 under L1 regularization when many coefficients are zero), and back to<br>
 dense through :meth:`densify`.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](1, 1)</td>
-<td>[[0.04]]</td>
+<td>[[0.08]]</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LogisticRegression.html#:~:text=feature_names_in_,-ndarray%20of%20shape%20%28n_features_in_%2C%29" class="param-doc-link" style="anchor-name: --doc-link-feature_names_in_;" rel="noreferrer" target="_blank">feature_names_in_ <span class="param-doc-description" style="position-anchor: --doc-link-feature_names_in_;"> feature_names_in_: ndarray of shape (`n_features_in_`,)<br>
@@ -1597,7 +1596,7 @@ has feature names that are all strings.<br>
 <br>
 .. versionadded:: 1.0</span></a></td>
 <td class="fitted-att-type">ndarray[object](1,)</td>
-<td>['glucose']</td>
+<td>['age']</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LogisticRegression.html#:~:text=intercept_,-ndarray%20of%20shape%20%281%2C%29%20or%20%28n_classes%2C%29" class="param-doc-link" style="anchor-name: --doc-link-intercept_;" rel="noreferrer" target="_blank">intercept_ <span class="param-doc-description" style="position-anchor: --doc-link-intercept_;"> intercept_: ndarray of shape (1,) or (n_classes,)<br>
@@ -1607,7 +1606,7 @@ Intercept (a.k.a. bias) added to the decision function.<br>
 If `fit_intercept` is set to False, the intercept is set to zero.<br>
 `intercept_` is of shape (1,) when the given problem is binary.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](1,)</td>
-<td>[-5.06]</td>
+<td>[-5.64]</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LogisticRegression.html#:~:text=n_features_in_,-int" class="param-doc-link" style="anchor-name: --doc-link-n_features_in_;" rel="noreferrer" target="_blank">n_features_in_ <span class="param-doc-description" style="position-anchor: --doc-link-n_features_in_;"> n_features_in_: int<br>
@@ -1628,7 +1627,7 @@ Actual number of iterations for all classes.<br>
 In SciPy &lt;= 1.0.0 the number of lbfgs iterations may exceed<br>
 ``max_iter``. ``n_iter_`` will now report at most ``max_iter``.</span></a></td>
 <td class="fitted-att-type">ndarray[int32](1,)</td>
-<td>[21]</td>
+<td>[19]</td>
 </tr>
 </tbody>
 </table>
@@ -1809,21 +1808,21 @@ forceTheme('sk-container-id-1');</script>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"intercept:"</span>, sk_model.intercept_, <span class="st">" slope:"</span>, sk_model.coef_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; intercept: [-5.0639797]  slope: [[0.03502648]]</code></pre>
+<pre><code>#&gt; intercept: [-5.63802661]  slope: [[0.08321897]]</code></pre>
 </div>
 </div>
 </section>
 <section id="part-1-the-log-loss-1" class="level3">
 <h3 class="anchored" data-anchor-id="part-1-the-log-loss-1">Part 1 — The log loss</h3>
-<p>A logistic regression predicts a probability <span class="math inline">\(p\)</span> of diabetes for each patient. How much should a patient cost the model?</p>
+<p>A logistic regression predicts a probability <span class="math inline">\(p\)</span> of an event for each person. How much should a patient cost the model?</p>
 <ul>
-<li>If the patient <strong>has</strong> diabetes (<span class="math inline">\(y = 1\)</span>), the model should have given a high <span class="math inline">\(p\)</span>. The loss is <span class="math inline">\(-\log(p)\)</span>.</li>
+<li>If the person <strong>had</strong> an event (<span class="math inline">\(y = 1\)</span>), the model should have given a high <span class="math inline">\(p\)</span>. The loss is <span class="math inline">\(-\log(p)\)</span>.</li>
 <li>If the patient does <strong>not</strong> (<span class="math inline">\(y = 0\)</span>), it should have given a low <span class="math inline">\(p\)</span>. The loss is <span class="math inline">\(-\log(1 - p)\)</span>.</li>
 </ul>
 <p>Both cases in one formula, averaged over the patients, is the <strong>log loss</strong> (also called cross-entropy):</p>
 <p><span class="math display">\[\text{log loss} = -\frac{1}{n}\sum_{i=1}^{n} \Big[\, y_i \log(p_i) + (1 - y_i)\log(1 - p_i) \,\Big]\]</span></p>
 <p>For each patient only one of the two terms is switched on: <span class="math inline">\(y_i\)</span> or <span class="math inline">\(1 - y_i\)</span> is 0.</p>
-<p>For a patient with diabetes, here is what the log loss and the squared error <span class="math inline">\((1 - p)^2\)</span> charge for four predictions:</p>
+<p>For a person who had an event, here is what the log loss and the squared error <span class="math inline">\((1 - p)^2\)</span> charge for four predictions:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>p <span class="op">=</span> np.array([<span class="fl">0.9</span>, <span class="fl">0.5</span>, <span class="fl">0.1</span>, <span class="fl">0.01</span>])</span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>pd.DataFrame({<span class="st">"p"</span>: p, <span class="st">"log_loss"</span>: <span class="op">-</span>np.log(p), <span class="st">"squared_error"</span>: (<span class="dv">1</span> <span class="op">-</span> p) <span class="op">**</span> <span class="dv">2</span>})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -1842,7 +1841,7 @@ forceTheme('sk-container-id-1');</script>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
 <span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>ax.plot(p_grid, <span class="op">-</span>np.log(p_grid), color<span class="op">=</span><span class="st">"red"</span>, linewidth<span class="op">=</span><span class="dv">2</span>, label<span class="op">=</span><span class="st">"log loss"</span>)</span>
 <span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>ax.plot(p_grid, (<span class="dv">1</span> <span class="op">-</span> p_grid) <span class="op">**</span> <span class="dv">2</span>, color<span class="op">=</span><span class="st">"grey"</span>, linewidth<span class="op">=</span><span class="dv">2</span>, label<span class="op">=</span><span class="st">"squared error"</span>)</span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Predicted probability of diabetes, for a patient who has diabetes"</span>)</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Predicted probability of an event, for a person who had one"</span>)</span>
 <span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"What the patient costs"</span>)</span>
 <span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>ax.legend()</span>
 <span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -1865,18 +1864,18 @@ forceTheme('sk-container-id-1');</script>
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>The squared error of a probability can never be more than 1, however wrong the model is: a confident 0.01 for a patient with diabetes costs 0.98, hardly more than an unsure 0.1 (0.81). The log loss charges 4.6 for the first and 2.3 for the second, so confident mistakes are what the model works hardest to avoid. And once the probability goes through the S-curve, the MSE over the two coefficients is no longer a single bowl, while the log loss is. Minimising the log loss is also exactly what statisticians call maximum likelihood.</p>
+<p>The squared error of a probability can never be more than 1, however wrong the model is: a confident 0.01 for a person who had an event costs 0.98, hardly more than an unsure 0.1 (0.81). The log loss charges 4.6 for the first and 2.3 for the second, so confident mistakes are what the model works hardest to avoid. And once the probability goes through the S-curve, the MSE over the two coefficients is no longer a single bowl, while the log loss is. Minimising the log loss is also exactly what statisticians call maximum likelihood.</p>
 </div>
 </div>
 <section id="task-1a-the-log-loss-of-a-model-1" class="level4">
 <h4 class="anchored" data-anchor-id="task-1a-the-log-loss-of-a-model-1">Task 1a — The log loss of a model</h4>
-<p>Complete the function, then use it on two models: scikit-learn’s, and a model that gives every patient the same probability, the 36.7% of training patients who have diabetes.</p>
+<p>Complete the function, then use it on two models: scikit-learn’s, and a model that gives every patient the same probability, the 35.5% of training patients who had an event.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> log_loss(y, p):</span>
 <span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">-</span>np.mean(y <span class="op">*</span> np.log(p) <span class="op">+</span> (<span class="dv">1</span> <span class="op">-</span> y) <span class="op">*</span> np.log(______))</span>
 <span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>p_sk <span class="op">=</span> sk_model.predict_proba(train[[<span class="st">"glucose"</span>]])[:, <span class="dv">1</span>]</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>p_sk <span class="op">=</span> sk_model.predict_proba(train[[<span class="st">"age"</span>]])[:, <span class="dv">1</span>]</span>
 <span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>p_same <span class="op">=</span> np.full(<span class="bu">len</span>(y), y.mean())</span>
 <span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"scikit-learn:     "</span>, log_loss(y, p_sk))</span>
@@ -1894,7 +1893,7 @@ forceTheme('sk-container-id-1');</script>
 </div>
 <div id="callout-10" class="callout-10-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p>For a patient without diabetes the loss is the log of the probability of <strong>not</strong> having diabetes.</p>
+<p>For a person without an event the loss is the log of the probability of <strong>not</strong> having one.</p>
 </div>
 </div>
 </div>
@@ -1922,7 +1921,7 @@ forceTheme('sk-container-id-1');</script>
 <span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>        loss[i] <span class="op">=</span> log_loss(y, <span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> np.exp(<span class="op">-</span>(b0 <span class="op">+</span> b1 <span class="op">*</span> x))))</span>
 <span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">"b0"</span>: b0, <span class="st">"b1"</span>: b1, <span class="st">"loss"</span>: loss}</span>
 <span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>raw <span class="op">=</span> descend_log_loss(x, y, alpha<span class="op">=</span><span class="fl">1e-4</span>, n<span class="op">=</span><span class="dv">1000</span>)</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>raw <span class="op">=</span> descend_log_loss(x, y, alpha<span class="op">=</span><span class="fl">1e-3</span>, n<span class="op">=</span><span class="dv">1000</span>)</span>
 <span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"intercept:"</span>, raw[<span class="st">"b0"</span>], <span class="st">" slope:"</span>, raw[<span class="st">"b1"</span>], <span class="st">" log loss:"</span>, raw[<span class="st">"loss"</span>][<span class="op">-</span><span class="dv">1</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
@@ -1941,12 +1940,12 @@ forceTheme('sk-container-id-1');</script>
 </div>
 </div>
 </div>
-<p>After a thousand iterations the descent reports an intercept of −0.006 and a slope of −0.002, with a log loss of 0.682. scikit-learn gives −5.064 and 0.0350, with a log loss of 0.541. The slope even has the wrong sign.</p>
-<p><strong>The same problem as in Exercise 3.4.</strong> Both coefficients start at 0, which gives every patient a probability of 0.5. The quickest way to lower the loss from there is to bring everyone’s probability down towards 37%. The derivative for the slope is multiplied by glucose, about 126 on average, so the slope reacts more than 100 times faster than the intercept and is pushed below 0 to do that job. The learning rate must be small enough for the slope not to overshoot, and at that rate the intercept crawls towards −5: after 100,000 iterations it has reached only −0.57. Make the learning rate ten times larger (<span class="math inline">\(10^{-3}\)</span>) and the loss goes up instead of down.</p>
+<p>After a thousand iterations the descent reports an intercept of −0.040 and a slope of −0.007, with a log loss of 0.669. scikit-learn gives −5.638 and 0.0832, with a log loss of 0.565. The slope even has the wrong sign.</p>
+<p><strong>The same problem as in Exercise 3.4.</strong> Both coefficients start at 0, which gives every patient a probability of 0.5. The quickest way to lower the loss from there is to bring everyone’s probability down towards 36%. The derivative for the slope is multiplied by age, about 59 on average, so the slope reacts about 60 times faster than the intercept and is pushed below 0 to do that job. The learning rate must be small enough for the slope not to overshoot, and at that rate the intercept crawls towards −5.6: after 100,000 iterations it has reached only −2.8. Make the learning rate ten times larger (<span class="math inline">\(10^{-2}\)</span>) and the loss goes up instead of down.</p>
 </section>
 <section id="task-2b-standardise-descend-convert-back-1" class="level4">
 <h4 class="anchored" data-anchor-id="task-2b-standardise-descend-convert-back-1">Task 2b — Standardise, descend, convert back</h4>
-<p>The fix is the one from Exercise 3.4: standardise glucose, descend, and convert the coefficients back. Only the predictor is standardised; the outcome is 0 or 1 and stays as it is.</p>
+<p>The fix is the one from Exercise 3.4: standardise age, descend, and convert the coefficients back. Only the predictor is standardised; the outcome is 0 or 1 and stays as it is.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>mx, sx <span class="op">=</span> x.mean(), x.std(ddof<span class="op">=</span><span class="dv">1</span>)</span>
@@ -1988,8 +1987,8 @@ forceTheme('sk-container-id-1');</script>
 </div>
 <div id="callout-13" class="callout-13-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p>On the standardised scale glucose is measured in standard deviations (SDs). The descent finds a slope of 1.111: one SD more glucose adds 1.111 to the log-odds. One SD of glucose is 31.7 mg/dL, so one mg/dL adds 1.111 / 31.7 = 0.0350. That is the line <code>slope = std["b1"] / sx</code>.</p>
-<p>The standardised intercept, −0.653, is the log-odds of a patient with the average glucose, 125.9 mg/dL. To get the log-odds at a glucose of 0, go back 125.9 mg/dL along the slope: −0.653 − 0.0350 × 125.9 = −5.06. That is the line <code>intercept = std["b0"] - slope * mx</code>.</p>
+<p>On the standardised scale age is measured in standard deviations (SDs). The descent finds a slope of 0.941: one SD more age adds 0.941 to the log-odds. One SD of age is 11.3 years, so one year adds 0.941 / 11.3 = 0.0832. That is the line <code>slope = std["b1"] / sx</code>.</p>
+<p>The standardised intercept, −0.716, is the log-odds of a person of the average age, 59.1 years. To get the log-odds at an age of 0, go back 59.1 years along the slope: −0.716 − 0.0832 × 59.1 = −5.63. That is the line <code>intercept = std["b0"] - slope * mx</code>.</p>
 </div>
 </div>
 </div>
@@ -2000,11 +1999,11 @@ forceTheme('sk-container-id-1');</script>
 <span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
 <span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>ax.plot(np.arange(<span class="dv">1</span>, <span class="dv">101</span>), std_curve[<span class="st">"loss"</span>], color<span class="op">=</span><span class="st">"firebrick"</span>, linewidth<span class="op">=</span><span class="dv">2</span>)</span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>ax.axhline(<span class="fl">0.657</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, color<span class="op">=</span><span class="st">"grey"</span>)</span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>ax.text(<span class="dv">60</span>, <span class="fl">0.648</span>, <span class="st">"same probability for everyone"</span>, color<span class="op">=</span><span class="st">"grey"</span>)</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>ax.axhline(<span class="fl">0.650</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, color<span class="op">=</span><span class="st">"grey"</span>)</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>ax.text(<span class="dv">60</span>, <span class="fl">0.645</span>, <span class="st">"same probability for everyone"</span>, color<span class="op">=</span><span class="st">"grey"</span>)</span>
 <span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Iteration"</span>)</span>
 <span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Log loss (training patients)"</span>)</span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Gradient descent on standardised glucose"</span>)</span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Gradient descent on standardised age"</span>)</span>
 <span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
@@ -2019,7 +2018,7 @@ forceTheme('sk-container-id-1');</script>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>sk_model.n_iter_</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; array([21], dtype=int32)</code></pre>
+<pre><code>#&gt; array([19], dtype=int32)</code></pre>
 </div>
 </div>
 <div class="callout callout-style-simple callout-important callout-titled">

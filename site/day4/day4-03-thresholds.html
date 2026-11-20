@@ -243,10 +243,10 @@ window.Quarto = {
 
 <p>A logistic regression outputs a probability,</p>
 <p><span class="math display">\[\hat{p}(x) = P(Y = 1 \mid x),\]</span></p>
-<p>but a clinic needs a decision: test this person for diabetes, or not. To turn the probability into a predicted class we choose a <strong>decision threshold</strong>. Usually:</p>
+<p>but a clinic needs a decision: offer this person treatment to prevent a heart attack or stroke, or not. To turn the probability into a predicted class we choose a <strong>decision threshold</strong>. Usually:</p>
 <ul>
-<li>if <span class="math inline">\(\hat{p}(x) \geq 0.5\)</span>, predict 1 (diabetes);</li>
-<li>if <span class="math inline">\(\hat{p}(x) &lt; 0.5\)</span>, predict 0 (no diabetes).</li>
+<li>if <span class="math inline">\(\hat{p}(x) \geq 0.5\)</span>, predict 1 (an event);</li>
+<li>if <span class="math inline">\(\hat{p}(x) &lt; 0.5\)</span>, predict 0 (no event).</li>
 </ul>
 <p>But 0.5 is arbitrary. Changing the threshold changes how many true positives, false positives, true negatives and false negatives the model makes, and so which mistakes it makes.</p>
 <p><strong>Theory:</strong> decision threshold; confusion table; true and false positives and negatives; sensitivity and specificity; the cost of each kind of mistake.</p>
@@ -280,16 +280,15 @@ window.Quarto = {
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_bw</span>())          <span class="co"># white background for every plot</span></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">pillar.sigfig =</span> <span class="dv">4</span>)     <span class="co"># show four significant figures in tables</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The same 750 people and the same split as Exercises 4.1 and 4.2. We add a column <code>diabetes_dummy</code>, the outcome coded 1 for <code>pos</code> and 0 for <code>neg</code>, which makes the counting below easier to read.</p>
+<p>The same 500 people and the same split as Exercises 4.1 and 4.2. We add a column <code>cvd_dummy</code>, the outcome coded 1 for <code>yes</code> and 0 for <code>no</code>, which makes the counting below easier to read.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/diabetes_clean.csv"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(glucose, mass, age, diabetes) <span class="sc">|&gt;</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">diabetes       =</span> <span class="fu">factor</span>(diabetes, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"neg"</span>, <span class="st">"pos"</span>)),</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>         <span class="at">diabetes_dummy =</span> <span class="fu">if_else</span>(diabetes <span class="sc">==</span> <span class="st">"pos"</span>, <span class="dv">1</span>, <span class="dv">0</span>))</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(diabetes), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> diabetes[<span class="sc">-</span>test_rows, ]</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> diabetes[test_rows, ]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>cvd <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/cvd_risk.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">cvd       =</span> <span class="fu">factor</span>(cvd, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"no"</span>, <span class="st">"yes"</span>)),</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">cvd_dummy =</span> <span class="fu">if_else</span>(cvd <span class="sc">==</span> <span class="st">"yes"</span>, <span class="dv">1</span>, <span class="dv">0</span>))</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(cvd), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> cvd[<span class="sc">-</span>test_rows, ]</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> cvd[test_rows, ]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <hr>
 </section>
@@ -299,51 +298,51 @@ window.Quarto = {
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>log_fit <span class="ot">&lt;-</span> <span class="fu">logistic_reg</span>(<span class="at">mode =</span> <span class="st">"classification"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"glm"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(diabetes <span class="sc">~</span> glucose, <span class="at">data =</span> train)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(cvd <span class="sc">~</span> age, <span class="at">data =</span> train)</span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">tidy</span>(log_fit)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 2 × 5
 #&gt;   term        estimate std.error statistic   p.value
 #&gt;   &lt;chr&gt;          &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;
-#&gt; 1 (Intercept) -5.064    0.4485      -11.29 1.438e-29
-#&gt; 2 glucose      0.03503  0.003359     10.43 1.864e-25</code></pre>
+#&gt; 1 (Intercept) -5.638     0.6882     -8.193 2.548e-16
+#&gt; 2 age          0.08322   0.01097     7.585 3.324e-14</code></pre>
 </div>
 </div>
-<p>To make it easy to follow, predict the probability of diabetes for 15 people from the test set only: the patients in rows 26 to 40.</p>
+<p>To make it easy to follow, predict the probability of an event for 15 people from the test set only: the patients in rows 68 to 82.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>patients15 <span class="ot">&lt;-</span> test <span class="sc">|&gt;</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">26</span><span class="sc">:</span><span class="dv">40</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">68</span><span class="sc">:</span><span class="dv">82</span>)</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>prediction_15 <span class="ot">&lt;-</span> <span class="fu">predict</span>(log_fit, <span class="at">new_data =</span> patients15, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">prob =</span> .pred_pos) <span class="sc">|&gt;</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">prob =</span> .pred_yes) <span class="sc">|&gt;</span></span>
 <span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(prob) <span class="sc">|&gt;</span></span>
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(patients15)</span>
 <span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>prediction_15 <span class="sc">|&gt;</span></span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(glucose, diabetes_dummy, prob)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(age, cvd_dummy, prob)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 15 × 3
-#&gt;    glucose diabetes_dummy    prob
-#&gt;      &lt;dbl&gt;          &lt;dbl&gt;   &lt;dbl&gt;
-#&gt;  1      57              0 0.04447
-#&gt;  2     163              1 0.6560 
-#&gt;  3     111              0 0.2358 
-#&gt;  4      99              0 0.1685 
-#&gt;  5     111              0 0.2358 
-#&gt;  6      97              0 0.1589 
-#&gt;  7     165              1 0.6716 
-#&gt;  8     131              1 0.3833 
-#&gt;  9     124              0 0.3272 
-#&gt; 10     160              0 0.6319 
-#&gt; 11     111              1 0.2358 
-#&gt; 12     147              1 0.5212 
-#&gt; 13     106              1 0.2057 
-#&gt; 14     175              1 0.7438 
-#&gt; 15      99              0 0.1685</code></pre>
+#&gt;      age cvd_dummy   prob
+#&gt;    &lt;dbl&gt;     &lt;dbl&gt;  &lt;dbl&gt;
+#&gt;  1    73         1 0.6075
+#&gt;  2    68         1 0.5052
+#&gt;  3    68         0 0.5052
+#&gt;  4    74         1 0.6272
+#&gt;  5    45         0 0.1309
+#&gt;  6    58         0 0.3076
+#&gt;  7    46         0 0.1406
+#&gt;  8    56         1 0.2733
+#&gt;  9    64         0 0.4226
+#&gt; 10    60         1 0.3441
+#&gt; 11    74         0 0.6272
+#&gt; 12    80         1 0.7349
+#&gt; 13    48         0 0.1620
+#&gt; 14    70         1 0.5467
+#&gt; 15    55         0 0.2571</code></pre>
 </div>
 </div>
-<p>Now turn each probability into a predicted class at three thresholds: 0.3, 0.5 and 0.7. A person is predicted to have diabetes (1) when their probability is at or above the threshold:</p>
+<p>Now turn each probability into a predicted class at three thresholds: 0.3, 0.5 and 0.7. A person is predicted to have an event (1) when their probability is at or above the threshold:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>prediction_15 <span class="ot">&lt;-</span> prediction_15 <span class="sc">|&gt;</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">class_0.3 =</span> <span class="fu">if_else</span>(prob <span class="sc">&gt;=</span> <span class="fl">0.3</span>, <span class="dv">1</span>, <span class="dv">0</span>),</span>
@@ -351,41 +350,41 @@ window.Quarto = {
 <span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>         <span class="at">class_0.7 =</span> <span class="fu">if_else</span>(prob <span class="sc">&gt;=</span> <span class="fl">0.7</span>, <span class="dv">1</span>, <span class="dv">0</span>))</span>
 <span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>prediction_15 <span class="sc">|&gt;</span></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(glucose, diabetes_dummy, prob, class_0<span class="fl">.3</span>, class_0<span class="fl">.5</span>, class_0<span class="fl">.7</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(age, cvd_dummy, prob, class_0<span class="fl">.3</span>, class_0<span class="fl">.5</span>, class_0<span class="fl">.7</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 15 × 6
-#&gt;    glucose diabetes_dummy    prob class_0.3 class_0.5 class_0.7
-#&gt;      &lt;dbl&gt;          &lt;dbl&gt;   &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;
-#&gt;  1      57              0 0.04447         0         0         0
-#&gt;  2     163              1 0.6560          1         1         0
-#&gt;  3     111              0 0.2358          0         0         0
-#&gt;  4      99              0 0.1685          0         0         0
-#&gt;  5     111              0 0.2358          0         0         0
-#&gt;  6      97              0 0.1589          0         0         0
-#&gt;  7     165              1 0.6716          1         1         0
-#&gt;  8     131              1 0.3833          1         0         0
-#&gt;  9     124              0 0.3272          1         0         0
-#&gt; 10     160              0 0.6319          1         1         0
-#&gt; 11     111              1 0.2358          0         0         0
-#&gt; 12     147              1 0.5212          1         1         0
-#&gt; 13     106              1 0.2057          0         0         0
-#&gt; 14     175              1 0.7438          1         1         1
-#&gt; 15      99              0 0.1685          0         0         0</code></pre>
+#&gt;      age cvd_dummy   prob class_0.3 class_0.5 class_0.7
+#&gt;    &lt;dbl&gt;     &lt;dbl&gt;  &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;
+#&gt;  1    73         1 0.6075         1         1         0
+#&gt;  2    68         1 0.5052         1         1         0
+#&gt;  3    68         0 0.5052         1         1         0
+#&gt;  4    74         1 0.6272         1         1         0
+#&gt;  5    45         0 0.1309         0         0         0
+#&gt;  6    58         0 0.3076         1         0         0
+#&gt;  7    46         0 0.1406         0         0         0
+#&gt;  8    56         1 0.2733         0         0         0
+#&gt;  9    64         0 0.4226         1         0         0
+#&gt; 10    60         1 0.3441         1         0         0
+#&gt; 11    74         0 0.6272         1         1         0
+#&gt; 12    80         1 0.7349         1         1         1
+#&gt; 13    48         0 0.1620         0         0         0
+#&gt; 14    70         1 0.5467         1         1         0
+#&gt; 15    55         0 0.2571         0         0         0</code></pre>
 </div>
 </div>
-<p>Here are the 15 predicted probabilities, coloured by what is actually true, with the three thresholds as dashed lines. Everyone above a line is predicted to have diabetes at that threshold. The points follow the sigmoid curve from Exercise 4.2.</p>
+<p>Here are the 15 predicted probabilities, coloured by what is actually true, with the three thresholds as dashed lines. Everyone above a line is predicted to have an event at that threshold. The points follow the sigmoid curve from Exercise 4.2.</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>prediction_15 <span class="sc">|&gt;</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">truth =</span> <span class="fu">if_else</span>(diabetes_dummy <span class="sc">==</span> <span class="dv">1</span>, <span class="st">"diabetes (1)"</span>, <span class="st">"no diabetes (0)"</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> glucose, <span class="at">y =</span> prob, <span class="at">colour =</span> truth)) <span class="sc">+</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">truth =</span> <span class="fu">if_else</span>(cvd_dummy <span class="sc">==</span> <span class="dv">1</span>, <span class="st">"event (1)"</span>, <span class="st">"no event (0)"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> age, <span class="at">y =</span> prob, <span class="at">colour =</span> truth)) <span class="sc">+</span></span>
 <span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">3</span>, <span class="at">alpha =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
 <span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.3</span>, <span class="at">colour =</span> <span class="st">"blue"</span>,   <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
 <span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.5</span>, <span class="at">colour =</span> <span class="st">"red"</span>,    <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
 <span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.7</span>, <span class="at">colour =</span> <span class="st">"purple"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
 <span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"darkorange"</span>, <span class="st">"grey40"</span>)) <span class="sc">+</span></span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Glucose (mg/dL)"</span>, <span class="at">y =</span> <span class="st">"Predicted probability of diabetes"</span>,</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Age (years)"</span>, <span class="at">y =</span> <span class="st">"Predicted probability of an event"</span>,</span>
 <span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>       <span class="at">colour =</span> <span class="st">"What is true"</span>,</span>
 <span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"Predicted probabilities with the thresholds 0.3, 0.5 and 0.7"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
@@ -410,7 +409,7 @@ window.Quarto = {
 <ul>
 <li>A classifier gives a probability; a threshold turns it into a predicted class.</li>
 <li>The threshold is a choice, not part of the model. 0.5 is only a convention.</li>
-<li>Lowering the threshold predicts diabetes for more people; raising it, for fewer.</li>
+<li>Lowering the threshold predicts an event for more people; raising it, for fewer.</li>
 </ul>
 </div>
 </div>
@@ -428,8 +427,8 @@ window.Quarto = {
 <thead>
 <tr class="header">
 <th></th>
-<th style="text-align: center;">Predicted 1 (diabetes)</th>
-<th style="text-align: center;">Predicted 0 (no diabetes)</th>
+<th style="text-align: center;">Predicted 1 (event)</th>
+<th style="text-align: center;">Predicted 0 (no event)</th>
 </tr>
 </thead>
 <tbody>
@@ -447,19 +446,19 @@ window.Quarto = {
 </table>
 <p>This is the <strong>confusion table</strong>. <strong>On paper first:</strong> use the table of 15 people above to count TP, FP, FN and TN at the threshold 0.5. Then check with code.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(<span class="at">True =</span> prediction_15<span class="sc">$</span>diabetes_dummy, <span class="at">Predicted =</span> prediction_15<span class="sc">$</span>class_0<span class="fl">.5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(<span class="at">True =</span> prediction_15<span class="sc">$</span>cvd_dummy, <span class="at">Predicted =</span> prediction_15<span class="sc">$</span>class_0<span class="fl">.5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;     Predicted
 #&gt; True 0 1
-#&gt;    0 7 1
-#&gt;    1 3 4</code></pre>
+#&gt;    0 6 2
+#&gt;    1 2 5</code></pre>
 </div>
 </div>
-<p>At 0.5 there are 4 true positives, 1 false positive, 3 false negatives and 7 true negatives. Now count all four boxes for the three thresholds side by side. Two summaries of the table are used everywhere in medicine:</p>
+<p>At 0.5 there are 5 true positives, 2 false positives, 2 false negatives and 6 true negatives. Now count all four boxes for the three thresholds side by side. Two summaries of the table are used everywhere in medicine:</p>
 <p><span class="math display">\[\text{Sensitivity} = \frac{TP}{TP + FN} \qquad\qquad
 \text{Specificity} = \frac{TN}{TN + FP}\]</span></p>
 <ul>
-<li><strong>Sensitivity</strong>: of the people who really have diabetes, the proportion the model catches.</li>
+<li><strong>Sensitivity</strong>: of the people who really had an event, the proportion the model catches.</li>
 <li><strong>Specificity</strong>: of the people who really do not, the proportion the model correctly leaves alone.</li>
 </ul>
 <p>Complete the code so that it counts the false negatives and computes the specificity:</p>
@@ -469,10 +468,10 @@ window.Quarto = {
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">c</span>(class_0<span class="fl">.3</span>, class_0<span class="fl">.5</span>, class_0<span class="fl">.7</span>),</span>
 <span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>               <span class="at">names_to =</span> <span class="st">"threshold"</span>, <span class="at">values_to =</span> <span class="st">"predicted"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(threshold) <span class="sc">|&gt;</span></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">TP =</span> <span class="fu">sum</span>(diabetes_dummy <span class="sc">==</span> <span class="dv">1</span> <span class="sc">&amp;</span> predicted <span class="sc">==</span> <span class="dv">1</span>),</span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">FP =</span> <span class="fu">sum</span>(diabetes_dummy <span class="sc">==</span> <span class="dv">0</span> <span class="sc">&amp;</span> predicted <span class="sc">==</span> <span class="dv">1</span>),</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">TP =</span> <span class="fu">sum</span>(cvd_dummy <span class="sc">==</span> <span class="dv">1</span> <span class="sc">&amp;</span> predicted <span class="sc">==</span> <span class="dv">1</span>),</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">FP =</span> <span class="fu">sum</span>(cvd_dummy <span class="sc">==</span> <span class="dv">0</span> <span class="sc">&amp;</span> predicted <span class="sc">==</span> <span class="dv">1</span>),</span>
 <span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">FN =</span> <span class="fu">sum</span>(______),</span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>            <span class="at">TN =</span> <span class="fu">sum</span>(diabetes_dummy <span class="sc">==</span> <span class="dv">0</span> <span class="sc">&amp;</span> predicted <span class="sc">==</span> <span class="dv">0</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>            <span class="at">TN =</span> <span class="fu">sum</span>(cvd_dummy <span class="sc">==</span> <span class="dv">0</span> <span class="sc">&amp;</span> predicted <span class="sc">==</span> <span class="dv">0</span>)) <span class="sc">|&gt;</span></span>
 <span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">sensitivity =</span> TP <span class="sc">/</span> (TP <span class="sc">+</span> FN),</span>
 <span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>         <span class="at">specificity =</span> ______)</span>
 <span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a></span>
@@ -490,11 +489,11 @@ window.Quarto = {
 </div>
 <div id="callout-3" class="callout-3-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p>A false negative is a person who truly has diabetes (<code>diabetes_dummy == 1</code>) but was predicted not to (<code>predicted == 0</code>). Specificity uses TN and FP, in the same way as sensitivity uses TP and FN.</p>
+<p>A false negative is a person who truly had an event (<code>cvd_dummy == 1</code>) but was predicted not to (<code>predicted == 0</code>). Specificity uses TN and FP, in the same way as sensitivity uses TP and FN.</p>
 </div>
 </div>
 </div>
-<p>Changing the threshold changes the kind of mistakes the model makes. A <strong>low</strong> threshold catches more of the people with diabetes (higher sensitivity) at the price of more false alarms. A <strong>high</strong> threshold raises fewer false alarms (higher specificity) but misses more cases. At 0.7 this model misses six of the seven people with diabetes.</p>
+<p>Changing the threshold changes the kind of mistakes the model makes. A <strong>low</strong> threshold catches more of the people who had an event (higher sensitivity) at the price of more false alarms. A <strong>high</strong> threshold raises fewer false alarms (higher specificity) but misses more cases. At 0.7 this model misses six of the seven people who had an event.</p>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -520,18 +519,18 @@ window.Quarto = {
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>test_preds <span class="ot">&lt;-</span> <span class="fu">predict</span>(log_fit, <span class="at">new_data =</span> test, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(test) <span class="sc">|&gt;</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">predicted_0.5 =</span> <span class="fu">factor</span>(<span class="fu">if_else</span>(.pred_pos <span class="sc">&gt;=</span> <span class="fl">0.5</span>, <span class="st">"pos"</span>, <span class="st">"neg"</span>),</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>                                <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"neg"</span>, <span class="st">"pos"</span>)))</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">predicted_0.5 =</span> <span class="fu">factor</span>(<span class="fu">if_else</span>(.pred_yes <span class="sc">&gt;=</span> <span class="fl">0.5</span>, <span class="st">"yes"</span>, <span class="st">"no"</span>),</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>                                <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"no"</span>, <span class="st">"yes"</span>)))</span>
 <span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>cm <span class="ot">&lt;-</span> test_preds <span class="sc">|&gt;</span></span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">conf_mat</span>(<span class="at">truth =</span> diabetes, <span class="at">estimate =</span> predicted_0<span class="fl">.5</span>)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">conf_mat</span>(<span class="at">truth =</span> cvd, <span class="at">estimate =</span> predicted_0<span class="fl">.5</span>)</span>
 <span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>cm</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;           Truth
-#&gt; Prediction neg pos
-#&gt;        neg  90  29
-#&gt;        pos   7  24</code></pre>
+#&gt; Prediction no yes
+#&gt;        no  59  12
+#&gt;        yes  7  22</code></pre>
 </div>
 </div>
 <div class="cell" data-layout-align="center">
@@ -557,8 +556,8 @@ window.Quarto = {
 <p><code>conf_mat()</code> puts the <strong>prediction</strong> in the rows and the <strong>truth</strong> in the columns. scikit-learn’s <code>confusion_matrix()</code> does the opposite. The numbers are the same; read the labels before you read the table.</p>
 </div>
 </div>
-<p>At 0.5 the model finds 24 of the 53 people with diabetes (sensitivity 0.453) and correctly leaves alone 90 of the 97 without (specificity 0.928). For a screening test, missing more than half the cases is a poor result.</p>
-<p><strong>Putting a price on the two mistakes.</strong> Suppose a missed case (a false negative) costs five times as much as an unnecessary test (a false positive): the disease goes untreated, while the extra test costs one appointment. Then the cost of a threshold is</p>
+<p>At 0.5 the model finds 22 of the 34 people who had an event (sensitivity 0.647) and correctly leaves alone 59 of the 66 without (specificity 0.894). For prevention, missing a third of the people who go on to have a heart attack or stroke is a poor result.</p>
+<p><strong>Putting a price on the two mistakes.</strong> Suppose a missed case (a false negative) costs five times as much as unnecessary treatment (a false positive): a preventable heart attack or stroke happens, while unnecessary treatment costs a prescription and a review appointment. Then the cost of a threshold is</p>
 <p><span class="math display">\[\text{cost} = 5 \times FN + 1 \times FP\]</span></p>
 <p>Work out the cost of every threshold from 0.1 to 0.9 on the test patients, and find the cheapest:</p>
 <div class="cell" data-layout-align="center">
@@ -568,13 +567,13 @@ window.Quarto = {
 <span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>threshold_costs <span class="ot">&lt;-</span> thresholds <span class="sc">|&gt;</span></span>
 <span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cross_join</span>(test_preds) <span class="sc">|&gt;</span>                      <span class="co"># every threshold with every patient</span></span>
 <span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(threshold) <span class="sc">|&gt;</span></span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">FN =</span> <span class="fu">sum</span>(diabetes <span class="sc">==</span> <span class="st">"pos"</span> <span class="sc">&amp;</span> .pred_pos <span class="sc">&lt;</span>  threshold),</span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">FP =</span> <span class="fu">sum</span>(diabetes <span class="sc">==</span> <span class="st">"neg"</span> <span class="sc">&amp;</span> .pred_pos <span class="sc">&gt;=</span> threshold)) <span class="sc">|&gt;</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">FN =</span> <span class="fu">sum</span>(cvd <span class="sc">==</span> <span class="st">"yes"</span> <span class="sc">&amp;</span> .pred_yes <span class="sc">&lt;</span>  threshold),</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">FP =</span> <span class="fu">sum</span>(cvd <span class="sc">==</span> <span class="st">"no"</span> <span class="sc">&amp;</span> .pred_yes <span class="sc">&gt;=</span> threshold)) <span class="sc">|&gt;</span></span>
 <span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">cost =</span> ______)</span>
 <span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>threshold_costs</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p><strong>Question!</strong> The cost ratio of five to one was an assumption. Who should decide it, and what happens to the best threshold if a missed case costs twenty times an unnecessary test instead of five?</p>
+<p><strong>Question!</strong> The cost ratio of five to one was an assumption. Who should decide it, and what happens to the best threshold if a missed case costs twenty times unnecessary treatment instead of five?</p>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -609,15 +608,14 @@ window.Quarto = {
 <span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> LogisticRegression</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The same 750 people and the same split as Exercises 4.1 and 4.2. We add a column <code>diabetes_dummy</code>, the outcome coded 1 for <code>pos</code> and 0 for <code>neg</code>, which makes the counting below easier to read.</p>
+<p>The same 500 people and the same split as Exercises 4.1 and 4.2. We add a column <code>cvd_dummy</code>, the outcome coded 1 for <code>yes</code> and 0 for <code>no</code>, which makes the counting below easier to read.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes_clean.csv"</span>)</span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes[[<span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"age"</span>, <span class="st">"diabetes"</span>]]</span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>diabetes[<span class="st">"diabetes_dummy"</span>] <span class="op">=</span> (diabetes[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"pos"</span>).astype(<span class="bu">int</span>) <span class="co"># 1 = pos, 0 = neg</span></span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> diabetes.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
-<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> diabetes[<span class="op">~</span>is_test]</span>
-<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>test  <span class="op">=</span> diabetes[is_test]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>cvd <span class="op">=</span> pd.read_csv(<span class="st">"data/cvd_risk.csv"</span>)</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>cvd[<span class="st">"cvd_dummy"</span>] <span class="op">=</span> (cvd[<span class="st">"cvd"</span>] <span class="op">==</span> <span class="st">"yes"</span>).astype(<span class="bu">int</span>) <span class="co"># 1 = yes, 0 = no</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> cvd.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> cvd[<span class="op">~</span>is_test]</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>test  <span class="op">=</span> cvd[is_test]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <hr>
 </section>
@@ -626,87 +624,87 @@ window.Quarto = {
 <p>Fit the logistic regression from Exercise 4.2 on the training rows:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>log_fit <span class="op">=</span> LogisticRegression(C<span class="op">=</span>np.inf)</span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>log_fit <span class="op">=</span> log_fit.fit(train[[<span class="st">"glucose"</span>]], train[<span class="st">"diabetes_dummy"</span>])</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>log_fit <span class="op">=</span> log_fit.fit(train[[<span class="st">"age"</span>]], train[<span class="st">"cvd_dummy"</span>])</span>
 <span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"intercept:"</span>, <span class="bu">round</span>(log_fit.intercept_[<span class="dv">0</span>], <span class="dv">4</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; intercept: -5.064</code></pre>
+<pre><code>#&gt; intercept: -5.638</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"slope:    "</span>, <span class="bu">round</span>(log_fit.coef_[<span class="dv">0</span>, <span class="dv">0</span>], <span class="dv">4</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; slope:     0.035</code></pre>
+<pre><code>#&gt; slope:     0.0832</code></pre>
 </div>
 </div>
-<p>To make it easy to follow, predict the probability of diabetes for 15 people from the test set only: the patients in rows 26 to 40. Python counts from 0, so those are positions 25 to 39.</p>
+<p>To make it easy to follow, predict the probability of an event for 15 people from the test set only: the patients in rows 68 to 82. Python counts from 0, so those are positions 67 to 81.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>patients15 <span class="op">=</span> test.iloc[<span class="dv">25</span>:<span class="dv">40</span>].copy()</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>patients15 <span class="op">=</span> test.iloc[<span class="dv">67</span>:<span class="dv">82</span>].copy()</span>
 <span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>prediction_15 <span class="op">=</span> patients15.copy()</span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>prediction_15[<span class="st">"prob"</span>] <span class="op">=</span> log_fit.predict_proba(patients15[[<span class="st">"glucose"</span>]])[:, <span class="dv">1</span>]</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>prediction_15[<span class="st">"prob"</span>] <span class="op">=</span> log_fit.predict_proba(patients15[[<span class="st">"age"</span>]])[:, <span class="dv">1</span>]</span>
 <span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>prediction_15[[<span class="st">"glucose"</span>, <span class="st">"diabetes_dummy"</span>, <span class="st">"prob"</span>]].<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>prediction_15[[<span class="st">"age"</span>, <span class="st">"cvd_dummy"</span>, <span class="st">"prob"</span>]].<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;      glucose  diabetes_dummy   prob
-#&gt; 125       57               0  0.044
-#&gt; 130      163               1  0.656
-#&gt; 135      111               0  0.236
-#&gt; 140       99               0  0.168
-#&gt; 145      111               0  0.236
-#&gt; 150       97               0  0.159
-#&gt; 155      165               1  0.672
-#&gt; 160      131               1  0.383
-#&gt; 165      124               0  0.327
-#&gt; 170      160               0  0.632
-#&gt; 175      111               1  0.236
-#&gt; 180      147               1  0.521
-#&gt; 185      106               1  0.206
-#&gt; 190      175               1  0.744
-#&gt; 195       99               0  0.168</code></pre>
+<pre><code>#&gt;      age  cvd_dummy   prob
+#&gt; 335   73          1  0.608
+#&gt; 340   68          1  0.505
+#&gt; 345   68          0  0.505
+#&gt; 350   74          1  0.627
+#&gt; 355   45          0  0.131
+#&gt; 360   58          0  0.308
+#&gt; 365   46          0  0.141
+#&gt; 370   56          1  0.273
+#&gt; 375   64          0  0.423
+#&gt; 380   60          1  0.344
+#&gt; 385   74          0  0.627
+#&gt; 390   80          1  0.735
+#&gt; 395   48          0  0.162
+#&gt; 400   70          1  0.547
+#&gt; 405   55          0  0.257</code></pre>
 </div>
 </div>
-<p>Now turn each probability into a predicted class at three thresholds: 0.3, 0.5 and 0.7. A person is predicted to have diabetes (1) when their probability is at or above the threshold:</p>
+<p>Now turn each probability into a predicted class at three thresholds: 0.3, 0.5 and 0.7. A person is predicted to have an event (1) when their probability is at or above the threshold:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>prediction_15[<span class="st">"class_0.3"</span>] <span class="op">=</span> (prediction_15[<span class="st">"prob"</span>] <span class="op">&gt;=</span> <span class="fl">0.3</span>).astype(<span class="bu">int</span>)</span>
 <span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>prediction_15[<span class="st">"class_0.5"</span>] <span class="op">=</span> (prediction_15[<span class="st">"prob"</span>] <span class="op">&gt;=</span> <span class="fl">0.5</span>).astype(<span class="bu">int</span>)</span>
 <span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>prediction_15[<span class="st">"class_0.7"</span>] <span class="op">=</span> (prediction_15[<span class="st">"prob"</span>] <span class="op">&gt;=</span> <span class="fl">0.7</span>).astype(<span class="bu">int</span>)</span>
 <span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>prediction_15[[<span class="st">"glucose"</span>, <span class="st">"diabetes_dummy"</span>, <span class="st">"prob"</span>,</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>prediction_15[[<span class="st">"age"</span>, <span class="st">"cvd_dummy"</span>, <span class="st">"prob"</span>,</span>
 <span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>               <span class="st">"class_0.3"</span>, <span class="st">"class_0.5"</span>, <span class="st">"class_0.7"</span>]].<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;      glucose  diabetes_dummy   prob  class_0.3  class_0.5  class_0.7
-#&gt; 125       57               0  0.044          0          0          0
-#&gt; 130      163               1  0.656          1          1          0
-#&gt; 135      111               0  0.236          0          0          0
-#&gt; 140       99               0  0.168          0          0          0
-#&gt; 145      111               0  0.236          0          0          0
-#&gt; 150       97               0  0.159          0          0          0
-#&gt; 155      165               1  0.672          1          1          0
-#&gt; 160      131               1  0.383          1          0          0
-#&gt; 165      124               0  0.327          1          0          0
-#&gt; 170      160               0  0.632          1          1          0
-#&gt; 175      111               1  0.236          0          0          0
-#&gt; 180      147               1  0.521          1          1          0
-#&gt; 185      106               1  0.206          0          0          0
-#&gt; 190      175               1  0.744          1          1          1
-#&gt; 195       99               0  0.168          0          0          0</code></pre>
+<pre><code>#&gt;      age  cvd_dummy   prob  class_0.3  class_0.5  class_0.7
+#&gt; 335   73          1  0.608          1          1          0
+#&gt; 340   68          1  0.505          1          1          0
+#&gt; 345   68          0  0.505          1          1          0
+#&gt; 350   74          1  0.627          1          1          0
+#&gt; 355   45          0  0.131          0          0          0
+#&gt; 360   58          0  0.308          1          0          0
+#&gt; 365   46          0  0.141          0          0          0
+#&gt; 370   56          1  0.273          0          0          0
+#&gt; 375   64          0  0.423          1          0          0
+#&gt; 380   60          1  0.344          1          0          0
+#&gt; 385   74          0  0.627          1          1          0
+#&gt; 390   80          1  0.735          1          1          1
+#&gt; 395   48          0  0.162          0          0          0
+#&gt; 400   70          1  0.547          1          1          0
+#&gt; 405   55          0  0.257          0          0          0</code></pre>
 </div>
 </div>
-<p>Here are the 15 predicted probabilities, coloured by what is actually true, with the three thresholds as dashed lines. Everyone above a line is predicted to have diabetes at that threshold. The points follow the sigmoid curve from Exercise 4.2.</p>
+<p>Here are the 15 predicted probabilities, coloured by what is actually true, with the three thresholds as dashed lines. Everyone above a line is predicted to have an event at that threshold. The points follow the sigmoid curve from Exercise 4.2.</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>has_diabetes <span class="op">=</span> prediction_15[<span class="st">"diabetes_dummy"</span>] <span class="op">==</span> <span class="dv">1</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>has_event <span class="op">=</span> prediction_15[<span class="st">"cvd_dummy"</span>] <span class="op">==</span> <span class="dv">1</span></span>
 <span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>ax.scatter(prediction_15.loc[has_diabetes, <span class="st">"glucose"</span>], prediction_15.loc[has_diabetes, <span class="st">"prob"</span>],</span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>           color<span class="op">=</span><span class="st">"darkorange"</span>, s<span class="op">=</span><span class="dv">60</span>, label<span class="op">=</span><span class="st">"diabetes (1)"</span>)</span>
-<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>ax.scatter(prediction_15.loc[<span class="op">~</span>has_diabetes, <span class="st">"glucose"</span>], prediction_15.loc[<span class="op">~</span>has_diabetes, <span class="st">"prob"</span>],</span>
-<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>           color<span class="op">=</span><span class="st">"grey"</span>, s<span class="op">=</span><span class="dv">60</span>, label<span class="op">=</span><span class="st">"no diabetes (0)"</span>)</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>ax.scatter(prediction_15.loc[has_event, <span class="st">"age"</span>], prediction_15.loc[has_event, <span class="st">"prob"</span>],</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>           color<span class="op">=</span><span class="st">"darkorange"</span>, s<span class="op">=</span><span class="dv">60</span>, label<span class="op">=</span><span class="st">"event (1)"</span>)</span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>ax.scatter(prediction_15.loc[<span class="op">~</span>has_event, <span class="st">"age"</span>], prediction_15.loc[<span class="op">~</span>has_event, <span class="st">"prob"</span>],</span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>           color<span class="op">=</span><span class="st">"grey"</span>, s<span class="op">=</span><span class="dv">60</span>, label<span class="op">=</span><span class="st">"no event (0)"</span>)</span>
 <span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>ax.axhline(<span class="fl">0.3</span>, color<span class="op">=</span><span class="st">"blue"</span>,   linestyle<span class="op">=</span><span class="st">"--"</span>)</span>
 <span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>ax.axhline(<span class="fl">0.5</span>, color<span class="op">=</span><span class="st">"red"</span>,    linestyle<span class="op">=</span><span class="st">"--"</span>)</span>
 <span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>ax.axhline(<span class="fl">0.7</span>, color<span class="op">=</span><span class="st">"purple"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>)</span>
-<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Glucose (mg/dL)"</span>)</span>
-<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Predicted probability of diabetes"</span>)</span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Age (years)"</span>)</span>
+<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Predicted probability of an event"</span>)</span>
 <span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Predicted probabilities with the thresholds 0.3, 0.5 and 0.7"</span>)</span>
 <span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>ax.legend(title<span class="op">=</span><span class="st">"What is true"</span>)</span>
 <span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -732,7 +730,7 @@ window.Quarto = {
 <ul>
 <li>A classifier gives a probability; a threshold turns it into a predicted class.</li>
 <li>The threshold is a choice, not part of the model. 0.5 is only a convention.</li>
-<li>Lowering the threshold predicts diabetes for more people; raising it, for fewer.</li>
+<li>Lowering the threshold predicts an event for more people; raising it, for fewer.</li>
 </ul>
 </div>
 </div>
@@ -750,8 +748,8 @@ window.Quarto = {
 <thead>
 <tr class="header">
 <th></th>
-<th style="text-align: center;">Predicted 1 (diabetes)</th>
-<th style="text-align: center;">Predicted 0 (no diabetes)</th>
+<th style="text-align: center;">Predicted 1 (event)</th>
+<th style="text-align: center;">Predicted 0 (no event)</th>
 </tr>
 </thead>
 <tbody>
@@ -769,20 +767,20 @@ window.Quarto = {
 </table>
 <p>This is the <strong>confusion table</strong>. <strong>On paper first:</strong> use the table of 15 people above to count TP, FP, FN and TN at the threshold 0.5. Then check with code.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>pd.crosstab(prediction_15[<span class="st">"diabetes_dummy"</span>], prediction_15[<span class="st">"class_0.5"</span>],</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>pd.crosstab(prediction_15[<span class="st">"cvd_dummy"</span>], prediction_15[<span class="st">"class_0.5"</span>],</span>
 <span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>            rownames<span class="op">=</span>[<span class="st">"True"</span>], colnames<span class="op">=</span>[<span class="st">"Predicted"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; Predicted  0  1
 #&gt; True           
-#&gt; 0          7  1
-#&gt; 1          3  4</code></pre>
+#&gt; 0          6  2
+#&gt; 1          2  5</code></pre>
 </div>
 </div>
-<p>At 0.5 there are 4 true positives, 1 false positive, 3 false negatives and 7 true negatives. Now count all four boxes for the three thresholds side by side. Two summaries of the table are used everywhere in medicine:</p>
+<p>At 0.5 there are 5 true positives, 2 false positives, 2 false negatives and 6 true negatives. Now count all four boxes for the three thresholds side by side. Two summaries of the table are used everywhere in medicine:</p>
 <p><span class="math display">\[\text{Sensitivity} = \frac{TP}{TP + FN} \qquad\qquad
 \text{Specificity} = \frac{TN}{TN + FP}\]</span></p>
 <ul>
-<li><strong>Sensitivity</strong>: of the people who really have diabetes, the proportion the model catches.</li>
+<li><strong>Sensitivity</strong>: of the people who really had an event, the proportion the model catches.</li>
 <li><strong>Specificity</strong>: of the people who really do not, the proportion the model correctly leaves alone.</li>
 </ul>
 <p>Complete the code so that it counts the false negatives and computes the specificity:</p>
@@ -790,7 +788,7 @@ window.Quarto = {
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> []</span>
 <span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> threshold <span class="kw">in</span> [<span class="st">"0.3"</span>, <span class="st">"0.5"</span>, <span class="st">"0.7"</span>]:</span>
-<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>    truth     <span class="op">=</span> prediction_15[<span class="st">"diabetes_dummy"</span>]</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>    truth     <span class="op">=</span> prediction_15[<span class="st">"cvd_dummy"</span>]</span>
 <span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>    predicted <span class="op">=</span> prediction_15[<span class="st">"class_"</span> <span class="op">+</span> threshold]</span>
 <span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>    rows.append({<span class="st">"threshold"</span>: threshold,</span>
 <span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"TP"</span>: ((truth <span class="op">==</span> <span class="dv">1</span>) <span class="op">&amp;</span> (predicted <span class="op">==</span> <span class="dv">1</span>)).<span class="bu">sum</span>(),</span>
@@ -816,11 +814,11 @@ window.Quarto = {
 </div>
 <div id="callout-8" class="callout-8-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p>A false negative is a person who truly has diabetes (<code>truth == 1</code>) but was predicted not to (<code>predicted == 0</code>). Specificity uses the TN and FP columns, in the same way as sensitivity uses TP and FN.</p>
+<p>A false negative is a person who truly had an event (<code>truth == 1</code>) but was predicted not to (<code>predicted == 0</code>). Specificity uses the TN and FP columns, in the same way as sensitivity uses TP and FN.</p>
 </div>
 </div>
 </div>
-<p>Changing the threshold changes the kind of mistakes the model makes. A <strong>low</strong> threshold catches more of the people with diabetes (higher sensitivity) at the price of more false alarms. A <strong>high</strong> threshold raises fewer false alarms (higher specificity) but misses more cases. At 0.7 this model misses six of the seven people with diabetes.</p>
+<p>Changing the threshold changes the kind of mistakes the model makes. A <strong>low</strong> threshold catches more of the people who had an event (higher sensitivity) at the price of more false alarms. A <strong>high</strong> threshold raises fewer false alarms (higher specificity) but misses more cases. At 0.7 this model misses six of the seven people who had an event.</p>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -847,18 +845,18 @@ window.Quarto = {
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> confusion_matrix, ConfusionMatrixDisplay</span>
 <span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>test_preds <span class="op">=</span> test.copy()</span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>test_preds[<span class="st">"prob"</span>] <span class="op">=</span> log_fit.predict_proba(test[[<span class="st">"glucose"</span>]])[:, <span class="dv">1</span>]</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>test_preds[<span class="st">"prob"</span>] <span class="op">=</span> log_fit.predict_proba(test[[<span class="st">"age"</span>]])[:, <span class="dv">1</span>]</span>
 <span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>test_preds[<span class="st">"predicted_0.5"</span>] <span class="op">=</span> (test_preds[<span class="st">"prob"</span>] <span class="op">&gt;=</span> <span class="fl">0.5</span>).astype(<span class="bu">int</span>)</span>
 <span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>cm <span class="op">=</span> confusion_matrix(test_preds[<span class="st">"diabetes_dummy"</span>], test_preds[<span class="st">"predicted_0.5"</span>])</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>cm <span class="op">=</span> confusion_matrix(test_preds[<span class="st">"cvd_dummy"</span>], test_preds[<span class="st">"predicted_0.5"</span>])</span>
 <span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>cm</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; array([[90,  7],
-#&gt;        [29, 24]])</code></pre>
+<pre><code>#&gt; array([[59,  7],
+#&gt;        [12, 22]])</code></pre>
 </div>
 </div>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>display <span class="op">=</span> ConfusionMatrixDisplay(cm, display_labels<span class="op">=</span>[<span class="st">"neg (0)"</span>, <span class="st">"pos (1)"</span>])</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>display <span class="op">=</span> ConfusionMatrixDisplay(cm, display_labels<span class="op">=</span>[<span class="st">"no (0)"</span>, <span class="st">"yes (1)"</span>])</span>
 <span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>display <span class="op">=</span> display.plot(cmap<span class="op">=</span><span class="st">"Blues"</span>)</span>
 <span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
@@ -882,15 +880,15 @@ window.Quarto = {
 <p><code>confusion_matrix()</code> puts the <strong>truth</strong> in the rows and the <strong>prediction</strong> in the columns. tidymodels’ <code>conf_mat()</code> does the opposite. The numbers are the same; read the labels before you read the table.</p>
 </div>
 </div>
-<p>At 0.5 the model finds 24 of the 53 people with diabetes (sensitivity 0.453) and correctly leaves alone 90 of the 97 without (specificity 0.928). For a screening test, missing more than half the cases is a poor result.</p>
-<p><strong>Putting a price on the two mistakes.</strong> Suppose a missed case (a false negative) costs five times as much as an unnecessary test (a false positive): the disease goes untreated, while the extra test costs one appointment. Then the cost of a threshold is</p>
+<p>At 0.5 the model finds 22 of the 34 people who had an event (sensitivity 0.647) and correctly leaves alone 59 of the 66 without (specificity 0.894). For prevention, missing a third of the people who go on to have a heart attack or stroke is a poor result.</p>
+<p><strong>Putting a price on the two mistakes.</strong> Suppose a missed case (a false negative) costs five times as much as unnecessary treatment (a false positive): a preventable heart attack or stroke happens, while unnecessary treatment costs a prescription and a review appointment. Then the cost of a threshold is</p>
 <p><span class="math display">\[\text{cost} = 5 \times FN + 1 \times FP\]</span></p>
 <p>Work out the cost of every threshold from 0.1 to 0.9 on the test patients, and find the cheapest:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> []</span>
 <span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> threshold <span class="kw">in</span> np.<span class="bu">round</span>(np.arange(<span class="fl">0.1</span>, <span class="fl">1.0</span>, <span class="fl">0.1</span>), <span class="dv">1</span>):</span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>    truth <span class="op">=</span> test_preds[<span class="st">"diabetes_dummy"</span>]</span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>    truth <span class="op">=</span> test_preds[<span class="st">"cvd_dummy"</span>]</span>
 <span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>    prob  <span class="op">=</span> test_preds[<span class="st">"prob"</span>]</span>
 <span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>    FN <span class="op">=</span> ((truth <span class="op">==</span> <span class="dv">1</span>) <span class="op">&amp;</span> (prob <span class="op">&lt;</span>  threshold)).<span class="bu">sum</span>()</span>
 <span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>    FP <span class="op">=</span> ((truth <span class="op">==</span> <span class="dv">0</span>) <span class="op">&amp;</span> (prob <span class="op">&gt;=</span> threshold)).<span class="bu">sum</span>()</span>
@@ -899,7 +897,7 @@ window.Quarto = {
 <span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a>threshold_costs <span class="op">=</span> pd.DataFrame(rows)</span>
 <span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a>threshold_costs</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p><strong>Question!</strong> The cost ratio of five to one was an assumption. Who should decide it, and what happens to the best threshold if a missed case costs twenty times an unnecessary test instead of five?</p>
+<p><strong>Question!</strong> The cost ratio of five to one was an assumption. Who should decide it, and what happens to the best threshold if a missed case costs twenty times unnecessary treatment instead of five?</p>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -933,7 +931,7 @@ window.Quarto = {
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>The cheapest threshold above was chosen by looking at the test patients, and then judged on the same test patients. Choose it on the <strong>training</strong> rows instead, then apply it once to the test patients. Is the cost still 71? Why is this the honest way round?</p>
+<p>The cheapest threshold above was chosen by looking at the test patients, and then judged on the same test patients. Choose it on the <strong>training</strong> rows instead, then apply it once to the test patients. Is the cost still 49? Why is this the honest way round?</p>
 </div>
 </div>
 
