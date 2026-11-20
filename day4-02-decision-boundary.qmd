@@ -9,10 +9,9 @@ engine: knitr
 In Exercise 4.1 the map of the logistic regression's probability had a black
 line across it: to one side the model says `yes`, to the other `no`. That line
 is the **decision boundary**. In this exercise you work it out from the
-coefficients, see why it is straight, move it with the threshold, and meet data
-where no straight line can do the job.
+coefficients, see why it is straight, and move it with the threshold.
 
-Parts 1 and 2 use the same people as Exercise 4.1: age, systolic blood
+We use the same people as Exercise 4.1: age, systolic blood
 pressure, and whether they had a cardiovascular event in the next ten years.
 Both measurements matter, so the boundary is tilted.
 
@@ -20,9 +19,6 @@ Both measurements matter, so the boundary is tilted.
   see it as the line where a plane is cut, in 3D.
 - **Part 2.** Change the threshold and see the line move: every threshold
   gives its own line.
-- **Part 3.** A dataset where the risk is high at both ends of a measurement.
-  A straight boundary fails; a squared term or a tree gives a boundary that
-  bends.
 
 ::: {.callout-note appearance="simple"}
 ## The plots are for looking at
@@ -65,9 +61,10 @@ into your `data` folder.
 cvd <- read_csv("data/cvd_risk.csv") |>
   mutate(cvd = factor(cvd, levels = c("no", "yes")))
 
-test_rows <- seq(1, nrow(cvd), by = 5)     # every fifth person is held back
-train <- cvd[-test_rows, ]
-test  <- cvd[test_rows, ]
+set.seed(42)
+split <- initial_split(cvd, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
 
 count(train, cvd)
 ```
@@ -133,13 +130,13 @@ intercept is negative, so minus the intercept is a positive number.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-boundary_120 <- (-(-14.22) - 0.05292 * 120) / 0.1042
-boundary_160 <- (-(-14.22) - 0.05292 * 160) / 0.1042
+boundary_120 <- (-(-13.83) - 0.05083 * 120) / 0.1019
+boundary_160 <- (-(-13.83) - 0.05083 * 160) / 0.1019
 c(boundary_120, boundary_160)
 ```
 
 With a blood pressure of 120 the model predicts an event from about age 76;
-with 160, from about age 55.
+with 160, from about age 56.
 :::
 :::
 
@@ -147,7 +144,7 @@ Check it with `predict()`: a person on the boundary should get a probability
 of 0.5.
 
 ```{r}
-predict(log_fit, new_data = data.frame(age = 75.6, systolic_bp = 120), type = "prob")
+predict(log_fit, new_data = data.frame(age = 75.9, systolic_bp = 120), type = "prob")
 ```
 
 Every point on the boundary satisfies one linear equation in age and blood
@@ -161,7 +158,7 @@ coefficients, over the test patients:
 ggplot(test, aes(x = age, y = systolic_bp, shape = cvd, colour = cvd)) +
   geom_point(size = 2) +
   geom_abline(intercept = -b[1] / b[3], slope = -b[2] / b[3], linewidth = 1) +
-  annotate("point", x = c(75.6, 55.3), y = c(120, 160), colour = "red", size = 3) +
+  annotate("point", x = c(75.9, 55.9), y = c(120, 160), colour = "red", size = 3) +
   scale_shape_manual(values = c(no = 1, yes = 17)) +
   scale_colour_manual(values = c(no = "steelblue", yes = "darkorange")) +
   coord_cartesian(xlim = c(40, 80), ylim = c(80, 200)) +
@@ -273,7 +270,7 @@ if (!requireNamespace("plotly", quietly = TRUE)) knitr::asis_output(paste0(
 ## Think about it
 1. As far as the model is concerned, 10 mmHg more blood pressure is worth how
    many years of age? Where do you see that in the plot?
-2. Two people: one is 70 with a blood pressure of 130, the other 55 with 165.
+2. Two people: one is 70 with a blood pressure of 128, the other 55 with 165.
    Which side of the line is each on?
 3. A model with three predictors (say age, blood pressure and cholesterol) also
    has a boundary. What shape would it be?
@@ -283,16 +280,16 @@ if (!requireNamespace("plotly", quietly = TRUE)) knitr::asis_output(paste0(
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{r}
-predict(log_fit, new_data = data.frame(age = c(70, 55), systolic_bp = c(130, 165)),
+predict(log_fit, new_data = data.frame(age = c(70, 55), systolic_bp = c(128, 165)),
         type = "prob")
 ```
 
-1. About 5 years: 10 × 0.0529 / 0.1042 = 5.1. Adding 10 mmHg raises the
+1. About 5 years: 10 × 0.0508 / 0.1019 = 5.0. Adding 10 mmHg raises the
    log-odds as much as 5 extra years. That is the tilt of the line: going 10
-   mmHg up, the boundary moves 5 years younger (from 76 at 120 mmHg to 55 at
+   mmHg up, the boundary moves 5 years younger (from 76 at 120 mmHg to 56 at
    160 mmHg).
-2. The 70-year-old is just below the line (probability 0.49, `no`); the
-   55-year-old is above it (0.56, `yes`). The younger person is called `yes`
+2. The 70-year-old is just below the line (probability 0.45, `no`); the
+   55-year-old is above it (0.54, `yes`). The younger person is called `yes`
    because of the blood pressure. Neither measurement decides alone.
 3. Still flat: one linear equation in three measurements is a flat plane in
    three dimensions. A logistic regression always has a flat boundary in the
@@ -344,7 +341,7 @@ thresholds
 ```
 
 The log-odds are −0.847, 0 and 0.847. For a blood pressure of 140 the class
-changes at age 57, 65 and 74.
+changes at age 57, 66 and 74.
 :::
 :::
 
@@ -393,184 +390,12 @@ triangles (they had an event), circles (they did not), or both?
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-52 patients are called `yes` at 0.3, 31 at 0.5 and 15 at 0.7. Moving the line
+50 patients are called `yes` at 0.3, 34 at 0.5 and 17 at 0.7. Moving the line
 down (0.3) brings more of the triangles onto the `yes` side, but it brings over
 circles too. Moving it up (0.7) does the opposite: fewer circles called `yes`,
 but more triangles missed. The model, its coefficients and the tilt of the line
 are the same; only the decision changed. Why you might want to move it is the
 subject of Exercise 4.3.
-:::
-:::
-
-### Part 3 — When a straight line cannot work
-
-`data/sodium_delirium.csv` holds 500 older patients admitted to hospital: their
-age, their blood sodium in mmol/L (normal is about 135 to 145), and whether
-they developed delirium during the admission. If you do not have it yet,
-[**download `sodium_delirium.csv`**](data/sodium_delirium.csv){download="sodium_delirium.csv"}
-into your `data` folder.
-
-```{r}
-delirium <- read_csv("data/sodium_delirium.csv") |>
-  mutate(delirium = factor(delirium, levels = c("no", "yes")))
-
-test_rows_d <- seq(1, nrow(delirium), by = 5)     # every fifth patient is held back
-train_d <- delirium[-test_rows_d, ]
-test_d  <- delirium[test_rows_d, ]
-
-count(train_d, delirium)
-```
-
-```{r}
-#| code-fold: true
-#| code-summary: "Code for this plot (optional)"
-ggplot(train_d, aes(x = sodium, y = age, shape = delirium, colour = delirium)) +
-  geom_point(size = 2) +
-  scale_shape_manual(values = c(no = 1, yes = 17)) +
-  scale_colour_manual(values = c(no = "steelblue", yes = "darkorange")) +
-  labs(x = "Sodium (mmol/L)", y = "Age (years)", shape = "Delirium", colour = "Delirium",
-       title = "Training patients")
-```
-
-Delirium is common when sodium is **too low and when it is too high**, and
-rarer in between. Fit the same kind of model as before, with age and sodium:
-
-```{r}
-line_fit <- log_model |>
-  fit(delirium ~ age + sodium, data = train_d)
-
-line_fit$fit$coefficients
-```
-
-```{r}
-#| code-fold: true
-#| code-summary: "Code for this plot (optional)"
-grid_d <- expand_grid(sodium = seq(114, 163, by = 0.5), age = seq(60, 98, by = 0.5)) |>
-  mutate(sodium_dev2 = (sodium - 140)^2)
-
-delirium_map <- function(fit, title) {
-  grid_d$prob <- predict(fit, new_data = grid_d, type = "prob")$.pred_yes
-  ggplot(grid_d, aes(x = sodium, y = age)) +
-    geom_raster(aes(fill = prob)) +
-    geom_contour(aes(z = prob), breaks = 0.5, colour = "black", linewidth = 0.8) +
-    geom_point(data = test_d, aes(shape = delirium), size = 1.5) +
-    scale_fill_gradient2(low = "steelblue", mid = "white", high = "darkorange",
-                         midpoint = 0.5, limits = c(0, 1)) +
-    scale_shape_manual(values = c(no = 1, yes = 17)) +
-    labs(x = "Sodium (mmol/L)", y = "Age (years)",
-         fill = "Probability\nof delirium", shape = "Test patients", title = title)
-}
-
-delirium_map(line_fit, "Logistic regression: age + sodium")
-```
-
-The weight for sodium is almost exactly 0, and the map has no boundary at all:
-the probability never reaches 0.5, so the model says `no` for every patient.
-A straight line has to put "high risk" on one side. Here the high-risk patients
-are on **both** sides, so the best straight line the model can find is one that
-hardly uses sodium.
-
-#### Task 3a — Give the model a predictor it can use
-
-How far sodium is from normal matters, not which direction. Make a new column,
-the squared distance from 140, and add it to the model. The model is still a
-logistic regression, linear in the predictors you give it, but one of those
-predictors is now curved in sodium.
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-train_d <- train_d |> mutate(sodium_dev2 = (sodium - 140)^2)
-test_d  <- test_d  |> mutate(sodium_dev2 = (sodium - 140)^2)
-
-curve_fit <- log_model |>
-  fit(delirium ~ age + sodium + ______, data = train_d)
-
-curve_fit$fit$coefficients
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-Add the name of the new column to the formula, after a `+`.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-train_d <- train_d |> mutate(sodium_dev2 = (sodium - 140)^2)
-test_d  <- test_d  |> mutate(sodium_dev2 = (sodium - 140)^2)
-
-curve_fit <- log_model |>
-  fit(delirium ~ age + sodium + sodium_dev2, data = train_d)
-
-curve_fit$fit$coefficients
-```
-
-The weight for `sodium_dev2` is positive (0.023): the further sodium is from
-140, in either direction, the higher the log-odds of delirium. Age now has a
-clear positive weight too (0.039).
-:::
-:::
-
-```{r}
-#| code-fold: true
-#| code-summary: "Code for this plot (optional)"
-delirium_map(curve_fit, "Logistic regression: age + sodium + (sodium - 140)²")
-```
-
-A tree needs no new column: it can split on sodium twice.
-
-```{r}
-tree_fit <- decision_tree() |>
-  set_engine("rpart") |>
-  set_mode("classification") |>
-  fit(delirium ~ age + sodium, data = train_d)
-
-tree_fit
-```
-
-```{r}
-#| code-fold: true
-#| code-summary: "Code for this plot (optional)"
-delirium_map(tree_fit, "Decision tree: age + sodium")
-```
-
-What does each model say about an 80-year-old with a low, a normal and a high
-sodium?
-
-```{r}
-patients <- data.frame(age = 80, sodium = c(126, 140, 154)) |>
-  mutate(sodium_dev2 = (sodium - 140)^2)
-
-patients |>
-  mutate(straight_line = predict(line_fit,  new_data = patients, type = "prob")$.pred_yes,
-         with_squared  = predict(curve_fit, new_data = patients, type = "prob")$.pred_yes,
-         tree          = predict(tree_fit,  new_data = patients, type = "prob")$.pred_yes)
-```
-
-::: {.callout-important appearance="simple"}
-## Think about it
-1. Look at the straight-line model's map. Does it ever say `yes`?
-2. The straight-line model says sodium hardly matters. Is that true?
-3. Describe the boundary of the model with the squared term, and of the tree.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-1. No. Its probabilities stay between about 0.22 and 0.42, so it says `no` to
-   everyone: no straight line separates the two classes.
-2. No. Sodium matters a great deal, but in both directions, which a straight
-   line cannot express. An 80-year-old gets 0.33, 0.32 and 0.31 from the
-   straight line whatever their sodium; the model with the squared term gives
-   0.88, 0.08 and 0.91. A weight near 0 means "no straight-line relationship",
-   not "no relationship".
-3. The squared term gives two curved lines: delirium is predicted when sodium
-   is below about 130 or above about 150, and the normal band narrows slightly
-   with age (about 128 to 151 at 65, about 131 to 149 at 95). The tree gives
-   three vertical bands: sodium below 130.5, 130.5 to 149.5, and 149.5 or
-   above; it does not use age at all.
 :::
 :::
 
@@ -581,10 +406,6 @@ patients |>
   $\log\big(t/(1-t)\big)$: 0 for a threshold of 0.5.
 - A logistic regression's boundary is straight (flat) in its predictors.
   Changing the threshold moves it without changing its tilt.
-- When the risk is high at both ends of a measurement, no straight line can
-  separate the classes, and a weight near 0 can hide a strong relationship.
-- A boundary can bend if you give the model a curved predictor, such as a
-  squared term, or use a model that bends on its own, such as a tree.
 :::
 
 ## Python
@@ -608,6 +429,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier, export_text
 ```
@@ -621,9 +443,7 @@ into your `data` folder.
 ```{python}
 cvd = pd.read_csv("data/cvd_risk.csv")
 
-is_test = cvd.index % 5 == 0               # every fifth person is held back
-train = cvd[~is_test]
-test  = cvd[is_test]
+train, test = train_test_split(cvd, test_size=0.2, random_state=42)
 
 train["cvd"].value_counts()
 ```
@@ -687,13 +507,13 @@ intercept is negative, so minus the intercept is a positive number.
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-boundary_120 = (-(-14.22) - 0.05292 * 120) / 0.1042
-boundary_160 = (-(-14.22) - 0.05292 * 160) / 0.1042
+boundary_120 = (-(-15.06) - 0.05366 * 120) / 0.1159
+boundary_160 = (-(-15.06) - 0.05366 * 160) / 0.1159
 print(boundary_120, boundary_160)
 ```
 
-With a blood pressure of 120 the model predicts an event from about age 76;
-with 160, from about age 55.
+With a blood pressure of 120 the model predicts an event from about age 74;
+with 160, from about age 56.
 :::
 :::
 
@@ -701,7 +521,7 @@ Check it with `.predict_proba()`: a person on the boundary should get a
 probability of 0.5.
 
 ```{python}
-log_model.predict_proba(pd.DataFrame({"age": [75.6], "systolic_bp": [120]}))
+log_model.predict_proba(pd.DataFrame({"age": [74.4], "systolic_bp": [120]}))
 ```
 
 Every point on the boundary satisfies one linear equation in age and blood
@@ -718,7 +538,7 @@ for cls, mk, colour in [("no", "o", "steelblue"), ("yes", "^", "darkorange")]:
     ax.scatter(rows["age"], rows["systolic_bp"], marker=mk, color=colour, s=20, label=cls)
 # the boundary written as blood pressure = (-b0 - b1 * age) / b2
 ax.plot(age_line, (-b0 - b1 * age_line) / b2, color="black", linewidth=2)
-ax.scatter([75.6, 55.3], [120, 160], color="red", s=50, zorder=3)
+ax.scatter([74.4, 55.9], [120, 160], color="red", s=50, zorder=3)
 ax.set_xlim(40, 80)
 ax.set_ylim(80, 200)
 ax.set_xlabel("Age (years)")
@@ -895,7 +715,7 @@ if (requireNamespace("plotly", quietly = TRUE)) {
 ## Think about it
 1. As far as the model is concerned, 10 mmHg more blood pressure is worth how
    many years of age? Where do you see that in the plot?
-2. Two people: one is 70 with a blood pressure of 130, the other 55 with 165.
+2. Two people: one is 70 with a blood pressure of 128, the other 55 with 165.
    Which side of the line is each on?
 3. A model with three predictors (say age, blood pressure and cholesterol) also
    has a boundary. What shape would it be?
@@ -905,15 +725,15 @@ if (requireNamespace("plotly", quietly = TRUE)) {
 ::: {.callout-note appearance="simple"}
 ## Worked answer
 ```{python}
-log_model.predict_proba(pd.DataFrame({"age": [70, 55], "systolic_bp": [130, 165]}))
+log_model.predict_proba(pd.DataFrame({"age": [70, 55], "systolic_bp": [128, 165]}))
 ```
 
-1. About 5 years: 10 × 0.0529 / 0.1042 = 5.1. Adding 10 mmHg raises the
+1. About 5 years: 10 × 0.0537 / 0.1159 = 4.6. Adding 10 mmHg raises the
    log-odds as much as 5 extra years. That is the tilt of the line: going 10
-   mmHg up, the boundary moves 5 years younger (from 76 at 120 mmHg to 55 at
+   mmHg up, the boundary moves 5 years younger (from 74 at 120 mmHg to 56 at
    160 mmHg).
-2. The 70-year-old is just below the line (probability 0.49, `no`); the
-   55-year-old is above it (0.56, `yes`). The younger person is called `yes`
+2. The 70-year-old is just below the line (probability 0.48, `no`); the
+   55-year-old is above it (0.54, `yes`). The younger person is called `yes`
    because of the blood pressure. Neither measurement decides alone.
 3. Still flat: one linear equation in three measurements is a flat plane in
    three dimensions. A logistic regression always has a flat boundary in the
@@ -965,7 +785,7 @@ thresholds
 ```
 
 The log-odds are −0.847, 0 and 0.847. For a blood pressure of 140 the class
-changes at age 57, 65 and 74.
+changes at age 58, 65 and 72.
 :::
 :::
 
@@ -1016,197 +836,12 @@ triangles (they had an event), circles (they did not), or both?
 ::: {.content-visible when-meta="show-solutions"}
 ::: {.callout-note appearance="simple"}
 ## Worked answer
-52 patients are called `yes` at 0.3, 31 at 0.5 and 15 at 0.7. Moving the line
+40 patients are called `yes` at 0.3, 27 at 0.5 and 14 at 0.7. Moving the line
 down (0.3) brings more of the triangles onto the `yes` side, but it brings over
 circles too. Moving it up (0.7) does the opposite: fewer circles called `yes`,
 but more triangles missed. The model, its coefficients and the tilt of the line
 are the same; only the decision changed. Why you might want to move it is the
 subject of Exercise 4.3.
-:::
-:::
-
-### Part 3 — When a straight line cannot work
-
-`data/sodium_delirium.csv` holds 500 older patients admitted to hospital: their
-age, their blood sodium in mmol/L (normal is about 135 to 145), and whether
-they developed delirium during the admission. If you do not have it yet,
-[**download `sodium_delirium.csv`**](data/sodium_delirium.csv){download="sodium_delirium.csv"}
-into your `data` folder.
-
-```{python}
-delirium = pd.read_csv("data/sodium_delirium.csv")
-
-is_test_d = delirium.index % 5 == 0             # every fifth patient is held back
-train_d = delirium[~is_test_d].copy()
-test_d  = delirium[is_test_d].copy()
-
-train_d["delirium"].value_counts()
-```
-
-```{python}
-#| code-fold: true
-#| code-summary: "Code for this plot (optional)"
-fig, ax = plt.subplots()
-for cls, mk, colour in [("no", "o", "steelblue"), ("yes", "^", "darkorange")]:
-    rows = train_d[train_d["delirium"] == cls]
-    ax.scatter(rows["sodium"], rows["age"], marker=mk, color=colour, s=20, label=cls)
-ax.set_xlabel("Sodium (mmol/L)")
-ax.set_ylabel("Age (years)")
-ax.legend(title="Delirium")
-ax.set_title("Training patients")
-plt.show()
-```
-
-Delirium is common when sodium is **too low and when it is too high**, and
-rarer in between. Fit the same kind of model as before, with age and sodium:
-
-```{python}
-line_model = LogisticRegression(C=np.inf)
-line_model.fit(train_d[["age", "sodium"]], train_d["delirium"])
-
-print("intercept:", line_model.intercept_)
-print("weights (age, sodium):", line_model.coef_)
-```
-
-```{python}
-#| code-fold: true
-#| code-summary: "Code for this plot (optional)"
-from matplotlib.colors import LinearSegmentedColormap
-
-S, A = np.meshgrid(np.arange(114, 163.5, 0.5), np.arange(60, 98.5, 0.5))
-grid_d = pd.DataFrame({"age": A.ravel(), "sodium": S.ravel()})
-grid_d["sodium_dev2"] = (grid_d["sodium"] - 140) ** 2
-blue_orange = LinearSegmentedColormap.from_list("bo", ["steelblue", "white", "darkorange"])
-
-def delirium_map(model, columns, title):
-    prob = model.predict_proba(grid_d[columns])[:, 1].reshape(S.shape)
-    fig, ax = plt.subplots()
-    im = ax.pcolormesh(S, A, prob, cmap=blue_orange, vmin=0, vmax=1, shading="auto")
-    if prob.min() < 0.5 < prob.max():
-        ax.contour(S, A, prob, levels=[0.5], colors="black")
-    no, yes = test_d[test_d["delirium"] == "no"], test_d[test_d["delirium"] == "yes"]
-    ax.scatter(no["sodium"], no["age"], marker="o", facecolors="none",
-               edgecolors="black", s=20, label="test: no")
-    ax.scatter(yes["sodium"], yes["age"], marker="^", color="black", s=20,
-               label="test: yes")
-    fig.colorbar(im, ax=ax, label="Probability of delirium")
-    ax.set_xlabel("Sodium (mmol/L)")
-    ax.set_ylabel("Age (years)")
-    ax.set_title(title)
-    ax.legend(loc="upper left", fontsize=8)
-    plt.show()
-
-delirium_map(line_model, ["age", "sodium"], "Logistic regression: age + sodium")
-```
-
-The weight for sodium is almost exactly 0, and the map has no boundary at all:
-the probability never reaches 0.5, so the model says `no` for every patient.
-A straight line has to put "high risk" on one side. Here the high-risk patients
-are on **both** sides, so the best straight line the model can find is one that
-hardly uses sodium.
-
-#### Task 3a — Give the model a predictor it can use
-
-How far sodium is from normal matters, not which direction. Make a new column,
-the squared distance from 140, and add it to the model. The model is still a
-logistic regression, linear in the predictors you give it, but one of those
-predictors is now curved in sodium.
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-train_d["sodium_dev2"] = (train_d["sodium"] - 140) ** 2
-test_d["sodium_dev2"]  = (test_d["sodium"] - 140) ** 2
-
-curve_columns = ["age", "sodium", "______"]
-curve_model = LogisticRegression(C=np.inf)
-curve_model.fit(train_d[curve_columns], train_d["delirium"])
-
-print("weights (age, sodium, sodium_dev2):", curve_model.coef_)
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The third column is the name of the new column you just made.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-train_d["sodium_dev2"] = (train_d["sodium"] - 140) ** 2
-test_d["sodium_dev2"]  = (test_d["sodium"] - 140) ** 2
-
-curve_columns = ["age", "sodium", "sodium_dev2"]
-curve_model = LogisticRegression(C=np.inf)
-curve_model.fit(train_d[curve_columns], train_d["delirium"])
-
-print("weights (age, sodium, sodium_dev2):", curve_model.coef_)
-```
-
-The weight for `sodium_dev2` is positive (0.023): the further sodium is from
-140, in either direction, the higher the log-odds of delirium. Age now has a
-clear positive weight too (0.039).
-:::
-:::
-
-```{python}
-#| code-fold: true
-#| code-summary: "Code for this plot (optional)"
-delirium_map(curve_model, curve_columns,
-             "Logistic regression: age + sodium + (sodium - 140)²")
-```
-
-A tree needs no new column: it can split on sodium twice.
-
-```{python}
-tree_model = DecisionTreeClassifier(max_depth=2, random_state=0)
-tree_model.fit(train_d[["age", "sodium"]], train_d["delirium"])
-
-print(export_text(tree_model, feature_names=["age", "sodium"]))
-```
-
-```{python}
-#| code-fold: true
-#| code-summary: "Code for this plot (optional)"
-delirium_map(tree_model, ["age", "sodium"], "Decision tree: age + sodium")
-```
-
-What does each model say about an 80-year-old with a low, a normal and a high
-sodium?
-
-```{python}
-patients = pd.DataFrame({"age": [80, 80, 80], "sodium": [126, 140, 154]})
-patients["sodium_dev2"] = (patients["sodium"] - 140) ** 2
-patients["straight_line"] = line_model.predict_proba(patients[["age", "sodium"]])[:, 1]
-patients["with_squared"] = curve_model.predict_proba(patients[curve_columns])[:, 1]
-patients["tree"] = tree_model.predict_proba(patients[["age", "sodium"]])[:, 1]
-patients
-```
-
-::: {.callout-important appearance="simple"}
-## Think about it
-1. Look at the straight-line model's map. Does it ever say `yes`?
-2. The straight-line model says sodium hardly matters. Is that true?
-3. Describe the boundary of the model with the squared term, and of the tree.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-1. No. Its probabilities stay between about 0.22 and 0.42, so it says `no` to
-   everyone: no straight line separates the two classes.
-2. No. Sodium matters a great deal, but in both directions, which a straight
-   line cannot express. An 80-year-old gets 0.33, 0.32 and 0.31 from the
-   straight line whatever their sodium; the model with the squared term gives
-   0.88, 0.08 and 0.91. A weight near 0 means "no straight-line relationship",
-   not "no relationship".
-3. The squared term gives two curved lines: delirium is predicted when sodium
-   is below about 130 or above about 150, and the normal band narrows slightly
-   with age (about 128 to 151 at 65, about 131 to 149 at 95). The tree gives
-   three vertical bands of `yes`, `no`, `yes`, at sodium 130.5 and 149.5; it
-   does not use age at all. (It also splits the low-sodium band at 127.5, but
-   both halves still say `yes`.)
 :::
 :::
 
@@ -1217,10 +852,6 @@ patients
   $\log\big(t/(1-t)\big)$: 0 for a threshold of 0.5.
 - A logistic regression's boundary is straight (flat) in its predictors.
   Changing the threshold moves it without changing its tilt.
-- When the risk is high at both ends of a measurement, no straight line can
-  separate the classes, and a weight near 0 can hide a strong relationship.
-- A boundary can bend if you give the model a curved predictor, such as a
-  squared term, or use a model that bends on its own, such as a tree.
 :::
 
 ::::::
@@ -1229,34 +860,26 @@ patients
 ::: {.instructor}
 **Teaching choice.** Part 1 links the map students saw in Exercise 4.1 to the
 coefficients; Part 2 introduces the threshold, which Exercise 4.3 then puts
-to use. No sensitivity or specificity here: that is Exercise 4.3. Parts 1 and 2 use the Day 4 dataset (`data/cvd_risk.csv`, simulated), in
+to use. No sensitivity or specificity here: that is Exercise 4.3. Both parts use the Day 4 dataset (`data/cvd_risk.csv`, simulated), in
 which age and blood pressure carry similar weight, so the boundary is clearly
-tilted. Part 3 uses a second
-simulated dataset in which the risk is U-shaped in sodium. Both are generated
-in `scripts/make_data.R` and described in `data/PROVENANCE.txt`.
+tilted. It is generated in `scripts/make_data.R` and described in
+`data/PROVENANCE.txt`.
 
-**Expected values.** CVD data: 500 people, 176 with an event; training 400
-(142), test 100 (34; baseline 0.66). Model: −14.22, age 0.1042, blood pressure
-0.05292; accuracy 0.83. Boundary: blood pressure = 268.8 − 1.968 × age; age
-75.6 at 120 mmHg, 55.3 at 160 mmHg; 10 mmHg ≈ 5.1 years. Age 70 / BP 130:
-0.49; age 55 / BP 165: 0.56. Thresholds 0.3, 0.5, 0.7: log-odds −0.847, 0,
-0.847; age at 140 mmHg 57.3, 65.4, 73.6; test patients called `yes` 52, 31,
-15. Sodium data: 500
-patients, 148 with delirium; training 400 (120 yes), test 100 (28 yes).
-Straight line: −2.112, age 0.0228, sodium −0.0034; predicted probabilities
-0.22 to 0.42, so `no` for everyone; accuracy 0.72 = baseline. With
-`sodium_dev2`: −6.913, 0.0389, 0.0098, 0.0232; accuracy 0.88; boundary at age
-80 sodium 129.6 and 150.0. Tree: R default 3 leaves (sodium < 130.5 → 0.82,
-130.5–149.5 → 0.10, ≥ 149.5 → 0.80); Python `max_depth=2` 4 leaves (extra
-split at 127.5, both `yes`); both 0.88. Patient aged 80, sodium 126 / 140 /
-154: line 0.33 / 0.32 / 0.31, squared 0.88 / 0.08 / 0.91, tree 0.82 (Python
-0.90, its extra leaf) / 0.10 / 0.80.
+**Expected values.** Random split (R `set.seed(42)` + `initial_split(prop =
+0.8)`; Python `train_test_split(test_size=0.2, random_state=42)`), so the two
+languages differ. **R:** −13.83, age 0.1019, blood pressure 0.05083; boundary:
+blood pressure = 272.1 − 2.006 × age; age 75.9 at 120 mmHg, 55.9 at 160 mmHg;
+10 mmHg ≈ 5.0 years. Age 70 / BP 128: 0.453 `no`; age 55 / BP 165: 0.541 `yes`.
+Thresholds 0.3, 0.5, 0.7: log-odds −0.847, 0, 0.847; age at 140 mmHg 57.5,
+65.9, 74.2; test patients called `yes` 50, 34, 17. **Python:** −15.06, 0.1159,
+0.05366; age 74.4 at 120 mmHg, 55.9 at 160 mmHg; 10 mmHg ≈ 4.6 years. Age 70 /
+BP 128: 0.481 `no`; age 55 / BP 165: 0.542 `yes`. Age at 140 mmHg 57.8, 65.1,
+72.4; test patients called `yes` 40, 27, 14.
 
 **Common failures.** (1) Forgetting that the boundary uses log-odds 0, not
 probability 0, and solving β0 + β1 age + β2 BP = 0.5. (2) Dropping the
-minus sign of the intercept in Task 1a. (3) In Task 3a, adding the column to
-`train_d` but not to `test_d`, so prediction fails with a missing column.
+minus sign of the intercept in Task 1a.
 
-**Timing.** Part 1 twenty minutes, Part 2 ten, Part 3 twenty.
+**Timing.** Part 1 twenty minutes, Part 2 ten.
 :::
 :::
