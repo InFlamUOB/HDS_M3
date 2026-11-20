@@ -103,25 +103,6 @@ prediction_15 |>
   select(age, cvd_dummy, prob, class_0.3, class_0.5, class_0.7)
 ```
 
-Here are the 15 predicted probabilities, coloured by what is actually true, with
-the three thresholds as dashed lines. Everyone above a line is predicted to have
-an event at that threshold. The points follow the S-shaped curve from
-Exercise 4.1.
-
-```{r}
-prediction_15 |>
-  mutate(truth = if_else(cvd_dummy == 1, "event (1)", "no event (0)")) |>
-  ggplot(aes(x = age, y = prob, colour = truth)) +
-  geom_point(size = 3, alpha = 0.8) +
-  geom_hline(yintercept = 0.3, colour = "blue",   linetype = "dashed") +
-  geom_hline(yintercept = 0.5, colour = "red",    linetype = "dashed") +
-  geom_hline(yintercept = 0.7, colour = "purple", linetype = "dashed") +
-  scale_colour_manual(values = c("darkorange", "grey40")) +
-  labs(x = "Age (years)", y = "Predicted probability of an event",
-       colour = "What is true",
-       title = "Predicted probabilities with the thresholds 0.3, 0.5 and 0.7")
-```
-
 > **Learning points**
 >
 > - A classifier gives a probability; a threshold turns it into a predicted class.
@@ -243,14 +224,38 @@ stroke is a poor result.
 negative is a person who was not offered treatment and then had a heart attack
 or stroke. A false positive is a person offered a tablet and a review
 appointment they did not need. A clinic that wants to miss fewer cases lowers
-the threshold. Compare three thresholds on all 100 test patients:
+the threshold. Compare three thresholds on all 100 test patients, with the same
+steps as for the 15 people. First, the predicted class at each threshold, as in
+Part 1:
 
 ```{r}
-data.frame(threshold = c(0.3, 0.5, 0.7)) |>
-  cross_join(test_preds) |>                      # every threshold with every patient
+test_preds <- test_preds |>
+  mutate(class_0.3 = if_else(.pred_yes >= 0.3, 1, 0),
+         class_0.5 = if_else(.pred_yes >= 0.5, 1, 0),
+         class_0.7 = if_else(.pred_yes >= 0.7, 1, 0))
+```
+
+Then count the four boxes for each threshold, as in Part 2:
+
+```{r}
+all_compare <- test_preds |>
+  pivot_longer(c(class_0.3, class_0.5, class_0.7),
+               names_to = "threshold", values_to = "predicted") |>
   group_by(threshold) |>
-  summarise(sensitivity = sum(cvd == "yes" & .pred_yes >= threshold) / sum(cvd == "yes"),
-            specificity = sum(cvd == "no"  & .pred_yes <  threshold) / sum(cvd == "no"))
+  summarise(TP = sum(cvd_dummy == 1 & predicted == 1),
+            FP = sum(cvd_dummy == 0 & predicted == 1),
+            FN = sum(cvd_dummy == 1 & predicted == 0),
+            TN = sum(cvd_dummy == 0 & predicted == 0))
+
+all_compare
+```
+
+Finally, the sensitivity and specificity of each threshold:
+
+```{r}
+all_compare |>
+  mutate(sensitivity = TP / (TP + FN),
+         specificity = TN / (TN + FP))
 ```
 
 At 0.3 the model finds 32 of the 38 people who had an event (sensitivity

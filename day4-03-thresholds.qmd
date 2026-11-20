@@ -117,27 +117,6 @@ prediction_15 |>
   select(age, cvd_dummy, prob, class_0.3, class_0.5, class_0.7)
 ```
 
-Here are the 15 predicted probabilities, coloured by what is actually true, with
-the three thresholds as dashed lines. Everyone above a line is predicted to have
-an event at that threshold. The points follow the S-shaped curve from
-Exercise 4.1.
-
-```{r}
-#| code-fold: true
-#| code-summary: "Code for this plot (optional)"
-prediction_15 |>
-  mutate(truth = if_else(cvd_dummy == 1, "event (1)", "no event (0)")) |>
-  ggplot(aes(x = age, y = prob, colour = truth)) +
-  geom_point(size = 3, alpha = 0.8) +
-  geom_hline(yintercept = 0.3, colour = "blue",   linetype = "dashed") +
-  geom_hline(yintercept = 0.5, colour = "red",    linetype = "dashed") +
-  geom_hline(yintercept = 0.7, colour = "purple", linetype = "dashed") +
-  scale_colour_manual(values = c("darkorange", "grey40")) +
-  labs(x = "Age (years)", y = "Predicted probability of an event",
-       colour = "What is true",
-       title = "Predicted probabilities with the thresholds 0.3, 0.5 and 0.7")
-```
-
 ::: {.callout-important}
 ## Learning points
 - A classifier gives a probability; a threshold turns it into a predicted class.
@@ -285,14 +264,38 @@ stroke is a poor result.
 negative is a person who was not offered treatment and then had a heart attack
 or stroke. A false positive is a person offered a tablet and a review
 appointment they did not need. A clinic that wants to miss fewer cases lowers
-the threshold. Compare three thresholds on all 100 test patients:
+the threshold. Compare three thresholds on all 100 test patients, with the same
+steps as for the 15 people. First, the predicted class at each threshold, as in
+Part 1:
 
 ```{r}
-data.frame(threshold = c(0.3, 0.5, 0.7)) |>
-  cross_join(test_preds) |>                      # every threshold with every patient
+test_preds <- test_preds |>
+  mutate(class_0.3 = if_else(.pred_yes >= 0.3, 1, 0),
+         class_0.5 = if_else(.pred_yes >= 0.5, 1, 0),
+         class_0.7 = if_else(.pred_yes >= 0.7, 1, 0))
+```
+
+Then count the four boxes for each threshold, as in Part 2:
+
+```{r}
+all_compare <- test_preds |>
+  pivot_longer(c(class_0.3, class_0.5, class_0.7),
+               names_to = "threshold", values_to = "predicted") |>
   group_by(threshold) |>
-  summarise(sensitivity = sum(cvd == "yes" & .pred_yes >= threshold) / sum(cvd == "yes"),
-            specificity = sum(cvd == "no"  & .pred_yes <  threshold) / sum(cvd == "no"))
+  summarise(TP = sum(cvd_dummy == 1 & predicted == 1),
+            FP = sum(cvd_dummy == 0 & predicted == 1),
+            FN = sum(cvd_dummy == 1 & predicted == 0),
+            TN = sum(cvd_dummy == 0 & predicted == 0))
+
+all_compare
+```
+
+Finally, the sensitivity and specificity of each threshold:
+
+```{r}
+all_compare |>
+  mutate(sensitivity = TP / (TP + FN),
+         specificity = TN / (TN + FP))
 ```
 
 At 0.3 the model finds 32 of the 38 people who had an event (sensitivity
@@ -390,31 +393,8 @@ prediction_15[["age", "cvd_dummy", "prob",
                "class_0.3", "class_0.5", "class_0.7"]].round(3)
 ```
 
-Here are the 15 predicted probabilities, coloured by what is actually true, with
-the three thresholds as dashed lines. Everyone above a line is predicted to have
-an event at that threshold. The points follow the S-shaped curve from
-Exercise 4.1. The 67-year-old sits exactly on the 0.5 line: their probability is
-0.5005, so with `>=` they are predicted 1.
-
-```{python}
-#| code-fold: true
-#| code-summary: "Code for this plot (optional)"
-has_event = prediction_15["cvd_dummy"] == 1
-
-fig, ax = plt.subplots()
-ax.scatter(prediction_15.loc[has_event, "age"], prediction_15.loc[has_event, "prob"],
-           color="darkorange", s=60, label="event (1)")
-ax.scatter(prediction_15.loc[~has_event, "age"], prediction_15.loc[~has_event, "prob"],
-           color="grey", s=60, label="no event (0)")
-ax.axhline(0.3, color="blue",   linestyle="--")
-ax.axhline(0.5, color="red",    linestyle="--")
-ax.axhline(0.7, color="purple", linestyle="--")
-ax.set_xlabel("Age (years)")
-ax.set_ylabel("Predicted probability of an event")
-ax.set_title("Predicted probabilities with the thresholds 0.3, 0.5 and 0.7")
-ax.legend(title="What is true")
-plt.show()
-```
+Look at the 67-year-old: their probability is 0.5005, which rounds to 0.5 in the
+table. It is just at the threshold, so with `>=` they are predicted 1.
 
 ::: {.callout-important}
 ## Learning points
@@ -570,15 +550,40 @@ stroke is a poor result.
 negative is a person who was not offered treatment and then had a heart attack
 or stroke. A false positive is a person offered a tablet and a review
 appointment they did not need. A clinic that wants to miss fewer cases lowers
-the threshold. Compare three thresholds on all 100 test patients:
+the threshold. Compare three thresholds on all 100 test patients, with the same
+steps as for the 15 people. First, the predicted class at each threshold, as in
+Part 1:
 
 ```{python}
-had_event = test_preds["cvd_dummy"] == 1
-for threshold in [0.3, 0.5, 0.7]:
-    called_yes = test_preds["prob"] >= threshold
-    sensitivity = (called_yes & had_event).sum() / had_event.sum()
-    specificity = (~called_yes & ~had_event).sum() / (~had_event).sum()
-    print(threshold, "sensitivity:", round(sensitivity, 3), "specificity:", round(specificity, 3))
+test_preds["class_0.3"] = (test_preds["prob"] >= 0.3).astype(int)
+test_preds["class_0.5"] = (test_preds["prob"] >= 0.5).astype(int)
+test_preds["class_0.7"] = (test_preds["prob"] >= 0.7).astype(int)
+```
+
+Then count the four boxes for each threshold, as in Part 2:
+
+```{python}
+rows = []
+for threshold in ["0.3", "0.5", "0.7"]:
+    truth     = test_preds["cvd_dummy"]
+    predicted = test_preds["class_" + threshold]
+    rows.append({"threshold": threshold,
+                 "TP": ((truth == 1) & (predicted == 1)).sum(),
+                 "FP": ((truth == 0) & (predicted == 1)).sum(),
+                 "FN": ((truth == 1) & (predicted == 0)).sum(),
+                 "TN": ((truth == 0) & (predicted == 0)).sum()})
+
+all_compare = pd.DataFrame(rows)
+all_compare
+```
+
+Finally, the sensitivity and specificity of each threshold:
+
+```{python}
+all_compare["sensitivity"] = all_compare["TP"] / (all_compare["TP"] + all_compare["FN"])
+all_compare["specificity"] = all_compare["TN"] / (all_compare["TN"] + all_compare["FP"])
+
+all_compare.round(3)
 ```
 
 At 0.3 the model finds 20 of the 31 people who had an event (sensitivity
