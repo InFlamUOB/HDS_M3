@@ -84,8 +84,7 @@ The outcome is a factor with two levels, `no` then `yes`. The probabilities
 are then about `yes`: having an event.
 
 We hold back every fifth person as the test set: 400 training patients and 100
-test patients. Splitting by a fixed rule rather than at random gives both
-languages the same 100 people. Every Day 4 exercise uses this split.
+test patients.
 
 ```{r}
 test_rows <- seq(1, nrow(cvd), by = 5)     # every fifth person is held back
@@ -201,34 +200,6 @@ test_results <- test |>
 
 head(test_results, 10)
 ```
-
-How often is the predicted class right? Compare it with a "model" that always
-says `no`, the most common class.
-
-```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-mean(test_results$.pred_class == test_results$______)   # accuracy of the model
-mean(test_results$cvd == "no")                          # always saying no
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-Compare the predicted class with the column that holds what happened.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
-mean(test_results$.pred_class == test_results$cvd)   # accuracy of the model
-mean(test_results$cvd == "no")                          # always saying no
-```
-
-The model is right for 81% of the test patients. Always saying `no` is right
-for 66%, because 66 of the 100 had no event.
-:::
-:::
 
 ```{r}
 #| code-fold: true
@@ -355,8 +326,7 @@ prob_map(log_fit_2, "Logistic regression: age and blood pressure")
 2. Very little: the probability moved by 0.06. The class flipped only because
    the person sits right next to the line. Near 0.5 a small change in the
    probability can change the class; the probability shows that, the class
-   does not. On the 100 test patients the model with both predictors is right
-   83% of the time, against 81% with age alone.
+   does not.
 :::
 :::
 
@@ -418,25 +388,13 @@ The same map as for the logistic regression:
 prob_map(tree_fit, "Decision tree: age and blood pressure")
 ```
 
-How often is each model right on the test patients?
-
-```{r}
-data.frame(
-  model = c("logistic, age", "logistic, age + BP", "tree, age + BP",
-            "always says no"),
-  accuracy = c(mean(predict(log_fit,   new_data = test)$.pred_class == test$cvd),
-               mean(predict(log_fit_2, new_data = test)$.pred_class == test$cvd),
-               mean(predict(tree_fit,  new_data = test)$.pred_class == test$cvd),
-               mean(test$cvd == "no")))
-```
-
 ::: {.callout-important appearance="simple"}
 ## Think about it
 1. The logistic regression gives every person their own probability. How many
    different probabilities can the tree give, and why?
 2. Compare the two maps. What shape is the region where each model says `yes`?
-3. The three models gave the 70-year-old 0.55, 0.49 and 0.21. Their accuracies
-   on the test patients are close. What does that tell you?
+3. The three models gave the 70-year-old 0.55, 0.49 and 0.21. What does that
+   tell you?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
@@ -451,10 +409,9 @@ data.frame(
    it says `yes` for anyone 53.5 or older with a blood pressure of 135.5 or
    more, and for anyone 71.5 or older with a blood pressure between 114.5 and
    135.5.
-3. Models can agree on most classes and still give quite different
-   probabilities for a single person. Accuracy only counts classes; it says
-   nothing about how good the probabilities are. With 100 test patients, a difference of
-   two people (83% against 81%) is far too small to pick a winner.
+3. Models fitted to the same patients with the same predictors can give quite
+   different probabilities for one person, and even different classes. Which
+   model to trust needs a proper evaluation, which comes later in the module.
 :::
 :::
 
@@ -510,9 +467,7 @@ cvd.describe()
 ```
 
 We hold back every fifth person as the test set: 400 training patients and 100
-test patients. Splitting by a fixed rule rather than at random gives both
-languages the same 100 people, so this tab prints the same numbers as the R
-tab. Every Day 4 exercise uses this split.
+test patients.
 
 ```{python}
 is_test = cvd.index % 5 == 0               # every fifth person is held back
@@ -635,34 +590,6 @@ test_results["predicted"] = log_model.predict(test[["age"]])
 
 test_results.head(10)
 ```
-
-How often is the predicted class right? Compare it with a "model" that always
-says `no`, the most common class.
-
-```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-print((test_results["predicted"] == test_results["______"]).mean())   # accuracy of the model
-print((test_results["cvd"] == "no").mean())                          # always saying no
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-Compare the predicted class with the column that holds what happened.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
-print((test_results["predicted"] == test_results["cvd"]).mean())   # accuracy of the model
-print((test_results["cvd"] == "no").mean())                          # always saying no
-```
-
-The model is right for 81% of the test patients. Always saying `no` is right
-for 66%, because 66 of the 100 had no event.
-:::
-:::
 
 ```{python}
 #| code-fold: true
@@ -802,8 +729,7 @@ prob_map(log_model_2, "Logistic regression: age and blood pressure")
 2. Very little: the probability moved by 0.06. The class flipped only because
    the person sits right next to the line. Near 0.5 a small change in the
    probability can change the class; the probability shows that, the class
-   does not. On the 100 test patients the model with both predictors is right
-   83% of the time, against 81% with age alone.
+   does not.
 :::
 :::
 
@@ -867,27 +793,13 @@ The same map as for the logistic regression:
 prob_map(tree_model, "Decision tree: age and blood pressure")
 ```
 
-How often is each model right on the test patients?
-
-```{python}
-pd.DataFrame({
-    "model": ["logistic, age", "logistic, age + BP", "tree, age + BP",
-              "always says no"],
-    "accuracy": [log_model.score(test[["age"]], test["cvd"]),
-                 log_model_2.score(test[["age", "systolic_bp"]], test["cvd"]),
-                 tree_model.score(test[["age", "systolic_bp"]], test["cvd"]),
-                 (test["cvd"] == "no").mean()]})
-```
-
-`.score()` is the accuracy: the share of people whose predicted class is right.
-
 ::: {.callout-important appearance="simple"}
 ## Think about it
 1. The logistic regression gives every person their own probability. How many
    different probabilities can the tree give, and why?
 2. Compare the two maps. What shape is the region where each model says `yes`?
-3. The three models gave the 70-year-old 0.55, 0.49 and 0.21. Their accuracies
-   on the test patients are close. What does that tell you?
+3. The three models gave the 70-year-old 0.55, 0.49 and 0.21. What does that
+   tell you?
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
@@ -901,10 +813,9 @@ pd.DataFrame({
    everything above a straight line. The tree's map is made of flat rectangles:
    it says `yes` for anyone over 53.5 with a blood pressure over 135.5, and for
    anyone over 71.5 with a blood pressure between 114.5 and 135.5.
-3. Models can agree on most classes and still give quite different
-   probabilities for a single person. Accuracy only counts classes; it says
-   nothing about how good the probabilities are. With 100 test patients, a difference of
-   two people (83% against 81%) is far too small to pick a winner.
+3. Models fitted to the same patients with the same predictors can give quite
+   different probabilities for one person, and even different classes. Which
+   model to trust needs a proper evaluation, which comes later in the module.
 :::
 :::
 
