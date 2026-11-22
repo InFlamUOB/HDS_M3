@@ -17,9 +17,10 @@ that predicts best on rows the model has not seen. The page
 [Lasso and ridge in a picture](day5-01b-lasso-ridge-picture.qmd) explains what
 the penalty does.
 
-**Theory:** hyperparameters; a validation set; the lasso and ridge penalties;
-grid search, random search and zooming in; refitting the chosen model and
-checking it once on the test rows.
+**Theory:** hyperparameters; grid search; why candidates are scored on a
+validation set and not on the training rows; `tune_grid()` and
+`GridSearchCV()`; refitting the chosen model and checking it once on the test
+rows.
 
 > **The plots are for looking at**
 >
@@ -56,43 +57,15 @@ test  <- diabetes[test_rows, ]
 
 ------------------------------------------------------------------------
 
-### Part 1 — A validation set
+### Part 1 — A model with room to overfit
 
-The test rows are for one final check of the model we choose. If we also use
-them to *make* the choice, we pick whichever candidate happened to do best on
-those 150 people, and its test RMSE is no longer an honest estimate (the
-Stretch of Exercise 5.1). So we split the training rows once more. Every fourth
-training row becomes a **validation** row: the candidates are fitted on the
-other rows and compared on these.
+The recipe fills in the missing values with the median (Day 2), adds every
+product of two predictors (`pregnant_x_age`, …) and every square, and
+standardises the result. Seven predictors become 35 columns: plenty of room to
+fit noise.
 
 ```{r}
-val_rows   <- seq(1, nrow(train), by = 4)       # every fourth training row
-fitting    <- train[-val_rows, ]
-validation <- train[val_rows, ]
-
-nrow(fitting)
-nrow(validation)
-nrow(test)
-```
-
-450 rows to fit each candidate, 150 to compare the candidates, and 150 for the
-final check.
-
-> **Coming later: cross-validation**
->
-> One validation set is the simplest way to compare candidates, but the result
-> depends on which 150 people landed in it. In Exercise 5.4 you will learn
-> **cross-validation**, a resampling method that repeats the comparison on
-> several different splits of the training rows, and the functions that run the
-> whole search for you.
-
-Now a model with plenty of room to overfit. The recipe fills in the missing
-values with the median (Day 2), adds every product of two predictors
-(`pregnant_x_age`, …) and every square, and standardises the result. Seven
-predictors become 35 columns.
-
-```{r}
-glucose_rec <- recipe(glucose ~ ., data = fitting) |>
+glucose_rec <- recipe(glucose ~ ., data = train) |>
   step_impute_median(all_predictors()) |>                        # fill the missing values
   step_interact(terms = ~ all_predictors():all_predictors()) |>  # products of two predictors
   step_poly(all_predictors(), -contains("_x_"), degree = 2,
@@ -105,38 +78,14 @@ glucose_rec |>
   dim()
 ```
 
-450 rows and 36 columns: glucose and the 35 predictor columns. Fit an
-ordinary linear regression, with no penalty, and compare its RMSE on the
-fitting and the validation rows:
-
-```{r}
-plain_fit <- workflow() |>
-  add_recipe(glucose_rec) |>
-  add_model(linear_reg()) |>
-  fit(data = fitting)
-
-augment(plain_fit, new_data = fitting) |>
-  rmse(truth = glucose, estimate = .pred)
-augment(plain_fit, new_data = validation) |>
-  rmse(truth = glucose, estimate = .pred)
-```
-
-26.06 on the rows it was fitted on, 30.32 on the validation rows: the 35
-columns have been used to fit some of the noise in the 450 people.
-
-> **Learning points**
->
-> - A **hyperparameter** is a setting we choose before fitting; the fitting does not choose it for us. The degree of the polynomial in Exercise 5.1 was one.
-> - Candidates are compared on validation rows that were not used to fit them. The test rows are kept for one final check.
-
-------------------------------------------------------------------------
-
-### Part 2 — One hyperparameter: a simple grid search
+600 rows and 36 columns: glucose and the 35 predictor columns.
 
 The lasso adds a penalty $\lambda \times \sum_j |\beta_j|$ to the fitting (see
 [Lasso and ridge in a picture](day5-01b-lasso-ridge-picture.qmd)). $\lambda$ is
-the hyperparameter: in tidymodels it is called `penalty`, and `mixture = 1`
-asks for the lasso. We mark `penalty` with `tune()`, a placeholder for "to be
+a **hyperparameter**: a setting we choose before fitting, which the fitting
+does not choose for us. The degree of the polynomial in Exercise 5.1 was
+another. In tidymodels $\lambda$ is called `penalty`, and `mixture = 1` asks
+for the lasso. We mark `penalty` with `tune()`, a placeholder for "to be
 chosen", and fill it in later with `finalize_workflow()`:
 
 ```{r}
@@ -146,44 +95,106 @@ lasso_wf <- workflow() |>
               set_engine("glmnet"))
 ```
 
+------------------------------------------------------------------------
+
+### Part 2 — A grid search, scored on the training rows
+
 A **grid search** tries a list of values, fits one model for each, and keeps
-the one with the lowest validation RMSE. Seven penalties, each about three
-times the one before:
+the one with the lowest error. Try seven penalties, each about three times the
+one before. Fit each model on the training rows and, for now, measure its RMSE
+on the **same** rows:
 
 ```{r}
 # Replace every ______ below, then run this cell.
 penalties <- c(0.01, 0.03, 0.1, 0.3, 1, 3, 10)
-lasso_results <- data.frame()
+train_results <- data.frame()
 
 for (p in penalties) {
   lasso_fit <- lasso_wf |>
     finalize_workflow(tibble(penalty = p)) |>     # fill in the placeholder
-    fit(data = fitting)
+    fit(data = train)
+
+  train_rmse <- augment(lasso_fit, new_data = ______) |>
+    rmse(truth = glucose, estimate = .pred)
+
+  train_results <- bind_rows(train_results,
+                             data.frame(penalty = p, train_rmse = train_rmse$.estimate))
+}
+
+train_results
+```
+
+> **Stuck?**
+>
+> For now, the model is scored on the rows it was fitted on.
+
+The RMSE only ever goes up: 26.83 at a penalty of 0.01, 30.78 at 10. Scored on
+its own training rows, the smallest penalty always wins, and no penalty at all
+would win outright.
+
+**Question!** Does that mean the penalty is useless?
+
+> **Learning points**
+>
+> - A grid search fits one model for each candidate value and keeps the candidate with the lowest error.
+> - On the rows it was fitted on, a smaller penalty always looks better, because a freer model can follow those rows, noise included, more closely.
+
+------------------------------------------------------------------------
+
+### Part 3 — The same grid search, scored on a validation set
+
+The training RMSE cannot tell us when the model starts fitting noise, because
+the noise is in the rows it is measured on. We need rows the model has **not**
+seen. The test rows are kept for one final check of the model we choose: if we
+also used them to *make* the choice, we would pick whichever candidate
+happened to do best on those 150 people, and its test RMSE would no longer be
+an honest estimate (the Stretch of Exercise 5.1).
+
+So we split the training rows once more. Every fourth training row becomes a
+**validation** row: each candidate is fitted on the other rows and scored on
+these.
+
+```{r}
+val_rows   <- seq(1, nrow(train), by = 4)       # every fourth training row
+fitting    <- train[-val_rows, ]
+validation <- train[val_rows, ]
+
+nrow(fitting)
+nrow(validation)
+```
+
+Run the grid search again: fit on `fitting`, score on both sets.
+
+```{r}
+# Replace every ______ below, then run this cell.
+val_results <- data.frame()
+
+for (p in penalties) {
+  lasso_fit <- lasso_wf |>
+    finalize_workflow(tibble(penalty = p)) |>
+    fit(data = ______)
 
   fit_rmse <- augment(lasso_fit, new_data = fitting) |>
     rmse(truth = glucose, estimate = .pred)
   val_rmse <- augment(lasso_fit, new_data = ______) |>
     rmse(truth = glucose, estimate = .pred)
-  kept <- tidy(lasso_fit) |>
-    filter(term != "(Intercept)", estimate != 0) |>
-    nrow()                                         # columns the lasso kept
 
-  lasso_results <- bind_rows(lasso_results,
-                             data.frame(penalty  = p,
-                                        fit_rmse = fit_rmse$.estimate,
-                                        val_rmse = val_rmse$.estimate,
-                                        kept     = kept))
+  val_results <- bind_rows(val_results,
+                           data.frame(penalty  = p,
+                                      fit_rmse = fit_rmse$.estimate,
+                                      val_rmse = val_rmse$.estimate))
 }
 
-lasso_results
+val_results
 ```
 
 > **Stuck?**
 >
-> The candidates are compared on the rows that were **not** used to fit them.
+> Each candidate is fitted on the 450 `fitting` rows and scored on the 150 rows
+> it has not seen.
 
 ```{r}
-lasso_results |>
+val_results |>
   pivot_longer(c(fit_rmse, val_rmse), names_to = "rows", values_to = "rmse") |>
   ggplot(aes(x = penalty, y = rmse, colour = rows)) +
   geom_line() +
@@ -193,206 +204,188 @@ lasso_results |>
        title = "The lasso: fitting and validation RMSE for each penalty")
 ```
 
-Read the table from top to bottom. The fitting RMSE only ever goes up: a
-larger penalty always fits the fitting rows less closely. The validation RMSE
-first falls, from 30.24 to its lowest value, 29.74 at a penalty of 0.3, and then
-rises again, to 31.85 at 10. The penalty 0.3 is chosen because it has the
-lowest validation RMSE, and at that penalty the lasso keeps 14 of the 35
-columns.
+The two columns tell different stories. The fitting RMSE rises with the
+penalty, as in Part 2. The validation RMSE first **falls**, from 30.24 to its
+lowest value, 29.74 at a penalty of 0.3, and then rises again, to 31.85 at 10.
 
-**Question!** Why not choose the penalty with the lowest *fitting* RMSE?
+Why? With a small penalty the model follows the noise of the 450 fitting
+people; that noise does not repeat in the 150 validation people, so their
+predictions are worse (**overfitting**). With a large penalty the model is too
+restrained to follow even the real pattern, and both errors are high
+(**underfitting**). The validation rows played no part in the fitting, so they
+behave like new patients, and their error shows the cost of both. The
+penalty 0.3 is chosen because it has the lowest validation RMSE. Choosing a
+hyperparameter on rows the model was not fitted on is the normal way to choose
+it.
+
+> **Coming later: cross-validation**
+>
+> One validation set is the simplest way to compare candidates, but the result
+> depends on which 150 people landed in it (try the Stretch). In Exercise 5.4
+> you will learn **cross-validation**, a resampling method that repeats the
+> comparison on several different splits of the training rows and averages.
 
 > **Learning points**
 >
-> - A grid search fits one model for each candidate value and keeps the candidate with the lowest validation error.
+> - Candidates are scored on validation rows that were not used to fit them; the test rows are kept for one final check.
 > - Too small a penalty overfits, too large a penalty underfits; the validation error is lowest in between.
-> - The fitting error always prefers the smallest penalty, so it cannot be used to choose.
 
 ------------------------------------------------------------------------
 
-### Part 3 — Two hyperparameters: a grid of combinations
+### Part 4 — The same search with `tune_grid()`
 
-`mixture` is a second hyperparameter: 1 is the lasso, 0 is ridge, and values in
-between mix the two penalties. Mark both with `tune()`:
+tidymodels runs this loop for you. `tune_grid()` takes the workflow, the grid
+of candidates, and the split to score them on. It expects the split as a
+**resampling object**; here that object holds our one split, with the fitting
+rows for fitting and the validation rows for scoring.
 
 ```{r}
-enet_wf <- workflow() |>
+one_split <- make_splits(list(analysis   = setdiff(1:nrow(train), val_rows),  # fit on these
+                              assessment = as.integer(val_rows)),             # score on these
+                         data = train)
+val_set <- manual_rset(list(one_split), ids = "validation")
+val_set
+```
+
+```{r}
+lasso_res <- tune_grid(lasso_wf,
+                       resamples = val_set,
+                       grid      = tibble(penalty = penalties),
+                       metrics   = metric_set(rmse))
+
+collect_metrics(lasso_res)
+select_best(lasso_res, metric = "rmse")
+```
+
+The `mean` column is the validation RMSE of your loop, number for number, and
+`select_best()` picks the same penalty, 0.3. `autoplot()` draws the results:
+
+```{r}
+autoplot(lasso_res) +
+  labs(title = "tune_grid(): validation RMSE for each penalty")
+```
+
+| Your loop in Part 3 | `tune_grid()` |
+|:--------------------|:--------------|
+| `for (p in penalties)` | `grid = tibble(penalty = penalties)` |
+| `fit(data = fitting)` | the analysis rows of `val_set` |
+| `augment(..., new_data = validation)` and `rmse()` | the assessment rows of `val_set`, `metrics = metric_set(rmse)` |
+| read the table for the lowest `val_rmse` | `select_best(lasso_res, metric = "rmse")` |
+
+**Which hyperparameters does a model have?** `extract_parameter_set_dials()`
+lists the ones marked with `tune()` in a workflow, and the
+[parsnip page for `linear_reg()` with glmnet](https://parsnip.tidymodels.org/reference/details_linear_reg_glmnet.html)
+lists those the model offers: `penalty` and `mixture`. Chapter 12 of
+[Tidy Modeling with R](https://www.tmwr.org/tuning) explains tuning in
+tidymodels.
+
+```{r}
+extract_parameter_set_dials(lasso_wf)
+```
+
+> **Learning points**
+>
+> - `tune()` marks a hyperparameter; `tune_grid()` fits and scores every candidate; `collect_metrics()`, `autoplot()` and `select_best()` show and choose.
+> - It is the loop of Part 3, written for you.
+
+------------------------------------------------------------------------
+
+### Part 5 — Tuning the mix of lasso and ridge
+
+`mixture` is the other hyperparameter: 1 is the lasso, 0 is ridge, and values
+in between mix the two penalties. Keep the penalty at 0.3 and tune only the
+mixture. (glmnet needs a penalty in every row of the grid, so we mark both with
+`tune()` and give the penalty a single value.)
+
+```{r}
+# Replace every ______ below, then run this cell.
+mix_wf <- workflow() |>
   add_recipe(glucose_rec) |>
   add_model(linear_reg(penalty = tune(), mixture = tune()) |>
               set_engine("glmnet"))
-```
 
-With two hyperparameters a grid search tries every **combination**.
-`grid_regular()` builds the grid: 7 penalties from 0.01 to 10 (the range is
-given on the log10 scale) and 5 mixtures from 0 to 1, so 7 × 5 = 35
-combinations.
+mix_res <- tune_grid(mix_wf,
+                     resamples = val_set,
+                     grid      = tibble(penalty = 0.3,
+                                        mixture = c(0, 0.25, 0.5, 0.75, ______)),
+                     metrics   = metric_set(rmse))
 
-```{r}
-regular_grid <- grid_regular(penalty(range = c(-2, 1)),
-                             mixture(),
-                             levels = c(penalty = 7, mixture = 5))
-regular_grid
-```
-
-Fitting and scoring a candidate is the same few lines every time, so we put
-them in a function and call it once for each row of the grid:
-
-```{r}
-validation_rmse <- function(penalty, mixture) {
-  fitted <- enet_wf |>
-    finalize_workflow(tibble(penalty = penalty, mixture = mixture)) |>
-    fit(data = fitting)
-  augment(fitted, new_data = validation) |>
-    rmse(truth = glucose, estimate = .pred) |>
-    pull(.estimate)
-}
-
-regular_grid$val_rmse <- NA
-for (i in 1:nrow(regular_grid)) {
-  regular_grid$val_rmse[i] <- validation_rmse(regular_grid$penalty[i],
-                                              regular_grid$mixture[i])
-}
-
-regular_grid |>
-  arrange(val_rmse) |>
-  head(5)
-```
-
-```{r}
-ggplot(regular_grid, aes(x = factor(signif(penalty, 2)), y = factor(mixture),
-                         fill = val_rmse)) +
-  geom_tile(colour = "white") +
-  geom_text(aes(label = round(val_rmse, 2)), size = 3) +
-  scale_fill_viridis_c(direction = -1) +
-  labs(x = "Penalty", y = "Mixture (0 = ridge, 1 = lasso)", fill = "Validation\nRMSE",
-       title = "Grid search: validation RMSE of each combination")
-```
-
-The best combination is a penalty of 0.32 with a mixture of 0.5, at 29.58: a
-little better than the best lasso of Part 2 (29.74). Most of the grid lies
-between 29.6 and 30.4; only the largest penalty is clearly worse.
-
-> **Learning points**
->
-> - With several hyperparameters, a grid search tries every combination, so the number of fits multiplies: 7 × 5 = 35 here.
-> - `tune()` marks a hyperparameter to be chosen; `finalize_workflow()` fills in a value.
-
-------------------------------------------------------------------------
-
-### Part 4 — Other ways to search
-
-A grid is not the only way to choose the candidates. **Random search** draws
-the same number of combinations at random from the same ranges:
-
-```{r}
-set.seed(123)
-random_grid <- grid_random(penalty(range = c(-2, 1)),
-                           mixture(),
-                           size = 35)
-
-random_grid$val_rmse <- NA
-for (i in 1:nrow(random_grid)) {
-  random_grid$val_rmse[i] <- validation_rmse(random_grid$penalty[i],
-                                             random_grid$mixture[i])
-}
-
-random_grid |>
-  arrange(val_rmse) |>
-  head(5)
-```
-
-```{r}
-bind_rows(mutate(regular_grid, search = "grid search"),
-          mutate(random_grid,  search = "random search")) |>
-  ggplot(aes(x = penalty, y = mixture, colour = val_rmse)) +
-  geom_point(size = 2.5) +
-  scale_x_log10() +
-  scale_colour_viridis_c(direction = -1) +
-  facet_wrap(~ search) +
-  labs(x = "Penalty (log scale)", y = "Mixture", colour = "Validation\nRMSE",
-       title = "The same 35 fits, placed two ways")
-```
-
-The random search finds 29.60 (penalty 0.38, mixture 0.41), as good as the grid
-for the same 35 fits. Look at the plot: the grid tries only 7 different
-penalties, the random search 35. When one hyperparameter matters much more than
-the other, as the penalty does here, random search explores it more finely.
-
-A third way is to **zoom in**: start with a coarse grid, then search a finer
-grid around the best combination. Build a 5 × 5 grid with penalties from 0.1 to
-1 and mixtures from 0.25 to 0.75 around the best of Part 3, and score it:
-
-```{r}
-# Replace every ______ below, then run this cell.
-fine_grid <- grid_regular(penalty(range = c(______, ______)),   # log10 of 0.1 and of 1
-                          mixture(range = c(0.25, 0.75)),
-                          levels = c(penalty = 5, mixture = 5))
-
-fine_grid$val_rmse <- NA
-for (i in 1:nrow(fine_grid)) {
-  fine_grid$val_rmse[i] <- validation_rmse(fine_grid$penalty[i],
-                                           fine_grid$mixture[i])
-}
-
-fine_grid |>
-  arrange(val_rmse) |>
-  head(5)
+collect_metrics(mix_res)
+select_best(mix_res, metric = "rmse")
 ```
 
 > **Stuck?**
 >
-> The range is on the log10 scale: $\log_{10}(0.1) = -1$ and $\log_{10}(1) = 0$.
-
-There are cleverer searches still, which choose each new candidate using the
-results so far, but they all work the same way: propose candidates, score each
-on data the model was not fitted on, keep the best.
+> The mixture runs from 0 (ridge) to 1 (lasso).
 
 > **Learning points**
 >
-> - Grid search, random search and zooming in differ only in **which** candidates they try; each candidate is scored the same way.
-> - For the same number of fits, random search tries more distinct values of each hyperparameter.
+> - Tune one hyperparameter at a time by giving the others a single value in the grid.
 
 ------------------------------------------------------------------------
 
-### Part 5 — The final model and its one test
+### Part 6 — The final model and its one test
 
-Take the best candidate of all the searches. Fit it once more, now on all 600
-training rows (fitting and validation together), and check it once on the test
-rows. Do the same for the unpenalised model, to compare:
+Put the chosen values into the workflow, fit it once more on all 600 training
+rows, and check it once on the test rows. Do the same for the unpenalised
+model, to compare:
 
 ```{r}
-# Replace every ______ below, then run this cell.
-best <- bind_rows(regular_grid, random_grid, fine_grid) |>
-  slice_min(val_rmse, n = 1, with_ties = FALSE)   # the lowest; one row even if tied
-best
-
-final_fit <- enet_wf |>
-  finalize_workflow(best |> select(penalty, mixture)) |>
+final_fit <- mix_wf |>
+  finalize_workflow(select_best(mix_res, metric = "rmse")) |>
   fit(data = train)
 
-plain_final <- workflow() |>
+plain_fit <- workflow() |>
   add_recipe(glucose_rec) |>
   add_model(linear_reg()) |>
-  fit(data = ______)
+  fit(data = train)
 
 augment(final_fit, new_data = test) |>
   rmse(truth = glucose, estimate = .pred)
-augment(plain_final, new_data = ______) |>
+augment(plain_fit, new_data = test) |>
   rmse(truth = glucose, estimate = .pred)
+
+tidy(final_fit) |>
+  filter(term != "(Intercept)", estimate != 0) |>
+  nrow()                                           # columns kept
 ```
 
-> **Stuck?**
->
-> Both models are fitted on the same rows, and both are checked on the rows that
-> were held back from the start.
+The chosen model has a test RMSE of 26.90 against 27.12 for the unpenalised
+model, and it uses 20 of the 35 columns.
 
 **Question!** The penalised model is only a little more accurate on the test
-rows, but it uses about half the columns. Why might that still matter?
+rows, but it uses fewer columns. Why might that still matter?
+
+> **From one validation set to cross-validation**
+>
+> In Exercise 5.4 the only change is the resampling object: instead of our one
+> split, `vfold_cv()` makes five, and `tune_grid()` averages over them.
+>
+> ```r
+> val_set <- manual_rset(list(one_split), ids = "validation")   # this exercise
+> folds   <- vfold_cv(train, v = 5)                             # Exercise 5.4
+> tune_grid(lasso_wf, resamples = folds, grid = ...)
+> ```
 
 > **Learning points**
 >
 > - Once the hyperparameters are chosen, refit on all the training rows and check the model once on the test rows.
-> - The test rows played no part in any choice, so the test RMSE is an honest estimate for new people.
+
+> **Other ways to choose the candidates**
+>
+> A regular grid is the simplest way to choose which values to try, but not the
+> only one. **Random search** draws the candidates at random from a range
+> (`grid_random()` in tidymodels, `RandomizedSearchCV()` in scikit-learn).
+> **Space-filling designs**, such as the **Latin hypercube**, spread a fixed
+> number of candidates evenly over the range
+> ([`grid_space_filling()`](https://dials.tidymodels.org/reference/grid_space_filling.html)).
+> **Iterative** searches, such as Bayesian optimisation, choose each new
+> candidate from the results so far. All of them score the candidates the same
+> way as here. Read more in chapters 13 and 14 of Tidy Modeling with R
+> ([grid search](https://www.tmwr.org/grid-search),
+> [iterative search](https://www.tmwr.org/iterative-search)) and in the
+> scikit-learn guide to
+> [tuning hyper-parameters](https://scikit-learn.org/stable/modules/grid_search.html).
 
 ## Stretch
 
@@ -400,5 +393,5 @@ rows, but it uses about half the columns. Why might that still matter?
 >
 > Make the validation rows every fourth training row starting from the second
 > (`seq(2, nrow(train), by = 4)` in R, `np.arange(len(train)) % 4 == 1` in
-> Python) and run the lasso grid of Part 2 again. Is the same penalty chosen?
-> What does that tell you about choosing with a single validation set?
+> Python) and run the search of Part 3 or Part 4 again. Is the same penalty
+> chosen? What does that tell you about choosing with a single validation set?
