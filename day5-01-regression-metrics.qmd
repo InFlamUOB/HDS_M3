@@ -50,17 +50,20 @@ theme_set(theme_bw())          # white background for every plot
 options(pillar.sigfig = 4)     # show four significant figures in tables
 ```
 
-The data are in [`data/diabetes_clean.csv`](data/diabetes_clean.csv). We hold back
-every fifth person as the test set: 600 training patients and 150 test patients.
+The data are in [`data/diabetes_clean.csv`](data/diabetes_clean.csv). We split the
+750 people into a training set and a test set, as in earlier exercises: 80% for
+training and 20% held back as the test set, 600 and 150 people. `set.seed(42)`
+makes the random split the same every time.
 
 ```{r}
 diabetes <- read_csv("data/diabetes_clean.csv") |>
   select(glucose, mass, age, diabetes) |>
   mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
 
-test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
-train <- diabetes[-test_rows, ]
-test  <- diabetes[test_rows, ]
+set.seed(42)
+split <- initial_split(diabetes, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
 
 dim(diabetes)
 dim(train)
@@ -117,9 +120,9 @@ tidy(model_cubic)
 ```
 
 The four coefficients belong to the orthogonal columns, so they are hard to read
-on their own, and they differ from the ones you get in Python, which uses the raw
-powers of age. The **predictions** are identical in both languages, and the
-predictions are what we evaluate.
+on their own, and they differ from the ones you would get from the raw powers of
+age, which Python uses. On the same data the **predictions** are identical either
+way, and the predictions are what we evaluate.
 
 Here is the fitted cubic on top of the training data:
 
@@ -168,7 +171,7 @@ head(test_preds)
 ```
 
 The first test person is 28 years old with a glucose of 194, and the model
-predicts 127.4 for them: an error of 66.6 mg/dL, a person the model gets badly
+predicts 125.9 for them: an error of 68.1 mg/dL, a person the model gets badly
 wrong.
 
 ```{r}
@@ -216,8 +219,8 @@ train_preds |>
             MAE  = mean(abs(error)))
 ```
 
-On the training rows the typical error is about 30 mg/dL (RMSE 30.29, MAE
-24.61). Now do the same for the **test** rows:
+On the training rows the typical error is about 30 mg/dL (RMSE 29.98, MAE
+24.13). Now do the same for the **test** rows:
 
 ```{r}
 #| eval: false
@@ -249,11 +252,10 @@ test_preds |>
 
 | | MSE | RMSE | MAE |
 |:-|:-:|:-:|:-:|
-| Training rows | 917.6 | 30.29 | 24.61 |
-| Test rows | 865.1 | 29.41 | 23.69 |
+| Training rows | 898.7 | 29.98 | 24.13 |
+| Test rows | 938.7 | 30.64 | 25.23 |
 
-The test error is about the same as the training error, here even slightly
-smaller.
+The test error is about the same as the training error, slightly larger.
 :::
 :::
 
@@ -284,7 +286,7 @@ reg_metrics(______, truth = glucose, estimate = ______)
 reg_metrics(test_preds, truth = glucose, estimate = .pred)
 ```
 
-Test RMSE 29.41 and MAE 23.69, the same as your hand calculation.
+Test RMSE 30.64 and MAE 25.23, the same as your hand calculation.
 :::
 :::
 
@@ -350,10 +352,10 @@ degree_results |>
        title = "Training error keeps falling; test error does not")
 ```
 
-The training RMSE falls with every extra degree, from 31.10 for the straight line
-to 30.12 for degree 8: a more flexible curve can always follow the training
-points more closely. The test RMSE does not follow. It is lowest at degree 2
-(29.08) and highest at degree 8 (29.74). The extra flexibility is spent on
+The training RMSE falls with every extra degree, from 30.53 for the straight line
+to 29.88 for degree 8: a more flexible curve can always follow the training
+points more closely. The test RMSE does not follow. It is lowest at degree 6
+(30.44) and rises again after that, to 30.68 at degree 8. The extra flexibility is spent on
 the noise of these particular 600 people, which does not repeat in new people.
 With 600 people and a single predictor the effect is small; with fewer people
 or more flexible models it can be very large.
@@ -388,21 +390,22 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 ```
 
-The data are in [`data/diabetes_clean.csv`](data/diabetes_clean.csv). We hold back
-every fifth person as the test set: 600 training patients and 150 test patients.
+The data are in [`data/diabetes_clean.csv`](data/diabetes_clean.csv). We split the
+750 people into a training set and a test set, as in earlier exercises: 80% for
+training and 20% held back as the test set, 600 and 150 people. `random_state=42`
+makes the random split the same every time.
 
 ```{python}
 diabetes = pd.read_csv("data/diabetes_clean.csv")
 diabetes = diabetes[["glucose", "mass", "age", "diabetes"]]
 
-is_test = diabetes.index % 5 == 0               # every fifth person is held back
-train = diabetes[~is_test]
-test  = diabetes[is_test]
+train, test = train_test_split(diabetes, test_size=0.2, random_state=42)
 
 print(diabetes.shape)
 print(train.shape)
@@ -452,8 +455,8 @@ print("coefficients:", cubic_pipe["model"].coef_)
 ```
 
 The coefficients belong to age, age² and age³. They differ from the ones you get
-in R, where `step_poly()` uses orthogonal polynomials, but the **predictions**
-are identical in both languages, and the predictions are what we evaluate.
+from orthogonal polynomials, which R's `step_poly()` uses, but on the same data the
+**predictions** are identical either way, and the predictions are what we evaluate.
 
 Here is the fitted cubic on top of the training data:
 
@@ -505,9 +508,8 @@ test_preds["pred"] = cubic_pipe.predict(test[["age"]])
 test_preds.head().round(2)
 ```
 
-The first test person is 28 years old with a glucose of 194, and the model
-predicts 127.4 for them: an error of 66.6 mg/dL, a person the model gets badly
-wrong.
+The first test person is 35 years old with a glucose of 115, and the model
+predicts 133.8 for them: an error of −18.8 mg/dL, so the model predicts too high.
 
 ```{python}
 #| code-fold: true
@@ -558,8 +560,8 @@ print("RMSE:", round(train_rmse, 2))
 print("MAE: ", round(train_mae, 2))
 ```
 
-On the training rows the typical error is about 30 mg/dL (RMSE 30.29, MAE
-24.61). Now do the same for the **test** rows:
+On the training rows the typical error is about 30 mg/dL (RMSE 30.05, MAE
+24.21). Now do the same for the **test** rows:
 
 ```{python}
 #| eval: false
@@ -599,11 +601,10 @@ print("MAE: ", round(test_mae, 2))
 
 | | MSE | RMSE | MAE |
 |:-|:-:|:-:|:-:|
-| Training rows | 917.6 | 30.29 | 24.61 |
-| Test rows | 865.1 | 29.41 | 23.69 |
+| Training rows | 902.9 | 30.05 | 24.21 |
+| Test rows | 923.3 | 30.39 | 24.55 |
 
-The test error is about the same as the training error, here even slightly
-smaller.
+The test error is about the same as the training error, slightly larger.
 :::
 :::
 
@@ -638,7 +639,7 @@ print("test RMSE:", round(root_mean_squared_error(test_preds["glucose"], test_pr
 print("test MAE: ", round(mean_absolute_error(test_preds["glucose"], test_preds["pred"]), 2))
 ```
 
-Test RMSE 29.41 and MAE 23.69, the same as your hand calculation.
+Test RMSE 30.39 and MAE 24.55, the same as your hand calculation.
 :::
 :::
 
@@ -697,18 +698,19 @@ ax.plot(degree_results["degree"], degree_results["train_rmse"], marker="o", labe
 ax.plot(degree_results["degree"], degree_results["test_rmse"], marker="o", label="test_rmse")
 ax.set_xlabel("Degree of the polynomial")
 ax.set_ylabel("RMSE (mg/dL)")
-ax.set_title("Training error keeps falling; test error does not")
+ax.set_title("Training and test error by degree")
 ax.legend()
 plt.show()
 ```
 
-The training RMSE falls with every extra degree, from 31.10 for the straight line
-to 30.12 for degree 8: a more flexible curve can always follow the training
-points more closely. The test RMSE does not follow. It is lowest at degree 2
-(29.08) and highest at degree 8 (29.74). The extra flexibility is spent on
-the noise of these particular 600 people, which does not repeat in new people.
-With 600 people and a single predictor the effect is small; with fewer people
-or more flexible models it can be very large.
+The training RMSE falls with every extra degree, from 30.72 for the straight line
+to 29.98 for degree 8: a more flexible curve can always follow the training
+points more closely. On this split the test RMSE also falls a little, to 30.15
+at degree 8, but after degree 3 (30.39) each extra degree gains less than
+0.1 mg/dL. With 600 people and a single predictor there is little room to
+overfit, so the cost of extra flexibility is small or hidden by noise. With fewer
+people or more flexible models the test error can rise sharply, as it does from
+degree 7 in R.
 
 **Question!** Which degree would you choose, and on which data did you base the
 choice? (Look again at the Stretch below.)
@@ -735,32 +737,40 @@ and 120, choose the degree on the 120, then report the test RMSE once.
 ::: {.content-visible when-profile="instructor"}
 ::: {.instructor}
 **Teaching choice.** The module lead's page used the full 768-row Pima data and
-a random 70/30 split (`initial_split`, seed 123); this version uses the shared
-Day 5 split (750 rows after removing zero glucose and mass, every fifth person
-held back) so that every number agrees between R and Python and with the rest of
-the booklet. Her user-defined `rmse_mine()` is replaced by `mutate()` and
+a random 70/30 split (`initial_split`, seed 123); this version uses the 750 rows
+after removing zero glucose and mass, with the random 80/20 split and seed 42
+used on Days 1 to 4. R (`initial_split`) and Python (`train_test_split`) draw
+different random splits, so their numbers differ. Her user-defined `rmse_mine()` is replaced by `mutate()` and
 `summarise()` steps, and the Metrics package by yardstick (already loaded with
 tidymodels; Metrics masks yardstick's `rmse` and `mae`, a known source of
 confusion). Part 4 is an addition: it turns her closing question about over- and
 underfitting into a picture.
 
-**Expected values.** Identical in R and Python. Train 600, test 150. Cubic
-predictions for the first six training rows 136.45, 123.19, 137.31, 111.81,
-134.43, 111.81. R orthogonal coefficients 125.9, 149.8, −144.3, 95.52; Python raw
-coefficients intercept −44.04, age 11.54, age² −0.2364, age³ 0.001528. First test
-person: age 28, glucose 194, predicted 127.4 (residual 66.57). Train MSE 917.6, RMSE 30.29, MAE
-24.61; test MSE 865.1, RMSE 29.41, MAE 23.69. Degrees 1 to 8, train RMSE 31.10,
-30.54, 30.29, 30.28, 30.22, 30.19, 30.17, 30.12; test RMSE 29.41, 29.08, 29.41,
-29.34, 29.58, 29.52, 29.62, 29.74.
+**Expected values.** Train 600, test 150 in both languages.
+
+R: cubic predictions for the first six training rows 129.92, 113.25, 120.37,
+118.19, 113.25, 115.82. Orthogonal coefficients 125.2, 137.8, −120.4, 73.08.
+First test person: age 28, glucose 194, predicted 125.9 (residual 68.13). Train
+MSE 898.7, RMSE 29.98, MAE 24.13; test MSE 938.7, RMSE 30.64, MAE 25.23. Degrees 1
+to 8, train RMSE 30.53, 30.13, 29.98, 29.97, 29.95, 29.94, 29.93, 29.88; test RMSE
+31.77, 30.83, 30.64, 30.59, 30.55, 30.44, 30.60, 30.68.
+
+Python: cubic predictions for the first six training rows 108.05, 136.33, 129.74,
+113.90, 139.36, 111.08. Raw coefficients intercept −14.95, age 9.048, age²
+−0.1742, age³ 0.001062. First test person: age 35, glucose 115, predicted 133.8
+(error −18.83). Train MSE 902.9, RMSE 30.05, MAE 24.21; test MSE 923.3, RMSE 30.39,
+MAE 24.55. Degrees 1 to 8, train RMSE 30.72, 30.20, 30.05, 30.04, 30.03, 29.99,
+29.99, 29.98; test RMSE 31.03, 30.56, 30.39, 30.34, 30.28, 30.24, 30.22, 30.15.
 
 **Common failures.** (1) Fitting the workflow on `test`, or on `diabetes`.
 (2) Taking the square root of each error before averaging (that is the MAE of
 square-rooted errors, not the RMSE). (3) In Python, raising the degree above 8
 without the scaler: degree 8 with raw powers already gives a training RMSE of
-30.99 instead of 30.12, because the arithmetic loses precision; degree 10 drifts
+30.66 instead of 29.98, because the arithmetic loses precision; degree 10 drifts
 even with the scaler, which is why the loop stops at 8. (4) Students puzzled
-that the test error is lower than the training error: 150 people is a small
-sample, and this test set happens to be slightly easier.
+that the R and Python numbers differ: the two languages draw different random
+splits. With 150 test people the gap between training and test error also varies
+from split to split.
 
 **Timing.** Part 1 fifteen minutes, Part 2 ten, Part 3 twenty, Part 4 ten.
 :::

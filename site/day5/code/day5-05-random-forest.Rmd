@@ -22,10 +22,6 @@ much of the noise that each single tree has memorised.
 - compare training and test performance;
 - reflect on what workflows and pipelines give you.
 
-**Theory:** bagging and random predictor subsets; the hyperparameters `mtry`
-and `min_n`; grid search with cross-validation; finalising a tuned model; why a
-forest's training performance says little.
-
 > **The plots are for looking at**
 >
 > The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
@@ -43,7 +39,7 @@ theme_set(theme_bw())          # white background for every plot
 options(pillar.sigfig = 3)     # show three significant figures in tables
 ```
 
-The same 750 people and split as Exercises 5.3 and 5.4, from
+The same 750 people as Exercises 5.3 and 5.4, from
 [`data/diabetes_clean.csv`](data/diabetes_clean.csv), with the five predictors pregnant,
 glucose, mass, pedigree and age (triceps, insulin and blood pressure are left
 out because a zero there means "not measured"). The outcome has the levels
@@ -53,10 +49,17 @@ out because a zero there means "not measured"). The outcome has the levels
 diabetes <- read_csv("data/diabetes_clean.csv") |>
   select(pregnant, glucose, mass, pedigree, age, diabetes) |>
   mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+```
 
-test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
-train <- diabetes[-test_rows, ]
-test  <- diabetes[test_rows, ]
+We split the 750 people into a training set and a test set, as in earlier
+exercises: 80% for training and 20% held back as the test set, 600 and 150
+people. `set.seed(42)` makes the random split the same every time.
+
+```{r}
+set.seed(42)
+split <- initial_split(diabetes, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
 ```
 
 ------------------------------------------------------------------------
@@ -205,7 +208,7 @@ class_metrics(______, truth = diabetes, estimate = .pred_class,
 roc_auc(______, truth = diabetes, .pred_pos, event_level = "second")
 ```
 
-Forests are random (bootstrap samples, predictor subsets, fold assignment), and
+Forests are random (the split, bootstrap samples, predictor subsets, folds), and
 R and Python draw different random numbers, so the two languages do not give
 the same forest or exactly the same numbers.
 
@@ -245,12 +248,11 @@ class_metrics(test_preds_basic, truth = diabetes, estimate = .pred_class,
 roc_auc(test_preds_basic, truth = diabetes, .pred_pos, event_level = "second")
 ```
 
-The untuned forest does as well as the tuned one on the test rows: test AUC
-0.832 against 0.825 in R, and 0.835 against 0.825 in Python (test accuracy 0.773
-against 0.767 in R, 0.727 against 0.780 in Python). The cross-validated AUCs of
-the whole grid lay within about 0.02 of each other, one or two standard errors,
-and 150 test patients cannot tell differences that small apart. Tuning is still
-the right procedure; here it simply has little to find.
+The untuned forest does almost as well as the tuned one on the test rows: test
+AUC 0.756 against 0.766, and the same test accuracy, 0.740. The cross-validated
+AUCs of the whole grid lay within about 0.03 of each other, about two standard
+errors, and 150 test patients cannot tell differences that small apart. Tuning
+is still the right procedure; here it has little to find.
 
 **Question! Why pipelines?** Look back at the code of this exercise and of
 Exercise 5.4.

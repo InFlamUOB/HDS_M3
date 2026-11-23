@@ -47,8 +47,11 @@ theme_set(theme_bw())          # white background for every plot
 options(pillar.sigfig = 3)     # show three significant figures in tables
 ```
 
-The same 750 people and the same split as Exercise 5.1, from
-[`data/diabetes_clean.csv`](data/diabetes_clean.csv). This time we keep five predictors,
+The same 750 people as Exercise 5.1, from
+[`data/diabetes_clean.csv`](data/diabetes_clean.csv). We split them into a training set and a
+test set, as in earlier exercises: 80% for training and 20% held back as the test set,
+600 and 150 people. `set.seed(42)` makes the random split the same every time.
+This time we keep five predictors,
 because Part 4 uses them all. Triceps skinfold, insulin and blood pressure are
 left out because in this data set a zero in those columns means "not measured".
 The outcome is a factor with the levels `neg` then `pos`.
@@ -58,16 +61,17 @@ diabetes <- read_csv("data/diabetes_clean.csv") |>
   select(pregnant, glucose, mass, pedigree, age, diabetes) |>
   mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
 
-test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
-train <- diabetes[-test_rows, ]
-test  <- diabetes[test_rows, ]
+set.seed(42)
+split <- initial_split(diabetes, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
 
 count(train, diabetes)
 count(test, diabetes)
 ```
 
-Always look at the number of people in each class first. 220 of the 600
-training rows (36.7%) and 53 of the 150 test rows (35.3%) have diabetes.
+Always look at the number of people in each class first. 218 of the 600
+training rows (36.3%) and 55 of the 150 test rows (36.7%) have diabetes.
 
 ------------------------------------------------------------------------
 
@@ -94,7 +98,7 @@ tidy(log_fit)
 ```
 
 The coefficient of age is positive: older people have higher predicted odds of
-diabetes, by a factor of $e^{0.0363} = 1.04$ per year.
+diabetes, by a factor of $e^{0.0365} = 1.04$ per year.
 
 A classification model first gives a **probability** for each person. To turn
 it into a predicted class we choose a threshold, as in Exercise 4.3; here we use
@@ -121,8 +125,8 @@ test_preds <- predict(log_fit, new_data = test, type = "prob") |>
 count(test_preds, pred_class)
 ```
 
-At 0.5 the age-only model predicts diabetes for only 20 of the 150 test patients:
-a probability of 0.5 or more needs an age of 49 or more.
+At 0.5 the age-only model predicts diabetes for only 19 of the 150 test patients:
+a probability of 0.5 or more needs an age of 50 or more.
 
 ::: {.callout-important}
 ## Learning points
@@ -181,18 +185,18 @@ class_metrics(test_preds, truth = diabetes, estimate = pred_class,
 
 | | Accuracy | Precision | Recall = sensitivity | Specificity |
 |:-|:-:|:-:|:-:|:-:|
-| Training rows | 0.623 | 0.461 | 0.159 | 0.892 |
-| Test rows | 0.647 | 0.500 | 0.189 | 0.897 |
+| Training rows | 0.628 | 0.466 | 0.156 | 0.898 |
+| Test rows | 0.640 | 0.526 | 0.182 | 0.905 |
 :::
 :::
 
 **Question!** Is the model overfitting? Is it any good? Compare the test accuracy
 with a "model" that predicts no diabetes for everybody: it would be right for
-the 97 of 150 test patients without diabetes, an accuracy of 0.647.
+the 95 of 150 test patients without diabetes, an accuracy of 0.633.
 
 Training and test metrics are similar, so there is no strong sign of
-overfitting. But the age-only model is no more accurate than predicting "no
-diabetes" for everyone, and it finds fewer than one in five of the people with
+overfitting. But the age-only model is hardly more accurate than predicting "no
+diabetes" for everyone (0.640 against 0.633), and it finds fewer than one in five of the people with
 diabetes. It **underfits**: age alone is not enough.
 
 ::: {.callout-important}
@@ -267,7 +271,7 @@ roc_auc(______, truth = diabetes, ______, event_level = "second")
 roc_auc(train_preds, truth = diabetes, .pred_pos, event_level = "second")
 ```
 
-Training AUC 0.671, test AUC 0.668: similar, and both far from 1.
+Training AUC 0.675, test AUC 0.659: similar, and both far from 1.
 :::
 :::
 
@@ -302,11 +306,11 @@ log_fit2 <- log_wf2 |>
 tidy(log_fit2)
 ```
 
-Glucose has by far the largest coefficient, 1.02 log-odds per standard
-deviation, followed by body mass (0.46). Once glucose is in the model, age adds
-little (0.15). (R's `step_normalize()` divides by the standard deviation with
-$n - 1$, Python's `StandardScaler()` with $n$; the coefficients differ in the
-fourth digit, the predictions do not.)
+Glucose has by far the largest coefficient, 1.12 log-odds per standard
+deviation, followed by body mass (0.43). Once glucose is in the model, age adds
+little (0.12). (R's `step_normalize()` divides by the standard deviation with
+$n - 1$, Python's `StandardScaler()` with $n$; on the same rows the coefficients
+would differ only in the fourth digit, and the predictions not at all.)
 
 Predict both sets and compute the metrics:
 
@@ -327,7 +331,7 @@ class_metrics(test_preds2, truth = diabetes, estimate = pred_class,
               event_level = "second")
 ```
 
-Test accuracy rises from 0.647 to 0.767 and sensitivity from 0.189 to 0.528.
+Test accuracy rises from 0.640 to 0.753 and sensitivity from 0.182 to 0.582.
 Training and test are still close, so the richer model does not overfit
 either. Complete the code for its ROC curve and AUC on the test rows:
 
@@ -350,7 +354,7 @@ auc_rich <- roc_auc(test_preds2, truth = diabetes, .pred_pos, event_level = "sec
 auc_rich
 ```
 
-Test AUC 0.830, against 0.668 for age only.
+Test AUC 0.764, against 0.659 for age only.
 :::
 :::
 
@@ -373,12 +377,13 @@ ggplot(roc_both, aes(x = 1 - specificity, y = sensitivity, colour = model)) +
   labs(colour = NULL, title = "ROC curves on the test rows")
 ```
 
-**Question!** The richer model is better on every metric. Could adding even more
+**Question!** The richer model is better on almost every metric; only
+specificity falls a little. Could adding even more
 predictors ever make a model worse on the test rows? What would you look for?
 
 ::: {.callout-important}
 ## Learning points
-- Adding relevant predictors improved every metric and the AUC, on training and test alike.
+- Adding relevant predictors improved accuracy, precision, sensitivity and the AUC, on training and test alike; specificity fell a little.
 - Standardise the predictors when you want to compare the sizes of their coefficients.
 - More flexible models can still overfit: keep comparing training and test.
 :::
@@ -404,6 +409,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
@@ -411,8 +417,11 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.metrics import roc_curve, roc_auc_score
 ```
 
-The same 750 people and the same split as Exercise 5.1, from
-[`data/diabetes_clean.csv`](data/diabetes_clean.csv). This time we keep five predictors,
+The same 750 people as Exercise 5.1, from
+[`data/diabetes_clean.csv`](data/diabetes_clean.csv). We split them into a training set and a
+test set, as in earlier exercises: 80% for training and 20% held back as the test set,
+600 and 150 people. `random_state=42` makes the random split the same every time.
+This time we keep five predictors,
 because Part 4 uses them all. Triceps skinfold, insulin and blood pressure are
 left out because in this data set a zero in those columns means "not measured".
 The outcome is coded 1 for `pos` and 0 for `neg`.
@@ -422,23 +431,21 @@ diabetes = pd.read_csv("data/diabetes_clean.csv")
 diabetes = diabetes[["pregnant", "glucose", "mass", "pedigree", "age", "diabetes"]]
 diabetes["diabetes"] = (diabetes["diabetes"] == "pos").astype(int)       # 1 = pos, 0 = neg
 
-is_test = diabetes.index % 5 == 0               # every fifth person is held back
-train = diabetes[~is_test]
-test  = diabetes[is_test]
+train, test = train_test_split(diabetes, test_size=0.2, random_state=42)
 
 print(train["diabetes"].value_counts())
 print(test["diabetes"].value_counts())
 ```
 
-Always look at the number of people in each class first. 220 of the 600
-training rows (36.7%) and 53 of the 150 test rows (35.3%) have diabetes.
+Always look at the number of people in each class first. 216 of the 600
+training rows (36.0%) and 57 of the 150 test rows (38.0%) have diabetes.
 
 ------------------------------------------------------------------------
 
 ### Part 1 — An age-only model, and its predictions
 
 Start with a very simple model: diabetes from age only. `C=np.inf` switches off
-scikit-learn's default penalty, so the coefficients match R's.
+scikit-learn's default penalty, so it fits the same model as R's `glm`.
 
 ```{python}
 age_model = LogisticRegression(C=np.inf)
@@ -475,7 +482,7 @@ test_preds["pred_class"].value_counts()
 ```
 
 At 0.5 the age-only model predicts diabetes for only 20 of the 150 test patients:
-a probability of 0.5 or more needs an age of 49 or more.
+a probability of 0.5 or more needs an age of 50 or more.
 
 ::: {.callout-important}
 ## Learning points
@@ -550,14 +557,14 @@ print("specificity:", round(recall_score(truth, predicted, pos_label=0), 3))
 
 | | Accuracy | Precision | Recall = sensitivity | Specificity |
 |:-|:-:|:-:|:-:|:-:|
-| Training rows | 0.623 | 0.461 | 0.159 | 0.892 |
-| Test rows | 0.647 | 0.500 | 0.189 | 0.897 |
+| Training rows | 0.633 | 0.472 | 0.157 | 0.901 |
+| Test rows | 0.620 | 0.500 | 0.175 | 0.892 |
 :::
 :::
 
 **Question!** Is the model overfitting? Is it any good? Compare the test accuracy
 with a "model" that predicts no diabetes for everybody: it would be right for
-the 97 of 150 test patients without diabetes, an accuracy of 0.647.
+the 93 of 150 test patients without diabetes, an accuracy of 0.620.
 
 Training and test metrics are similar, so there is no strong sign of
 overfitting. But the age-only model is no more accurate than predicting "no
@@ -640,7 +647,7 @@ auc_age_train = roc_auc_score(train_preds["diabetes"], train_preds["prob"])
 print("training AUC, age only:", round(auc_age_train, 3))
 ```
 
-Training AUC 0.671, test AUC 0.668: similar, and both far from 1.
+Training AUC 0.672, test AUC 0.674: similar, and both far from 1.
 :::
 :::
 
@@ -672,11 +679,11 @@ rich_pipe = rich_pipe.fit(train[predictors], train["diabetes"])
 pd.Series(rich_pipe["model"].coef_[0], index=predictors).round(3)
 ```
 
-Glucose has by far the largest coefficient, 1.02 log-odds per standard
-deviation, followed by body mass (0.46). Once glucose is in the model, age adds
-little (0.15). (R's `step_normalize()` divides by the standard deviation with
-$n - 1$, Python's `StandardScaler()` with $n$; the coefficients differ in the
-fourth digit, the predictions do not.)
+Glucose has by far the largest coefficient, 1.05 log-odds per standard
+deviation, followed by body mass (0.43). Once glucose is in the model, age adds
+little (0.13). (R's `step_normalize()` divides by the standard deviation with
+$n - 1$, Python's `StandardScaler()` with $n$; on the same rows the coefficients
+would differ only in the fourth digit, and the predictions not at all.)
 
 Predict both sets and compute the metrics:
 
@@ -698,7 +705,7 @@ for name, data in [("train", train_preds2), ("test", test_preds2)]:
           "specificity", round(recall_score(truth, predicted, pos_label=0), 3))
 ```
 
-Test accuracy rises from 0.647 to 0.767 and sensitivity from 0.189 to 0.528.
+Test accuracy rises from 0.620 to 0.767 and sensitivity from 0.175 to 0.579.
 Training and test are still close, so the richer model does not overfit
 either. Complete the code for its ROC curve and AUC on the test rows:
 
@@ -721,7 +728,7 @@ auc_rich = roc_auc_score(test_preds2["diabetes"], test_preds2["prob"])
 print("test AUC, five predictors:", round(auc_rich, 3))
 ```
 
-Test AUC 0.830, against 0.668 for age only.
+Test AUC 0.810, against 0.674 for age only.
 :::
 :::
 
@@ -744,12 +751,13 @@ ax.legend()
 plt.show()
 ```
 
-**Question!** The richer model is better on every metric. Could adding even more
+**Question!** The richer model is better on almost every metric; only
+specificity falls a little. Could adding even more
 predictors ever make a model worse on the test rows? What would you look for?
 
 ::: {.callout-important}
 ## Learning points
-- Adding relevant predictors improved every metric and the AUC, on training and test alike.
+- Adding relevant predictors improved accuracy, precision, sensitivity and the AUC, on training and test alike; specificity fell a little.
 - Standardise the predictors when you want to compare the sizes of their coefficients.
 - More flexible models can still overfit: keep comparing training and test.
 :::
@@ -773,32 +781,41 @@ cheaper is the richer model at its best threshold?
 stratified random 70/30 split, `fct_relevel(diabetes, "pos", "neg")` to make
 `pos` the first level, the threshold `> 0.5`, and in its second half the
 predictors age, pressure, triceps, mass and insulin with median imputation.
-This version uses the shared Day 5 split and factor levels (`neg`, `pos`) with
+This version uses the seed-42 80/20 random split of Days 1-4 and factor levels (`neg`, `pos`) with
 `event_level = "second"`, `>= 0.5` as in Exercise 4.3, and the shared predictor
 set (pregnant, glucose, mass, pedigree, age), for which no imputation is needed.
 Her flow is kept: workflow, predictions at 0.5, metric set on train and test,
 boxplots, ROC and AUC, then a richer model. The age coefficient is positive
-here (+0.0363) and was negative on her page (−0.0449) because with `pos` as the
+here (+0.0365 in R, +0.0363 in Python) and was negative on her page (−0.0449) because with `pos` as the
 first level `glm` modelled the probability of `neg`; worth knowing if students
 compare the two pages.
 
-**Expected values.** Identical in R and Python (R coefficients differ from
-Python's in the fourth digit in Part 4, see the page). Train 600 (220 pos),
-test 150 (53 pos). Age-only: intercept −1.7715, age 0.0363 (odds ratio 1.04),
-probability 0.5 at age 48.8; 20 of 150 test patients predicted `pos`. Train
-accuracy 0.623, precision 0.461, sensitivity 0.159, specificity 0.892; test
-0.647, 0.500, 0.189, 0.897. Majority-class test accuracy 0.647 (97/150), equal
-to the age-only model's. AUC train 0.671, test 0.668. Five predictors
-(standardised, R): intercept −0.702, pregnant 0.235, glucose 1.02, mass 0.464,
-pedigree 0.220, age 0.149; train accuracy 0.763, precision 0.714, sensitivity
-0.591, specificity 0.863; test 0.767, 0.737, 0.528, 0.897; test AUC 0.830.
+**Expected values.** R and Python draw different random splits, so their
+numbers differ. R: train 600 (218 pos), test 150 (55 pos). Age-only: intercept
+−1.7968, age 0.0365 (odds ratio 1.04), probability 0.5 at age 49.3; 19 of 150
+test patients predicted `pos`. Train accuracy 0.628, precision 0.466,
+sensitivity 0.156, specificity 0.898; test 0.640, 0.526, 0.182, 0.905.
+Majority-class test accuracy 0.633 (95/150), just below the age-only model's.
+AUC train 0.675, test 0.659. Five predictors (standardised): intercept −0.735,
+pregnant 0.296, glucose 1.12, mass 0.434, pedigree 0.174, age 0.124; train
+accuracy 0.765, precision 0.720, sensitivity 0.578, specificity 0.872; test
+0.753, 0.696, 0.582, 0.853; AUC train 0.828, test 0.764. Python: train 600 (216
+pos), test 150 (57 pos). Age-only: intercept −1.8064, age 0.0363 (odds ratio
+1.04), probability 0.5 at age 49.8; 20 of 150 test patients predicted 1. Train
+accuracy 0.633, precision 0.472, sensitivity 0.157, specificity 0.901; test
+0.620, 0.500, 0.175, 0.892. Majority-class test accuracy 0.620 (93/150), equal
+to the age-only model's. AUC train 0.672, test 0.674. Five predictors
+(standardised): intercept −0.736, pregnant 0.220, glucose 1.053, mass 0.434,
+pedigree 0.233, age 0.125; train accuracy 0.770, precision 0.724, sensitivity
+0.583, specificity 0.875; test 0.767, 0.750, 0.579, 0.882; AUC train 0.818,
+test 0.810.
 
 **Common failures.** (1) Leaving out `event_level = "second"`: sensitivity and
-specificity swap, and the age-only model appears to have a sensitivity of 0.897.
+specificity swap, and the age-only model appears to have a test sensitivity of 0.905.
 (2) Passing `.pred_neg` to `roc_auc()`, which gives 1 minus the AUC. (3) In
 Python, passing the predicted class rather than the probability to
 `roc_auc_score()`, which gives the area under a curve with a single threshold.
-(4) Reading the age-only model's accuracy of 0.647 as acceptable without
+(4) Reading the age-only model's test accuracy (0.640 in R, 0.620 in Python) as acceptable without
 comparing it with the majority class.
 
 **Timing.** Part 1 fifteen minutes, Part 2 fifteen, Part 3 twenty, Part 4

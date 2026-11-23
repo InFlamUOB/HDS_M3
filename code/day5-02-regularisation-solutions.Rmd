@@ -14,9 +14,6 @@ of the penalty: its size, $\lambda$, and the mix of lasso and ridge (see
 them by trying several values and keeping the ones that predict best on rows
 the model was not fitted on.
 
-**Theory:** hyperparameters; grid search; validation set; `tune_grid()` and
-`GridSearchCV()`; refitting the chosen model.
-
 > **The plots are for looking at**
 >
 > The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
@@ -38,16 +35,19 @@ The same 750 people and the same split as Exercise 5.1, from
 [`data/diabetes_clean.csv`](data/diabetes_clean.csv). The outcome is glucose
 again, but this time the other seven measurements are the predictors. In
 `pressure`, `triceps` and `insulin` a zero means "not measured", so we turn the
-zeros into `NA` and let the recipe fill them in.
+zeros into `NA` and let the recipe fill them in. As in Exercise 5.1, 80% of
+the people are used for training and 20% are held back as the test set;
+`set.seed(42)` makes the random split the same every time.
 
 ```{r}
 diabetes <- read_csv("data/diabetes_clean.csv") |>
   select(-diabetes) |>                                          # glucose is the outcome
   mutate(across(c(pressure, triceps, insulin), ~ na_if(.x, 0)))  # 0 means "not measured"
 
-test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
-train <- diabetes[-test_rows, ]
-test  <- diabetes[test_rows, ]
+set.seed(42)
+split <- initial_split(diabetes, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
 ```
 
 ------------------------------------------------------------------------
@@ -120,7 +120,7 @@ for (p in penalties) {
 train_results
 ```
 
-The RMSE only ever goes up: 26.83 at a penalty of 0.01, 30.78 at 10. Scored on
+The RMSE only ever goes up: 26.73 at a penalty of 0.01, 30.45 at 10. Scored on
 its own training rows, the smallest penalty always wins, and no penalty at all
 would win outright.
 
@@ -134,12 +134,14 @@ The training RMSE cannot show overfitting: the noise the model has learnt is in
 the very rows it is scored on. We need rows it has **not** seen. Not the test
 rows: they are kept for one final check, and choosing with them would make that
 check too optimistic (the Stretch of Exercise 5.1). So we split the training
-rows once more: every fourth training row becomes a **validation** row.
+rows once more, with the same function as before: a random quarter of them
+become **validation** rows.
 
 ```{r}
-val_rows   <- seq(1, nrow(train), by = 4)       # every fourth training row
-fitting    <- train[-val_rows, ]
-validation <- train[val_rows, ]
+set.seed(42)
+val_split  <- initial_split(train, prop = 0.75)   # 75% to fit, 25% to compare
+fitting    <- training(val_split)
+validation <- testing(val_split)
 
 nrow(fitting)
 nrow(validation)
@@ -188,11 +190,11 @@ val_results |>
 ```
 
 The fitting RMSE rises with the penalty, as in Part 2. The validation RMSE
-**falls**, from 30.24 to 29.74 at a penalty of 0.3, and then rises again, to
-31.85 at 10. With a small penalty the model learns noise in the fitting rows
+**falls**, from 27.76 to 27.50 at a penalty of 0.1, and then rises again, to
+30.12 at 10. With a small penalty the model learns noise in the fitting rows
 that does not repeat in the validation rows (**overfitting**); with a large
 penalty it misses the real pattern too (**underfitting**). The validation rows
-show both, so we choose the penalty with the lowest validation RMSE: 0.3. This
+show both, so we choose the penalty with the lowest validation RMSE: 0.1. This
 is the normal way to choose a hyperparameter.
 
 ------------------------------------------------------------------------
@@ -201,14 +203,11 @@ is the normal way to choose a hyperparameter.
 
 tidymodels runs this loop for you. `tune_grid()` takes the workflow, the grid
 of candidates, and the split to score them on. It expects the split as a
-**resampling object**; here that object holds our one split, with the fitting
-rows for fitting and the validation rows for scoring.
+**resampling object**; `manual_rset()` turns our one split, `val_split`, into
+one: its training part is used for fitting and its test part for scoring.
 
 ```{r}
-one_split <- make_splits(list(analysis   = setdiff(1:nrow(train), val_rows),  # fit on these
-                              assessment = as.integer(val_rows)),             # score on these
-                         data = train)
-val_set <- manual_rset(list(one_split), ids = "validation")
+val_set <- manual_rset(list(val_split), ids = "validation")
 val_set
 ```
 
@@ -223,7 +222,7 @@ select_best(lasso_res, metric = "rmse")
 ```
 
 The `mean` column is the validation RMSE of your loop, number for number, and
-`select_best()` picks the same penalty, 0.3. `autoplot()` draws the results:
+`select_best()` picks the same penalty, 0.1. `autoplot()` draws the results:
 
 ```{r}
 autoplot(lasso_res) +
@@ -233,8 +232,8 @@ autoplot(lasso_res) +
 | Your loop in Part 3 | `tune_grid()` |
 |:--------------------|:--------------|
 | `for (p in penalties)` | `grid = tibble(penalty = penalties)` |
-| `fit(data = fitting)` | the analysis rows of `val_set` |
-| `augment(..., new_data = validation)` and `rmse()` | the assessment rows of `val_set`, `metrics = metric_set(rmse)` |
+| `fit(data = fitting)` | the training part of `val_split` |
+| `augment(..., new_data = validation)` and `rmse()` | the test part of `val_split`, `metrics = metric_set(rmse)` |
 | read the table for the lowest `val_rmse` | `select_best(lasso_res, metric = "rmse")` |
 
 > **Where to find a model's hyperparameters**
@@ -255,8 +254,8 @@ extract_parameter_set_dials(lasso_wf)
 ### Part 5 — Tuning the mix of lasso and ridge
 
 `mixture` is the other hyperparameter: 1 is the lasso, 0 is ridge, and values
-in between mix the two penalties. Keep the penalty at 0.3 and tune only the
-mixture. (glmnet needs a penalty in every row of the grid, so we mark both with
+in between mix the two penalties. Keep the penalty chosen in Part 4 and tune
+only the mixture. (glmnet needs a penalty in every row of the grid, so we mark both with
 `tune()` and give the penalty a single value.)
 
 > **Stuck?**
@@ -266,6 +265,8 @@ mixture. (glmnet needs a penalty in every row of the grid, so we mark both with
 > **Worked answer**
 
 ```{r}
+best_penalty <- select_best(lasso_res, metric = "rmse")$penalty   # the penalty chosen in Part 4
+
 mix_wf <- workflow() |>
   add_recipe(glucose_rec) |>
   add_model(linear_reg(penalty = tune(), mixture = tune()) |>
@@ -273,7 +274,7 @@ mix_wf <- workflow() |>
 
 mix_res <- tune_grid(mix_wf,
                      resamples = val_set,
-                     grid      = tibble(penalty = 0.3,
+                     grid      = tibble(penalty = best_penalty,
                                         mixture = c(0, 0.25, 0.5, 0.75, 1)),
                      metrics   = metric_set(rmse),
                      control   = control_grid(save_workflow = TRUE))   # keep the workflow for fit_best()
@@ -282,8 +283,8 @@ collect_metrics(mix_res)
 select_best(mix_res, metric = "rmse")
 ```
 
-> A half-and-half mix (`mixture = 0.5`) is best, at 29.59, against 29.74 for the
-> lasso and 29.86 for ridge. The differences are small.
+> The lasso (`mixture = 1`) is still best, at 27.50, against 27.56 to 27.64 for
+> the mixes and ridge. The differences are small.
 
 ------------------------------------------------------------------------
 
@@ -354,11 +355,12 @@ tidy(refit_by_tool) |>
   nrow()                                           # columns kept
 ```
 
-The chosen model (penalty 0.3, mixture 0.5) has a test RMSE of 26.90 against
-27.12 for the unpenalised model, and it uses 20 of the 35 columns.
+The chosen model (penalty 0.1, mixture 1: the lasso) has a test RMSE of 27.35
+against 27.31 for the unpenalised model: about the same, with 23 of the 35
+columns.
 
-**Question!** The penalised model is only a little more accurate on the test
-rows, but it uses fewer columns. Why might that still matter?
+**Question!** The penalised model is about as accurate on the test rows as the
+unpenalised one, but it uses fewer columns. Why might that still matter?
 
 > **From one validation set to cross-validation**
 >
@@ -368,7 +370,7 @@ rows, but it uses fewer columns. Why might that still matter?
 > instead of `val_set`); `select_best()` and `fit_best()` work as here.
 >
 > ```r
-> val_set <- manual_rset(list(one_split), ids = "validation")   # this exercise
+> val_set <- manual_rset(list(val_split), ids = "validation")   # this exercise
 > folds   <- vfold_cv(train, v = 5)                             # Exercise 5.4
 > tune_grid(lasso_wf, resamples = folds, grid = ...)
 > ```
@@ -400,7 +402,8 @@ rows, but it uses fewer columns. Why might that still matter?
 
 > **Stretch — a different validation set**
 >
-> Make the validation rows every fourth training row starting from the second
-> (`seq(2, nrow(train), by = 4)` in R, `np.arange(len(train)) % 4 == 1` in
-> Python) and run the search of Part 3 or Part 4 again. Is the same penalty
+> Draw a different validation set by changing the seed of the second split
+> (`set.seed(1)` before `initial_split(train, prop = 0.75)` in R,
+> `random_state=1` in the second `train_test_split()` in Python) and run the
+> search of Part 3 or Part 4 again. Is the same penalty
 > chosen? What does that tell you about choosing with a single validation set?

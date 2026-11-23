@@ -249,7 +249,6 @@ window.Quarto = {
 <p>On Day 3 you fitted a straight line to predict glucose and measured its error with a loss function. A model is only useful if it also predicts <strong>people it has not seen</strong>. In this exercise we fit a model on the training rows, predict both the training and the test rows, and compare the errors. The comparison tells us whether the model is <strong>overfitting</strong> (much better on training than on test) or <strong>underfitting</strong> (similar on both, but poor on both).</p>
 <p>Suppose we believe that the relationship between glucose and age is not a straight line but a <strong>cubic</strong>:</p>
 <p><span class="math display">\[\widehat{\text{glucose}} = \beta_0 + \beta_1\,\text{age} + \beta_2\,\text{age}^2 + \beta_3\,\text{age}^3\]</span></p>
-<p><strong>Theory:</strong> polynomial features as a pre-processing step; recipes, workflows and pipelines; predictions on training and test data; mean squared error, root mean squared error and mean absolute error; overfitting and underfitting.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -280,17 +279,18 @@ window.Quarto = {
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_bw</span>())          <span class="co"># white background for every plot</span></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">pillar.sigfig =</span> <span class="dv">4</span>)     <span class="co"># show four significant figures in tables</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The data are in <a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>. We hold back every fifth person as the test set: 600 training patients and 150 test patients.</p>
+<p>The data are in <a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>. We split the 750 people into a training set and a test set, as in earlier exercises: 80% for training and 20% held back as the test set, 600 and 150 people. <code>set.seed(42)</code> makes the random split the same every time.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/diabetes_clean.csv"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(glucose, mass, age, diabetes) <span class="sc">|&gt;</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">diabetes =</span> <span class="fu">factor</span>(diabetes, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"neg"</span>, <span class="st">"pos"</span>)))</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(diabetes), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> diabetes[<span class="sc">-</span>test_rows, ]</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> diabetes[test_rows, ]</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(diabetes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>split <span class="ot">&lt;-</span> <span class="fu">initial_split</span>(diabetes, <span class="at">prop =</span> <span class="fl">0.8</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> <span class="fu">training</span>(split)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> <span class="fu">testing</span>(split)</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(diabetes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; [1] 750   4</code></pre>
 </div>
@@ -325,16 +325,16 @@ window.Quarto = {
 <pre><code>#&gt; # A tibble: 600 × 4
 #&gt;    glucose age_poly_1 age_poly_2 age_poly_3
 #&gt;      &lt;dbl&gt;      &lt;dbl&gt;      &lt;dbl&gt;      &lt;dbl&gt;
-#&gt;  1     129  0.03702    -0.04407   -0.01452 
-#&gt;  2     132 -0.02504     0.003851   0.01624 
-#&gt;  3     184  0.01978    -0.04692    0.01713 
-#&gt;  4     108 -0.03883     0.03639   -0.03213 
-#&gt;  5     100 -0.0009021  -0.03393    0.03904 
-#&gt;  6      88 -0.03883     0.03639   -0.03213 
-#&gt;  7      73 -0.0009021  -0.03393    0.03904 
-#&gt;  8     126  0.04392    -0.03944   -0.02768 
-#&gt;  9      87 -0.04227     0.04576   -0.04920 
-#&gt; 10      99 -0.02848     0.01124    0.006944
+#&gt;  1     106  -0.008114   -0.02475   0.03936 
+#&gt;  2     128  -0.03863     0.03542  -0.03207 
+#&gt;  3     105  -0.02846     0.01111   0.006132
+#&gt;  4     129  -0.03185     0.01874  -0.004801
+#&gt;  5     107  -0.03863     0.03542  -0.03207 
+#&gt;  6     111  -0.03524     0.02685  -0.01751 
+#&gt;  7     113   0.1105      0.1055   -0.01023 
+#&gt;  8     113  -0.03863     0.03542  -0.03207 
+#&gt;  9     137   0.1105      0.1055   -0.01023 
+#&gt; 10     101   0.03257    -0.04537  -0.001921
 #&gt; # ℹ 590 more rows</code></pre>
 </div>
 </div>
@@ -353,13 +353,13 @@ window.Quarto = {
 <pre><code>#&gt; # A tibble: 4 × 5
 #&gt;   term        estimate std.error statistic     p.value
 #&gt;   &lt;chr&gt;          &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;       &lt;dbl&gt;
-#&gt; 1 (Intercept)   125.9      1.241   101.5   0          
-#&gt; 2 age_poly_1    149.8     30.39      4.927 0.000001083
-#&gt; 3 age_poly_2   -144.3     30.39     -4.747 0.000002593
-#&gt; 4 age_poly_3     95.52    30.39      3.143 0.001756</code></pre>
+#&gt; 1 (Intercept)   125.2      1.228   101.9   0          
+#&gt; 2 age_poly_1    137.8     30.08      4.580 0.000005667
+#&gt; 3 age_poly_2   -120.4     30.08     -4.002 0.00007072 
+#&gt; 4 age_poly_3     73.08    30.08      2.430 0.01541</code></pre>
 </div>
 </div>
-<p>The four coefficients belong to the orthogonal columns, so they are hard to read on their own, and they differ from the ones you get in Python, which uses the raw powers of age. The <strong>predictions</strong> are identical in both languages, and the predictions are what we evaluate.</p>
+<p>The four coefficients belong to the orthogonal columns, so they are hard to read on their own, and they differ from the ones you would get from the raw powers of age, which Python uses. On the same data the <strong>predictions</strong> are identical either way, and the predictions are what we evaluate.</p>
 <p>Here is the fitted cubic on top of the training data:</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
@@ -410,12 +410,12 @@ window.Quarto = {
 <pre><code>#&gt; # A tibble: 6 × 1
 #&gt;   .pred
 #&gt;   &lt;dbl&gt;
-#&gt; 1 136.5
-#&gt; 2 123.2
-#&gt; 3 137.3
-#&gt; 4 111.8
-#&gt; 5 134.4
-#&gt; 6 111.8</code></pre>
+#&gt; 1 129.9
+#&gt; 2 113.3
+#&gt; 3 120.4
+#&gt; 4 118.2
+#&gt; 5 113.3
+#&gt; 6 115.8</code></pre>
 </div>
 </div>
 <p>It is easier to keep the predictions next to the data. <code>augment()</code> does that in one step: it adds the prediction <code>.pred</code> and the residual <code>.resid</code> (observed minus predicted) to each row. Do it for the training rows and the test rows:</p>
@@ -428,15 +428,15 @@ window.Quarto = {
 <pre><code>#&gt; # A tibble: 6 × 6
 #&gt;   .pred  .resid glucose  mass   age diabetes
 #&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;fct&gt;   
-#&gt; 1 127.4  66.57      194  28.5    28 neg     
-#&gt; 2 128.5 -11.49      117  30.1    58 pos     
-#&gt; 3 118.0   3.998     122  57.3    24 neg     
-#&gt; 4 120.7  -9.716     111  26.8    25 neg     
-#&gt; 5 127.2  14.76      142  39.5    62 pos     
-#&gt; 6 111.8  -9.807     102  28.9    22 neg</code></pre>
+#&gt; 1 125.9  68.13      194  28.5    28 neg     
+#&gt; 2 134.9  49.09      184  24.7    39 neg     
+#&gt; 3 113.3  -5.253     108  31.6    22 neg     
+#&gt; 4 129.0 -12.01      117  30.1    58 pos     
+#&gt; 5 113.3 -26.25       87  22.2    22 neg     
+#&gt; 6 115.8 -28.82       87  32      23 neg</code></pre>
 </div>
 </div>
-<p>The first test person is 28 years old with a glucose of 194, and the model predicts 127.4 for them: an error of 66.6 mg/dL, a person the model gets badly wrong.</p>
+<p>The first test person is 28 years old with a glucose of 194, and the model predicts 125.9 for them: an error of 68.1 mg/dL, a person the model gets badly wrong.</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
@@ -494,10 +494,10 @@ window.Quarto = {
 <pre><code>#&gt; # A tibble: 1 × 3
 #&gt;     MSE  RMSE   MAE
 #&gt;   &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
-#&gt; 1 917.6 30.29 24.61</code></pre>
+#&gt; 1 898.7 29.98 24.13</code></pre>
 </div>
 </div>
-<p>On the training rows the typical error is about 30 mg/dL (RMSE 30.29, MAE 24.61). Now do the same for the <strong>test</strong> rows:</p>
+<p>On the training rows the typical error is about 30 mg/dL (RMSE 29.98, MAE 24.13). Now do the same for the <strong>test</strong> rows:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span></span>
@@ -529,7 +529,7 @@ window.Quarto = {
 <pre><code>#&gt; # A tibble: 1 × 3
 #&gt;   .metric .estimator .estimate
 #&gt;   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
-#&gt; 1 rmse    standard       30.29</code></pre>
+#&gt; 1 rmse    standard       29.98</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>reg_metrics <span class="ot">&lt;-</span> <span class="fu">metric_set</span>(rmse, mae)</span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="fu">reg_metrics</span>(train_preds, <span class="at">truth =</span> glucose, <span class="at">estimate =</span> .pred)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -537,8 +537,8 @@ window.Quarto = {
 <pre><code>#&gt; # A tibble: 2 × 3
 #&gt;   .metric .estimator .estimate
 #&gt;   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
-#&gt; 1 rmse    standard       30.29
-#&gt; 2 mae     standard       24.61</code></pre>
+#&gt; 1 rmse    standard       29.98
+#&gt; 2 mae     standard       24.13</code></pre>
 </div>
 </div>
 <p>The same numbers as by hand. Check the test rows with the package as well:</p>
@@ -595,14 +595,14 @@ window.Quarto = {
 <span id="cb27-22"><a href="#cb27-22" aria-hidden="true" tabindex="-1"></a>degree_results</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;   degree train_rmse test_rmse
-#&gt; 1      1   31.10499  29.40714
-#&gt; 2      2   30.54229  29.07622
-#&gt; 3      3   30.29231  29.41330
-#&gt; 4      4   30.28348  29.34117
-#&gt; 5      5   30.22276  29.57734
-#&gt; 6      6   30.19395  29.52159
-#&gt; 7      7   30.16924  29.61574
-#&gt; 8      8   30.12057  29.73709</code></pre>
+#&gt; 1      1   30.52490  31.76974
+#&gt; 2      2   30.12671  30.83399
+#&gt; 3      3   29.97861  30.63758
+#&gt; 4      4   29.97255  30.58919
+#&gt; 5      5   29.95214  30.55137
+#&gt; 6      6   29.93711  30.43630
+#&gt; 7      7   29.92961  30.59558
+#&gt; 8      8   29.87801  30.68223</code></pre>
 </div>
 </div>
 <div class="cell" data-layout-align="center">
@@ -625,7 +625,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>The training RMSE falls with every extra degree, from 31.10 for the straight line to 30.12 for degree 8: a more flexible curve can always follow the training points more closely. The test RMSE does not follow. It is lowest at degree 2 (29.08) and highest at degree 8 (29.74). The extra flexibility is spent on the noise of these particular 600 people, which does not repeat in new people. With 600 people and a single predictor the effect is small; with fewer people or more flexible models it can be very large.</p>
+<p>The training RMSE falls with every extra degree, from 30.53 for the straight line to 29.88 for degree 8: a more flexible curve can always follow the training points more closely. The test RMSE does not follow. It is lowest at degree 6 (30.44) and rises again after that, to 30.68 at degree 8. The extra flexibility is spent on the noise of these particular 600 people, which does not repeat in new people. With 600 people and a single predictor the effect is small; with fewer people or more flexible models it can be very large.</p>
 <p><strong>Question!</strong> Which degree would you choose, and on which data did you base the choice? (Look again at the Stretch below.)</p>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -658,20 +658,19 @@ window.Quarto = {
 <span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
 <span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
 <span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.pipeline <span class="im">import</span> Pipeline</span>
-<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.preprocessing <span class="im">import</span> PolynomialFeatures</span>
-<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> LinearRegression</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.model_selection <span class="im">import</span> train_test_split</span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.pipeline <span class="im">import</span> Pipeline</span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.preprocessing <span class="im">import</span> PolynomialFeatures</span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> LinearRegression</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The data are in <a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>. We hold back every fifth person as the test set: 600 training patients and 150 test patients.</p>
+<p>The data are in <a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>. We split the 750 people into a training set and a test set, as in earlier exercises: 80% for training and 20% held back as the test set, 600 and 150 people. <code>random_state=42</code> makes the random split the same every time.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes_clean.csv"</span>)</span>
 <span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes[[<span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"age"</span>, <span class="st">"diabetes"</span>]]</span>
 <span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> diabetes.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
-<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> diabetes[<span class="op">~</span>is_test]</span>
-<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>test  <span class="op">=</span> diabetes[is_test]</span>
-<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(diabetes.shape)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>train, test <span class="op">=</span> train_test_split(diabetes, test_size<span class="op">=</span><span class="fl">0.2</span>, random_state<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(diabetes.shape)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; (750, 4)</code></pre>
 </div>
@@ -699,17 +698,17 @@ window.Quarto = {
 <span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(cubic_features, columns<span class="op">=</span>poly_step.get_feature_names_out()).head(<span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;     age   age^2    age^3
-#&gt; 0  44.0  1936.0  85184.0
-#&gt; 1  26.0   676.0  17576.0
-#&gt; 2  39.0  1521.0  59319.0
-#&gt; 3  22.0   484.0  10648.0
-#&gt; 4  33.0  1089.0  35937.0
-#&gt; 5  22.0   484.0  10648.0
-#&gt; 6  33.0  1089.0  35937.0
-#&gt; 7  46.0  2116.0  97336.0
-#&gt; 8  21.0   441.0   9261.0
-#&gt; 9  25.0   625.0  15625.0</code></pre>
+<pre><code>#&gt;     age   age^2     age^3
+#&gt; 0  21.0   441.0    9261.0
+#&gt; 1  41.0  1681.0   68921.0
+#&gt; 2  31.0   961.0   29791.0
+#&gt; 3  23.0   529.0   12167.0
+#&gt; 4  81.0  6561.0  531441.0
+#&gt; 5  22.0   484.0   10648.0
+#&gt; 6  25.0   625.0   15625.0
+#&gt; 7  45.0  2025.0   91125.0
+#&gt; 8  27.0   729.0   19683.0
+#&gt; 9  29.0   841.0   24389.0</code></pre>
 </div>
 </div>
 <p>The three columns are age, age² and age³. The squared and cubed values are large (81³ = 531441), which is fine for a cubic.</p>
@@ -723,14 +722,14 @@ window.Quarto = {
 <span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"intercept:   "</span>, <span class="bu">round</span>(cubic_pipe[<span class="st">"model"</span>].intercept_, <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; intercept:    -44.036</code></pre>
+<pre><code>#&gt; intercept:    -14.946</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"coefficients:"</span>, cubic_pipe[<span class="st">"model"</span>].coef_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; coefficients: [ 1.15444274e+01 -2.36367607e-01  1.52779710e-03]</code></pre>
+<pre><code>#&gt; coefficients: [ 9.04766683e+00 -1.74243504e-01  1.06249591e-03]</code></pre>
 </div>
 </div>
-<p>The coefficients belong to age, age² and age³. They differ from the ones you get in R, where <code>step_poly()</code> uses orthogonal polynomials, but the <strong>predictions</strong> are identical in both languages, and the predictions are what we evaluate.</p>
+<p>The coefficients belong to age, age² and age³. They differ from the ones you get from orthogonal polynomials, which R’s <code>step_poly()</code> uses, but on the same data the <strong>predictions</strong> are identical either way, and the predictions are what we evaluate.</p>
 <p>Here is the fitted cubic on top of the training data:</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
@@ -779,7 +778,7 @@ window.Quarto = {
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>cubic_pipe.predict(train[[<span class="st">"age"</span>]])[:<span class="dv">6</span>].<span class="bu">round</span>(<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; array([136.45, 123.19, 137.31, 111.81, 134.43, 111.81])</code></pre>
+<pre><code>#&gt; array([108.05, 136.33, 129.74, 113.9 , 139.36, 111.08])</code></pre>
 </div>
 </div>
 <p>It is easier to keep the predictions next to the data. Copy each data set and add the predictions as a new column <code>pred</code>, for the training rows and the test rows:</p>
@@ -792,15 +791,15 @@ window.Quarto = {
 <span id="cb47-6"><a href="#cb47-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb47-7"><a href="#cb47-7" aria-hidden="true" tabindex="-1"></a>test_preds.head().<span class="bu">round</span>(<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;     glucose  mass  age diabetes    pred
-#&gt; 0       194  28.5   28      neg  127.43
-#&gt; 5       117  30.1   58      pos  128.49
-#&gt; 10      122  57.3   24      neg  118.00
-#&gt; 15      111  26.8   25      neg  120.72
-#&gt; 20      142  39.5   62      pos  127.24</code></pre>
+<pre><code>#&gt;      glucose  mass  age diabetes    pred
+#&gt; 506      115  28.8   35      neg  133.83
+#&gt; 357       95  23.3   54      neg  132.84
+#&gt; 133      126  36.5   56      pos  131.89
+#&gt; 250      128  36.6   22      neg  111.08
+#&gt; 299      146  34.0   29      pos  126.81</code></pre>
 </div>
 </div>
-<p>The first test person is 28 years old with a glucose of 194, and the model predicts 127.4 for them: an error of 66.6 mg/dL, a person the model gets badly wrong.</p>
+<p>The first test person is 35 years old with a glucose of 115, and the model predicts 133.8 for them: an error of −18.8 mg/dL, so the model predicts too high.</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
@@ -857,18 +856,18 @@ window.Quarto = {
 <span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"MSE: "</span>, <span class="bu">round</span>(train_mse, <span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; MSE:  917.62</code></pre>
+<pre><code>#&gt; MSE:  902.9</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb52"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"RMSE:"</span>, <span class="bu">round</span>(train_rmse, <span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; RMSE: 30.29</code></pre>
+<pre><code>#&gt; RMSE: 30.05</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb54"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"MAE: "</span>, <span class="bu">round</span>(train_mae, <span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; MAE:  24.61</code></pre>
+<pre><code>#&gt; MAE:  24.21</code></pre>
 </div>
 </div>
-<p>On the training rows the typical error is about 30 mg/dL (RMSE 30.29, MAE 24.61). Now do the same for the <strong>test</strong> rows:</p>
+<p>On the training rows the typical error is about 30 mg/dL (RMSE 30.05, MAE 24.21). Now do the same for the <strong>test</strong> rows:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb56"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a>test_error <span class="op">=</span> ______</span>
@@ -903,15 +902,15 @@ window.Quarto = {
 <span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"train MSE: "</span>, <span class="bu">round</span>(mean_squared_error(train_preds[<span class="st">"glucose"</span>], train_preds[<span class="st">"pred"</span>]), <span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; train MSE:  917.62</code></pre>
+<pre><code>#&gt; train MSE:  902.9</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb59"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"train RMSE:"</span>, <span class="bu">round</span>(root_mean_squared_error(train_preds[<span class="st">"glucose"</span>], train_preds[<span class="st">"pred"</span>]), <span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; train RMSE: 30.29</code></pre>
+<pre><code>#&gt; train RMSE: 30.05</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb61"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"train MAE: "</span>, <span class="bu">round</span>(mean_absolute_error(train_preds[<span class="st">"glucose"</span>], train_preds[<span class="st">"pred"</span>]), <span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; train MAE:  24.61</code></pre>
+<pre><code>#&gt; train MAE:  24.21</code></pre>
 </div>
 </div>
 <p>The same numbers as by hand. Check the test rows with the package as well:</p>
@@ -965,14 +964,14 @@ window.Quarto = {
 <span id="cb64-17"><a href="#cb64-17" aria-hidden="true" tabindex="-1"></a>degree_results.<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;    degree  train_rmse  test_rmse
-#&gt; 0       1      31.105     29.407
-#&gt; 1       2      30.542     29.076
-#&gt; 2       3      30.292     29.413
-#&gt; 3       4      30.283     29.341
-#&gt; 4       5      30.223     29.577
-#&gt; 5       6      30.194     29.522
-#&gt; 6       7      30.169     29.616
-#&gt; 7       8      30.121     29.737</code></pre>
+#&gt; 0       1      30.723     31.033
+#&gt; 1       2      30.201     30.557
+#&gt; 2       3      30.048     30.385
+#&gt; 3       4      30.041     30.340
+#&gt; 4       5      30.030     30.277
+#&gt; 5       6      29.991     30.244
+#&gt; 6       7      29.988     30.215
+#&gt; 7       8      29.980     30.151</code></pre>
 </div>
 </div>
 <div class="cell" data-layout-align="center">
@@ -983,7 +982,7 @@ window.Quarto = {
 <span id="cb66-3"><a href="#cb66-3" aria-hidden="true" tabindex="-1"></a>ax.plot(degree_results[<span class="st">"degree"</span>], degree_results[<span class="st">"test_rmse"</span>], marker<span class="op">=</span><span class="st">"o"</span>, label<span class="op">=</span><span class="st">"test_rmse"</span>)</span>
 <span id="cb66-4"><a href="#cb66-4" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Degree of the polynomial"</span>)</span>
 <span id="cb66-5"><a href="#cb66-5" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"RMSE (mg/dL)"</span>)</span>
-<span id="cb66-6"><a href="#cb66-6" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Training error keeps falling; test error does not"</span>)</span>
+<span id="cb66-6"><a href="#cb66-6" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Training and test error by degree"</span>)</span>
 <span id="cb66-7"><a href="#cb66-7" aria-hidden="true" tabindex="-1"></a>ax.legend()</span>
 <span id="cb66-8"><a href="#cb66-8" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
@@ -995,7 +994,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>The training RMSE falls with every extra degree, from 31.10 for the straight line to 30.12 for degree 8: a more flexible curve can always follow the training points more closely. The test RMSE does not follow. It is lowest at degree 2 (29.08) and highest at degree 8 (29.74). The extra flexibility is spent on the noise of these particular 600 people, which does not repeat in new people. With 600 people and a single predictor the effect is small; with fewer people or more flexible models it can be very large.</p>
+<p>The training RMSE falls with every extra degree, from 30.72 for the straight line to 29.98 for degree 8: a more flexible curve can always follow the training points more closely. On this split the test RMSE also falls a little, to 30.15 at degree 8, but after degree 3 (30.39) each extra degree gains less than 0.1 mg/dL. With 600 people and a single predictor there is little room to overfit, so the cost of extra flexibility is small or hidden by noise. With fewer people or more flexible models the test error can rise sharply, as it does from degree 7 in R.</p>
 <p><strong>Question!</strong> Which degree would you choose, and on which data did you base the choice? (Look again at the Stretch below.)</p>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">

@@ -19,10 +19,6 @@ straight line but a **cubic**:
 
 $$\widehat{\text{glucose}} = \beta_0 + \beta_1\,\text{age} + \beta_2\,\text{age}^2 + \beta_3\,\text{age}^3$$
 
-**Theory:** polynomial features as a pre-processing step; recipes, workflows
-and pipelines; predictions on training and test data; mean squared error, root
-mean squared error and mean absolute error; overfitting and underfitting.
-
 > **The plots are for looking at**
 >
 > The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
@@ -40,17 +36,20 @@ theme_set(theme_bw())          # white background for every plot
 options(pillar.sigfig = 4)     # show four significant figures in tables
 ```
 
-The data are in [`data/diabetes_clean.csv`](data/diabetes_clean.csv). We hold back
-every fifth person as the test set: 600 training patients and 150 test patients.
+The data are in [`data/diabetes_clean.csv`](data/diabetes_clean.csv). We split the
+750 people into a training set and a test set, as in earlier exercises: 80% for
+training and 20% held back as the test set, 600 and 150 people. `set.seed(42)`
+makes the random split the same every time.
 
 ```{r}
 diabetes <- read_csv("data/diabetes_clean.csv") |>
   select(glucose, mass, age, diabetes) |>
   mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
 
-test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
-train <- diabetes[-test_rows, ]
-test  <- diabetes[test_rows, ]
+set.seed(42)
+split <- initial_split(diabetes, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
 
 dim(diabetes)
 dim(train)
@@ -107,9 +106,9 @@ tidy(model_cubic)
 ```
 
 The four coefficients belong to the orthogonal columns, so they are hard to read
-on their own, and they differ from the ones you get in Python, which uses the raw
-powers of age. The **predictions** are identical in both languages, and the
-predictions are what we evaluate.
+on their own, and they differ from the ones you would get from the raw powers of
+age, which Python uses. On the same data the **predictions** are identical either
+way, and the predictions are what we evaluate.
 
 Here is the fitted cubic on top of the training data:
 
@@ -155,7 +154,7 @@ head(test_preds)
 ```
 
 The first test person is 28 years old with a glucose of 194, and the model
-predicts 127.4 for them: an error of 66.6 mg/dL, a person the model gets badly
+predicts 125.9 for them: an error of 68.1 mg/dL, a person the model gets badly
 wrong.
 
 ```{r}
@@ -200,8 +199,8 @@ train_preds |>
             MAE  = mean(abs(error)))
 ```
 
-On the training rows the typical error is about 30 mg/dL (RMSE 30.29, MAE
-24.61). Now do the same for the **test** rows:
+On the training rows the typical error is about 30 mg/dL (RMSE 29.98, MAE
+24.13). Now do the same for the **test** rows:
 
 ```{r}
 # Replace every ______ below, then run this cell.
@@ -296,10 +295,10 @@ degree_results |>
        title = "Training error keeps falling; test error does not")
 ```
 
-The training RMSE falls with every extra degree, from 31.10 for the straight line
-to 30.12 for degree 8: a more flexible curve can always follow the training
-points more closely. The test RMSE does not follow. It is lowest at degree 2
-(29.08) and highest at degree 8 (29.74). The extra flexibility is spent on
+The training RMSE falls with every extra degree, from 30.53 for the straight line
+to 29.88 for degree 8: a more flexible curve can always follow the training
+points more closely. The test RMSE does not follow. It is lowest at degree 6
+(30.44) and rises again after that, to 30.68 at degree 8. The extra flexibility is spent on
 the noise of these particular 600 people, which does not repeat in new people.
 With 600 people and a single predictor the effect is small; with fewer people
 or more flexible models it can be very large.
