@@ -246,8 +246,8 @@ window.Quarto = {
 </header>
 
 
-<p>Some settings of a model are not learnt from the data: we choose them before fitting. They are called <strong>hyperparameters</strong>. In this exercise the hyperparameters are those of <strong>regularisation</strong>: a linear regression that pays a price for large coefficients, so that it fits the training rows a little less closely in exchange for a simpler model. How large the price is, <span class="math inline">\(\lambda\)</span>, must be chosen, and we choose it by trying several values and keeping the one that predicts best on rows the model has not seen. The page <a href="./day5-01b-lasso-ridge-picture.html">Lasso and ridge in a picture</a> explains what the penalty does.</p>
-<p><strong>Theory:</strong> hyperparameters; grid search; why candidates are scored on a validation set and not on the training rows; <code>tune_grid()</code> and <code>GridSearchCV()</code>; refitting the chosen model and checking it once on the test rows.</p>
+<p>Some settings of a model are not learnt from the data: we choose them before fitting. They are called <strong>hyperparameters</strong>; the degree of the polynomial in Exercise 5.1 was one. Here the hyperparameter is the size of the lasso penalty, <span class="math inline">\(\lambda\)</span> (see <a href="./day5-01b-lasso-ridge-picture.html">Lasso and ridge in a picture</a>). We choose it by trying several values and keeping the one that predicts best on rows the model was not fitted on.</p>
+<p><strong>Theory:</strong> hyperparameters; grid search; validation set; <code>tune_grid()</code> and <code>GridSearchCV()</code>; refitting the chosen model.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -309,8 +309,8 @@ window.Quarto = {
 <pre><code>#&gt; [1] 600  36</code></pre>
 </div>
 </div>
-<p>600 rows and 36 columns: glucose and the 35 predictor columns.</p>
-<p>The lasso adds a penalty <span class="math inline">\(\lambda \times \sum_j |\beta_j|\)</span> to the fitting (see <a href="./day5-01b-lasso-ridge-picture.html">Lasso and ridge in a picture</a>). <span class="math inline">\(\lambda\)</span> is a <strong>hyperparameter</strong>: a setting we choose before fitting, which the fitting does not choose for us. The degree of the polynomial in Exercise 5.1 was another. In tidymodels <span class="math inline">\(\lambda\)</span> is called <code>penalty</code>, and <code>mixture = 1</code> asks for the lasso. We mark <code>penalty</code> with <code>tune()</code>, a placeholder for “to be chosen”, and fill it in later with <code>finalize_workflow()</code>:</p>
+<p>600 rows: glucose and the 35 predictor columns.</p>
+<p>The model is the lasso: <code>linear_reg()</code> with <code>mixture = 1</code> and the glmnet engine. Its <span class="math inline">\(\lambda\)</span> is called <code>penalty</code>. We mark it with <code>tune()</code>, a placeholder for “to be chosen”:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>lasso_wf <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">|&gt;</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_recipe</span>(glucose_rec) <span class="sc">|&gt;</span></span>
@@ -359,28 +359,11 @@ window.Quarto = {
 </div>
 <p>The RMSE only ever goes up: 26.83 at a penalty of 0.01, 30.78 at 10. Scored on its own training rows, the smallest penalty always wins, and no penalty at all would win outright.</p>
 <p><strong>Question!</strong> Does that mean the penalty is useless?</p>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>A grid search fits one model for each candidate value and keeps the candidate with the lowest error.</li>
-<li>On the rows it was fitted on, a smaller penalty always looks better, because a freer model can follow those rows, noise included, more closely.</li>
-</ul>
-</div>
-</div>
 <hr>
 </section>
 <section id="part-3-the-same-grid-search-scored-on-a-validation-set" class="level3">
 <h3 class="anchored" data-anchor-id="part-3-the-same-grid-search-scored-on-a-validation-set">Part 3 — The same grid search, scored on a validation set</h3>
-<p>The training RMSE cannot tell us when the model starts fitting noise, because the noise is in the rows it is measured on. We need rows the model has <strong>not</strong> seen. The test rows are kept for one final check of the model we choose: if we also used them to <em>make</em> the choice, we would pick whichever candidate happened to do best on those 150 people, and its test RMSE would no longer be an honest estimate (the Stretch of Exercise 5.1).</p>
-<p>So we split the training rows once more. Every fourth training row becomes a <strong>validation</strong> row: each candidate is fitted on the other rows and scored on these.</p>
+<p>The training RMSE cannot show overfitting: the noise the model has learnt is in the very rows it is scored on. We need rows it has <strong>not</strong> seen. Not the test rows: they are kept for one final check, and choosing with them would make that check too optimistic (the Stretch of Exercise 5.1). So we split the training rows once more: every fourth training row becomes a <strong>validation</strong> row.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>val_rows   <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(train), <span class="at">by =</span> <span class="dv">4</span>)       <span class="co"># every fourth training row</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>fitting    <span class="ot">&lt;-</span> train[<span class="sc">-</span>val_rows, ]</span>
@@ -419,7 +402,7 @@ window.Quarto = {
 <span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>val_results</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-4-contents" aria-controls="callout-4" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-3-contents" aria-controls="callout-3" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -428,7 +411,7 @@ window.Quarto = {
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-4" class="callout-4-contents callout-collapse collapse">
+<div id="callout-3" class="callout-3-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <p>Each candidate is fitted on the 450 <code>fitting</code> rows and scored on the 150 rows it has not seen.</p>
 </div>
@@ -454,37 +437,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>The two columns tell different stories. The fitting RMSE rises with the penalty, as in Part 2. The validation RMSE first <strong>falls</strong>, from 30.24 to its lowest value, 29.74 at a penalty of 0.3, and then rises again, to 31.85 at 10.</p>
-<p>Why? With a small penalty the model follows the noise of the 450 fitting people; that noise does not repeat in the 150 validation people, so their predictions are worse (<strong>overfitting</strong>). With a large penalty the model is too restrained to follow even the real pattern, and both errors are high (<strong>underfitting</strong>). The validation rows played no part in the fitting, so they behave like new patients, and their error shows the cost of both. The penalty 0.3 is chosen because it has the lowest validation RMSE. Choosing a hyperparameter on rows the model was not fitted on is the normal way to choose it.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>Coming later: cross-validation
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>One validation set is the simplest way to compare candidates, but the result depends on which 150 people landed in it (try the Stretch). In Exercise 5.4 you will learn <strong>cross-validation</strong>, a resampling method that repeats the comparison on several different splits of the training rows and averages.</p>
-</div>
-</div>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>Candidates are scored on validation rows that were not used to fit them; the test rows are kept for one final check.</li>
-<li>Too small a penalty overfits, too large a penalty underfits; the validation error is lowest in between.</li>
-</ul>
-</div>
-</div>
+<p>The fitting RMSE rises with the penalty, as in Part 2. The validation RMSE <strong>falls</strong>, from 30.24 to 29.74 at a penalty of 0.3, and then rises again, to 31.85 at 10. With a small penalty the model learns noise in the fitting rows that does not repeat in the validation rows (<strong>overfitting</strong>); with a large penalty it misses the real pattern too (<strong>underfitting</strong>). The validation rows show both, so we choose the penalty with the lowest validation RMSE: 0.3. This is the normal way to choose a hyperparameter.</p>
 <hr>
 </section>
 <section id="part-4-the-same-search-with-tune_grid" class="level3">
@@ -573,25 +526,21 @@ window.Quarto = {
 </tr>
 </tbody>
 </table>
-<p><strong>Which hyperparameters does a model have?</strong> <code>extract_parameter_set_dials()</code> lists the ones marked with <code>tune()</code> in a workflow, and the <a href="https://parsnip.tidymodels.org/reference/details_linear_reg_glmnet.html">parsnip page for <code>linear_reg()</code> with glmnet</a> lists those the model offers: <code>penalty</code> and <code>mixture</code>. Chapter 12 of <a href="https://www.tmwr.org/tuning">Tidy Modeling with R</a> explains tuning in tidymodels.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">extract_parameter_set_dials</span>(lasso_wf)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
+<span class="screen-reader-only">Tip</span>Where to find a model’s hyperparameters
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<ul>
-<li><code>tune()</code> marks a hyperparameter; <code>tune_grid()</code> fits and scores every candidate; <code>collect_metrics()</code>, <code>autoplot()</code> and <code>select_best()</code> show and choose.</li>
-<li>It is the loop of Part 3, written for you.</li>
-</ul>
+<p><code>extract_parameter_set_dials()</code> lists the ones marked with <code>tune()</code> in a workflow. The <a href="https://parsnip.tidymodels.org/reference/details_linear_reg_glmnet.html">parsnip page for <code>linear_reg()</code> with glmnet</a> lists those the model offers (<code>penalty</code> and <code>mixture</code>), and chapter 12 of <a href="https://www.tmwr.org/tuning">Tidy Modeling with R</a> explains tuning in tidymodels.</p>
 </div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">extract_parameter_set_dials</span>(lasso_wf)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <hr>
 </section>
@@ -616,7 +565,7 @@ window.Quarto = {
 <span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a><span class="fu">select_best</span>(mix_res, <span class="at">metric =</span> <span class="st">"rmse"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-8-contents" aria-controls="callout-8" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-5-contents" aria-controls="callout-5" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -625,32 +574,17 @@ window.Quarto = {
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-8" class="callout-8-contents callout-collapse collapse">
+<div id="callout-5" class="callout-5-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <p>The mixture runs from 0 (ridge) to 1 (lasso).</p>
 </div>
-</div>
-</div>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>Tune one hyperparameter at a time by giving the others a single value in the grid.</li>
-</ul>
 </div>
 </div>
 <hr>
 </section>
 <section id="part-6-refitting-the-chosen-model-and-its-one-test" class="level3">
 <h3 class="anchored" data-anchor-id="part-6-refitting-the-chosen-model-and-its-one-test">Part 6 — Refitting the chosen model, and its one test</h3>
-<p>During the search every candidate was fitted on the 450 fitting rows only. Once the best hyperparameters are known, that one model is fitted again on all 600 training rows (fitting and validation together): the same settings, more data. This is the <strong>refit</strong>. Do it by hand first, using the results table, then with the tool, and check that the two agree.</p>
+<p>Every candidate was fitted on the 450 fitting rows only. The chosen one is now fitted once more on all 600 training rows, with the same settings: the <strong>refit</strong>. Do it by hand, then with the tool, and check that they agree.</p>
 <p><strong>By hand.</strong> Take the row with the lowest validation RMSE, put its values into the workflow with <code>finalize_workflow()</code>, and fit:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
@@ -664,7 +598,7 @@ window.Quarto = {
 <span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(<span class="at">data =</span> ______)                               <span class="co"># all 600 training rows</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-10-contents" aria-controls="callout-10" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-6-contents" aria-controls="callout-6" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -673,7 +607,7 @@ window.Quarto = {
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-10" class="callout-10-contents callout-collapse collapse">
+<div id="callout-6" class="callout-6-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <p>The refit uses every training row, fitting and validation together.</p>
 </div>
@@ -749,7 +683,7 @@ window.Quarto = {
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>In Exercise 5.4 the only change is the resampling object: instead of our one split, <code>vfold_cv()</code> makes five, and <code>tune_grid()</code> averages over them. <code>select_best()</code> and <code>fit_best()</code> work as here.</p>
+<p>One validation set depends on which 150 people landed in it (try the Stretch). Exercise 5.4 introduces <strong>cross-validation</strong>, which repeats the comparison on several splits and averages. In the code only the split changes (<code>vfold_cv()</code> instead of <code>val_set</code>); <code>select_best()</code> and <code>fit_best()</code> work as here.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>val_set <span class="ot">&lt;-</span> <span class="fu">manual_rset</span>(<span class="fu">list</span>(one_split), <span class="at">ids =</span> <span class="st">"validation"</span>)   <span class="co"># this exercise</span></span>
 <span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>folds   <span class="ot">&lt;-</span> <span class="fu">vfold_cv</span>(train, <span class="at">v =</span> <span class="dv">5</span>)                             <span class="co"># Exercise 5.4</span></span>
 <span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="fu">tune_grid</span>(lasso_wf, <span class="at">resamples =</span> folds, <span class="at">grid =</span> ...)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -761,13 +695,15 @@ window.Quarto = {
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
+<span class="screen-reader-only">Important</span>Key points
 </div>
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>Once the hyperparameters are chosen, refit that one model on all the training rows: by hand with <code>finalize_workflow()</code> and <code>fit()</code>, or in one step with <code>fit_best()</code>. Both give the same model.</li>
-<li>Then check it once on the test rows.</li>
+<li>A hyperparameter is chosen, not fitted: try several values, score each on rows the model was not fitted on, and keep the best.</li>
+<li>Scored on its own training rows, the least restrained model always wins. That is why we score on validation rows.</li>
+<li><code>tune_grid()</code> is the loop of Part 3 written for you; <code>select_best()</code> picks the winner and <code>fit_best()</code> does the refit.</li>
+<li>Refit the chosen model on all the training rows, then check it once on the test rows.</li>
 </ul>
 </div>
 </div>
@@ -810,7 +746,7 @@ window.Quarto = {
 <section id="part-1-a-model-with-room-to-overfit-1" class="level3">
 <h3 class="anchored" data-anchor-id="part-1-a-model-with-room-to-overfit-1">Part 1 — A model with room to overfit</h3>
 <p>The pipeline fills in the missing values with the median (Day 2), adds every square and every product of two predictors with <code>PolynomialFeatures(degree=2)</code>, and standardises the result. Seven predictors become 35 columns: plenty of room to fit noise.</p>
-<p>The lasso adds a penalty <span class="math inline">\(\lambda \times \sum_j |\beta_j|\)</span> to the fitting (see <a href="./day5-01b-lasso-ridge-picture.html">Lasso and ridge in a picture</a>). <span class="math inline">\(\lambda\)</span> is a <strong>hyperparameter</strong>: a setting we choose before fitting, which the fitting does not choose for us. The degree of the polynomial in Exercise 5.1 was another. In scikit-learn the lasso is <code>Lasso()</code>, and <span class="math inline">\(\lambda\)</span> is its <code>alpha</code>. (<code>max_iter</code> lets the fitting run longer than the default, because the squares and products are correlated and take longer to fit.)</p>
+<p>The model is the lasso, <code>Lasso()</code>. Its <span class="math inline">\(\lambda\)</span> is called <code>alpha</code>. (<code>max_iter</code> lets the fitting run longer than the default, because the squares and products are correlated and take longer to fit.)</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>lasso_pipe <span class="op">=</span> Pipeline([</span>
 <span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"impute"</span>, SimpleImputer(strategy<span class="op">=</span><span class="st">"median"</span>)),                <span class="co"># fill the missing values</span></span>
@@ -841,7 +777,7 @@ window.Quarto = {
 <span id="cb38-13"><a href="#cb38-13" aria-hidden="true" tabindex="-1"></a>train_results.<span class="bu">round</span>(<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-13-contents" aria-controls="callout-13" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-9-contents" aria-controls="callout-9" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -850,7 +786,7 @@ window.Quarto = {
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-13" class="callout-13-contents callout-collapse collapse">
+<div id="callout-9" class="callout-9-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <p>For now, the model is scored on the rows it was fitted on.</p>
 </div>
@@ -858,28 +794,11 @@ window.Quarto = {
 </div>
 <p>The RMSE only ever goes up: 26.83 at a penalty of 0.01, 30.78 at 10. Scored on its own training rows, the smallest penalty always wins, and no penalty at all would win outright.</p>
 <p><strong>Question!</strong> Does that mean the penalty is useless?</p>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>A grid search fits one model for each candidate value and keeps the candidate with the lowest error.</li>
-<li>On the rows it was fitted on, a smaller penalty always looks better, because a freer model can follow those rows, noise included, more closely.</li>
-</ul>
-</div>
-</div>
 <hr>
 </section>
 <section id="part-3-the-same-grid-search-scored-on-a-validation-set-1" class="level3">
 <h3 class="anchored" data-anchor-id="part-3-the-same-grid-search-scored-on-a-validation-set-1">Part 3 — The same grid search, scored on a validation set</h3>
-<p>The training RMSE cannot tell us when the model starts fitting noise, because the noise is in the rows it is measured on. We need rows the model has <strong>not</strong> seen. The test rows are kept for one final check of the model we choose: if we also used them to <em>make</em> the choice, we would pick whichever candidate happened to do best on those 150 people, and its test RMSE would no longer be an honest estimate (the Stretch of Exercise 5.1).</p>
-<p>So we split the training rows once more. Every fourth training row becomes a <strong>validation</strong> row: each candidate is fitted on the other rows and scored on these.</p>
+<p>The training RMSE cannot show overfitting: the noise the model has learnt is in the very rows it is scored on. We need rows it has <strong>not</strong> seen. Not the test rows: they are kept for one final check, and choosing with them would make that check too optimistic (the Stretch of Exercise 5.1). So we split the training rows once more: every fourth training row becomes a <strong>validation</strong> row.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>is_val <span class="op">=</span> np.arange(<span class="bu">len</span>(train)) <span class="op">%</span> <span class="dv">4</span> <span class="op">==</span> <span class="dv">0</span>          <span class="co"># every fourth training row</span></span>
 <span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>fitting    <span class="op">=</span> train[<span class="op">~</span>is_val]</span>
@@ -907,7 +826,7 @@ window.Quarto = {
 <span id="cb41-13"><a href="#cb41-13" aria-hidden="true" tabindex="-1"></a>val_results.<span class="bu">round</span>(<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-15-contents" aria-controls="callout-15" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-10-contents" aria-controls="callout-10" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -916,7 +835,7 @@ window.Quarto = {
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-15" class="callout-15-contents callout-collapse collapse">
+<div id="callout-10" class="callout-10-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <p>Each candidate is fitted on the 450 <code>fitting</code> rows and scored on the 150 rows it has not seen.</p>
 </div>
@@ -943,37 +862,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>The two columns tell different stories. The fitting RMSE rises with the penalty, as in Part 2. The validation RMSE first <strong>falls</strong>, from 30.26 to its lowest value, 29.75 at a penalty of 0.3, and then rises again, to 31.85 at 10.</p>
-<p>Why? With a small penalty the model follows the noise of the 450 fitting people; that noise does not repeat in the 150 validation people, so their predictions are worse (<strong>overfitting</strong>). With a large penalty the model is too restrained to follow even the real pattern, and both errors are high (<strong>underfitting</strong>). The validation rows played no part in the fitting, so they behave like new patients, and their error shows the cost of both. The penalty 0.3 is chosen because it has the lowest validation RMSE. Choosing a hyperparameter on rows the model was not fitted on is the normal way to choose it.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>Coming later: cross-validation
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>One validation set is the simplest way to compare candidates, but the result depends on which 150 people landed in it (try the Stretch). In Exercise 5.4 you will learn <strong>cross-validation</strong>, a resampling method that repeats the comparison on several different splits of the training rows and averages.</p>
-</div>
-</div>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>Candidates are scored on validation rows that were not used to fit them; the test rows are kept for one final check.</li>
-<li>Too small a penalty overfits, too large a penalty underfits; the validation error is lowest in between.</li>
-</ul>
-</div>
-</div>
+<p>The fitting RMSE rises with the penalty, as in Part 2. The validation RMSE <strong>falls</strong>, from 30.26 to 29.75 at a penalty of 0.3, and then rises again, to 31.85 at 10. With a small penalty the model learns noise in the fitting rows that does not repeat in the validation rows (<strong>overfitting</strong>); with a large penalty it misses the real pattern too (<strong>underfitting</strong>). The validation rows show both, so we choose the penalty with the lowest validation RMSE: 0.3. This is the normal way to choose a hyperparameter.</p>
 <hr>
 </section>
 <section id="part-4-the-same-search-with-gridsearchcv" class="level3">
@@ -2047,7 +1936,7 @@ available in the ``cv_results_`` dict at the keys ending with that<br>
 scorer's name (``'_&lt;scorer_name&gt;'``) instead of ``'_score'`` shown<br>
 above. ('split0_test_precision', 'mean_train_precision' etc.)</span></a></td>
 <td class="fitted-att-type">dict</td>
-<td>{'me...me': array([0.0159..., 0.00171208]), 'me...me': array([0.0007..., 0.00066686]), 'me...re': array([-30.25...-31.85119182]), 'pa...ha': masked_array(...l_value=1e+20), ...}</td>
+<td>{'me...me': array([0.0163..., 0.00180888]), 'me...me': array([0.0011..., 0.0010078 ]), 'me...re': array([-30.25...-31.85119182]), 'pa...ha': masked_array(...l_value=1e+20), ...}</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.model_selection.GridSearchCV.html#:~:text=feature_names_in_,-ndarray%20of%20shape%20%28n_features_in_%2C%29" class="param-doc-link" style="anchor-name: --doc-link-feature_names_in_;" rel="noreferrer" target="_blank">feature_names_in_ <span class="param-doc-description" style="position-anchor: --doc-link-feature_names_in_;"> feature_names_in_: ndarray of shape (`n_features_in_`,)<br>
@@ -2096,7 +1985,7 @@ This is present only if ``refit`` is not False.<br>
 <br>
 .. versionadded:: 0.20</span></a></td>
 <td class="fitted-att-type">float</td>
-<td>0.002952</td>
+<td>0.0032</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.model_selection.GridSearchCV.html#:~:text=scorer_,-function%20or%20a%20dict" class="param-doc-link" style="anchor-name: --doc-link-scorer_;" rel="noreferrer" target="_blank">scorer_ <span class="param-doc-description" style="position-anchor: --doc-link-scorer_;"> scorer_: function or a dict<br>
@@ -3268,27 +3157,23 @@ forceTheme('sk-container-id-3');</script>
 </tr>
 </tbody>
 </table>
-<p><strong>Which hyperparameters does a model have?</strong> <code>get_params()</code> lists every setting of every step of a pipeline, under the names <code>set_params()</code> and <code>param_grid</code> use; the <a href="https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.ElasticNet.html">scikit-learn page for <code>ElasticNet</code></a> explains <code>alpha</code> and <code>l1_ratio</code>. The user guide’s <a href="https://scikit-learn.org/stable/modules/grid_search.html">tuning the hyper-parameters of an estimator</a> covers the search tools.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>[name <span class="cf">for</span> name <span class="kw">in</span> lasso_pipe.get_params() <span class="cf">if</span> name.startswith(<span class="st">"model__"</span>)]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; ['model__alpha', 'model__copy_X', 'model__fit_intercept', 'model__max_iter', 'model__positive', 'model__precompute', 'model__random_state', 'model__selection', 'model__tol', 'model__warm_start']</code></pre>
-</div>
-</div>
-<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
+<span class="screen-reader-only">Tip</span>Where to find a model’s hyperparameters
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<ul>
-<li><code>GridSearchCV()</code> fits and scores every candidate; <code>cv_results_</code>, <code>best_params_</code> and <code>ValidationCurveDisplay</code> show and choose.</li>
-<li>It is the loop of Part 3, written for you.</li>
-</ul>
+<p><code>get_params()</code> lists every setting of every step of a pipeline, under the names that <code>set_params()</code> and <code>param_grid</code> use. The <a href="https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.ElasticNet.html">scikit-learn page for <code>ElasticNet</code></a> explains <code>alpha</code> and <code>l1_ratio</code>, and the user guide on <a href="https://scikit-learn.org/stable/modules/grid_search.html">tuning the hyper-parameters of an estimator</a> covers the search tools.</p>
+</div>
+</div>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>[name <span class="cf">for</span> name <span class="kw">in</span> lasso_pipe.get_params() <span class="cf">if</span> name.startswith(<span class="st">"model__"</span>)]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; ['model__alpha', 'model__copy_X', 'model__fit_intercept', 'model__max_iter', 'model__positive', 'model__precompute', 'model__random_state', 'model__selection', 'model__tol', 'model__warm_start']</code></pre>
 </div>
 </div>
 <hr>
@@ -3317,7 +3202,7 @@ forceTheme('sk-container-id-3');</script>
 <span id="cb51-18"><a href="#cb51-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(mix_search.best_params_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-19-contents" aria-controls="callout-19" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-12-contents" aria-controls="callout-12" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -3326,32 +3211,17 @@ forceTheme('sk-container-id-3');</script>
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-19" class="callout-19-contents callout-collapse collapse">
+<div id="callout-12" class="callout-12-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <p><code>l1_ratio</code> runs from 0 (ridge) to 1 (lasso).</p>
 </div>
-</div>
-</div>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>Tune one hyperparameter at a time by fixing the others in the pipeline and putting only one in <code>param_grid</code>.</li>
-</ul>
 </div>
 </div>
 <hr>
 </section>
 <section id="part-6-refitting-the-chosen-model-and-its-one-test-1" class="level3">
 <h3 class="anchored" data-anchor-id="part-6-refitting-the-chosen-model-and-its-one-test-1">Part 6 — Refitting the chosen model, and its one test</h3>
-<p>During the search every candidate was fitted on the 450 fitting rows only. Once the best hyperparameters are known, that one model is fitted again on all 600 training rows (fitting and validation together): the same settings, more data. This is the <strong>refit</strong>. Do it by hand first, using the results table, then with the tool, and check that the two agree.</p>
+<p>Every candidate was fitted on the 450 fitting rows only. The chosen one is now fitted once more on all 600 training rows, with the same settings: the <strong>refit</strong>. Do it by hand, then with the tool, and check that they agree.</p>
 <p><strong>By hand.</strong> Take the row with the lowest validation RMSE, put its value into a fresh copy of the pipeline with <code>set_params()</code>, and fit. <code>clone()</code> makes an unfitted copy of the pipeline, so the one inside the search is left alone.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb52"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
@@ -3364,7 +3234,7 @@ forceTheme('sk-container-id-3');</script>
 <span id="cb52-8"><a href="#cb52-8" aria-hidden="true" tabindex="-1"></a>refit_by_hand.fit(______[predictors], ______[<span class="st">"glucose"</span>])           <span class="co"># all 600 training rows</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-21-contents" aria-controls="callout-21" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-13-contents" aria-controls="callout-13" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -3373,7 +3243,7 @@ forceTheme('sk-container-id-3');</script>
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-21" class="callout-21-contents callout-collapse collapse">
+<div id="callout-13" class="callout-13-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <p>The refit uses every training row, fitting and validation together.</p>
 </div>
@@ -5299,7 +5169,7 @@ forceTheme('sk-container-id-6');</script>
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>In Exercise 5.4 the only change is <code>cv</code>: instead of our one split, <code>cv=5</code> makes five, and <code>GridSearchCV()</code> averages over them. <code>best_params_</code> and <code>best_estimator_</code> work as here.</p>
+<p>One validation set depends on which 150 people landed in it (try the Stretch). Exercise 5.4 introduces <strong>cross-validation</strong>, which repeats the comparison on several splits and averages. In the code only <code>cv</code> changes (<code>cv=5</code> instead of <code>one_split</code>); <code>best_params_</code> and <code>best_estimator_</code> work as here.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb65"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a>GridSearchCV(lasso_pipe, param_grid<span class="op">=</span>..., cv<span class="op">=</span>one_split, ...)   <span class="co"># this exercise</span></span>
 <span id="cb65-2"><a href="#cb65-2" aria-hidden="true" tabindex="-1"></a>GridSearchCV(lasso_pipe, param_grid<span class="op">=</span>..., cv<span class="op">=</span><span class="dv">5</span>, ...)           <span class="co"># Exercise 5.4</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
@@ -5310,13 +5180,15 @@ forceTheme('sk-container-id-6');</script>
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
+<span class="screen-reader-only">Important</span>Key points
 </div>
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>Once the hyperparameters are chosen, refit that one model on all the training rows: by hand with <code>clone()</code>, <code>set_params()</code> and <code>fit()</code>, or let <code>GridSearchCV()</code> do it and take <code>best_estimator_</code>. Both give the same model.</li>
-<li>Then check it once on the test rows.</li>
+<li>A hyperparameter is chosen, not fitted: try several values, score each on rows the model was not fitted on, and keep the best.</li>
+<li>Scored on its own training rows, the least restrained model always wins. That is why we score on validation rows.</li>
+<li><code>GridSearchCV()</code> is the loop of Part 3 written for you; <code>best_params_</code> is the winner and <code>best_estimator_</code> is the refit.</li>
+<li>Refit the chosen model on all the training rows, then check it once on the test rows.</li>
 </ul>
 </div>
 </div>

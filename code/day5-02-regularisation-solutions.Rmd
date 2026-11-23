@@ -8,19 +8,14 @@ output: html_document
 *Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
 Some settings of a model are not learnt from the data: we choose them before
-fitting. They are called **hyperparameters**. In this exercise the
-hyperparameters are those of **regularisation**: a linear regression that pays
-a price for large coefficients, so that it fits the training rows a little less
-closely in exchange for a simpler model. How large the price is, $\lambda$,
-must be chosen, and we choose it by trying several values and keeping the one
-that predicts best on rows the model has not seen. The page
-[Lasso and ridge in a picture](day5-01b-lasso-ridge-picture.qmd) explains what
-the penalty does.
+fitting. They are called **hyperparameters**; the degree of the polynomial in
+Exercise 5.1 was one. Here the hyperparameter is the size of the lasso penalty,
+$\lambda$ (see [Lasso and ridge in a picture](day5-01b-lasso-ridge-picture.qmd)).
+We choose it by trying several values and keeping the one that predicts best on
+rows the model was not fitted on.
 
-**Theory:** hyperparameters; grid search; why candidates are scored on a
-validation set and not on the training rows; `tune_grid()` and
-`GridSearchCV()`; refitting the chosen model and checking it once on the test
-rows.
+**Theory:** hyperparameters; grid search; validation set; `tune_grid()` and
+`GridSearchCV()`; refitting the chosen model.
 
 > **The plots are for looking at**
 >
@@ -78,15 +73,11 @@ glucose_rec |>
   dim()
 ```
 
-600 rows and 36 columns: glucose and the 35 predictor columns.
+600 rows: glucose and the 35 predictor columns.
 
-The lasso adds a penalty $\lambda \times \sum_j |\beta_j|$ to the fitting (see
-[Lasso and ridge in a picture](day5-01b-lasso-ridge-picture.qmd)). $\lambda$ is
-a **hyperparameter**: a setting we choose before fitting, which the fitting
-does not choose for us. The degree of the polynomial in Exercise 5.1 was
-another. In tidymodels $\lambda$ is called `penalty`, and `mixture = 1` asks
-for the lasso. We mark `penalty` with `tune()`, a placeholder for "to be
-chosen", and fill it in later with `finalize_workflow()`:
+The model is the lasso: `linear_reg()` with `mixture = 1` and the glmnet
+engine. Its $\lambda$ is called `penalty`. We mark it with `tune()`, a
+placeholder for "to be chosen":
 
 ```{r}
 lasso_wf <- workflow() |>
@@ -135,25 +126,15 @@ would win outright.
 
 **Question!** Does that mean the penalty is useless?
 
-> **Learning points**
->
-> - A grid search fits one model for each candidate value and keeps the candidate with the lowest error.
-> - On the rows it was fitted on, a smaller penalty always looks better, because a freer model can follow those rows, noise included, more closely.
-
 ------------------------------------------------------------------------
 
 ### Part 3 — The same grid search, scored on a validation set
 
-The training RMSE cannot tell us when the model starts fitting noise, because
-the noise is in the rows it is measured on. We need rows the model has **not**
-seen. The test rows are kept for one final check of the model we choose: if we
-also used them to *make* the choice, we would pick whichever candidate
-happened to do best on those 150 people, and its test RMSE would no longer be
-an honest estimate (the Stretch of Exercise 5.1).
-
-So we split the training rows once more. Every fourth training row becomes a
-**validation** row: each candidate is fitted on the other rows and scored on
-these.
+The training RMSE cannot show overfitting: the noise the model has learnt is in
+the very rows it is scored on. We need rows it has **not** seen. Not the test
+rows: they are kept for one final check, and choosing with them would make that
+check too optimistic (the Stretch of Exercise 5.1). So we split the training
+rows once more: every fourth training row becomes a **validation** row.
 
 ```{r}
 val_rows   <- seq(1, nrow(train), by = 4)       # every fourth training row
@@ -206,31 +187,13 @@ val_results |>
        title = "The lasso: fitting and validation RMSE for each penalty")
 ```
 
-The two columns tell different stories. The fitting RMSE rises with the
-penalty, as in Part 2. The validation RMSE first **falls**, from 30.24 to its
-lowest value, 29.74 at a penalty of 0.3, and then rises again, to 31.85 at 10.
-
-Why? With a small penalty the model follows the noise of the 450 fitting
-people; that noise does not repeat in the 150 validation people, so their
-predictions are worse (**overfitting**). With a large penalty the model is too
-restrained to follow even the real pattern, and both errors are high
-(**underfitting**). The validation rows played no part in the fitting, so they
-behave like new patients, and their error shows the cost of both. The
-penalty 0.3 is chosen because it has the lowest validation RMSE. Choosing a
-hyperparameter on rows the model was not fitted on is the normal way to choose
-it.
-
-> **Coming later: cross-validation**
->
-> One validation set is the simplest way to compare candidates, but the result
-> depends on which 150 people landed in it (try the Stretch). In Exercise 5.4
-> you will learn **cross-validation**, a resampling method that repeats the
-> comparison on several different splits of the training rows and averages.
-
-> **Learning points**
->
-> - Candidates are scored on validation rows that were not used to fit them; the test rows are kept for one final check.
-> - Too small a penalty overfits, too large a penalty underfits; the validation error is lowest in between.
+The fitting RMSE rises with the penalty, as in Part 2. The validation RMSE
+**falls**, from 30.24 to 29.74 at a penalty of 0.3, and then rises again, to
+31.85 at 10. With a small penalty the model learns noise in the fitting rows
+that does not repeat in the validation rows (**overfitting**); with a large
+penalty it misses the real pattern too (**underfitting**). The validation rows
+show both, so we choose the penalty with the lowest validation RMSE: 0.3. This
+is the normal way to choose a hyperparameter.
 
 ------------------------------------------------------------------------
 
@@ -274,21 +237,18 @@ autoplot(lasso_res) +
 | `augment(..., new_data = validation)` and `rmse()` | the assessment rows of `val_set`, `metrics = metric_set(rmse)` |
 | read the table for the lowest `val_rmse` | `select_best(lasso_res, metric = "rmse")` |
 
-**Which hyperparameters does a model have?** `extract_parameter_set_dials()`
-lists the ones marked with `tune()` in a workflow, and the
-[parsnip page for `linear_reg()` with glmnet](https://parsnip.tidymodels.org/reference/details_linear_reg_glmnet.html)
-lists those the model offers: `penalty` and `mixture`. Chapter 12 of
-[Tidy Modeling with R](https://www.tmwr.org/tuning) explains tuning in
-tidymodels.
+> **Where to find a model's hyperparameters**
+>
+> `extract_parameter_set_dials()` lists the ones marked with `tune()` in a
+> workflow. The
+> [parsnip page for `linear_reg()` with glmnet](https://parsnip.tidymodels.org/reference/details_linear_reg_glmnet.html)
+> lists those the model offers (`penalty` and `mixture`), and chapter 12 of
+> [Tidy Modeling with R](https://www.tmwr.org/tuning) explains tuning in
+> tidymodels.
 
 ```{r}
 extract_parameter_set_dials(lasso_wf)
 ```
-
-> **Learning points**
->
-> - `tune()` marks a hyperparameter; `tune_grid()` fits and scores every candidate; `collect_metrics()`, `autoplot()` and `select_best()` show and choose.
-> - It is the loop of Part 3, written for you.
 
 ------------------------------------------------------------------------
 
@@ -325,19 +285,13 @@ select_best(mix_res, metric = "rmse")
 > A half-and-half mix (`mixture = 0.5`) is best, at 29.59, against 29.74 for the
 > lasso and 29.86 for ridge. The differences are small.
 
-> **Learning points**
->
-> - Tune one hyperparameter at a time by giving the others a single value in the grid.
-
 ------------------------------------------------------------------------
 
 ### Part 6 — Refitting the chosen model, and its one test
 
-During the search every candidate was fitted on the 450 fitting rows only.
-Once the best hyperparameters are known, that one model is fitted again on all
-600 training rows (fitting and validation together): the same settings, more
-data. This is the **refit**. Do it by hand first, using the results table,
-then with the tool, and check that the two agree.
+Every candidate was fitted on the 450 fitting rows only. The chosen one is now
+fitted once more on all 600 training rows, with the same settings: the
+**refit**. Do it by hand, then with the tool, and check that they agree.
 
 **By hand.** Take the row with the lowest validation RMSE, put its values into
 the workflow with `finalize_workflow()`, and fit:
@@ -408,9 +362,10 @@ rows, but it uses fewer columns. Why might that still matter?
 
 > **From one validation set to cross-validation**
 >
-> In Exercise 5.4 the only change is the resampling object: instead of our one
-> split, `vfold_cv()` makes five, and `tune_grid()` averages over them.
-> `select_best()` and `fit_best()` work as here.
+> One validation set depends on which 150 people landed in it (try the Stretch).
+> Exercise 5.4 introduces **cross-validation**, which repeats the comparison on
+> several splits and averages. In the code only the split changes (`vfold_cv()`
+> instead of `val_set`); `select_best()` and `fit_best()` work as here.
 >
 > ```r
 > val_set <- manual_rset(list(one_split), ids = "validation")   # this exercise
@@ -418,10 +373,12 @@ rows, but it uses fewer columns. Why might that still matter?
 > tune_grid(lasso_wf, resamples = folds, grid = ...)
 > ```
 
-> **Learning points**
+> **Key points**
 >
-> - Once the hyperparameters are chosen, refit that one model on all the training rows: by hand with `finalize_workflow()` and `fit()`, or in one step with `fit_best()`. Both give the same model.
-> - Then check it once on the test rows.
+> - A hyperparameter is chosen, not fitted: try several values, score each on rows the model was not fitted on, and keep the best.
+> - Scored on its own training rows, the least restrained model always wins. That is why we score on validation rows.
+> - `tune_grid()` is the loop of Part 3 written for you; `select_best()` picks the winner and `fit_best()` does the refit.
+> - Refit the chosen model on all the training rows, then check it once on the test rows.
 
 > **Other ways to choose the candidates**
 >
