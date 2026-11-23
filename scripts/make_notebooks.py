@@ -354,7 +354,7 @@ def cells(items):
     return tidy
 
 
-def intro(stem, lang):
+def intro(stem, lang, has_blanks=True):
     day = day_of(stem)
     url = f"{SITE}day{day}/{stem}.html" if day else SITE
     where = ("Open it in RStudio and run it a chunk at a time"
@@ -364,7 +364,14 @@ def intro(stem, lang):
             f"the web page is at <{url}>.*", "",
             f"*{where}. Keep it in the folder that holds your `data` folder. "
             + ("This version has the worked answers filled in.*" if SOLUTIONS else
-               "Cells with `______` are blanks for you to fill in.*")]
+               "Cells with `______` are blanks for you to fill in.*" if has_blanks else
+               "Every cell is filled in: run each one in turn.*")]
+
+
+def has_blanks(items):
+    """True if any code cell of this notebook still holds a ______ blank."""
+    return any(c[0] == "code" and any("______" in line for line in c[1])
+               for c in cells(items))
 
 
 def option_lines(body, keep):
@@ -387,7 +394,7 @@ def option_lines(body, keep):
 
 def to_rmd(stem, title, items):
     head = ["---", f'title: "{title}"', "output: html_document", "---", ""]
-    body = intro(stem, "r") + [""]
+    body = intro(stem, "r", has_blanks(items)) + [""]
     for c in cells(items):
         if c[0] == "markdown":
             body += c[1] + [""]
@@ -400,7 +407,7 @@ def to_ipynb(stem, title, items):
     def src(lines):
         return [l + "\n" for l in lines[:-1]] + [lines[-1]] if lines else []
     nb_cells = [{"cell_type": "markdown", "metadata": {},
-                 "source": src([f"# {title}", ""] + intro(stem, "python"))}]
+                 "source": src([f"# {title}", ""] + intro(stem, "python", has_blanks(items)))}]
     for c in cells(items):
         if c[0] == "markdown":
             nb_cells.append({"cell_type": "markdown", "metadata": {}, "source": src(c[1])})

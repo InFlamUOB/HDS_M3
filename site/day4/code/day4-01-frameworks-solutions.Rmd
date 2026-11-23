@@ -1,11 +1,11 @@
 ---
-title: "Exercise 4.1 — One workflow, two classifiers"
+title: "Exercise 4.1 — One workflow, two classifiers (with solutions)"
 output: html_document
 ---
 
 *HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day4/day4-01-frameworks.html>.*
 
-*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
 In Exercise 3.1 you predicted a number, blood glucose. Now the outcome is a
 **class**: will this person have a heart attack or a stroke in the next ten
@@ -108,17 +108,21 @@ we let `predict()` do it.
 `predict()` gives the **class** by default. With `type = "prob"` it gives a
 **probability** for each class instead.
 
-```{r}
-# Replace every ______ below, then run this cell.
-person <- data.frame(age = 70)
-
-predict(log_fit, new_data = person, type = "______")   # a probability for each class
-predict(log_fit, new_data = person)                     # the class
-```
-
 > **Stuck?**
 >
 > The word in quotes is short for probability.
+
+> **Worked answer**
+
+```{r}
+person <- data.frame(age = 70)
+
+predict(log_fit, new_data = person, type = "prob")   # a probability for each class
+predict(log_fit, new_data = person)                     # the class
+```
+
+> `.pred_no` is 0.460 and `.pred_yes` is 0.540: they always add up to 1. The
+> class is `yes`, because the probability of `yes` is above 0.5.
 
 The class is the probability cut at 0.5: `yes` if $\hat{P}(\text{yes}) > 0.5$,
 `no` otherwise. The red point is the 70-year-old, on the fitted curve:
@@ -143,6 +147,13 @@ ggplot() +
 >
 > 1. The model says `yes` for this person. How sure is it?
 > 2. At about what age does the predicted class change from `no` to `yes`?
+
+> **Worked answer**
+>
+> 1. Hardly sure at all: 0.540 is only just above 0.5. The class `yes` on its own
+>    hides that; the probability shows it.
+> 2. Where the curve crosses the dashed line at 0.5: at about 68 years (68.1).
+>    Below that the class is `no`, above it `yes`.
 
 #### Task 1b — Predictions against what happened
 
@@ -173,6 +184,20 @@ ggplot(test_results, aes(x = age, y = .pred_yes, colour = cvd)) +
 >    orange points below the dashed line, and for the blue points above it?
 > 2. Which is more useful to a clinician: the class, or the probability?
 
+> **Worked answer**
+
+```{r}
+count(test_results, predicted = .pred_class, happened = cvd)
+```
+
+> 1. The orange points below the line had an event but were called `no`: 17
+>    people. The blue points above it had none but were called `yes`: 11 people.
+>    With age as the only predictor, two people of the same age get the same
+>    probability, whatever else is true of them.
+> 2. The probability. A person at 0.52 and a person at 0.72 are both `yes`, but
+>    they are not equally worrying. The cut-off of 0.5 is a choice, not part of
+>    the model; Exercise 4.3 is about choosing it.
+
 ### Part 2 — Add blood pressure
 
 The same specification, `log_model`, with a second predictor:
@@ -186,18 +211,21 @@ log_fit_2$fit$coefficients
 
 #### Task 2a — The same person, now with a blood pressure of 128
 
-```{r}
-# Replace every ______ below, then run this cell.
-person <- data.frame(age = 70, systolic_bp = ______)
-
-predict(log_fit_2, new_data = person, type = "______")
-predict(log_fit_2, new_data = person)
-```
-
 > **Stuck?**
 >
 > The person now needs a value for both predictors. Ask for the probabilities
 > exactly as in Task 1a.
+
+> **Worked answer**
+
+```{r}
+person <- data.frame(age = 70, systolic_bp = 128)
+
+predict(log_fit_2, new_data = person, type = "prob")
+predict(log_fit_2, new_data = person)
+```
+
+> The probability of an event is now 0.453, and the class is `no`.
 
 With two predictors, the probability is a **map** over age and blood pressure.
 The black line is where the probability is exactly 0.5: above it the class is
@@ -233,6 +261,17 @@ prob_map(log_fit_2, "Logistic regression: age and blood pressure")
 > 2. Adding blood pressure moved this person from 0.540 to 0.453, and the class
 >    from `yes` to `no`. Did it change much about this person's prediction?
 
+> **Worked answer**
+>
+> 1. The higher the blood pressure, the younger the age at which the model
+>    switches to `yes`: at 140 mmHg the line is at about 66 years, at 160 mmHg at
+>    about 56. Both predictors push the probability the same way, and neither
+>    decides alone. Exercise 4.2 works this line out from the coefficients.
+> 2. Very little: the probability moved by 0.09. The class flipped only because
+>    the person sits right next to the line. Near 0.5 a small change in the
+>    probability can change the class; the probability shows that, the class
+>    does not.
+
 ### Part 3 — The same steps, a decision tree
 
 Only the specification changes. The training patients, the predictors and the
@@ -266,6 +305,15 @@ Start at the top with the 70-year-old with a blood pressure of 128. At each
 question, go left or right. Which leaf do you reach? What probability and what
 class does it give?
 
+> **Worked answer**
+>
+> `age < 72`? Yes, go left. `systolic_bp < 157`? Yes, go left. That leaf gives
+> class `no` and a probability of an event of **0.21**. It holds 71% of the
+> training patients, and 60 of those 285 had an event: 60 / 285 = 0.21.
+>
+> The plot rounds the split points; the exact values (71.5 and 156.5) are in
+> `tree_fit$fit`.
+
 Check it with `predict()`:
 
 ```{r}
@@ -286,6 +334,20 @@ prob_map(tree_fit, "Decision tree: age and blood pressure")
 > 2. Compare the two maps. What shape is the region where each model says `yes`?
 > 3. The three models gave the 70-year-old 0.54, 0.45 and 0.21. What does that
 >    tell you?
+
+> **Worked answer**
+>
+> 1. Four, one per leaf: 0.21, 0.63, 0.13 and 0.78. Every person in the
+>    same leaf gets the same probability, the share of training patients in that
+>    leaf who had an event. Everyone under 71.5 with a blood pressure under
+>    156.5 gets 0.21, whatever their exact age and blood pressure.
+> 2. The logistic regression changes smoothly, and its `yes` region is
+>    everything above a straight line. The tree's map is made of flat rectangles:
+>    it says `yes` for anyone 71.5 or older with a blood pressure of 114.5 or
+>    more, and for anyone younger with a blood pressure of 156.5 or more.
+> 3. Models fitted to the same patients with the same predictors can give quite
+>    different probabilities for one person, and even different classes. Which
+>    model to trust needs a proper evaluation, which comes later in the module.
 
 > **Learning points**
 >

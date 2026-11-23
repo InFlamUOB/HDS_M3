@@ -1,11 +1,11 @@
 ---
-title: "Exercise 5.4 — Random forests"
+title: "Exercise 5.4 — Random forests (with solutions)"
 output: html_document
 ---
 
 *HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day5/day5-04-random-forest.html>.*
 
-*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
 A single decision tree is easy to read but unstable. A few different people in
 the training rows can give a very different tree. A **random forest** grows
@@ -120,14 +120,20 @@ autoplot(rf_res)
 
 Now show the five best combinations by AUC:
 
-```{r}
-# Replace every ______ below, then run this cell.
-show_best(rf_res, metric = ______, n = 5)
-```
-
 > **Stuck?**
 >
 > The metric is the one given to `metric_set()` above, written in quotes.
+
+> **Worked answer**
+
+```{r}
+show_best(rf_res, metric = "roc_auc", n = 5)
+```
+
+> `mtry` 1 with `min_n` 8 has the best cross-validated AUC, 0.809. Next come 1
+> with 10 (0.807), 1 with 6 (0.805), 2 with 10 (0.805) and 2 with 6 (0.802). The
+> standard errors are about 0.015, so these five cannot really be told apart. In
+> the plot, a small `mtry` and a large `min_n` do best.
 
 **Question!** Which values of `mtry` and `min_n` work best? Are the
 differences large compared with the standard errors?
@@ -158,18 +164,22 @@ test_preds <- test |>
 
 Now evaluate it on the test rows:
 
-```{r}
-# Replace every ______ below, then run this cell.
-class_metrics <- metric_set(accuracy, sens, spec)
-class_metrics(______, truth = diabetes, estimate = .pred_class,
-              event_level = "second")
-roc_auc(test_preds, truth = diabetes, ______, event_level = "second")
-```
-
 > **Stuck?**
 >
 > The predictions are in `test_preds`. The AUC needs the predicted probability of
 > `pos`, which is the column `.pred_pos`.
+
+> **Worked answer**
+
+```{r}
+class_metrics <- metric_set(accuracy, sens, spec)
+class_metrics(test_preds, truth = diabetes, estimate = .pred_class,
+              event_level = "second")
+roc_auc(test_preds, truth = diabetes, .pred_pos, event_level = "second")
+```
+
+> The forest uses `mtry` 1 and `min_n` 8. On the test rows: accuracy 0.733,
+> sensitivity 0.618, specificity 0.800, AUC 0.764.
 
 **Question!** Look back at your tuned tree in Exercise 5.3. Is the forest
 better on the test rows? Is it worth losing a single tree that you can read?

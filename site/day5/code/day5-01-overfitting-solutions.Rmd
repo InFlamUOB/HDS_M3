@@ -1,11 +1,11 @@
 ---
-title: "Exercise 5.1 — Overfitting and underfitting"
+title: "Exercise 5.1 — Overfitting and underfitting (with solutions)"
 output: html_document
 ---
 
 *HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day5/day5-01-overfitting.html>.*
 
-*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
 A model is only useful if it predicts **people it has not seen**. So we always
 compare two errors: on the training rows, which the model was fitted on, and on
@@ -98,8 +98,14 @@ hours³ because of that small adjustment.
 Now fit the three models on the training rows: a straight line (degree 1), a
 gentle curve (degree 3) and a very bendy curve (degree 6).
 
+> **Stuck?**
+>
+> The bendy curve has degree 6, and every model is fitted on the training rows
+> only, so `data = train`.
+
+> **Worked answer**
+
 ```{r}
-# Replace every ______ below, then run this cell.
 rec_1 <- recipe(concentration ~ hours, data = train) |>
   step_poly(hours, degree = 1)
 fit_1 <- workflow(rec_1, linear_reg()) |>
@@ -109,15 +115,10 @@ fit_3 <- workflow(rec_3, linear_reg()) |>
   fit(data = train)
 
 rec_6 <- recipe(concentration ~ hours, data = train) |>
-  step_poly(hours, degree = ______)
+  step_poly(hours, degree = 6)
 fit_6 <- workflow(rec_6, linear_reg()) |>
-  fit(data = ______)
+  fit(data = train)
 ```
-
-> **Stuck?**
->
-> The bendy curve has degree 6, and every model is fitted on the training rows
-> only, so `data = train`.
 
 ------------------------------------------------------------------------
 
@@ -137,23 +138,24 @@ test_rmse_1  <- rmse(pred_test_1,  truth = concentration, estimate = .pred)$.est
 
 Do the same for the other two models:
 
-```{r}
-# Replace every ______ below, then run this cell.
-pred_train_3 <- predict(fit_3, new_data = train) |> bind_cols(train)
-pred_test_3  <- predict(fit_3, new_data = ______) |> bind_cols(______)
-train_rmse_3 <- rmse(pred_train_3, truth = concentration, estimate = .pred)$.estimate
-test_rmse_3  <- rmse(pred_test_3,  truth = concentration, estimate = .pred)$.estimate
-
-pred_train_6 <- predict(fit_6, new_data = train) |> bind_cols(train)
-pred_test_6  <- predict(fit_6, new_data = ______) |> bind_cols(______)
-train_rmse_6 <- rmse(pred_train_6, truth = concentration, estimate = .pred)$.estimate
-test_rmse_6  <- rmse(pred_test_6,  truth = concentration, estimate = .pred)$.estimate
-```
-
 > **Stuck?**
 >
 > Copy the straight-line cell: the test predictions use the test rows,
 > `new_data = test` and `bind_cols(test)`.
+
+> **Worked answer**
+
+```{r}
+pred_train_3 <- predict(fit_3, new_data = train) |> bind_cols(train)
+pred_test_3  <- predict(fit_3, new_data = test)  |> bind_cols(test)
+train_rmse_3 <- rmse(pred_train_3, truth = concentration, estimate = .pred)$.estimate
+test_rmse_3  <- rmse(pred_test_3,  truth = concentration, estimate = .pred)$.estimate
+
+pred_train_6 <- predict(fit_6, new_data = train) |> bind_cols(train)
+pred_test_6  <- predict(fit_6, new_data = test)  |> bind_cols(test)
+train_rmse_6 <- rmse(pred_train_6, truth = concentration, estimate = .pred)$.estimate
+test_rmse_6  <- rmse(pred_test_6,  truth = concentration, estimate = .pred)$.estimate
+```
 
 ------------------------------------------------------------------------
 
