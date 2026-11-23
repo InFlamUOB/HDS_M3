@@ -21,8 +21,8 @@ single trees partly cancel out.
 
 **Goal.** In this exercise you will:
 
-- tune a random forest with a workflow and 5-fold cross-validation, as you did
-  for the tree in Exercise 5.3;
+- tune a random forest with a grid search and 5-fold cross-validation, as you
+  did for the tree in Exercise 5.3;
 - fit the final forest and evaluate it once on the test rows;
 - compare it with your tuned tree.
 
@@ -68,17 +68,13 @@ Two hyperparameters are marked with `tune()`:
 - `mtry`: how many predictors each split may choose from (1 to 5 here);
 - `min_n`: the smallest node that may still be split, as for the tree.
 
-The model and the recipe go into a workflow, exactly as in Exercise 5.3. Only
-the model line has changed.
+As for the tree in Exercise 5.3, only the model line changes. The formula
+`diabetes ~ .` is given when we tune and when we fit.
 
 ```{r}
 rf_spec <- rand_forest(mtry = tune(), min_n = tune(), trees = 500) |>
   set_engine("ranger") |>
   set_mode("classification")
-
-rf_wf <- workflow() |>
-  add_model(rf_spec) |>
-  add_recipe(recipe(diabetes ~ ., data = train))
 ```
 
 > **Learning points**
@@ -111,7 +107,8 @@ set.seed(123)
 folds <- vfold_cv(train, v = 5, strata = diabetes)
 
 rf_res <- tune_grid(
-  rf_wf,
+  rf_spec,
+  diabetes ~ .,
   resamples = folds,
   grid      = rf_grid,
   metrics   = metric_set(roc_auc),
@@ -137,26 +134,26 @@ differences large compared with the standard errors?
 
 > **Learning points**
 >
-> - Tuning a forest uses the same workflow, grid and folds as tuning a tree.
+> - Tuning a forest uses the same grid search and folds as tuning a tree.
 > - Look at the whole grid, not only the winner: many combinations are close.
 
 ------------------------------------------------------------------------
 
 ### Part 3 — The final forest, evaluated once
 
-Put the best combination into the workflow and fit it once on all 600 training
-rows:
+Put the best combination into the model with `finalize_model()` and fit it once
+on all 600 training rows:
 
 ```{r}
 best_rf <- select_best(rf_res, metric = "roc_auc")
 
 set.seed(123)
-final_rf_fit <- finalize_workflow(rf_wf, best_rf) |>
-  fit(data = train)
+final_rf_fit <- finalize_model(rf_spec, best_rf) |>
+  fit(diabetes ~ ., data = train)
 
-test_preds <- predict(final_rf_fit, new_data = test, type = "prob") |>
-  bind_cols(predict(final_rf_fit, new_data = test, type = "class")) |>
-  bind_cols(test)
+test_preds <- test |>
+  bind_cols(predict(final_rf_fit, new_data = test, type = "prob"),
+            predict(final_rf_fit, new_data = test))
 ```
 
 Now evaluate it on the test rows:

@@ -62,10 +62,8 @@ tree_spec_small <- decision_tree(tree_depth = 3) |>
   set_engine("rpart") |>
   set_mode("classification")
 
-tree_fit_small <- workflow() |>
-  add_model(tree_spec_small) |>
-  add_formula(diabetes ~ .) |>
-  fit(data = train)
+tree_fit_small <- tree_spec_small |>
+  fit(diabetes ~ ., data = train)
 ```
 
 ```{r}
@@ -109,10 +107,8 @@ tree_spec_full <- decision_tree(cost_complexity = 0, min_n = 2) |>
   set_engine("rpart") |>
   set_mode("classification")
 
-tree_fit_full <- workflow() |>
-  add_model(tree_spec_full) |>
-  add_formula(diabetes ~ .) |>
-  fit(data = train)
+tree_fit_full <- tree_spec_full |>
+  fit(diabetes ~ ., data = train)
 
 tree_frame <- extract_fit_engine(tree_fit_full)$frame   # one row per node
 sum(tree_frame$var == "<leaf>")                         # number of leaves
@@ -122,19 +118,24 @@ sum(tree_frame$var == "<leaf>")                         # number of leaves
 accuracy, and the **AUC**. The AUC is the chance that a random person with
 diabetes gets a higher predicted probability than a random person without: 0.5
 is guessing, 1 is perfect. `event_level = "second"` says that `pos` is the
-event. Score the tree on the training rows and on the test rows:
+event. Add the predicted probabilities and classes to the training rows and to the
+test rows, as in Day 4, and score both:
 
 ```{r}
 # Replace every ______ below, then run this cell.
 tree_metrics <- metric_set(accuracy, roc_auc)
 
-augment(tree_fit_full, new_data = train) |>
-  tree_metrics(truth = diabetes, estimate = .pred_class, .pred_pos,
-               event_level = "second")
+train_preds <- train |>
+  bind_cols(predict(tree_fit_full, new_data = train, type = "prob"),
+            predict(tree_fit_full, new_data = train))
+tree_metrics(train_preds, truth = diabetes, estimate = .pred_class, .pred_pos,
+             event_level = "second")
 
-augment(tree_fit_full, new_data = ______) |>
-  tree_metrics(truth = diabetes, estimate = .pred_class, .pred_pos,
-               event_level = "second")
+test_preds <- test |>
+  bind_cols(predict(tree_fit_full, new_data = ______, type = "prob"),
+            predict(tree_fit_full, new_data = ______))
+tree_metrics(test_preds, truth = diabetes, estimate = .pred_class, .pred_pos,
+             event_level = "second")
 ```
 
 > **Stuck?**
@@ -172,10 +173,6 @@ tree_spec_tune <- decision_tree(cost_complexity = 0,
   set_engine("rpart") |>
   set_mode("classification")
 
-tree_wf_tune <- workflow() |>
-  add_model(tree_spec_tune) |>
-  add_formula(diabetes ~ .)
-
 tree_grid <- grid_regular(tree_depth(range = c(1L, 10L)),
                           min_n(range = c(2L, 30L)),
                           levels = 5)
@@ -193,7 +190,8 @@ set.seed(123)
 folds <- vfold_cv(train, v = 5, strata = diabetes)
 
 tree_res <- tune_grid(
-  tree_wf_tune,
+  tree_spec_tune,
+  diabetes ~ .,
   resamples = folds,
   grid      = tree_grid,
   metrics   = metric_set(roc_auc),
@@ -209,14 +207,15 @@ autoplot(tree_res)
 
 A single question (depth 1) is too simple. When small nodes may be split
 (`min_n` 2 or 9), deep trees overfit and the AUC falls. Keep the best
-combination and refit it on all 600 training rows:
+combination: `finalize_model()` puts it into the model, and `fit()` refits it on
+all 600 training rows.
 
 ```{r}
 best_tree <- select_best(tree_res, metric = "roc_auc")
 best_tree
 
-final_tree_fit <- finalize_workflow(tree_wf_tune, best_tree) |>
-  fit(data = train)
+final_tree_fit <- finalize_model(tree_spec_tune, best_tree) |>
+  fit(diabetes ~ ., data = train)
 ```
 
 Now, and only now, use the test rows. Score the chosen tree once, next to its
@@ -224,19 +223,23 @@ score on the training rows.
 
 ```{r}
 # Replace every ______ below, then run this cell.
-augment(final_tree_fit, new_data = train) |>
-  tree_metrics(truth = diabetes, estimate = .pred_class, .pred_pos,
-               event_level = "second")
+final_train_preds <- train |>
+  bind_cols(predict(final_tree_fit, new_data = train, type = "prob"),
+            predict(final_tree_fit, new_data = train))
+tree_metrics(final_train_preds, truth = diabetes, estimate = .pred_class, .pred_pos,
+             event_level = "second")
 
-augment(final_tree_fit, new_data = ______) |>
-  tree_metrics(truth = diabetes, estimate = .pred_class, ______,
-               event_level = "second")
+final_test_preds <- test |>
+  bind_cols(predict(final_tree_fit, new_data = ______, type = "prob"),
+            predict(final_tree_fit, new_data = ______))
+tree_metrics(final_test_preds, truth = diabetes, estimate = .pred_class, ______,
+             event_level = "second")
 ```
 
 > **Stuck?**
 >
-> The same call as in Part 2: the test rows, and the column of predicted
-> probabilities for `pos`.
+> The same code as in Part 2: the test rows, and the column of predicted
+> probabilities for `pos`, `.pred_pos`.
 
 **Question!** Why must the test rows play no part in choosing `tree_depth` and
 `min_n`?
