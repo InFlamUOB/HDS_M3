@@ -308,7 +308,8 @@ mix_res <- tune_grid(mix_wf,
                      resamples = val_set,
                      grid      = tibble(penalty = 0.3,
                                         mixture = c(0, 0.25, 0.5, 0.75, ______)),
-                     metrics   = metric_set(rmse))
+                     metrics   = metric_set(rmse),
+                     control   = control_grid(save_workflow = TRUE))   # keep the workflow for fit_best()
 
 collect_metrics(mix_res)
 select_best(mix_res, metric = "rmse")
@@ -324,34 +325,76 @@ select_best(mix_res, metric = "rmse")
 
 ------------------------------------------------------------------------
 
-### Part 6 — The final model and its one test
+### Part 6 — Refitting the chosen model, and its one test
 
-Put the chosen values into the workflow, fit it once more on all 600 training
-rows, and check it once on the test rows. Do the same for the unpenalised
-model, to compare:
+During the search every candidate was fitted on the 450 fitting rows only.
+Once the best hyperparameters are known, that one model is fitted again on all
+600 training rows (fitting and validation together): the same settings, more
+data. This is the **refit**. Do it by hand first, using the results table,
+then with the tool, and check that the two agree.
+
+**By hand.** Take the row with the lowest validation RMSE, put its values into
+the workflow with `finalize_workflow()`, and fit:
 
 ```{r}
-final_fit <- mix_wf |>
-  finalize_workflow(select_best(mix_res, metric = "rmse")) |>
-  fit(data = train)
+# Replace every ______ below, then run this cell.
+best <- collect_metrics(mix_res) |>
+  slice_min(mean, n = 1) |>                        # the lowest validation RMSE
+  select(penalty, mixture)
+best
 
+refit_by_hand <- mix_wf |>
+  finalize_workflow(best) |>                       # put the chosen values in
+  fit(data = ______)                               # all 600 training rows
+```
+
+> **Stuck?**
+>
+> The refit uses every training row, fitting and validation together.
+
+**With the tool.** `fit_best()` does the same three steps in one: it finds the
+best candidate, puts its values into the workflow, and fits it on all the
+training rows of the search. (It needs the search to have kept the workflow,
+which is why Part 5 used `control_grid(save_workflow = TRUE)`.)
+
+```{r}
+refit_by_tool <- fit_best(mix_res)
+```
+
+Are they the same model? Put the coefficients side by side:
+
+```{r}
+coefs <- tidy(refit_by_hand) |>
+  select(term, by_hand = estimate) |>
+  left_join(tidy(refit_by_tool) |> select(term, fit_best = estimate), by = "term")
+
+head(coefs)
+all.equal(coefs$by_hand, coefs$fit_best)
+```
+
+`TRUE`: every coefficient is the same. `fit_best()` is the refit you did by
+hand.
+
+Now the **one** test check, with the unpenalised model for comparison:
+
+```{r}
 plain_fit <- workflow() |>
   add_recipe(glucose_rec) |>
   add_model(linear_reg()) |>
   fit(data = train)
 
-augment(final_fit, new_data = test) |>
+augment(refit_by_tool, new_data = test) |>
   rmse(truth = glucose, estimate = .pred)
 augment(plain_fit, new_data = test) |>
   rmse(truth = glucose, estimate = .pred)
 
-tidy(final_fit) |>
+tidy(refit_by_tool) |>
   filter(term != "(Intercept)", estimate != 0) |>
   nrow()                                           # columns kept
 ```
 
-The chosen model has a test RMSE of 26.90 against 27.12 for the unpenalised
-model, and it uses 20 of the 35 columns.
+The chosen model (penalty 0.3, mixture 0.5) has a test RMSE of 26.90 against
+27.12 for the unpenalised model, and it uses 20 of the 35 columns.
 
 **Question!** The penalised model is only a little more accurate on the test
 rows, but it uses fewer columns. Why might that still matter?
@@ -360,6 +403,7 @@ rows, but it uses fewer columns. Why might that still matter?
 >
 > In Exercise 5.4 the only change is the resampling object: instead of our one
 > split, `vfold_cv()` makes five, and `tune_grid()` averages over them.
+> `select_best()` and `fit_best()` work as here.
 >
 > ```r
 > val_set <- manual_rset(list(one_split), ids = "validation")   # this exercise
@@ -369,7 +413,8 @@ rows, but it uses fewer columns. Why might that still matter?
 
 > **Learning points**
 >
-> - Once the hyperparameters are chosen, refit on all the training rows and check the model once on the test rows.
+> - Once the hyperparameters are chosen, refit that one model on all the training rows: by hand with `finalize_workflow()` and `fit()`, or in one step with `fit_best()`. Both give the same model.
+> - Then check it once on the test rows.
 
 > **Other ways to choose the candidates**
 >

@@ -384,7 +384,8 @@ mix_res <- tune_grid(mix_wf,
                      resamples = val_set,
                      grid      = tibble(penalty = 0.3,
                                         mixture = c(0, 0.25, 0.5, 0.75, ______)),
-                     metrics   = metric_set(rmse))
+                     metrics   = metric_set(rmse),
+                     control   = control_grid(save_workflow = TRUE))   # keep the workflow for fit_best()
 
 collect_metrics(mix_res)
 select_best(mix_res, metric = "rmse")
@@ -408,7 +409,8 @@ mix_res <- tune_grid(mix_wf,
                      resamples = val_set,
                      grid      = tibble(penalty = 0.3,
                                         mixture = c(0, 0.25, 0.5, 0.75, 1)),
-                     metrics   = metric_set(rmse))
+                     metrics   = metric_set(rmse),
+                     control   = control_grid(save_workflow = TRUE))   # keep the workflow for fit_best()
 
 collect_metrics(mix_res)
 select_best(mix_res, metric = "rmse")
@@ -426,34 +428,94 @@ lasso and 29.86 for ridge. The differences are small.
 
 ------------------------------------------------------------------------
 
-### Part 6 — The final model and its one test
+### Part 6 — Refitting the chosen model, and its one test
 
-Put the chosen values into the workflow, fit it once more on all 600 training
-rows, and check it once on the test rows. Do the same for the unpenalised
-model, to compare:
+During the search every candidate was fitted on the 450 fitting rows only.
+Once the best hyperparameters are known, that one model is fitted again on all
+600 training rows (fitting and validation together): the same settings, more
+data. This is the **refit**. Do it by hand first, using the results table,
+then with the tool, and check that the two agree.
+
+**By hand.** Take the row with the lowest validation RMSE, put its values into
+the workflow with `finalize_workflow()`, and fit:
 
 ```{r}
-final_fit <- mix_wf |>
-  finalize_workflow(select_best(mix_res, metric = "rmse")) |>
-  fit(data = train)
+#| eval: false
+# Replace every ______ below, then run this cell.
+best <- collect_metrics(mix_res) |>
+  slice_min(mean, n = 1) |>                        # the lowest validation RMSE
+  select(penalty, mixture)
+best
 
+refit_by_hand <- mix_wf |>
+  finalize_workflow(best) |>                       # put the chosen values in
+  fit(data = ______)                               # all 600 training rows
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The refit uses every training row, fitting and validation together.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+best <- collect_metrics(mix_res) |>
+  slice_min(mean, n = 1) |>                        # the lowest validation RMSE
+  select(penalty, mixture)
+best
+
+refit_by_hand <- mix_wf |>
+  finalize_workflow(best) |>                       # put the chosen values in
+  fit(data = train)                                # all 600 training rows
+```
+:::
+:::
+
+**With the tool.** `fit_best()` does the same three steps in one: it finds the
+best candidate, puts its values into the workflow, and fits it on all the
+training rows of the search. (It needs the search to have kept the workflow,
+which is why Part 5 used `control_grid(save_workflow = TRUE)`.)
+
+```{r}
+refit_by_tool <- fit_best(mix_res)
+```
+
+Are they the same model? Put the coefficients side by side:
+
+```{r}
+coefs <- tidy(refit_by_hand) |>
+  select(term, by_hand = estimate) |>
+  left_join(tidy(refit_by_tool) |> select(term, fit_best = estimate), by = "term")
+
+head(coefs)
+all.equal(coefs$by_hand, coefs$fit_best)
+```
+
+`TRUE`: every coefficient is the same. `fit_best()` is the refit you did by
+hand.
+
+Now the **one** test check, with the unpenalised model for comparison:
+
+```{r}
 plain_fit <- workflow() |>
   add_recipe(glucose_rec) |>
   add_model(linear_reg()) |>
   fit(data = train)
 
-augment(final_fit, new_data = test) |>
+augment(refit_by_tool, new_data = test) |>
   rmse(truth = glucose, estimate = .pred)
 augment(plain_fit, new_data = test) |>
   rmse(truth = glucose, estimate = .pred)
 
-tidy(final_fit) |>
+tidy(refit_by_tool) |>
   filter(term != "(Intercept)", estimate != 0) |>
   nrow()                                           # columns kept
 ```
 
-The chosen model has a test RMSE of 26.90 against 27.12 for the unpenalised
-model, and it uses 20 of the 35 columns.
+The chosen model (penalty 0.3, mixture 0.5) has a test RMSE of 26.90 against
+27.12 for the unpenalised model, and it uses 20 of the 35 columns.
 
 **Question!** The penalised model is only a little more accurate on the test
 rows, but it uses fewer columns. Why might that still matter?
@@ -462,6 +524,7 @@ rows, but it uses fewer columns. Why might that still matter?
 ## From one validation set to cross-validation
 In Exercise 5.4 the only change is the resampling object: instead of our one
 split, `vfold_cv()` makes five, and `tune_grid()` averages over them.
+`select_best()` and `fit_best()` work as here.
 
 ```r
 val_set <- manual_rset(list(one_split), ids = "validation")   # this exercise
@@ -472,7 +535,8 @@ tune_grid(lasso_wf, resamples = folds, grid = ...)
 
 ::: {.callout-important}
 ## Learning points
-- Once the hyperparameters are chosen, refit on all the training rows and check the model once on the test rows.
+- Once the hyperparameters are chosen, refit that one model on all the training rows: by hand with `finalize_workflow()` and `fit()`, or in one step with `fit_best()`. Both give the same model.
+- Then check it once on the test rows.
 :::
 
 ## Python
@@ -862,26 +926,85 @@ mixes and ridge. The differences are small.
 
 ------------------------------------------------------------------------
 
-### Part 6 — The final model and its one test
+### Part 6 — Refitting the chosen model, and its one test
 
-After the search, `GridSearchCV()` has already refitted the best candidate on
-all 600 training rows (fitting and validation together); it is in
-`best_estimator_`. Check it once on the test rows, and compare with the
-unpenalised model:
+During the search every candidate was fitted on the 450 fitting rows only.
+Once the best hyperparameters are known, that one model is fitted again on all
+600 training rows (fitting and validation together): the same settings, more
+data. This is the **refit**. Do it by hand first, using the results table,
+then with the tool, and check that the two agree.
+
+**By hand.** Take the row with the lowest validation RMSE, put its value into a
+fresh copy of the pipeline with `set_params()`, and fit. `clone()` makes an
+unfitted copy of the pipeline, so the one inside the search is left alone.
 
 ```{python}
-final_pipe = mix_search.best_estimator_
+#| eval: false
+# Replace every ______ below, then run this cell.
+from sklearn.base import clone
 
+best = mix_results.loc[mix_results["val_rmse"].idxmin(), "param_model__l1_ratio"]   # the lowest validation RMSE
+print("best l1_ratio:", best)
+
+refit_by_hand = clone(mix_pipe).set_params(model__l1_ratio=best)   # put the chosen value in
+refit_by_hand.fit(______[predictors], ______["glucose"])           # all 600 training rows
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The refit uses every training row, fitting and validation together.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+from sklearn.base import clone
+
+best = mix_results.loc[mix_results["val_rmse"].idxmin(), "param_model__l1_ratio"]   # the lowest validation RMSE
+print("best l1_ratio:", best)
+
+refit_by_hand = clone(mix_pipe).set_params(model__l1_ratio=best)   # put the chosen value in
+refit_by_hand.fit(train[predictors], train["glucose"])             # all 600 training rows
+```
+:::
+:::
+
+**With the tool.** `GridSearchCV()` has already done the refit: after the
+search it puts the best value into the pipeline and fits it on all the rows it
+was given (`refit=True`, the default). The result is in `best_estimator_`.
+
+```{python}
+refit_by_tool = mix_search.best_estimator_
+```
+
+Are they the same model? Put the coefficients side by side:
+
+```{python}
+coefs = pd.DataFrame({"by_hand": refit_by_hand["model"].coef_,
+                      "best_estimator_": refit_by_tool["model"].coef_},
+                     index=refit_by_tool[:-1].get_feature_names_out())   # the 35 column names
+print(coefs.head().round(3))
+print("same model:", np.allclose(coefs["by_hand"], coefs["best_estimator_"]))
+```
+
+`True`: every coefficient is the same. `best_estimator_` is the refit you did
+by hand.
+
+Now the **one** test check, with the unpenalised model for comparison:
+
+```{python}
 plain_pipe = Pipeline(mix_pipe.steps[:-1] + [("model", LinearRegression())])
 plain_pipe.fit(train[predictors], train["glucose"])
 
-print("chosen model, test RMSE:     ", round(root_mean_squared_error(test["glucose"], final_pipe.predict(test[predictors])), 2))
+print("chosen model, test RMSE:     ", round(root_mean_squared_error(test["glucose"], refit_by_tool.predict(test[predictors])), 2))
 print("unpenalised model, test RMSE:", round(root_mean_squared_error(test["glucose"], plain_pipe.predict(test[predictors])), 2))
-print("columns kept:", (final_pipe["model"].coef_ != 0).sum())
+print("columns kept:", (refit_by_tool["model"].coef_ != 0).sum())
 ```
 
-The chosen model has a test RMSE of 27.04 against 27.12 for the unpenalised
-model, and it uses 14 of the 35 columns.
+The chosen model (penalty 0.3, `l1_ratio` 1, the lasso) has a test RMSE of
+27.04 against 27.12 for the unpenalised model, and it uses 14 of the 35
+columns.
 
 **Question!** The penalised model is only a little more accurate on the test
 rows, but it uses far fewer columns. Why might that still matter?
@@ -889,7 +1012,8 @@ rows, but it uses far fewer columns. Why might that still matter?
 ::: {.callout-note}
 ## From one validation set to cross-validation
 In Exercise 5.4 the only change is `cv`: instead of our one split, `cv=5` makes
-five, and `GridSearchCV()` averages over them.
+five, and `GridSearchCV()` averages over them. `best_params_` and
+`best_estimator_` work as here.
 
 ```python
 GridSearchCV(lasso_pipe, param_grid=..., cv=one_split, ...)   # this exercise
@@ -899,7 +1023,8 @@ GridSearchCV(lasso_pipe, param_grid=..., cv=5, ...)           # Exercise 5.4
 
 ::: {.callout-important}
 ## Learning points
-- Once the hyperparameters are chosen, refit on all the training rows and check the model once on the test rows.
+- Once the hyperparameters are chosen, refit that one model on all the training rows: by hand with `clone()`, `set_params()` and `fit()`, or let `GridSearchCV()` do it and take `best_estimator_`. Both give the same model.
+- Then check it once on the test rows.
 :::
 
 ::::::
@@ -941,7 +1066,10 @@ fourth training row; a clear minimum), and then shows that `tune_grid()` and
 `GridSearchCV()` reproduce the hand-written loop exactly. Students have not met
 resampling yet: the single split is passed to the tools as `manual_rset()` in R
 and `PredefinedSplit()` in Python, and the closing note shows that Exercise 5.4
-only swaps it for 5-fold cross-validation. The model is a degree-2 polynomial of
+only swaps it for 5-fold cross-validation. Part 6 refits the chosen model on
+all 600 training rows twice, by hand (`finalize_workflow()` and `fit()`;
+`clone()`, `set_params()` and `fit()`) and with the tool (`fit_best()`;
+`best_estimator_`), and prints that the coefficients are identical. The model is a degree-2 polynomial of
 seven predictors (squares and pairwise products, 35 columns), with zeros in
 pressure, triceps and insulin treated as missing and imputed with the median.
 
@@ -959,10 +1087,11 @@ columns), Python 27.04 (14 columns), unpenalised 27.12 in both.
 **Common failures.** (1) Scoring the candidates on `fitting` or `train` and
 choosing the smallest penalty. (2) Scoring them on `test`. (3) In R, tuning only
 `mixture` with a fixed `penalty` in `linear_reg()`: glmnet then stops with "At
-least one penalty value is required". (4) In Python, reading
+least one penalty value is required". (4) In R, calling `fit_best()` on a
+search run without `control_grid(save_workflow = TRUE)`. (5) In Python, reading
 `mean_test_score` as a test-set score, or forgetting that it is negative.
 
 **Timing.** Part 1 five minutes, Parts 2 and 3 twenty, Part 4 fifteen, Part 5
-ten, Part 6 five.
+ten, Part 6 ten.
 :::
 :::
