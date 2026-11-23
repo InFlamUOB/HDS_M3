@@ -14,7 +14,7 @@
     "href": "index.html#the-exercises",
     "title": "Day 5 — Supervised Learning.Regularization&Trees",
     "section": "The exercises",
-    "text": "The exercises\n\nExercise 5.1 — Evaluating a regression model on training and test data\nExercise 5.2 — Evaluating a classification model on training and test data\nExercise 5.3 — Decision trees, overfitting and tuning\nExercise 5.4 — Random forests and tuning with a workflow\nExercise 5.5 — Regularisation: lasso and ridge logistic regression",
+    "text": "The exercises\n\nExercise 5.1 — Evaluating a regression model on training and test data\nExercise 5.2 — Evaluating a classification model on training and test data\nExercise 5.3 — Decision trees, overfitting and tuning\nExercise 5.4 — Random forests and tuning with a workflow\nReading — Lasso and ridge in a picture\nExercise 5.5 — Regularisation: lasso and ridge logistic regression",
     "crumbs": [
       "Day 5 — Supervised Learning.Regularization&Trees"
     ]
@@ -110,13 +110,73 @@
     ]
   },
   {
+    "objectID": "day5-05a-lasso-ridge-picture.html",
+    "href": "day5-05a-lasso-ridge-picture.html",
+    "title": "Reading — Lasso and ridge in a picture",
+    "section": "",
+    "text": "The two penalties\nThis page has no code to write. Read it before Exercise 5.5. It explains one picture that you will meet in almost every textbook on regularisation, and it shows why the lasso can set a coefficient to exactly zero while ridge cannot.\nAn ordinary linear regression chooses the coefficients that give the lowest training MSE. Lasso and ridge add a price for large coefficients. With two predictors, they choose the pair \\((\\beta_1, \\beta_2)\\) that minimises\n\\[\\text{Lasso:}\\quad \\text{MSE} + \\lambda\\,\\big(|\\beta_1| + |\\beta_2|\\big)\n\\qquad\\qquad\n\\text{Ridge:}\\quad \\text{MSE} + \\lambda \\times \\tfrac{1}{2}\\big(\\beta_1^2 + \\beta_2^2\\big)\\]\nYou choose \\(\\lambda\\). With \\(\\lambda = 0\\) there is no price, and you get the ordinary fit, written \\(\\hat\\beta\\). The larger \\(\\lambda\\) is, the more the coefficients are pulled towards zero.",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Reading — Lasso and ridge in a picture</span>"
+    ]
+  },
+  {
+    "objectID": "day5-05a-lasso-ridge-picture.html#the-picture",
+    "href": "day5-05a-lasso-ridge-picture.html#the-picture",
+    "title": "Reading — Lasso and ridge in a picture",
+    "section": "The picture",
+    "text": "The picture\nEach point of the plane below is one possible pair \\((\\beta_1, \\beta_2)\\).\n\nThe black dot \\(\\hat\\beta\\) is the ordinary fit: the pair with the lowest training MSE.\nThe red curves are contours of the training MSE, like the contour lines of a map. Every pair on one curve has the same MSE, and the MSE grows as you move outwards from \\(\\hat\\beta\\). They are ellipses here because the two predictors are correlated.\nThe blue shape holds every pair whose penalty is no more than a budget \\(s\\). For the lasso, \\(|\\beta_1| + |\\beta_2| \\le s\\) is a diamond. For ridge, \\(\\beta_1^2 + \\beta_2^2 \\le s^2\\) is a circle.\nThe white dot is the fitted model: the first point where a red curve, growing outwards from \\(\\hat\\beta\\), touches the blue shape.\n\n\n\n\n\n\n\n\n\n\nThe fitted model is the pair with the lowest MSE that stays within the budget. On the left, the first touch is at the top corner of the diamond, so \\(\\beta_1 = 0\\): the lasso has dropped the first predictor. On the right, the circle has no corners, and the first touch is at a point where both coefficients are smaller than in \\(\\hat\\beta\\) but neither is zero.\nThe penalty \\(\\lambda\\) and the budget \\(s\\) are two descriptions of the same fit. We choose \\(\\lambda\\) and fit the model. Adding up the absolute values of the fitted coefficients then gives \\(s\\), which tells us how big to draw the diamond. The worked example below does exactly that.",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Reading — Lasso and ridge in a picture</span>"
+    ]
+  },
+  {
+    "objectID": "day5-05a-lasso-ridge-picture.html#a-worked-example-with-four-patients",
+    "href": "day5-05a-lasso-ridge-picture.html#a-worked-example-with-four-patients",
+    "title": "Reading — Lasso and ridge in a picture",
+    "section": "A worked example with four patients",
+    "text": "A worked example with four patients\nTo keep the arithmetic small, take four patients and two predictors that have already been standardised.\n\n\n\nPatient\n\\(x_1\\)\n\\(x_2\\)\n\\(y\\)\n\n\n\n\nA\n1\n1\n4\n\n\nB\n1\n−1\n2\n\n\nC\n−1\n1\n−2\n\n\nD\n−1\n−1\n−4\n\n\n\nEvery column averages 0, so the model needs no intercept: \\(\\hat y = \\beta_1 x_1 + \\beta_2 x_2\\). The ordinary fit is \\((3, 1)\\), which predicts all four \\(y\\) values exactly, so its MSE is 0.\n\nStep 1 — The red contours\nFor any pair \\((\\beta_1, \\beta_2)\\), predict the four \\(y\\) values and average the squared residuals. With these data, the calculation simplifies to\n\\[\\text{MSE} = (3 - \\beta_1)^2 + (1 - \\beta_2)^2 .\\]\nSo in this example the red contours are circles centred at \\((3, 1)\\). The farther out we go, the higher the training MSE. (They are circles rather than ellipses because \\(x_1\\) and \\(x_2\\) are uncorrelated here.)\n\n\nStep 2 — Choose \\(\\lambda\\) and fit the lasso\nSet \\(\\lambda = 2\\). The lasso chooses the pair that minimises training MSE plus \\(2 \\times\\) the sum of the absolute coefficients. Here is how a few candidate pairs compare.\n\n\n\n\n\n\n\n\n\nCandidate \\((\\beta_1, \\beta_2)\\)\nTraining MSE\n\\(|\\beta_1| + |\\beta_2|\\)\nTotal at \\(\\lambda = 2\\)\n\n\n\n\n\\((3, 1)\\), the ordinary fit\n0\n4\n8\n\n\n\\((2, 1)\\)\n1\n3\n7\n\n\n\\((2, 0)\\), the lasso fit\n2\n2\n6\n\n\n\\((1, 0)\\)\n5\n1\n7\n\n\n\\((0, 0)\\)\n10\n0\n10\n\n\n\nTake the move from \\((2, 1)\\) to \\((2, 0)\\). Setting \\(\\beta_2\\) to zero increases the training MSE by 1 but saves 2 in penalty, so the total drops from 7 to 6. Moving farther towards zero, to \\((1, 0)\\), increases the MSE by 3 and saves only 2, so the total goes back up.\n\n\nStep 3 — Draw the diamond from the fitted coefficients\nThe winner, \\((2, 0)\\), uses a budget of \\(s = |2| + |0| = 2\\). Draw the diamond holding all pairs whose absolute coefficients add up to at most 2. Its four corners are \\((2, 0)\\), \\((0, 2)\\), \\((-2, 0)\\) and \\((0, -2)\\).\n\n\n\n\n\n\n\n\n\nNow picture a red circle growing outwards from \\((3, 1)\\). The first touch is at \\((2, 0)\\), the right-hand corner of the diamond. Why? If a point inside the diamond had a lower MSE, it would also have an equal or smaller penalty, and so it would have beaten \\((2, 0)\\) in the lasso fit.\n\n\nStep 4 — Turn up \\(\\lambda\\) and watch the diamond shrink\n\n\n\n\n\n\n\n\n\n\\(\\lambda\\)\nLasso fit \\((\\hat\\beta_1, \\hat\\beta_2)\\)\n\\(s = |\\hat\\beta_1| + |\\hat\\beta_2|\\)\nThe diamond reaches\n\n\n\n\n0\n\\((3, 1)\\)\n4\n4 units along each axis\n\n\n2\n\\((2, 0)\\)\n2\n2 units along each axis\n\n\n4\n\\((1, 0)\\)\n1\n1 unit along each axis\n\n\n6\n\\((0, 0)\\)\n0\nOnly the origin\n\n\n\nAt \\(\\lambda = 4\\), the move from \\((2, 0)\\) to \\((1, 0)\\) still increases the MSE by 3, but now it saves 4 in penalty. That is why the stronger penalty favours the smaller coefficient and gives a smaller diamond.\n\n\n\n\n\n\n\n\n\nRead the panels in order. \\(\\beta_2\\) reaches zero first, at \\(\\lambda = 2\\), and \\(\\beta_1\\) follows at \\(\\lambda = 6\\). At \\(\\lambda = 0\\) there is no penalty, and the diamond simply passes through the ordinary fit. The lasso has dropped the weaker predictor first. With many predictors, this is how the lasso selects variables.",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Reading — Lasso and ridge in a picture</span>"
+    ]
+  },
+  {
+    "objectID": "day5-05a-lasso-ridge-picture.html#the-same-example-with-ridge",
+    "href": "day5-05a-lasso-ridge-picture.html#the-same-example-with-ridge",
+    "title": "Reading — Lasso and ridge in a picture",
+    "section": "The same example with ridge",
+    "text": "The same example with ridge\nKeep \\(\\lambda = 2\\), but use the ridge penalty \\(\\lambda \\times \\tfrac{1}{2}(\\beta_1^2 + \\beta_2^2)\\). The last two columns compare ridge with the lasso for the same candidates.\n\n\n\n\n\n\n\n\n\n\nCandidate \\((\\beta_1, \\beta_2)\\)\nTraining MSE\nRidge penalty\nRidge total\nLasso total\n\n\n\n\n\\((3, 1)\\), the ordinary fit\n0\n10\n10\n8\n\n\n\\((2, 0)\\)\n2\n4\n6\n6\n\n\n\\((1.5, 0.5)\\)\n2.5\n2.5\n5\n6.5\n\n\n\\((1, 0)\\)\n5\n1\n6\n7\n\n\n\\((0, 0)\\)\n10\n0\n10\n10\n\n\n\nThe lasso’s winner, \\((2, 0)\\), loses under ridge. Ridge prefers \\((1.5, 0.5)\\), which keeps both coefficients. Squaring makes small coefficients very cheap: a coefficient of 0.5 adds only \\(0.5^2 = 0.25\\) before \\(\\lambda\\) is applied, so there is little to gain by pushing it all the way to zero.\n\n\n\n\n\n\n\n\n\nTurning up \\(\\lambda\\) shrinks the ridge circle, but the fit never lands on an axis:\n\n\n\n\n\n\n\n\n\\(\\lambda\\)\nRidge fit \\((\\hat\\beta_1, \\hat\\beta_2)\\)\nLasso fit \\((\\hat\\beta_1, \\hat\\beta_2)\\)\n\n\n\n\n0\n\\((3, 1)\\)\n\\((3, 1)\\)\n\n\n2\n\\((1.5, 0.5)\\)\n\\((2, 0)\\)\n\n\n6\n\\((0.75, 0.25)\\)\n\\((0, 0)\\)\n\n\n18\n\\((0.3, 0.1)\\)\n\\((0, 0)\\)\n\n\n\nIn this tidy example, with uncorrelated predictors, there is a simple pattern. Ridge divides both coefficients by the same number, \\(1 + \\lambda/2\\), so they get smaller but never reach zero. The lasso subtracts the same amount, \\(\\lambda/2\\), from each coefficient’s size and stops at zero, so the smaller coefficient reaches zero first. With correlated predictors the arithmetic is messier, but the pictures tell the same story.",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Reading — Lasso and ridge in a picture</span>"
+    ]
+  },
+  {
+    "objectID": "day5-05a-lasso-ridge-picture.html#why-the-corners-matter",
+    "href": "day5-05a-lasso-ridge-picture.html#why-the-corners-matter",
+    "title": "Reading — Lasso and ridge in a picture",
+    "section": "Why the corners matter",
+    "text": "Why the corners matter\nThe diamond’s corners lie on the axes, and every point on an axis has one coefficient equal to zero. A red contour arriving from many directions meets a corner before it meets an edge. A circle has no corners, so a first touch exactly on an axis would be a coincidence. With ten predictors the diamond becomes a shape in ten dimensions with many corners and edges, each one a place where some of the coefficients are exactly zero. That is why the lasso often keeps only a handful of predictors, while ridge keeps them all.",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Reading — Lasso and ridge in a picture</span>"
+    ]
+  },
+  {
+    "objectID": "day5-05a-lasso-ridge-picture.html#before-you-start-exercise-5.5",
+    "href": "day5-05a-lasso-ridge-picture.html#before-you-start-exercise-5.5",
+    "title": "Reading — Lasso and ridge in a picture",
+    "section": "Before you start Exercise 5.5",
+    "text": "Before you start Exercise 5.5\n\nLogistic regression. In Exercise 5.5 the model is a logistic regression, so the red contours show the log-loss rather than the MSE. The picture and its conclusion are the same.\nStandardise first. The penalty treats every coefficient alike. A coefficient for age per year is ten times smaller than the same coefficient for age per decade, so without standardising, the penalty would depend on the units you happened to choose.\nCoefficient paths. In Exercise 5.5 you will draw the coefficients against \\(\\lambda\\). Each value of \\(\\lambda\\) on those plots is one picture like the ones above. The lasso lines hit zero one by one, like \\(\\beta_2\\) and then \\(\\beta_1\\) here. The ridge lines bend towards zero but never reach it.\n\n\n\n\n\n\n\nTipKey points\n\n\n\n\nLasso and ridge minimise the training misfit plus \\(\\lambda\\) times a penalty on the coefficients.\nEach fit can be drawn as the first touch between the misfit contours and a budget shape: a diamond for the lasso, a circle for ridge.\nThe diamond has corners on the axes, so the lasso can set coefficients exactly to zero and select predictors. Ridge shrinks every coefficient and drops none.\nA larger \\(\\lambda\\) means a smaller budget \\(s\\), and so a smaller shape.",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Reading — Lasso and ridge in a picture</span>"
+    ]
+  },
+  {
     "objectID": "day5-05-regularisation.html",
     "href": "day5-05-regularisation.html",
     "title": "Exercise 5.5 — Regularisation: lasso and ridge logistic regression",
     "section": "",
-    "text": "Stretch\nA logistic regression fitted without restraint chooses the coefficients that fit the training rows best. Regularisation adds a price for large coefficients, so that the model fits the training rows a little less closely in exchange for being simpler. With predictors standardised, the fitted coefficients minimise\n\\[\\underbrace{-\\frac{1}{n}\\,\\text{log-likelihood}}_{\\text{misfit}} \\;+\\;\n\\lambda \\times \\underbrace{\\textstyle\\sum_j |\\beta_j|}_{\\text{lasso}}\n\\qquad\\text{or}\\qquad\n\\ldots \\;+\\; \\lambda \\times \\underbrace{\\tfrac{1}{2}\\textstyle\\sum_j \\beta_j^2}_{\\text{ridge}}\\]\nThe penalty \\(\\lambda\\) is a hyperparameter: 0 gives the ordinary model, and the larger it is, the more the coefficients are pulled towards zero. The lasso pulls some of them all the way to zero, dropping those predictors; ridge shrinks all of them but drops none.\nTheory: penalised regression; lasso and ridge; why the predictors must be standardised first; coefficient paths; choosing the penalty by cross-validation.",
+    "text": "Stretch\nA logistic regression fitted without restraint chooses the coefficients that fit the training rows best. Regularisation adds a price for large coefficients, so that the model fits the training rows a little less closely in exchange for being simpler. With predictors standardised, the fitted coefficients minimise\n\\[\\underbrace{-\\frac{1}{n}\\,\\text{log-likelihood}}_{\\text{misfit}} \\;+\\;\n\\lambda \\times \\underbrace{\\textstyle\\sum_j |\\beta_j|}_{\\text{lasso}}\n\\qquad\\text{or}\\qquad\n\\ldots \\;+\\; \\lambda \\times \\underbrace{\\tfrac{1}{2}\\textstyle\\sum_j \\beta_j^2}_{\\text{ridge}}\\]\nThe penalty \\(\\lambda\\) is a hyperparameter: 0 gives the ordinary model, and the larger it is, the more the coefficients are pulled towards zero. The lasso pulls some of them all the way to zero, dropping those predictors; ridge shrinks all of them but drops none. The reading Lasso and ridge in a picture shows why, with a worked example.\nTheory: penalised regression; lasso and ridge; why the predictors must be standardised first; coefficient paths; choosing the penalty by cross-validation.",
     "crumbs": [
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Exercise 5.5 — Regularisation: lasso and ridge logistic regression</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Exercise 5.5 — Regularisation: lasso and ridge logistic regression</span>"
     ]
   },
   {
@@ -126,7 +186,7 @@
     "section": "",
     "text": "NoteStretch — the noise test\n\n\n\nAdd five columns of pure random noise to the training and test rows (rnorm() in R, np.random.default_rng(1).normal() in Python), refit the unpenalised model and the tuned lasso on all ten predictors, and compare. Which model gives the noise columns coefficients, and which test AUC suffers more?",
     "crumbs": [
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Exercise 5.5 — Regularisation: lasso and ridge logistic regression</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Exercise 5.5 — Regularisation: lasso and ridge logistic regression</span>"
     ]
   }
 ]
