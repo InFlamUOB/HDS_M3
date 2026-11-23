@@ -247,7 +247,6 @@ window.Quarto = {
 
 
 <p>Some settings of a model are not learnt from the data: we choose them before fitting. They are called <strong>hyperparameters</strong>. Here they are the two settings of the penalty: its size, <span class="math inline">\(\lambda\)</span>, and the mix of lasso and ridge (see <a href="./day5-01b-lasso-ridge-picture.html">Lasso and ridge in a picture</a>). We choose them by trying several values and keeping the ones that predict best on rows the model was not fitted on.</p>
-<p><strong>Theory:</strong> hyperparameters; grid search; validation set; <code>tune_grid()</code> and <code>GridSearchCV()</code>; refitting the chosen model.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -278,15 +277,16 @@ window.Quarto = {
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_bw</span>())          <span class="co"># white background for every plot</span></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">pillar.sigfig =</span> <span class="dv">4</span>)     <span class="co"># show four significant figures in tables</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The same 750 people and the same split as Exercise 5.1, from <a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>. The outcome is glucose again, but this time the other seven measurements are the predictors. In <code>pressure</code>, <code>triceps</code> and <code>insulin</code> a zero means “not measured”, so we turn the zeros into <code>NA</code> and let the recipe fill them in.</p>
+<p>The same 750 people and the same split as Exercise 5.1, from <a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>. The outcome is glucose again, but this time the other seven measurements are the predictors. In <code>pressure</code>, <code>triceps</code> and <code>insulin</code> a zero means “not measured”, so we turn the zeros into <code>NA</code> and let the recipe fill them in. As in Exercise 5.1, 80% of the people are used for training and 20% are held back as the test set; <code>set.seed(42)</code> makes the random split the same every time.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/diabetes_clean.csv"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>diabetes) <span class="sc">|&gt;</span>                                          <span class="co"># glucose is the outcome</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">c</span>(pressure, triceps, insulin), <span class="sc">~</span> <span class="fu">na_if</span>(.x, <span class="dv">0</span>)))  <span class="co"># 0 means "not measured"</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(diabetes), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> diabetes[<span class="sc">-</span>test_rows, ]</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> diabetes[test_rows, ]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>split <span class="ot">&lt;-</span> <span class="fu">initial_split</span>(diabetes, <span class="at">prop =</span> <span class="fl">0.8</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> <span class="fu">training</span>(split)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> <span class="fu">testing</span>(split)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <hr>
 </section>
@@ -357,19 +357,20 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>The RMSE only ever goes up: 26.83 at a penalty of 0.01, 30.78 at 10. Scored on its own training rows, the smallest penalty always wins, and no penalty at all would win outright.</p>
+<p>The RMSE only ever goes up: 26.73 at a penalty of 0.01, 30.45 at 10. Scored on its own training rows, the smallest penalty always wins, and no penalty at all would win outright.</p>
 <p><strong>Question!</strong> Does that mean the penalty is useless?</p>
 <hr>
 </section>
 <section id="part-3-the-same-grid-search-scored-on-a-validation-set" class="level3">
 <h3 class="anchored" data-anchor-id="part-3-the-same-grid-search-scored-on-a-validation-set">Part 3 — The same grid search, scored on a validation set</h3>
-<p>The training RMSE cannot show overfitting: the noise the model has learnt is in the very rows it is scored on. We need rows it has <strong>not</strong> seen. Not the test rows: they are kept for one final check, and choosing with them would make that check too optimistic (the Stretch of Exercise 5.1). So we split the training rows once more: every fourth training row becomes a <strong>validation</strong> row.</p>
+<p>The training RMSE cannot show overfitting: the noise the model has learnt is in the very rows it is scored on. We need rows it has <strong>not</strong> seen. Not the test rows: they are kept for one final check, and choosing with them would make that check too optimistic (the Stretch of Exercise 5.1). So we split the training rows once more, with the same function as before: a random quarter of them become <strong>validation</strong> rows.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>val_rows   <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(train), <span class="at">by =</span> <span class="dv">4</span>)       <span class="co"># every fourth training row</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>fitting    <span class="ot">&lt;-</span> train[<span class="sc">-</span>val_rows, ]</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>validation <span class="ot">&lt;-</span> train[val_rows, ]</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(fitting)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>val_split  <span class="ot">&lt;-</span> <span class="fu">initial_split</span>(train, <span class="at">prop =</span> <span class="fl">0.75</span>)   <span class="co"># 75% to fit, 25% to compare</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>fitting    <span class="ot">&lt;-</span> <span class="fu">training</span>(val_split)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>validation <span class="ot">&lt;-</span> <span class="fu">testing</span>(val_split)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(fitting)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; [1] 450</code></pre>
 </div>
@@ -437,18 +438,15 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>The fitting RMSE rises with the penalty, as in Part 2. The validation RMSE <strong>falls</strong>, from 30.24 to 29.74 at a penalty of 0.3, and then rises again, to 31.85 at 10. With a small penalty the model learns noise in the fitting rows that does not repeat in the validation rows (<strong>overfitting</strong>); with a large penalty it misses the real pattern too (<strong>underfitting</strong>). The validation rows show both, so we choose the penalty with the lowest validation RMSE: 0.3. This is the normal way to choose a hyperparameter.</p>
+<p>The fitting RMSE rises with the penalty, as in Part 2. The validation RMSE <strong>falls</strong>, from 27.76 to 27.50 at a penalty of 0.1, and then rises again, to 30.12 at 10. With a small penalty the model learns noise in the fitting rows that does not repeat in the validation rows (<strong>overfitting</strong>); with a large penalty it misses the real pattern too (<strong>underfitting</strong>). The validation rows show both, so we choose the penalty with the lowest validation RMSE: 0.1. This is the normal way to choose a hyperparameter.</p>
 <hr>
 </section>
 <section id="part-4-the-same-search-with-tune_grid" class="level3">
 <h3 class="anchored" data-anchor-id="part-4-the-same-search-with-tune_grid">Part 4 — The same search with <code>tune_grid()</code></h3>
-<p>tidymodels runs this loop for you. <code>tune_grid()</code> takes the workflow, the grid of candidates, and the split to score them on. It expects the split as a <strong>resampling object</strong>; here that object holds our one split, with the fitting rows for fitting and the validation rows for scoring.</p>
+<p>tidymodels runs this loop for you. <code>tune_grid()</code> takes the workflow, the grid of candidates, and the split to score them on. It expects the split as a <strong>resampling object</strong>; <code>manual_rset()</code> turns our one split, <code>val_split</code>, into one: its training part is used for fitting and its test part for scoring.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>one_split <span class="ot">&lt;-</span> <span class="fu">make_splits</span>(<span class="fu">list</span>(<span class="at">analysis   =</span> <span class="fu">setdiff</span>(<span class="dv">1</span><span class="sc">:</span><span class="fu">nrow</span>(train), val_rows),  <span class="co"># fit on these</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>                              <span class="at">assessment =</span> <span class="fu">as.integer</span>(val_rows)),             <span class="co"># score on these</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">data =</span> train)</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>val_set <span class="ot">&lt;-</span> <span class="fu">manual_rset</span>(<span class="fu">list</span>(one_split), <span class="at">ids =</span> <span class="st">"validation"</span>)</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>val_set</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>val_set <span class="ot">&lt;-</span> <span class="fu">manual_rset</span>(<span class="fu">list</span>(val_split), <span class="at">ids =</span> <span class="st">"validation"</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>val_set</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # Manual resampling 
 #&gt; # A tibble: 1 × 2
@@ -468,23 +466,23 @@ window.Quarto = {
 <pre><code>#&gt; # A tibble: 7 × 7
 #&gt;   penalty .metric .estimator  mean     n std_err .config        
 #&gt;     &lt;dbl&gt; &lt;chr&gt;   &lt;chr&gt;      &lt;dbl&gt; &lt;int&gt;   &lt;dbl&gt; &lt;chr&gt;          
-#&gt; 1    0.01 rmse    standard   30.24     1      NA pre0_mod1_post0
-#&gt; 2    0.03 rmse    standard   30.14     1      NA pre0_mod2_post0
-#&gt; 3    0.1  rmse    standard   29.77     1      NA pre0_mod3_post0
-#&gt; 4    0.3  rmse    standard   29.74     1      NA pre0_mod4_post0
-#&gt; 5    1    rmse    standard   29.95     1      NA pre0_mod5_post0
-#&gt; 6    3    rmse    standard   30.30     1      NA pre0_mod6_post0
-#&gt; 7   10    rmse    standard   31.85     1      NA pre0_mod7_post0</code></pre>
+#&gt; 1    0.01 rmse    standard   27.76     1      NA pre0_mod1_post0
+#&gt; 2    0.03 rmse    standard   27.67     1      NA pre0_mod2_post0
+#&gt; 3    0.1  rmse    standard   27.50     1      NA pre0_mod3_post0
+#&gt; 4    0.3  rmse    standard   27.68     1      NA pre0_mod4_post0
+#&gt; 5    1    rmse    standard   27.87     1      NA pre0_mod5_post0
+#&gt; 6    3    rmse    standard   28.05     1      NA pre0_mod6_post0
+#&gt; 7   10    rmse    standard   30.12     1      NA pre0_mod7_post0</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">select_best</span>(lasso_res, <span class="at">metric =</span> <span class="st">"rmse"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 1 × 2
 #&gt;   penalty .config        
 #&gt;     &lt;dbl&gt; &lt;chr&gt;          
-#&gt; 1     0.3 pre0_mod4_post0</code></pre>
+#&gt; 1     0.1 pre0_mod3_post0</code></pre>
 </div>
 </div>
-<p>The <code>mean</code> column is the validation RMSE of your loop, number for number, and <code>select_best()</code> picks the same penalty, 0.3. <code>autoplot()</code> draws the results:</p>
+<p>The <code>mean</code> column is the validation RMSE of your loop, number for number, and <code>select_best()</code> picks the same penalty, 0.1. <code>autoplot()</code> draws the results:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">autoplot</span>(lasso_res) <span class="sc">+</span></span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"tune_grid(): validation RMSE for each penalty"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -514,11 +512,11 @@ window.Quarto = {
 </tr>
 <tr class="even">
 <td style="text-align: left;"><code>fit(data = fitting)</code></td>
-<td style="text-align: left;">the analysis rows of <code>val_set</code></td>
+<td style="text-align: left;">the training part of <code>val_split</code></td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;"><code>augment(..., new_data = validation)</code> and <code>rmse()</code></td>
-<td style="text-align: left;">the assessment rows of <code>val_set</code>, <code>metrics = metric_set(rmse)</code></td>
+<td style="text-align: left;">the test part of <code>val_split</code>, <code>metrics = metric_set(rmse)</code></td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">read the table for the lowest <code>val_rmse</code></td>
@@ -546,23 +544,25 @@ window.Quarto = {
 </section>
 <section id="part-5-tuning-the-mix-of-lasso-and-ridge" class="level3">
 <h3 class="anchored" data-anchor-id="part-5-tuning-the-mix-of-lasso-and-ridge">Part 5 — Tuning the mix of lasso and ridge</h3>
-<p><code>mixture</code> is the other hyperparameter: 1 is the lasso, 0 is ridge, and values in between mix the two penalties. Keep the penalty at 0.3 and tune only the mixture. (glmnet needs a penalty in every row of the grid, so we mark both with <code>tune()</code> and give the penalty a single value.)</p>
+<p><code>mixture</code> is the other hyperparameter: 1 is the lasso, 0 is ridge, and values in between mix the two penalties. Keep the penalty chosen in Part 4 and tune only the mixture. (glmnet needs a penalty in every row of the grid, so we mark both with <code>tune()</code> and give the penalty a single value.)</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>mix_wf <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">|&gt;</span></span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_recipe</span>(glucose_rec) <span class="sc">|&gt;</span></span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(<span class="fu">linear_reg</span>(<span class="at">penalty =</span> <span class="fu">tune</span>(), <span class="at">mixture =</span> <span class="fu">tune</span>()) <span class="sc">|&gt;</span></span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>              <span class="fu">set_engine</span>(<span class="st">"glmnet"</span>))</span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>mix_res <span class="ot">&lt;-</span> <span class="fu">tune_grid</span>(mix_wf,</span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>                     <span class="at">resamples =</span> val_set,</span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>                     <span class="at">grid      =</span> <span class="fu">tibble</span>(<span class="at">penalty =</span> <span class="fl">0.3</span>,</span>
-<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>                                        <span class="at">mixture =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span>, ______)),</span>
-<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>                     <span class="at">metrics   =</span> <span class="fu">metric_set</span>(rmse),</span>
-<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>                     <span class="at">control   =</span> <span class="fu">control_grid</span>(<span class="at">save_workflow =</span> <span class="cn">TRUE</span>))   <span class="co"># keep the workflow for fit_best()</span></span>
-<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a><span class="fu">collect_metrics</span>(mix_res)</span>
-<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a><span class="fu">select_best</span>(mix_res, <span class="at">metric =</span> <span class="st">"rmse"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>best_penalty <span class="ot">&lt;-</span> <span class="fu">select_best</span>(lasso_res, <span class="at">metric =</span> <span class="st">"rmse"</span>)<span class="sc">$</span>penalty   <span class="co"># the penalty chosen in Part 4</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>mix_wf <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">|&gt;</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_recipe</span>(glucose_rec) <span class="sc">|&gt;</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(<span class="fu">linear_reg</span>(<span class="at">penalty =</span> <span class="fu">tune</span>(), <span class="at">mixture =</span> <span class="fu">tune</span>()) <span class="sc">|&gt;</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>              <span class="fu">set_engine</span>(<span class="st">"glmnet"</span>))</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>mix_res <span class="ot">&lt;-</span> <span class="fu">tune_grid</span>(mix_wf,</span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>                     <span class="at">resamples =</span> val_set,</span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>                     <span class="at">grid      =</span> <span class="fu">tibble</span>(<span class="at">penalty =</span> best_penalty,</span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>                                        <span class="at">mixture =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span>, ______)),</span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>                     <span class="at">metrics   =</span> <span class="fu">metric_set</span>(rmse),</span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>                     <span class="at">control   =</span> <span class="fu">control_grid</span>(<span class="at">save_workflow =</span> <span class="cn">TRUE</span>))   <span class="co"># keep the workflow for fit_best()</span></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a><span class="fu">collect_metrics</span>(mix_res)</span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a><span class="fu">select_best</span>(mix_res, <span class="at">metric =</span> <span class="st">"rmse"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-5-contents" aria-controls="callout-5" aria-expanded="false" aria-label="Toggle callout">
@@ -626,14 +626,14 @@ window.Quarto = {
 <span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(coefs)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 6 × 3
-#&gt;   term                   by_hand   fit_best
-#&gt;   &lt;chr&gt;                    &lt;dbl&gt;      &lt;dbl&gt;
-#&gt; 1 (Intercept)         125.9      125.9     
-#&gt; 2 pregnant_x_pressure   0          0       
-#&gt; 3 pregnant_x_triceps   -6.362     -6.362   
-#&gt; 4 pregnant_x_insulin    0.008338   0.008338
-#&gt; 5 pregnant_x_mass      -1.581     -1.581   
-#&gt; 6 pregnant_x_pedigree   2.097      2.097</code></pre>
+#&gt;   term                by_hand fit_best
+#&gt;   &lt;chr&gt;                 &lt;dbl&gt;    &lt;dbl&gt;
+#&gt; 1 (Intercept)         125.2    125.2  
+#&gt; 2 pregnant_x_pressure   0        0    
+#&gt; 3 pregnant_x_triceps   -2.461   -2.461
+#&gt; 4 pregnant_x_insulin    1.807    1.807
+#&gt; 5 pregnant_x_mass      -1.789   -1.789
+#&gt; 6 pregnant_x_pedigree   1.867    1.867</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="fu">all.equal</span>(coefs<span class="sc">$</span>by_hand, coefs<span class="sc">$</span>fit_best)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
@@ -654,7 +654,7 @@ window.Quarto = {
 <pre><code>#&gt; # A tibble: 1 × 3
 #&gt;   .metric .estimator .estimate
 #&gt;   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
-#&gt; 1 rmse    standard       26.90</code></pre>
+#&gt; 1 rmse    standard       27.35</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="fu">augment</span>(plain_fit, <span class="at">new_data =</span> test) <span class="sc">|&gt;</span></span>
 <span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rmse</span>(<span class="at">truth =</span> glucose, <span class="at">estimate =</span> .pred)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -662,17 +662,17 @@ window.Quarto = {
 <pre><code>#&gt; # A tibble: 1 × 3
 #&gt;   .metric .estimator .estimate
 #&gt;   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
-#&gt; 1 rmse    standard       27.12</code></pre>
+#&gt; 1 rmse    standard       27.31</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tidy</span>(refit_by_tool) <span class="sc">|&gt;</span></span>
 <span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(term <span class="sc">!=</span> <span class="st">"(Intercept)"</span>, estimate <span class="sc">!=</span> <span class="dv">0</span>) <span class="sc">|&gt;</span></span>
 <span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">nrow</span>()                                           <span class="co"># columns kept</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; [1] 20</code></pre>
+<pre><code>#&gt; [1] 23</code></pre>
 </div>
 </div>
-<p>The chosen model (penalty 0.3, mixture 0.5) has a test RMSE of 26.90 against 27.12 for the unpenalised model, and it uses 20 of the 35 columns.</p>
-<p><strong>Question!</strong> The penalised model is only a little more accurate on the test rows, but it uses fewer columns. Why might that still matter?</p>
+<p>The chosen model (penalty 0.1, mixture 1: the lasso) has a test RMSE of 27.35 against 27.31 for the unpenalised model: about the same, with 23 of the 35 columns.</p>
+<p><strong>Question!</strong> The penalised model is about as accurate on the test rows as the unpenalised one, but it uses fewer columns. Why might that still matter?</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -684,7 +684,7 @@ window.Quarto = {
 </div>
 <div class="callout-body-container callout-body">
 <p>One validation set depends on which 150 people landed in it (try the Stretch). Exercise 5.4 introduces <strong>cross-validation</strong>, which repeats the comparison on several splits and averages. In the code only the split changes (<code>vfold_cv()</code> instead of <code>val_set</code>); <code>select_best()</code> and <code>fit_best()</code> work as here.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>val_set <span class="ot">&lt;-</span> <span class="fu">manual_rset</span>(<span class="fu">list</span>(one_split), <span class="at">ids =</span> <span class="st">"validation"</span>)   <span class="co"># this exercise</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>val_set <span class="ot">&lt;-</span> <span class="fu">manual_rset</span>(<span class="fu">list</span>(val_split), <span class="at">ids =</span> <span class="st">"validation"</span>)   <span class="co"># this exercise</span></span>
 <span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>folds   <span class="ot">&lt;-</span> <span class="fu">vfold_cv</span>(train, <span class="at">v =</span> <span class="dv">5</span>)                             <span class="co"># Exercise 5.4</span></span>
 <span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="fu">tune_grid</span>(lasso_wf, <span class="at">resamples =</span> folds, <span class="at">grid =</span> ...)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
@@ -726,10 +726,10 @@ window.Quarto = {
 <span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.impute <span class="im">import</span> SimpleImputer</span>
 <span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.preprocessing <span class="im">import</span> PolynomialFeatures, StandardScaler</span>
 <span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> LinearRegression, Lasso, ElasticNet</span>
-<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.model_selection <span class="im">import</span> GridSearchCV, PredefinedSplit, ValidationCurveDisplay</span>
+<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.model_selection <span class="im">import</span> train_test_split, GridSearchCV, PredefinedSplit, ValidationCurveDisplay</span>
 <span id="cb35-14"><a href="#cb35-14" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> root_mean_squared_error</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The same 750 people and the same split as Exercise 5.1, from <a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>. The outcome is glucose again, but this time the other seven measurements are the predictors. In <code>pressure</code>, <code>triceps</code> and <code>insulin</code> a zero means “not measured”, so we turn the zeros into missing values and let the pipeline fill them in.</p>
+<p>The same 750 people and the same split as Exercise 5.1, from <a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>. The outcome is glucose again, but this time the other seven measurements are the predictors. In <code>pressure</code>, <code>triceps</code> and <code>insulin</code> a zero means “not measured”, so we turn the zeros into missing values and let the pipeline fill them in. As in Exercise 5.1, 80% of the people are used for training and 20% are held back as the test set; <code>random_state=42</code> makes the random split the same every time.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes_clean.csv"</span>).drop(columns<span class="op">=</span><span class="st">"diabetes"</span>)   <span class="co"># glucose is the outcome</span></span>
 <span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> col <span class="kw">in</span> [<span class="st">"pressure"</span>, <span class="st">"triceps"</span>, <span class="st">"insulin"</span>]:</span>
@@ -737,9 +737,7 @@ window.Quarto = {
 <span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>predictors <span class="op">=</span> [<span class="st">"pregnant"</span>, <span class="st">"pressure"</span>, <span class="st">"triceps"</span>, <span class="st">"insulin"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>]</span>
 <span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> diabetes.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
-<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> diabetes[<span class="op">~</span>is_test]</span>
-<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>test  <span class="op">=</span> diabetes[is_test]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>train, test <span class="op">=</span> train_test_split(diabetes, test_size<span class="op">=</span><span class="fl">0.2</span>, random_state<span class="op">=</span><span class="dv">42</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <hr>
 </section>
@@ -792,19 +790,17 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>The RMSE only ever goes up: 26.83 at a penalty of 0.01, 30.78 at 10. Scored on its own training rows, the smallest penalty always wins, and no penalty at all would win outright.</p>
+<p>The RMSE only ever goes up: 26.83 at a penalty of 0.01, 30.66 at 10. Scored on its own training rows, the smallest penalty always wins, and no penalty at all would win outright.</p>
 <p><strong>Question!</strong> Does that mean the penalty is useless?</p>
 <hr>
 </section>
 <section id="part-3-the-same-grid-search-scored-on-a-validation-set-1" class="level3">
 <h3 class="anchored" data-anchor-id="part-3-the-same-grid-search-scored-on-a-validation-set-1">Part 3 — The same grid search, scored on a validation set</h3>
-<p>The training RMSE cannot show overfitting: the noise the model has learnt is in the very rows it is scored on. We need rows it has <strong>not</strong> seen. Not the test rows: they are kept for one final check, and choosing with them would make that check too optimistic (the Stretch of Exercise 5.1). So we split the training rows once more: every fourth training row becomes a <strong>validation</strong> row.</p>
+<p>The training RMSE cannot show overfitting: the noise the model has learnt is in the very rows it is scored on. We need rows it has <strong>not</strong> seen. Not the test rows: they are kept for one final check, and choosing with them would make that check too optimistic (the Stretch of Exercise 5.1). So we split the training rows once more, with the same function as before: a random quarter of them become <strong>validation</strong> rows.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>is_val <span class="op">=</span> np.arange(<span class="bu">len</span>(train)) <span class="op">%</span> <span class="dv">4</span> <span class="op">==</span> <span class="dv">0</span>          <span class="co"># every fourth training row</span></span>
-<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>fitting    <span class="op">=</span> train[<span class="op">~</span>is_val]</span>
-<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>validation <span class="op">=</span> train[is_val]</span>
-<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">len</span>(fitting), <span class="bu">len</span>(validation))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>fitting, validation <span class="op">=</span> train_test_split(train, test_size<span class="op">=</span><span class="fl">0.25</span>, random_state<span class="op">=</span><span class="dv">42</span>)   <span class="co"># 75% to fit, 25% to compare</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">len</span>(fitting), <span class="bu">len</span>(validation))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; 450 150</code></pre>
 </div>
@@ -862,20 +858,21 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>The fitting RMSE rises with the penalty, as in Part 2. The validation RMSE <strong>falls</strong>, from 30.26 to 29.75 at a penalty of 0.3, and then rises again, to 31.85 at 10. With a small penalty the model learns noise in the fitting rows that does not repeat in the validation rows (<strong>overfitting</strong>); with a large penalty it misses the real pattern too (<strong>underfitting</strong>). The validation rows show both, so we choose the penalty with the lowest validation RMSE: 0.3. This is the normal way to choose a hyperparameter.</p>
+<p>The fitting RMSE rises with the penalty, as in Part 2. The validation RMSE <strong>falls</strong>, from 25.16 to 24.55 at a penalty of 0.1, and then rises again, to 29.87 at 10. With a small penalty the model learns noise in the fitting rows that does not repeat in the validation rows (<strong>overfitting</strong>); with a large penalty it misses the real pattern too (<strong>underfitting</strong>). The validation rows show both, so we choose the penalty with the lowest validation RMSE: 0.1. This is the normal way to choose a hyperparameter.</p>
 <hr>
 </section>
 <section id="part-4-the-same-search-with-gridsearchcv" class="level3">
 <h3 class="anchored" data-anchor-id="part-4-the-same-search-with-gridsearchcv">Part 4 — The same search with <code>GridSearchCV()</code></h3>
-<p>scikit-learn runs this loop for you. <code>GridSearchCV()</code> takes the pipeline, the grid of candidates, and the split to score them on. <code>PredefinedSplit()</code> gives it our one split: rows marked <code>-1</code> are always used for fitting, rows marked <code>0</code> are the validation rows. <code>GridSearchCV()</code> always looks for the <strong>highest</strong> score, so for an error it uses the negative RMSE.</p>
+<p>scikit-learn runs this loop for you. <code>GridSearchCV()</code> takes the pipeline, the grid of candidates, and the split to score them on. <code>PredefinedSplit()</code> gives it our one split: training rows marked <code>-1</code> are used for fitting, rows marked <code>0</code> are the validation rows. <code>GridSearchCV()</code> always looks for the <strong>highest</strong> score, so for an error it uses the negative RMSE.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>one_split <span class="op">=</span> PredefinedSplit(np.where(is_val, <span class="dv">0</span>, <span class="op">-</span><span class="dv">1</span>))   <span class="co"># 0 = validation row, -1 = fitting row</span></span>
-<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>lasso_search <span class="op">=</span> GridSearchCV(lasso_pipe,</span>
-<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>                            param_grid<span class="op">=</span>{<span class="st">"model__alpha"</span>: penalties},</span>
-<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>                            cv<span class="op">=</span>one_split,</span>
-<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>                            scoring<span class="op">=</span><span class="st">"neg_root_mean_squared_error"</span>)</span>
-<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>lasso_search.fit(train[predictors], train[<span class="st">"glucose"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>is_val <span class="op">=</span> train.index.isin(validation.index)</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>one_split <span class="op">=</span> PredefinedSplit(np.where(is_val, <span class="dv">0</span>, <span class="op">-</span><span class="dv">1</span>))   <span class="co"># 0 = validation row, -1 = fitting row</span></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>lasso_search <span class="op">=</span> GridSearchCV(lasso_pipe,</span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>                            param_grid<span class="op">=</span>{<span class="st">"model__alpha"</span>: penalties},</span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>                            cv<span class="op">=</span>one_split,</span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>                            scoring<span class="op">=</span><span class="st">"neg_root_mean_squared_error"</span>)</span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>lasso_search.fit(train[predictors], train[<span class="st">"glucose"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <style>.sk-global {
   /* Definition of color scheme common for light and dark mode */
@@ -1582,7 +1579,7 @@ a.param-doc-link::before {
   justify-content: center;
   margin-top: 0.5em;
 }
-</style><div id="sk-container-id-3" tabindex="0" class="sk-top-container sk-global"><div class="sk-text-repr-fallback"><pre>GridSearchCV(cv=PredefinedSplit(test_fold=array([ 0, -1, ..., -1, -1], shape=(600,))),
+</style><div id="sk-container-id-3" tabindex="0" class="sk-top-container sk-global"><div class="sk-text-repr-fallback"><pre>GridSearchCV(cv=PredefinedSplit(test_fold=array([ 0, -1, ...,  0, -1], shape=(600,))),
              estimator=Pipeline(steps=[('impute',
                                         SimpleImputer(strategy='median')),
                                        ('poly',
@@ -1851,7 +1848,7 @@ mean score (``search.best_score_``).<br>
 For multi-metric evaluation, this is present only if ``refit`` is<br>
 specified.</span></a></td>
 <td class="fitted-att-type">int64</td>
-<td>np.int64(3)</td>
+<td>np.int64(2)</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.model_selection.GridSearchCV.html#:~:text=best_params_,-dict" class="param-doc-link" style="anchor-name: --doc-link-best_params_;" rel="noreferrer" target="_blank">best_params_ <span class="param-doc-description" style="position-anchor: --doc-link-best_params_;"> best_params_: dict<br>
@@ -1861,7 +1858,7 @@ Parameter setting that gave the best results on the hold out data.<br>
 For multi-metric evaluation, this is present only if ``refit`` is<br>
 specified.</span></a></td>
 <td class="fitted-att-type">dict</td>
-<td>{'mo...ha': 0.3}</td>
+<td>{'mo...ha': 0.1}</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.model_selection.GridSearchCV.html#:~:text=best_score_,-float" class="param-doc-link" style="anchor-name: --doc-link-best_score_;" rel="noreferrer" target="_blank">best_score_ <span class="param-doc-description" style="position-anchor: --doc-link-best_score_;"> best_score_: float<br>
@@ -1873,7 +1870,7 @@ specified.<br>
 <br>
 This attribute is not available if ``refit`` is a function.</span></a></td>
 <td class="fitted-att-type">float64</td>
-<td>-29.75</td>
+<td>-24.55</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.model_selection.GridSearchCV.html#:~:text=cv_results_,-dict%20of%20numpy%20%28masked%29%20ndarrays" class="param-doc-link" style="anchor-name: --doc-link-cv_results_;" rel="noreferrer" target="_blank">cv_results_ <span class="param-doc-description" style="position-anchor: --doc-link-cv_results_;"> cv_results_: dict of numpy (masked) ndarrays<br>
@@ -1936,7 +1933,7 @@ available in the ``cv_results_`` dict at the keys ending with that<br>
 scorer's name (``'_&lt;scorer_name&gt;'``) instead of ``'_score'`` shown<br>
 above. ('split0_test_precision', 'mean_train_precision' etc.)</span></a></td>
 <td class="fitted-att-type">dict</td>
-<td>{'me...me': array([0.0148..., 0.00152206]), 'me...me': array([0.0006..., 0.00059581]), 'me...re': array([-30.25...-31.85119182]), 'pa...ha': masked_array(...l_value=1e+20), ...}</td>
+<td>{'me...me': array([0.0120..., 0.00153112]), 'me...me': array([0.0007..., 0.0005939 ]), 'me...re': array([-25.15...-29.871222 ]), 'pa...ha': masked_array(...l_value=1e+20), ...}</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.model_selection.GridSearchCV.html#:~:text=feature_names_in_,-ndarray%20of%20shape%20%28n_features_in_%2C%29" class="param-doc-link" style="anchor-name: --doc-link-feature_names_in_;" rel="noreferrer" target="_blank">feature_names_in_ <span class="param-doc-description" style="position-anchor: --doc-link-feature_names_in_;"> feature_names_in_: ndarray of shape (`n_features_in_`,)<br>
@@ -1985,7 +1982,7 @@ This is present only if ``refit`` is not False.<br>
 <br>
 .. versionadded:: 0.20</span></a></td>
 <td class="fitted-att-type">float</td>
-<td>0.00263</td>
+<td>0.004296</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.model_selection.GridSearchCV.html#:~:text=scorer_,-function%20or%20a%20dict" class="param-doc-link" style="anchor-name: --doc-link-scorer_;" rel="noreferrer" target="_blank">scorer_ <span class="param-doc-description" style="position-anchor: --doc-link-scorer_;"> scorer_: function or a dict<br>
@@ -2168,7 +2165,7 @@ Computing statistics can result in `np.nan` values.<br>
 During :meth:`transform`, features corresponding to `np.nan`<br>
 statistics will be discarded.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](7,)</td>
-<td>[ 3. ,72. ,29. ,...,32.4 , 0.38,29. ]</td>
+<td>[ 3. ,72. ,29. ,...,32.5 , 0.38,29. ]</td>
 </tr>
 </tbody>
 </table>
@@ -2541,7 +2538,7 @@ unit standard deviation).</span></a></td>
 The mean value for each feature in the training set.<br>
 Equal to ``None`` when ``with_mean=False`` and ``with_std=False``.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](35,)</td>
-<td>[ 4.66, 72.34, 29.06,..., 0.38, 16.66,1246.56]</td>
+<td>[ 4.7 , 72.84, 29.18,..., 0.37, 16.64,1260.63]</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.preprocessing.StandardScaler.html#:~:text=n_features_in_,-int" class="param-doc-link" style="anchor-name: --doc-link-n_features_in_;" rel="noreferrer" target="_blank">n_features_in_ <span class="param-doc-description" style="position-anchor: --doc-link-n_features_in_;"> n_features_in_: int<br>
@@ -2577,7 +2574,7 @@ when `with_std=False`.<br>
 .. versionadded:: 0.17<br>
 *scale_*</span></a></td>
 <td class="fitted-att-type">ndarray[float64](35,)</td>
-<td>[ 3.88, 11.93, 7.96,..., 0.71, 15.63,969.64]</td>
+<td>[ 3.86, 12.07, 8.17,..., 0.67, 14.58,997.08]</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.preprocessing.StandardScaler.html#:~:text=var_,-ndarray%20of%20shape%20%28n_features%2C%29%20or%20None" class="param-doc-link" style="anchor-name: --doc-link-var_;" rel="noreferrer" target="_blank">var_ <span class="param-doc-description" style="position-anchor: --doc-link-var_;"> var_: ndarray of shape (n_features,) or None<br>
@@ -2586,7 +2583,7 @@ The variance for each feature in the training set. Used to compute<br>
 `scale_`. Equal to ``None`` when ``with_mean=False`` and<br>
 ``with_std=False``.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](35,)</td>
-<td>[ 15.08, 142.39, 63.35,..., 0.5 , 244.25,940207.7 ]</td>
+<td>[ 14.93, 145.58, 66.73,..., 0.44, 212.48,994169.55]</td>
 </tr>
 </tbody>
 </table>
@@ -2748,7 +2745,7 @@ When `alpha = 0`, the objective is equivalent to ordinary least<br>
 squares, solved by the :class:`LinearRegression` object. For numerical<br>
 reasons, using `alpha = 0` with the `Lasso` object is not advised.<br>
 Instead, you should use the :class:`LinearRegression` object.</span></a></td>
-<td class="value">0.3</td>
+<td class="value">0.1</td>
 </tr>
 <tr class="user-set even">
 <td><button type="button" class="copy-paste-icon" aria-label="Copy max_iter to clipboard" onclick="copyToClipboard('max_iter',
@@ -2872,7 +2869,7 @@ especially when tol is higher than 1e-4.</span></a></td>
 <br>
 Parameter vector (w in the cost function formula).</span></a></td>
 <td class="fitted-att-type">ndarray[float64](35,)</td>
-<td>[-0. ,-0. ,-0. ,...,-1.4 , 0. ,-3.73]</td>
+<td>[ -0. , 0.26, -0. ,..., -3.37, 0. ,-19.38]</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.Lasso.html#:~:text=dual_gap_,-float%20or%20ndarray%20of%20shape%20%28n_targets%2C%29" class="param-doc-link" style="anchor-name: --doc-link-dual_gap_;" rel="noreferrer" target="_blank">dual_gap_ <span class="param-doc-description" style="position-anchor: --doc-link-dual_gap_;"> dual_gap_: float or ndarray of shape (n_targets,)<br>
@@ -2880,14 +2877,14 @@ Parameter vector (w in the cost function formula).</span></a></td>
 Given parameter ``alpha``, the dual gaps at the end of the optimization,<br>
 same shape as each observation of y.</span></a></td>
 <td class="fitted-att-type">float64</td>
-<td>0.05854</td>
+<td>0.09855</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.Lasso.html#:~:text=intercept_,-float%20or%20ndarray%20of%20shape%20%28n_targets%2C%29" class="param-doc-link" style="anchor-name: --doc-link-intercept_;" rel="noreferrer" target="_blank">intercept_ <span class="param-doc-description" style="position-anchor: --doc-link-intercept_;"> intercept_: float or ndarray of shape (n_targets,)<br>
 <br>
 Independent term in decision function.</span></a></td>
 <td class="fitted-att-type">float64</td>
-<td>125.9</td>
+<td>124.9</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.Lasso.html#:~:text=n_features_in_,-int" class="param-doc-link" style="anchor-name: --doc-link-n_features_in_;" rel="noreferrer" target="_blank">n_features_in_ <span class="param-doc-description" style="position-anchor: --doc-link-n_features_in_;"> n_features_in_: int<br>
@@ -2904,7 +2901,7 @@ Number of features seen during :term:`fit`.<br>
 Number of iterations run by the coordinate descent solver to reach<br>
 the specified tolerance.</span></a></td>
 <td class="fitted-att-type">int</td>
-<td>292</td>
+<td>486</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.Lasso.html#:~:text=sparse_coef_,-sparse%20matrix%20of%20shape%20%28n_features%2C%201%29%20or%20%20%20%20%20%20%20%20%20%20%20%20%20%28n_targets%2C%20n_features%29" class="param-doc-link" style="anchor-name: --doc-link-sparse_coef_;" rel="noreferrer" target="_blank">sparse_coef_ <span class="param-doc-description" style="position-anchor: --doc-link-sparse_coef_;"> sparse_coef_: sparse matrix of shape (n_features, 1) or (n_targets, n_features)<br>
@@ -3095,20 +3092,20 @@ forceTheme('sk-container-id-3');</script>
 <span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(results[[<span class="st">"param_model__alpha"</span>, <span class="st">"val_rmse"</span>]].<span class="bu">round</span>(<span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;    param_model__alpha  val_rmse
-#&gt; 0                0.01     30.26
-#&gt; 1                0.03     30.15
-#&gt; 2                0.10     29.79
-#&gt; 3                0.30     29.75
-#&gt; 4                1.00     29.95
-#&gt; 5                3.00     30.29
-#&gt; 6               10.00     31.85</code></pre>
+#&gt; 0                0.01     25.16
+#&gt; 1                0.03     24.91
+#&gt; 2                0.10     24.55
+#&gt; 3                0.30     24.66
+#&gt; 4                1.00     25.23
+#&gt; 5                3.00     26.34
+#&gt; 6               10.00     29.87</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(lasso_search.best_params_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; {'model__alpha': 0.3}</code></pre>
+<pre><code>#&gt; {'model__alpha': 0.1}</code></pre>
 </div>
 </div>
-<p>The <code>val_rmse</code> column is the validation RMSE of your loop, number for number, and <code>best_params_</code> is the same penalty, 0.3. (scikit-learn calls the held-out rows “test” in its names, such as <code>mean_test_score</code>; here they are our validation rows.) <code>ValidationCurveDisplay</code> draws the fitting and the validation error for each value:</p>
+<p>The <code>val_rmse</code> column is the validation RMSE of your loop, number for number, and <code>best_params_</code> is the same penalty, 0.1. (scikit-learn calls the held-out rows “test” in its names, such as <code>mean_test_score</code>; here they are our validation rows.) <code>ValidationCurveDisplay</code> draws the fitting and the validation error for each value:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb48"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a>display <span class="op">=</span> ValidationCurveDisplay.from_estimator(</span>
 <span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>    lasso_pipe, train[predictors], train[<span class="st">"glucose"</span>],</span>
@@ -3180,26 +3177,28 @@ forceTheme('sk-container-id-3');</script>
 </section>
 <section id="part-5-tuning-the-mix-of-lasso-and-ridge-1" class="level3">
 <h3 class="anchored" data-anchor-id="part-5-tuning-the-mix-of-lasso-and-ridge-1">Part 5 — Tuning the mix of lasso and ridge</h3>
-<p><code>ElasticNet()</code> has a second hyperparameter, <code>l1_ratio</code>: 1 is the lasso, 0 is ridge, and values in between mix the two penalties. Keep the penalty at 0.3 and tune only <code>l1_ratio</code>:</p>
+<p><code>ElasticNet()</code> has a second hyperparameter, <code>l1_ratio</code>: 1 is the lasso, 0 is ridge, and values in between mix the two penalties. Keep the penalty chosen in Part 4 and tune only <code>l1_ratio</code>:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>mix_pipe <span class="op">=</span> Pipeline([</span>
-<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"impute"</span>, SimpleImputer(strategy<span class="op">=</span><span class="st">"median"</span>)),</span>
-<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"poly"</span>, PolynomialFeatures(degree<span class="op">=</span><span class="dv">2</span>, include_bias<span class="op">=</span><span class="va">False</span>)),</span>
-<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"scale"</span>, StandardScaler()),</span>
-<span id="cb51-6"><a href="#cb51-6" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"model"</span>, ElasticNet(alpha<span class="op">=</span><span class="fl">0.3</span>, max_iter<span class="op">=</span><span class="dv">100000</span>)),</span>
-<span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a>])</span>
-<span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb51-9"><a href="#cb51-9" aria-hidden="true" tabindex="-1"></a>mix_search <span class="op">=</span> GridSearchCV(mix_pipe,</span>
-<span id="cb51-10"><a href="#cb51-10" aria-hidden="true" tabindex="-1"></a>                          param_grid<span class="op">=</span>{<span class="st">"model__l1_ratio"</span>: [<span class="dv">0</span>, <span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span>, ______]},</span>
-<span id="cb51-11"><a href="#cb51-11" aria-hidden="true" tabindex="-1"></a>                          cv<span class="op">=</span>one_split,</span>
-<span id="cb51-12"><a href="#cb51-12" aria-hidden="true" tabindex="-1"></a>                          scoring<span class="op">=</span><span class="st">"neg_root_mean_squared_error"</span>)</span>
-<span id="cb51-13"><a href="#cb51-13" aria-hidden="true" tabindex="-1"></a>mix_search.fit(train[predictors], train[<span class="st">"glucose"</span>])</span>
-<span id="cb51-14"><a href="#cb51-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb51-15"><a href="#cb51-15" aria-hidden="true" tabindex="-1"></a>mix_results <span class="op">=</span> pd.DataFrame(mix_search.cv_results_)</span>
-<span id="cb51-16"><a href="#cb51-16" aria-hidden="true" tabindex="-1"></a>mix_results[<span class="st">"val_rmse"</span>] <span class="op">=</span> <span class="op">-</span>mix_results[<span class="st">"mean_test_score"</span>]</span>
-<span id="cb51-17"><a href="#cb51-17" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(mix_results[[<span class="st">"param_model__l1_ratio"</span>, <span class="st">"val_rmse"</span>]].<span class="bu">round</span>(<span class="dv">2</span>))</span>
-<span id="cb51-18"><a href="#cb51-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(mix_search.best_params_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>best_alpha <span class="op">=</span> lasso_search.best_params_[<span class="st">"model__alpha"</span>]   <span class="co"># the penalty chosen in Part 4</span></span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a>mix_pipe <span class="op">=</span> Pipeline([</span>
+<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"impute"</span>, SimpleImputer(strategy<span class="op">=</span><span class="st">"median"</span>)),</span>
+<span id="cb51-6"><a href="#cb51-6" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"poly"</span>, PolynomialFeatures(degree<span class="op">=</span><span class="dv">2</span>, include_bias<span class="op">=</span><span class="va">False</span>)),</span>
+<span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"scale"</span>, StandardScaler()),</span>
+<span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"model"</span>, ElasticNet(alpha<span class="op">=</span>best_alpha, max_iter<span class="op">=</span><span class="dv">100000</span>)),</span>
+<span id="cb51-9"><a href="#cb51-9" aria-hidden="true" tabindex="-1"></a>])</span>
+<span id="cb51-10"><a href="#cb51-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-11"><a href="#cb51-11" aria-hidden="true" tabindex="-1"></a>mix_search <span class="op">=</span> GridSearchCV(mix_pipe,</span>
+<span id="cb51-12"><a href="#cb51-12" aria-hidden="true" tabindex="-1"></a>                          param_grid<span class="op">=</span>{<span class="st">"model__l1_ratio"</span>: [<span class="dv">0</span>, <span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span>, ______]},</span>
+<span id="cb51-13"><a href="#cb51-13" aria-hidden="true" tabindex="-1"></a>                          cv<span class="op">=</span>one_split,</span>
+<span id="cb51-14"><a href="#cb51-14" aria-hidden="true" tabindex="-1"></a>                          scoring<span class="op">=</span><span class="st">"neg_root_mean_squared_error"</span>)</span>
+<span id="cb51-15"><a href="#cb51-15" aria-hidden="true" tabindex="-1"></a>mix_search.fit(train[predictors], train[<span class="st">"glucose"</span>])</span>
+<span id="cb51-16"><a href="#cb51-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-17"><a href="#cb51-17" aria-hidden="true" tabindex="-1"></a>mix_results <span class="op">=</span> pd.DataFrame(mix_search.cv_results_)</span>
+<span id="cb51-18"><a href="#cb51-18" aria-hidden="true" tabindex="-1"></a>mix_results[<span class="st">"val_rmse"</span>] <span class="op">=</span> <span class="op">-</span>mix_results[<span class="st">"mean_test_score"</span>]</span>
+<span id="cb51-19"><a href="#cb51-19" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(mix_results[[<span class="st">"param_model__l1_ratio"</span>, <span class="st">"val_rmse"</span>]].<span class="bu">round</span>(<span class="dv">2</span>))</span>
+<span id="cb51-20"><a href="#cb51-20" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(mix_search.best_params_)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-12-contents" aria-controls="callout-12" aria-expanded="false" aria-label="Toggle callout">
@@ -3262,10 +3261,10 @@ forceTheme('sk-container-id-3');</script>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;           by_hand  best_estimator_
 #&gt; pregnant   -0.000           -0.000
-#&gt; pressure   -0.000           -0.000
+#&gt; pressure    0.262            0.262
 #&gt; triceps    -0.000           -0.000
-#&gt; insulin    19.385           19.385
-#&gt; mass        0.000            0.000</code></pre>
+#&gt; insulin    23.547           23.547
+#&gt; mass       -0.398           -0.398</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb56"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"same model:"</span>, np.allclose(coefs[<span class="st">"by_hand"</span>], coefs[<span class="st">"best_estimator_"</span>]))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
@@ -4270,7 +4269,7 @@ Computing statistics can result in `np.nan` values.<br>
 During :meth:`transform`, features corresponding to `np.nan`<br>
 statistics will be discarded.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](7,)</td>
-<td>[ 3. ,72. ,29. ,...,32.4 , 0.38,29. ]</td>
+<td>[ 3. ,72. ,29. ,...,32.5 , 0.38,29. ]</td>
 </tr>
 </tbody>
 </table>
@@ -4643,7 +4642,7 @@ unit standard deviation).</span></a></td>
 The mean value for each feature in the training set.<br>
 Equal to ``None`` when ``with_mean=False`` and ``with_std=False``.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](35,)</td>
-<td>[ 4.66, 72.34, 29.06,..., 0.38, 16.66,1246.56]</td>
+<td>[ 4.7 , 72.84, 29.18,..., 0.37, 16.64,1260.63]</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.preprocessing.StandardScaler.html#:~:text=n_features_in_,-int" class="param-doc-link" style="anchor-name: --doc-link-n_features_in_;" rel="noreferrer" target="_blank">n_features_in_ <span class="param-doc-description" style="position-anchor: --doc-link-n_features_in_;"> n_features_in_: int<br>
@@ -4679,7 +4678,7 @@ when `with_std=False`.<br>
 .. versionadded:: 0.17<br>
 *scale_*</span></a></td>
 <td class="fitted-att-type">ndarray[float64](35,)</td>
-<td>[ 3.88, 11.93, 7.96,..., 0.71, 15.63,969.64]</td>
+<td>[ 3.86, 12.07, 8.17,..., 0.67, 14.58,997.08]</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.preprocessing.StandardScaler.html#:~:text=var_,-ndarray%20of%20shape%20%28n_features%2C%29%20or%20None" class="param-doc-link" style="anchor-name: --doc-link-var_;" rel="noreferrer" target="_blank">var_ <span class="param-doc-description" style="position-anchor: --doc-link-var_;"> var_: ndarray of shape (n_features,) or None<br>
@@ -4688,7 +4687,7 @@ The variance for each feature in the training set. Used to compute<br>
 `scale_`. Equal to ``None`` when ``with_mean=False`` and<br>
 ``with_std=False``.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](35,)</td>
-<td>[ 15.08, 142.39, 63.35,..., 0.5 , 244.25,940207.7 ]</td>
+<td>[ 14.93, 145.58, 66.73,..., 0.44, 212.48,994169.55]</td>
 </tr>
 </tbody>
 </table>
@@ -4934,7 +4933,7 @@ If multiple targets are passed during the fit (y 2D), this<br>
 is a 2D array of shape (n_targets, n_features), while if only<br>
 one target is passed, this is a 1D array of length n_features.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](35,)</td>
-<td>[ -6.41, 3.73, 9.16,..., -5.8 , 0.02,-20.08]</td>
+<td>[ -5.23, 10.06, 3.59,..., -4.16, 2.39,-26.1 ]</td>
 </tr>
 <tr class="default odd">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LinearRegression.html#:~:text=intercept_,-float%20or%20array%20of%20shape%20%28n_targets%2C%29" class="param-doc-link" style="anchor-name: --doc-link-intercept_;" rel="noreferrer" target="_blank">intercept_ <span class="param-doc-description" style="position-anchor: --doc-link-intercept_;"> intercept_: float or array of shape (n_targets,)<br>
@@ -4942,7 +4941,7 @@ one target is passed, this is a 1D array of length n_features.</span></a></td>
 Independent term in the linear model. Set to 0.0 if<br>
 `fit_intercept = False`.</span></a></td>
 <td class="fitted-att-type">float64</td>
-<td>125.9</td>
+<td>124.9</td>
 </tr>
 <tr class="default even">
 <td class="param"><a href="https://scikit-learn.org/1.9/modules/generated/sklearn.linear_model.LinearRegression.html#:~:text=n_features_in_,-int" class="param-doc-link" style="anchor-name: --doc-link-n_features_in_;" rel="noreferrer" target="_blank">n_features_in_ <span class="param-doc-description" style="position-anchor: --doc-link-n_features_in_;"> n_features_in_: int<br>
@@ -4965,7 +4964,7 @@ Rank of matrix `X`. Only available when `X` is dense.</span></a></td>
 <br>
 Singular values of `X`. Only available when `X` is dense.</span></a></td>
 <td class="fitted-att-type">ndarray[float64](35,)</td>
-<td>[82.81,65.83,57.99,..., 1.5 , 1.41, 1.02]</td>
+<td>[84.84,64.74,57.21,..., 1.65, 1.4 , 1.18]</td>
 </tr>
 </tbody>
 </table>
@@ -5146,19 +5145,19 @@ forceTheme('sk-container-id-6');</script>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb59"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"chosen model, test RMSE:     "</span>, <span class="bu">round</span>(root_mean_squared_error(test[<span class="st">"glucose"</span>], refit_by_tool.predict(test[predictors])), <span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; chosen model, test RMSE:      27.04</code></pre>
+<pre><code>#&gt; chosen model, test RMSE:      27.29</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb61"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"unpenalised model, test RMSE:"</span>, <span class="bu">round</span>(root_mean_squared_error(test[<span class="st">"glucose"</span>], plain_pipe.predict(test[predictors])), <span class="dv">2</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; unpenalised model, test RMSE: 27.12</code></pre>
+<pre><code>#&gt; unpenalised model, test RMSE: 27.14</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb63"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"columns kept:"</span>, (refit_by_tool[<span class="st">"model"</span>].coef_ <span class="op">!=</span> <span class="dv">0</span>).<span class="bu">sum</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; columns kept: 14</code></pre>
+<pre><code>#&gt; columns kept: 23</code></pre>
 </div>
 </div>
-<p>The chosen model (penalty 0.3, <code>l1_ratio</code> 1, the lasso) has a test RMSE of 27.04 against 27.12 for the unpenalised model, and it uses 14 of the 35 columns.</p>
-<p><strong>Question!</strong> The penalised model is only a little more accurate on the test rows, but it uses far fewer columns. Why might that still matter?</p>
+<p>The chosen model (penalty 0.1, <code>l1_ratio</code> 1: the lasso) has a test RMSE of 27.29 against 27.14 for the unpenalised model: about the same, with 23 of the 35 columns.</p>
+<p><strong>Question!</strong> The penalised model is about as accurate on the test rows as the unpenalised one, but it uses fewer columns. Why might that still matter?</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -5221,7 +5220,7 @@ forceTheme('sk-container-id-6');</script>
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>Make the validation rows every fourth training row starting from the second (<code>seq(2, nrow(train), by = 4)</code> in R, <code>np.arange(len(train)) % 4 == 1</code> in Python) and run the search of Part 3 or Part 4 again. Is the same penalty chosen? What does that tell you about choosing with a single validation set?</p>
+<p>Draw a different validation set by changing the seed of the second split (<code>set.seed(1)</code> before <code>initial_split(train, prop = 0.75)</code> in R, <code>random_state=1</code> in the second <code>train_test_split()</code> in Python) and run the search of Part 3 or Part 4 again. Is the same penalty chosen? What does that tell you about choosing with a single validation set?</p>
 </div>
 </div>
 

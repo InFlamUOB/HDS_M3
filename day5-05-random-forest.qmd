@@ -21,10 +21,6 @@ much of the noise that each single tree has memorised.
 - compare training and test performance;
 - reflect on what workflows and pipelines give you.
 
-**Theory:** bagging and random predictor subsets; the hyperparameters `mtry`
-and `min_n`; grid search with cross-validation; finalising a tuned model; why a
-forest's training performance says little.
-
 ::: {.callout-note}
 ## The plots are for looking at
 The code for every plot is folded away just above it, in case you are curious,
@@ -57,7 +53,7 @@ theme_set(theme_bw())          # white background for every plot
 options(pillar.sigfig = 3)     # show three significant figures in tables
 ```
 
-The same 750 people and split as Exercises 5.3 and 5.4, from
+The same 750 people as Exercises 5.3 and 5.4, from
 [`data/diabetes_clean.csv`](data/diabetes_clean.csv), with the five predictors pregnant,
 glucose, mass, pedigree and age (triceps, insulin and blood pressure are left
 out because a zero there means "not measured"). The outcome has the levels
@@ -67,10 +63,17 @@ out because a zero there means "not measured"). The outcome has the levels
 diabetes <- read_csv("data/diabetes_clean.csv") |>
   select(pregnant, glucose, mass, pedigree, age, diabetes) |>
   mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+```
 
-test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
-train <- diabetes[-test_rows, ]
-test  <- diabetes[test_rows, ]
+We split the 750 people into a training set and a test set, as in earlier
+exercises: 80% for training and 20% held back as the test set, 600 and 150
+people. `set.seed(42)` makes the random split the same every time.
+
+```{r}
+set.seed(42)
+split <- initial_split(diabetes, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
 ```
 
 ------------------------------------------------------------------------
@@ -179,14 +182,10 @@ rf_metrics |>
   head(5)
 ```
 
-R: `mtry` 1 with `min_n` 10 (AUC 0.783), 2 with 10 (0.781), 1 with 8 (0.779),
-1 with 6 (0.778), 2 with 8 (0.777), each with a standard error of about 0.012.
-Python: `max_features` 1 with `min_samples_split` 10 (0.786), 1 with 8 (0.784),
-2 with 10 (0.781), 2 with 8 (0.778), 1 with 6 (0.778). Python's
-`std_test_score` is the standard deviation across the 5 folds, about 0.039;
-divided by $\sqrt{5}$ it gives a standard error of about 0.018. In both
-languages the smallest `mtry` and the largest `min_n` win, and the best `min_n`
-lies at the edge of the grid.
+`mtry` 1 with `min_n` 10 (AUC 0.809), 1 with 8 (0.806), 2 with 10 (0.805),
+1 with 6 (0.804), 2 with 8 (0.802), each with a standard error of about 0.015.
+The smallest `mtry` and the largest `min_n` win, and the best `min_n` lies at
+the edge of the grid.
 :::
 :::
 
@@ -254,13 +253,12 @@ class_metrics(test_preds, truth = diabetes, estimate = .pred_class,
 roc_auc(test_preds, truth = diabetes, .pred_pos, event_level = "second")
 ```
 
-R: test accuracy 0.767, precision 0.725, sensitivity 0.547, specificity 0.887,
-AUC 0.825 (training accuracy 0.912, AUC 0.982). Python: 0.780, 0.750, 0.566,
-0.897, AUC 0.825 (training accuracy 0.895, AUC 0.970).
+Test accuracy 0.740, precision 0.654, sensitivity 0.618, specificity 0.811,
+AUC 0.766 (training accuracy 0.923, AUC 0.983).
 :::
 :::
 
-Forests are random (bootstrap samples, predictor subsets, fold assignment), and
+Forests are random (the split, bootstrap samples, predictor subsets, folds), and
 R and Python draw different random numbers, so the two languages do not give
 the same forest or exactly the same numbers.
 
@@ -301,12 +299,11 @@ class_metrics(test_preds_basic, truth = diabetes, estimate = .pred_class,
 roc_auc(test_preds_basic, truth = diabetes, .pred_pos, event_level = "second")
 ```
 
-The untuned forest does as well as the tuned one on the test rows: test AUC
-0.832 against 0.825 in R, and 0.835 against 0.825 in Python (test accuracy 0.773
-against 0.767 in R, 0.727 against 0.780 in Python). The cross-validated AUCs of
-the whole grid lay within about 0.02 of each other, one or two standard errors,
-and 150 test patients cannot tell differences that small apart. Tuning is still
-the right procedure; here it simply has little to find.
+The untuned forest does almost as well as the tuned one on the test rows: test
+AUC 0.756 against 0.766, and the same test accuracy, 0.740. The cross-validated
+AUCs of the whole grid lay within about 0.03 of each other, about two standard
+errors, and 150 test patients cannot tell differences that small apart. Tuning
+is still the right procedure; here it has little to find.
 
 **Question! Why pipelines?** Look back at the code of this exercise and of
 Exercise 5.4.
@@ -349,12 +346,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.metrics import roc_auc_score, classification_report
 ```
 
-The same 750 people and split as Exercises 5.3 and 5.4, from
+The same 750 people as Exercises 5.3 and 5.4, from
 [`data/diabetes_clean.csv`](data/diabetes_clean.csv), with the five predictors pregnant,
 glucose, mass, pedigree and age (triceps, insulin and blood pressure are left
 out because a zero there means "not measured"). The outcome is 1 for `pos` and
@@ -365,11 +362,15 @@ diabetes = pd.read_csv("data/diabetes_clean.csv")
 diabetes = diabetes[["pregnant", "glucose", "mass", "pedigree", "age", "diabetes"]]
 diabetes["diabetes"] = (diabetes["diabetes"] == "pos").astype(int)       # 1 = pos, 0 = neg
 
-is_test = diabetes.index % 5 == 0               # every fifth person is held back
-train = diabetes[~is_test]
-test  = diabetes[is_test]
-
 predictors = ["pregnant", "glucose", "mass", "pedigree", "age"]
+```
+
+We split the 750 people into a training set and a test set, as in earlier
+exercises: 80% for training and 20% held back as the test set, 600 and 150
+people. `random_state=42` makes the random split the same every time.
+
+```{python}
+train, test = train_test_split(diabetes, test_size=0.2, random_state=42)
 ```
 
 ------------------------------------------------------------------------
@@ -461,14 +462,12 @@ rf_results.sort_values(______, ascending=False).head(5).round(3)
 rf_results.sort_values("mean_test_score", ascending=False).head(5).round(3)
 ```
 
-R: `mtry` 1 with `min_n` 10 (AUC 0.783), 2 with 10 (0.781), 1 with 8 (0.779),
-1 with 6 (0.778), 2 with 8 (0.777), each with a standard error of about 0.012.
-Python: `max_features` 1 with `min_samples_split` 10 (0.786), 1 with 8 (0.784),
-2 with 10 (0.781), 2 with 8 (0.778), 1 with 6 (0.778). Python's
-`std_test_score` is the standard deviation across the 5 folds, about 0.039;
-divided by $\sqrt{5}$ it gives a standard error of about 0.018. In both
-languages the smallest `mtry` and the largest `min_n` win, and the best `min_n`
-lies at the edge of the grid.
+`max_features` 1 with `min_samples_split` 10 (0.800), 1 with 8 (0.800),
+2 with 10 (0.799), 1 with 6 (0.797), 2 with 8 (0.796). `std_test_score` is
+the standard deviation across the 5 folds, about 0.033; divided by $\sqrt{5}$
+it gives a standard error of about 0.015. The smallest `max_features` and the
+largest `min_samples_split` win, and the best `min_samples_split` lies at the
+edge of the grid.
 :::
 :::
 
@@ -540,13 +539,12 @@ print("test specificity:", round(recall_score(truth, predicted, pos_label=0), 3)
 print("test AUC:        ", round(roc_auc_score(truth, test_preds["prob"]), 3))
 ```
 
-R: test accuracy 0.767, precision 0.725, sensitivity 0.547, specificity 0.887,
-AUC 0.825 (training accuracy 0.912, AUC 0.982). Python: 0.780, 0.750, 0.566,
-0.897, AUC 0.825 (training accuracy 0.895, AUC 0.970).
+Test accuracy 0.747, precision 0.721, sensitivity 0.544, specificity 0.871,
+AUC 0.814 (training accuracy 0.892, AUC 0.974).
 :::
 :::
 
-Forests are random (bootstrap samples, predictor subsets, fold assignment), and
+Forests are random (the split, bootstrap samples, predictor subsets, folds), and
 R and Python draw different random numbers, so the two languages do not give
 the same forest or exactly the same numbers.
 
@@ -584,12 +582,12 @@ print("basic forest, test AUC:     ", round(roc_auc_score(test["diabetes"], basi
 print(classification_report(test["diabetes"], basic_class, digits=3))
 ```
 
-The untuned forest does as well as the tuned one on the test rows: test AUC
-0.832 against 0.825 in R, and 0.835 against 0.825 in Python (test accuracy 0.773
-against 0.767 in R, 0.727 against 0.780 in Python). The cross-validated AUCs of
-the whole grid lay within about 0.02 of each other, one or two standard errors,
-and 150 test patients cannot tell differences that small apart. Tuning is still
-the right procedure; here it simply has little to find.
+The tuned forest does a little better than the untuned one on the test rows:
+test AUC 0.814 against 0.790, test accuracy 0.747 against 0.720. The
+cross-validated AUCs of the whole grid lay within about 0.02 of each other,
+about one or two standard errors, and 150 test patients cannot tell differences
+that small apart with confidence. Tuning is the right procedure, but here it has
+little to find.
 
 **Question! Why pipelines?** Look back at the code of this exercise and of
 Exercise 5.4.
@@ -625,7 +623,7 @@ take to a clinic, and what besides the AUC would you weigh?
 ::: {.instructor}
 **Teaching choice.** The module lead's page used the full Pima data (eight
 predictors, stratified random 70/30 split, `pos` as first level) and a single
-bootstrap resample for tuning. This version uses the shared Day 5 split and the
+bootstrap resample for tuning. This version uses an 80/20 random split (seed 42) and the
 five predictors without hidden missing values, `event_level = "second"`, and
 5-fold cross-validation, which her code comment anticipated. Her grid shape is
 kept (five levels each); `mtry` runs 1 to 5 because there are five predictors,
@@ -636,19 +634,22 @@ forest from her list as a comparison, and her "why pipelines?" reflection is the
 closing question. In Python `min_samples_split` mirrors ranger's
 `min.node.size`, the minimal node size to split at.
 
-**Expected values.** R (`set.seed(123)`, ranger, 500 trees): best `mtry` 1,
-`min_n` 10, CV AUC 0.783 (SE 0.012); the top five lie between 0.777 and 0.783.
-Tuned forest train accuracy 0.912, AUC 0.982; test accuracy 0.767, precision
-0.725, sensitivity 0.547, specificity 0.887, AUC 0.825. Untuned ranger forest:
-test accuracy 0.773, precision 0.721, sensitivity 0.585, specificity 0.876, AUC
-0.832. Python (`random_state=123`, 500 trees): best `max_features` 1,
-`min_samples_split` 10, CV AUC 0.786 (fold SD 0.039); tuned train accuracy
-0.895, AUC 0.970; test accuracy 0.780, precision 0.750, sensitivity 0.566,
-specificity 0.897, AUC 0.825. Untuned sklearn forest (100 trees): test accuracy
-0.727, AUC 0.835, recall of class 1 0.509. Logistic regression on the same five
-predictors (Exercise 5.3): test AUC 0.830. In both languages the best `min_n`
-is the largest in the grid, so the grid could be extended (a natural follow-up
-question).
+**Expected values.** R (`set.seed(42)` split, `set.seed(123)`, ranger, 500
+trees): best `mtry` 1, `min_n` 10, CV AUC 0.809 (SE 0.014); the top five lie
+between 0.802 and 0.809, the whole grid between 0.780 and 0.809. Tuned forest
+train accuracy 0.923, AUC 0.983; test accuracy 0.740, precision 0.654,
+sensitivity 0.618, specificity 0.811, AUC 0.766. Untuned ranger forest: test
+accuracy 0.740, precision 0.648, sensitivity 0.636, specificity 0.800, AUC
+0.756. Logistic regression on the same five predictors (Exercise 5.3): test AUC
+0.764. Python (`random_state=42` split, `random_state=123`, 500 trees): best
+`max_features` 1, `min_samples_split` 10, CV AUC 0.800 (fold SD 0.032); the
+whole grid lies between 0.779 and 0.800. Tuned train accuracy 0.892, AUC 0.974;
+test accuracy 0.747, precision 0.721, sensitivity 0.544, specificity 0.871, AUC
+0.814. Untuned sklearn forest (100 trees): test accuracy 0.720, AUC 0.790,
+recall of class 1 0.491. Logistic regression (Exercise 5.3): test AUC 0.810.
+R and Python draw different random splits, so their numbers differ. In both
+languages the best `min_n` is the largest in the grid, so the grid could be
+extended (a natural follow-up question).
 
 **Common failures.** (1) `mtry` above the number of predictors: ranger stops
 with an error, while scikit-learn silently uses all the predictors. (2) Reading

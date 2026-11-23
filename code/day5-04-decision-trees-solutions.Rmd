@@ -16,10 +16,6 @@ splitting until it has memorised the training rows. In this exercise we fit a
 tree, watch it overfit, restrain it by hand, and then let a grid search choose
 the restraint for us.
 
-**Theory:** splits, nodes and leaves; tree depth and minimum node size as
-hyperparameters; overfitting in trees; grid search with cross-validation; the
-test set is used once, at the end.
-
 > **The plots are for looking at**
 >
 > The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
@@ -38,20 +34,25 @@ theme_set(theme_bw())          # white background for every plot
 options(pillar.sigfig = 3)     # show three significant figures in tables
 ```
 
-The same 750 people and split as Exercise 5.3, from
+The same 750 people as Exercise 5.3, from
 [`data/diabetes_clean.csv`](data/diabetes_clean.csv), with the five predictors pregnant,
 glucose, mass, pedigree and age (triceps, insulin and blood pressure are left
 out because a zero there means "not measured"). The outcome has the levels
 `neg` then `pos`.
+
+We split the 750 people into a training set and a test set, as in earlier
+exercises: 80% for training and 20% held back as the test set, 600 and 150
+people. `set.seed(42)` makes the random split the same every time.
 
 ```{r}
 diabetes <- read_csv("data/diabetes_clean.csv") |>
   select(pregnant, glucose, mass, pedigree, age, diabetes) |>
   mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
 
-test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
-train <- diabetes[-test_rows, ]
-test  <- diabetes[test_rows, ]
+set.seed(42)
+split <- initial_split(diabetes, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
 ```
 
 ------------------------------------------------------------------------
@@ -95,7 +96,7 @@ diabetes who reach it, and their share of the training rows. The first split is
 on glucose: everything else depends on it.
 
 rpart's defaults stop the tree early: a split is only kept if it improves the
-fit by at least 1% (`cost_complexity = 0.01`), which is why this tree has only 6
+fit by at least 1% (`cost_complexity = 0.01`), which is why this tree has only 5
 leaves. To see what a tree does when nothing stops it, switch that rule off with
 `cost_complexity = 0` and let any node with at least 2 people be split
 (`min_n = 2`). This is what scikit-learn's default tree does, in the Python tab.
@@ -114,7 +115,7 @@ tree_full_frame <- extract_fit_engine(tree_fit_full)$frame   # one row per node
 sum(tree_full_frame$var == "<leaf>")                          # number of leaves
 ```
 
-149 leaves for 600 people: too many to draw.
+142 leaves for 600 people: too many to draw.
 
 > **Learning points**
 >
@@ -162,10 +163,8 @@ class_metrics(test_preds_full, truth = diabetes, estimate = .pred_class,
               event_level = "second")
 ```
 
-> Training accuracy 1.000 in both languages; test accuracy 0.673 in R and 0.693 in
-> Python (the two trees differ in how ties between equally good splits are
-> broken). The test sensitivity is 0.434 in R and 0.509 in Python: the tree
-> misses about half of the people with diabetes it has never seen.
+> Training accuracy 1.000, test accuracy 0.607. The test sensitivity is 0.491:
+> the tree misses about half of the people with diabetes it has never seen.
 
 Compare the basic rpart tree of Part 1, which its stopping rule had already
 restrained:
@@ -179,8 +178,8 @@ predict(tree_fit_basic, new_data = test, type = "class") |>
   accuracy(truth = diabetes, estimate = .pred_class)
 ```
 
-Training accuracy 0.780 and test accuracy 0.787: with 6 leaves the basic tree
-does not overfit at all.
+Training accuracy 0.795 and test accuracy 0.713: with 5 leaves the basic tree
+overfits far less than the tree that nothing stopped.
 
 **Question!** The tree that nothing stopped is perfect on the training rows and
 much worse on the test rows. What has it learned that does not carry over to
@@ -223,11 +222,11 @@ tree_fit_shallow |>
   rpart.plot(extra = 101, roundint = FALSE)
 ```
 
-The shallow tree is small enough to read as a clinical rule. It has only three
+The shallow tree is small enough to read as a clinical rule. It has only five
 leaves, although it was allowed eight: rpart also drops a split when both of its
 sides would predict the same class, because it cannot reduce the number of
-mistakes. The scikit-learn tree in the Python tab keeps such splits, but
-predicts almost exactly the same classes. Evaluate it on both sets:
+mistakes. The scikit-learn tree in the Python tab keeps such splits. Evaluate it
+on both sets:
 
 ```{r}
 train_preds_shallow <- predict(tree_fit_shallow, new_data = train, type = "class") |>
@@ -241,9 +240,7 @@ class_metrics(test_preds_shallow, truth = diabetes, estimate = .pred_class,
               event_level = "second")
 ```
 
-Training accuracy 0.757 in R and 0.760 in Python, test accuracy 0.733 in both
-(rpart also refuses to make a leaf with fewer than a third of `min_n` people,
-scikit-learn does not, so the two trees differ slightly). Compared with the tree
+Training accuracy 0.777, test accuracy 0.693. Compared with the tree
 that nothing stopped, training accuracy has dropped, because the model is
 simpler, and test accuracy has risen: the shallow tree generalises better. Try another setting yourself: a tree of depth
 5 that may only split nodes holding at least 40 people.
@@ -266,9 +263,8 @@ predict(tree_fit_try, new_data = test, type = "class") |>
   accuracy(truth = diabetes, estimate = .pred_class)
 ```
 
-> R: training accuracy 0.783, test accuracy 0.780. Python: training accuracy
-> 0.785, test accuracy 0.767. Both do better on the test rows than the depth-3
-> tree.
+> Training accuracy 0.797, test accuracy 0.713: better on the test rows than the
+> depth-3 tree.
 
 > **Learning points**
 >
@@ -365,17 +361,14 @@ roc_auc(train_preds_final, truth = diabetes, .pred_pos, event_level = "second")
 roc_auc(test_preds_final,  truth = diabetes, .pred_pos, event_level = "second")
 ```
 
-> R chose `tree_depth` 7 and `min_n` 23 (cross-validated AUC 0.775), a tree with
-> 14 leaves: test accuracy 0.760, sensitivity 0.642, specificity 0.825; AUC 0.854
-> on the training rows and 0.800 on the test rows. Python chose `max_depth` 5 and
-> `min_samples_split` 30 (cross-validated AUC 0.767), 15 leaves: test accuracy
-> 0.747, sensitivity 0.585, specificity 0.835; AUC 0.859 on the training rows and
-> 0.782 on the test rows. The gap between training and test is far smaller than
+> The search chose `tree_depth` 7 and `min_n` 30 (cross-validated AUC 0.792), a
+> tree with 13 leaves: test accuracy 0.700, sensitivity 0.527, specificity 0.800;
+> AUC 0.856 on the training rows and 0.743 on the test rows. The gap between training and test is far smaller than
 > for the tree that nothing stopped, which was perfect on the training rows.
 
-Cross-validation splits the training rows at random, and trees break ties
-between equal splits in different ways, so R and Python do not choose the same
-tree and their numbers differ.
+R and Python draw different random splits and folds, and break ties between
+equal splits in different ways, so they do not choose the same tree and their
+numbers differ.
 
 **Question!** Compare the tuned tree with the basic tree of Part 2. Has the gap
 between training and test performance closed? Why must the test rows play no

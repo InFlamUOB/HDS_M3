@@ -218,7 +218,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <p>A decision tree classifies a person by asking a sequence of yes-or-no questions: is glucose above 128? If so, is body mass above 30? Each answer sends the person down one branch, until they reach a <strong>leaf</strong>, which gives a predicted class and a probability. Trees are easy to read, and they can model interactions and non-linear effects without being told to. Their weakness is that a tree can keep splitting until it has memorised the training rows. In this exercise we fit a tree, watch it overfit, restrain it by hand, and then let a grid search choose the restraint for us.</p>
-<p><strong>Theory:</strong> splits, nodes and leaves; tree depth and minimum node size as hyperparameters; overfitting in trees; grid search with cross-validation; the test set is used once, at the end.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -250,15 +249,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_bw</span>())          <span class="co"># white background for every plot</span></span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">pillar.sigfig =</span> <span class="dv">3</span>)     <span class="co"># show three significant figures in tables</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The same 750 people and split as Exercise 5.3, from <a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>, with the five predictors pregnant, glucose, mass, pedigree and age (triceps, insulin and blood pressure are left out because a zero there means “not measured”). The outcome has the levels <code>neg</code> then <code>pos</code>.</p>
+<p>The same 750 people as Exercise 5.3, from <a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>, with the five predictors pregnant, glucose, mass, pedigree and age (triceps, insulin and blood pressure are left out because a zero there means “not measured”). The outcome has the levels <code>neg</code> then <code>pos</code>.</p>
+<p>We split the 750 people into a training set and a test set, as in earlier exercises: 80% for training and 20% held back as the test set, 600 and 150 people. <code>set.seed(42)</code> makes the random split the same every time.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/diabetes_clean.csv"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pregnant, glucose, mass, pedigree, age, diabetes) <span class="sc">|&gt;</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">diabetes =</span> <span class="fu">factor</span>(diabetes, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"neg"</span>, <span class="st">"pos"</span>)))</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(diabetes), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> diabetes[<span class="sc">-</span>test_rows, ]</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> diabetes[test_rows, ]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>split <span class="ot">&lt;-</span> <span class="fu">initial_split</span>(diabetes, <span class="at">prop =</span> <span class="fl">0.8</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> <span class="fu">training</span>(split)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> <span class="fu">testing</span>(split)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <hr>
 </section>
@@ -294,17 +295,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 #&gt; node), split, n, loss, yval, (yprob)
 #&gt;       * denotes terminal node
 #&gt; 
-#&gt;  1) root 600 220 neg (0.6333333 0.3666667)  
-#&gt;    2) glucose&lt; 154.5 467 117 neg (0.7494647 0.2505353)  
-#&gt;      4) age&lt; 37.5 339  61 neg (0.8200590 0.1799410) *
-#&gt;      5) age&gt;=37.5 128  56 neg (0.5625000 0.4375000)  
-#&gt;       10) mass&lt; 24.8 16   0 neg (1.0000000 0.0000000) *
-#&gt;       11) mass&gt;=24.8 112  56 neg (0.5000000 0.5000000)  
-#&gt;         22) glucose&lt; 89 7   0 neg (1.0000000 0.0000000) *
-#&gt;         23) glucose&gt;=89 105  49 pos (0.4666667 0.5333333)  
-#&gt;           46) age&gt;=59 22   7 neg (0.6818182 0.3181818) *
-#&gt;           47) age&lt; 59 83  34 pos (0.4096386 0.5903614) *
-#&gt;    3) glucose&gt;=154.5 133  30 pos (0.2255639 0.7744361) *</code></pre>
+#&gt;  1) root 600 218 neg (0.6366667 0.3633333)  
+#&gt;    2) glucose&lt; 151 472 117 neg (0.7521186 0.2478814)  
+#&gt;      4) pregnant&lt; 6.5 345  57 neg (0.8347826 0.1652174) *
+#&gt;      5) pregnant&gt;=6.5 127  60 neg (0.5275591 0.4724409)  
+#&gt;       10) glucose&lt; 89.5 16   0 neg (1.0000000 0.0000000) *
+#&gt;       11) glucose&gt;=89.5 111  51 pos (0.4594595 0.5405405)  
+#&gt;         22) mass&lt; 27.1 22   5 neg (0.7727273 0.2272727) *
+#&gt;         23) mass&gt;=27.1 89  34 pos (0.3820225 0.6179775) *
+#&gt;    3) glucose&gt;=151 128  27 pos (0.2109375 0.7890625) *</code></pre>
 </div>
 </div>
 <p>Each line is a node: the split, the number of people who reach it, how many of them are misclassified, the predicted class and the two class proportions. A <code>*</code> marks a leaf. Drawing it is easier to read. <code>extract_fit_engine()</code> takes the fitted rpart tree out of the workflow:</p>
@@ -321,7 +320,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <p>Each box shows the predicted class, the number of people without and with diabetes who reach it, and their share of the training rows. The first split is on glucose: everything else depends on it.</p>
-<p>rpart’s defaults stop the tree early: a split is only kept if it improves the fit by at least 1% (<code>cost_complexity = 0.01</code>), which is why this tree has only 6 leaves. To see what a tree does when nothing stops it, switch that rule off with <code>cost_complexity = 0</code> and let any node with at least 2 people be split (<code>min_n = 2</code>). This is what scikit-learn’s default tree does, in the Python tab.</p>
+<p>rpart’s defaults stop the tree early: a split is only kept if it improves the fit by at least 1% (<code>cost_complexity = 0.01</code>), which is why this tree has only 5 leaves. To see what a tree does when nothing stops it, switch that rule off with <code>cost_complexity = 0</code> and let any node with at least 2 people be split (<code>min_n = 2</code>). This is what scikit-learn’s default tree does, in the Python tab.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>tree_spec_full <span class="ot">&lt;-</span> <span class="fu">decision_tree</span>(<span class="at">cost_complexity =</span> <span class="dv">0</span>, <span class="at">min_n =</span> <span class="dv">2</span>) <span class="sc">|&gt;</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"rpart"</span>) <span class="sc">|&gt;</span></span>
@@ -335,10 +334,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>tree_full_frame <span class="ot">&lt;-</span> <span class="fu">extract_fit_engine</span>(tree_fit_full)<span class="sc">$</span>frame   <span class="co"># one row per node</span></span>
 <span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(tree_full_frame<span class="sc">$</span>var <span class="sc">==</span> <span class="st">"&lt;leaf&gt;"</span>)                          <span class="co"># number of leaves</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; [1] 149</code></pre>
+<pre><code>#&gt; [1] 142</code></pre>
 </div>
 </div>
-<p>149 leaves for 600 people: too many to draw.</p>
+<p>142 leaves for 600 people: too many to draw.</p>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -374,8 +373,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;           Truth
 #&gt; Prediction neg pos
-#&gt;        neg 380   0
-#&gt;        pos   0 220</code></pre>
+#&gt;        neg 382   0
+#&gt;        pos   0 218</code></pre>
 </div>
 </div>
 <p>On the training rows the tree makes no mistakes at all. The same metric set as Exercise 5.3, with <code>pos</code> as the event (the second level):</p>
@@ -412,7 +411,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>#&gt; # A tibble: 1 × 3
 #&gt;   .metric  .estimator .estimate
 #&gt;   &lt;chr&gt;    &lt;chr&gt;          &lt;dbl&gt;
-#&gt; 1 accuracy binary          0.78</code></pre>
+#&gt; 1 accuracy binary         0.795</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(tree_fit_basic, <span class="at">new_data =</span> test, <span class="at">type =</span> <span class="st">"class"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(test) <span class="sc">|&gt;</span></span>
@@ -421,10 +420,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>#&gt; # A tibble: 1 × 3
 #&gt;   .metric  .estimator .estimate
 #&gt;   &lt;chr&gt;    &lt;chr&gt;          &lt;dbl&gt;
-#&gt; 1 accuracy binary         0.787</code></pre>
+#&gt; 1 accuracy binary         0.713</code></pre>
 </div>
 </div>
-<p>Training accuracy 0.780 and test accuracy 0.787: with 6 leaves the basic tree does not overfit at all.</p>
+<p>Training accuracy 0.795 and test accuracy 0.713: with 5 leaves the basic tree overfits far less than the tree that nothing stopped.</p>
 <p><strong>Question!</strong> The tree that nothing stopped is perfect on the training rows and much worse on the test rows. What has it learned that does not carry over to new people?</p>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -475,7 +474,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
-<p>The shallow tree is small enough to read as a clinical rule. It has only three leaves, although it was allowed eight: rpart also drops a split when both of its sides would predict the same class, because it cannot reduce the number of mistakes. The scikit-learn tree in the Python tab keeps such splits, but predicts almost exactly the same classes. Evaluate it on both sets:</p>
+<p>The shallow tree is small enough to read as a clinical rule. It has only five leaves, although it was allowed eight: rpart also drops a split when both of its sides would predict the same class, because it cannot reduce the number of mistakes. The scikit-learn tree in the Python tab keeps such splits. Evaluate it on both sets:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>train_preds_shallow <span class="ot">&lt;-</span> <span class="fu">predict</span>(tree_fit_shallow, <span class="at">new_data =</span> train, <span class="at">type =</span> <span class="st">"class"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(train)</span>
@@ -488,11 +487,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>#&gt; # A tibble: 5 × 3
 #&gt;   .metric   .estimator .estimate
 #&gt;   &lt;chr&gt;     &lt;chr&gt;          &lt;dbl&gt;
-#&gt; 1 accuracy  binary         0.757
-#&gt; 2 precision binary         0.819
-#&gt; 3 recall    binary         0.432
-#&gt; 4 sens      binary         0.432
-#&gt; 5 spec      binary         0.945</code></pre>
+#&gt; 1 accuracy  binary         0.777
+#&gt; 2 precision binary         0.688
+#&gt; 3 recall    binary         0.706
+#&gt; 4 sens      binary         0.706
+#&gt; 5 spec      binary         0.817</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">class_metrics</span>(test_preds_shallow, <span class="at">truth =</span> diabetes, <span class="at">estimate =</span> .pred_class,</span>
 <span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>              <span class="at">event_level =</span> <span class="st">"second"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -500,14 +499,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>#&gt; # A tibble: 5 × 3
 #&gt;   .metric   .estimator .estimate
 #&gt;   &lt;chr&gt;     &lt;chr&gt;          &lt;dbl&gt;
-#&gt; 1 accuracy  binary         0.733
-#&gt; 2 precision binary         0.783
-#&gt; 3 recall    binary         0.340
-#&gt; 4 sens      binary         0.340
-#&gt; 5 spec      binary         0.948</code></pre>
+#&gt; 1 accuracy  binary         0.693
+#&gt; 2 precision binary         0.576
+#&gt; 3 recall    binary         0.618
+#&gt; 4 sens      binary         0.618
+#&gt; 5 spec      binary         0.737</code></pre>
 </div>
 </div>
-<p>Training accuracy 0.757 in R and 0.760 in Python, test accuracy 0.733 in both (rpart also refuses to make a leaf with fewer than a third of <code>min_n</code> people, scikit-learn does not, so the two trees differ slightly). Compared with the tree that nothing stopped, training accuracy has dropped, because the model is simpler, and test accuracy has risen: the shallow tree generalises better. Try another setting yourself: a tree of depth 5 that may only split nodes holding at least 40 people.</p>
+<p>Training accuracy 0.777, test accuracy 0.693. Compared with the tree that nothing stopped, training accuracy has dropped, because the model is simpler, and test accuracy has risen: the shallow tree generalises better. Try another setting yourself: a tree of depth 5 that may only split nodes holding at least 40 people.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>tree_fit_try <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">|&gt;</span></span>
@@ -595,11 +594,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>#&gt; # A tibble: 5 × 8
 #&gt;   tree_depth min_n .metric .estimator  mean     n std_err .config         
 #&gt;        &lt;int&gt; &lt;int&gt; &lt;chr&gt;   &lt;chr&gt;      &lt;dbl&gt; &lt;int&gt;   &lt;dbl&gt; &lt;chr&gt;           
-#&gt; 1          7    23 roc_auc binary     0.775     5  0.0182 pre0_mod19_post0
-#&gt; 2         10    23 roc_auc binary     0.774     5  0.0183 pre0_mod24_post0
-#&gt; 3          5    23 roc_auc binary     0.767     5  0.0176 pre0_mod14_post0
-#&gt; 4          7    30 roc_auc binary     0.761     5  0.0160 pre0_mod20_post0
-#&gt; 5         10    30 roc_auc binary     0.761     5  0.0160 pre0_mod25_post0</code></pre>
+#&gt; 1          7    30 roc_auc binary     0.792     5  0.0275 pre0_mod20_post0
+#&gt; 2         10    30 roc_auc binary     0.788     5  0.0299 pre0_mod25_post0
+#&gt; 3          7    23 roc_auc binary     0.786     5  0.0316 pre0_mod19_post0
+#&gt; 4         10    23 roc_auc binary     0.786     5  0.0314 pre0_mod24_post0
+#&gt; 5          5    30 roc_auc binary     0.784     5  0.0269 pre0_mod15_post0</code></pre>
 </div>
 </div>
 <div class="cell" data-layout-align="center">
@@ -620,7 +619,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>#&gt; # A tibble: 1 × 3
 #&gt;   tree_depth min_n .config         
 #&gt;        &lt;int&gt; &lt;int&gt; &lt;chr&gt;           
-#&gt; 1          7    23 pre0_mod19_post0</code></pre>
+#&gt; 1          7    30 pre0_mod20_post0</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>final_tree_fit <span class="ot">&lt;-</span> <span class="fu">finalize_workflow</span>(tree_wf_cv, best_tree) <span class="sc">|&gt;</span></span>
 <span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(<span class="at">data =</span> train)</span>
@@ -651,7 +650,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a><span class="fu">roc_auc</span>(train_preds_final, <span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>)</span>
 <span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a><span class="fu">roc_auc</span>(test_preds_final,  <span class="at">truth =</span> diabetes, ______, <span class="at">event_level =</span> <span class="st">"second"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Cross-validation splits the training rows at random, and trees break ties between equal splits in different ways, so R and Python do not choose the same tree and their numbers differ.</p>
+<p>R and Python draw different random splits and folds, and break ties between equal splits in different ways, so they do not choose the same tree and their numbers differ.</p>
 <p><strong>Question!</strong> Compare the tuned tree with the basic tree of Part 2. Has the gap between training and test performance closed? Why must the test rows play no part in choosing <code>tree_depth</code> and <code>min_n</code>?</p>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -686,21 +685,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
 <span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.tree <span class="im">import</span> DecisionTreeClassifier, plot_tree</span>
-<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.model_selection <span class="im">import</span> GridSearchCV</span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.model_selection <span class="im">import</span> GridSearchCV, train_test_split</span>
 <span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> accuracy_score, precision_score, recall_score</span>
 <span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> confusion_matrix, roc_auc_score</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The same 750 people and split as Exercise 5.3, from <a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>, with the five predictors pregnant, glucose, mass, pedigree and age (triceps, insulin and blood pressure are left out because a zero there means “not measured”). The outcome is 1 for <code>pos</code> and 0 for <code>neg</code>.</p>
+<p>The same 750 people as Exercise 5.3, from <a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>, with the five predictors pregnant, glucose, mass, pedigree and age (triceps, insulin and blood pressure are left out because a zero there means “not measured”). The outcome is 1 for <code>pos</code> and 0 for <code>neg</code>.</p>
+<p>We split the 750 people into a training set and a test set, as in earlier exercises: 80% for training and 20% held back as the test set, 600 and 150 people. <code>random_state=42</code> makes the random split the same every time.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes_clean.csv"</span>)</span>
 <span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes[[<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>, <span class="st">"diabetes"</span>]]</span>
 <span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>diabetes[<span class="st">"diabetes"</span>] <span class="op">=</span> (diabetes[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"pos"</span>).astype(<span class="bu">int</span>)       <span class="co"># 1 = pos, 0 = neg</span></span>
 <span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> diabetes.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
-<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> diabetes[<span class="op">~</span>is_test]</span>
-<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>test  <span class="op">=</span> diabetes[is_test]</span>
-<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>predictors <span class="op">=</span> [<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>train, test <span class="op">=</span> train_test_split(diabetes, test_size<span class="op">=</span><span class="fl">0.2</span>, random_state<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>predictors <span class="op">=</span> [<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <hr>
 </section>
@@ -713,14 +711,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"depth: "</span>, tree_basic.get_depth())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; depth:  18</code></pre>
+<pre><code>#&gt; depth:  16</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"leaves:"</span>, tree_basic.get_n_leaves())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; leaves: 151</code></pre>
+<pre><code>#&gt; leaves: 135</code></pre>
 </div>
 </div>
-<p>The default tree keeps splitting until every leaf is pure: it has grown to a depth of 18 with 151 leaves for 600 people. Draw the top three levels (<code>max_depth=3</code> only limits the drawing, not the tree):</p>
+<p>The default tree keeps splitting until every leaf is pure: it has grown to a depth of 16 with 135 leaves for 600 people. Draw the top three levels (<code>max_depth=3</code> only limits the drawing, not the tree):</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">22</span>, <span class="dv">8</span>))</span>
 <span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>drawn <span class="op">=</span> plot_tree(tree_basic, max_depth<span class="op">=</span><span class="dv">3</span>, feature_names<span class="op">=</span>predictors,</span>
@@ -735,7 +733,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <p>In each box: the split, the Gini impurity (0 for a pure node), the number of people (<code>samples</code>), how many of them are without and with diabetes (<code>value</code>), and the predicted class. The first split is on glucose: everything else depends on it.</p>
-<p>scikit-learn’s defaults grow the tree until every leaf is pure. R’s rpart stops early by default (a split is only kept if it improves the fit by at least 1%), so in the R tab the same data give a much smaller tree.</p>
+<p>scikit-learn’s defaults grow the tree until every leaf is pure. R’s rpart stops early by default (a split is only kept if it improves the fit by at least 1%), so the tree in the R tab is much smaller.</p>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -769,8 +767,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a>confusion_matrix(train_preds_basic[<span class="st">"diabetes"</span>], train_preds_basic[<span class="st">"pred_class"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; array([[380,   0],
-#&gt;        [  0, 220]])</code></pre>
+<pre><code>#&gt; array([[384,   0],
+#&gt;        [  0, 216]])</code></pre>
 </div>
 </div>
 <p>The same metrics as Exercise 5.3. Remember that <code>confusion_matrix()</code> puts the truth in the rows. On the training rows the tree makes no mistakes at all:</p>
@@ -849,7 +847,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
-<p>The shallow tree is small enough to read as a clinical rule. Most of its leaves predict <code>neg</code>; only people with high glucose and a high body mass are predicted to have diabetes. Evaluate it on both sets:</p>
+<p>The shallow tree is small enough to read as a clinical rule. Most of its leaves predict <code>neg</code>; only people with high glucose are predicted to have diabetes. Evaluate it on both sets:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name, data <span class="kw">in</span> [(<span class="st">"train"</span>, train), (<span class="st">"test"</span>, test)]:</span>
 <span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>    truth <span class="op">=</span> data[<span class="st">"diabetes"</span>]</span>
@@ -860,11 +858,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a>          <span class="st">"sensitivity"</span>, <span class="bu">round</span>(recall_score(truth, predicted), <span class="dv">3</span>),</span>
 <span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a>          <span class="st">"specificity"</span>, <span class="bu">round</span>(recall_score(truth, predicted, pos_label<span class="op">=</span><span class="dv">0</span>), <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; train accuracy 0.76 precision 0.839 sensitivity 0.427 specificity 0.953
-#&gt; test accuracy 0.733 precision 0.783 sensitivity 0.34 specificity 0.948</code></pre>
+<pre><code>#&gt; train accuracy 0.77 precision 0.855 sensitivity 0.435 specificity 0.958
+#&gt; test accuracy 0.707 precision 0.724 sensitivity 0.368 specificity 0.914</code></pre>
 </div>
 </div>
-<p>Training accuracy 0.757 in R and 0.760 in Python, test accuracy 0.733 in both (rpart also refuses to make a leaf with fewer than a third of <code>min_n</code> people, scikit-learn does not, so the two trees differ slightly). Compared with the tree that nothing stopped, training accuracy has dropped, because the model is simpler, and test accuracy has risen: the shallow tree generalises better. Try another setting yourself: a tree of depth 5 that may only split nodes holding at least 40 people.</p>
+<p>Training accuracy 0.770, test accuracy 0.707. Compared with the tree that nothing stopped, training accuracy has dropped, because the model is simpler, and test accuracy has risen: the shallow tree generalises better. Try another setting yourself: a tree of depth 5 that may only split nodes holding at least 40 people.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
 <span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>tree_try <span class="op">=</span> DecisionTreeClassifier(max_depth<span class="op">=</span>______, min_samples_split<span class="op">=</span>______, random_state<span class="op">=</span><span class="dv">123</span>)</span>
@@ -911,11 +909,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a>tree_results.sort_values(<span class="st">"mean_test_score"</span>, ascending<span class="op">=</span><span class="va">False</span>).head(<span class="dv">5</span>).<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;     param_max_depth  param_min_samples_split  mean_test_score  std_test_score
-#&gt; 14                5                       30            0.767           0.062
-#&gt; 13                5                       23            0.759           0.074
-#&gt; 12                5                       16            0.758           0.054
-#&gt; 7                 3                       16            0.756           0.047
-#&gt; 6                 3                        9            0.756           0.047</code></pre>
+#&gt; 14                5                       30            0.758           0.043
+#&gt; 13                5                       23            0.752           0.039
+#&gt; 24               10                       30            0.748           0.041
+#&gt; 19                7                       30            0.748           0.044
+#&gt; 23               10                       23            0.748           0.031</code></pre>
 </div>
 </div>
 <div class="cell" data-layout-align="center">
@@ -943,7 +941,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb60"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"cross-validated AUC:"</span>, <span class="bu">round</span>(tree_search.best_score_, <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; cross-validated AUC: 0.767</code></pre>
+<pre><code>#&gt; cross-validated AUC: 0.758</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb62"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a>final_tree <span class="op">=</span> tree_search.best_estimator_</span>
 <span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"leaves:"</span>, final_tree.get_n_leaves())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -964,7 +962,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb64-9"><a href="#cb64-9" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"train AUC:"</span>, <span class="bu">round</span>(roc_auc_score(train[<span class="st">"diabetes"</span>], train_prob), <span class="dv">3</span>))</span>
 <span id="cb64-10"><a href="#cb64-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"test AUC: "</span>, <span class="bu">round</span>(roc_auc_score(test[<span class="st">"diabetes"</span>], ______), <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Cross-validation splits the training rows at random, and trees break ties between equal splits in different ways, so R and Python do not choose the same tree and their numbers differ.</p>
+<p>R and Python draw different random splits and folds, and break ties between equal splits in different ways, so they do not choose the same tree and their numbers differ.</p>
 <p><strong>Question!</strong> Compare the tuned tree with the basic tree of Part 2. Has the gap between training and test performance closed? Why must the test rows play no part in choosing <code>tree_depth</code> and <code>min_n</code>?</p>
 <div class="callout callout-style-default callout-important callout-titled">
 <div class="callout-header d-flex align-content-center">

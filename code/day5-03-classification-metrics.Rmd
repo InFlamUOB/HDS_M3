@@ -15,11 +15,6 @@ with a threshold, and measure its performance on the training and the test
 rows, first with metrics that depend on the threshold and then with the ROC
 curve and the AUC, which do not. Finally we add more predictors and compare.
 
-**Theory:** predicted probabilities and predicted classes; accuracy, precision,
-recall, sensitivity and specificity; which class is the event; the distribution
-of predicted probabilities; the ROC curve and the area under it (AUC);
-underfitting in classification.
-
 > **The plots are for looking at**
 >
 > The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
@@ -38,8 +33,11 @@ theme_set(theme_bw())          # white background for every plot
 options(pillar.sigfig = 3)     # show three significant figures in tables
 ```
 
-The same 750 people and the same split as Exercise 5.1, from
-[`data/diabetes_clean.csv`](data/diabetes_clean.csv). This time we keep five predictors,
+The same 750 people as Exercise 5.1, from
+[`data/diabetes_clean.csv`](data/diabetes_clean.csv). We split them into a training set and a
+test set, as in earlier exercises: 80% for training and 20% held back as the test set,
+600 and 150 people. `set.seed(42)` makes the random split the same every time.
+This time we keep five predictors,
 because Part 4 uses them all. Triceps skinfold, insulin and blood pressure are
 left out because in this data set a zero in those columns means "not measured".
 The outcome is a factor with the levels `neg` then `pos`.
@@ -49,16 +47,17 @@ diabetes <- read_csv("data/diabetes_clean.csv") |>
   select(pregnant, glucose, mass, pedigree, age, diabetes) |>
   mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
 
-test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
-train <- diabetes[-test_rows, ]
-test  <- diabetes[test_rows, ]
+set.seed(42)
+split <- initial_split(diabetes, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
 
 count(train, diabetes)
 count(test, diabetes)
 ```
 
-Always look at the number of people in each class first. 220 of the 600
-training rows (36.7%) and 53 of the 150 test rows (35.3%) have diabetes.
+Always look at the number of people in each class first. 218 of the 600
+training rows (36.3%) and 55 of the 150 test rows (36.7%) have diabetes.
 
 ------------------------------------------------------------------------
 
@@ -85,7 +84,7 @@ tidy(log_fit)
 ```
 
 The coefficient of age is positive: older people have higher predicted odds of
-diabetes, by a factor of $e^{0.0363} = 1.04$ per year.
+diabetes, by a factor of $e^{0.0365} = 1.04$ per year.
 
 A classification model first gives a **probability** for each person. To turn
 it into a predicted class we choose a threshold, as in Exercise 4.3; here we use
@@ -112,8 +111,8 @@ test_preds <- predict(log_fit, new_data = test, type = "prob") |>
 count(test_preds, pred_class)
 ```
 
-At 0.5 the age-only model predicts diabetes for only 20 of the 150 test patients:
-a probability of 0.5 or more needs an age of 49 or more.
+At 0.5 the age-only model predicts diabetes for only 19 of the 150 test patients:
+a probability of 0.5 or more needs an age of 50 or more.
 
 > **Learning points**
 >
@@ -161,11 +160,11 @@ class_metrics(______, truth = diabetes, estimate = pred_class,
 
 **Question!** Is the model overfitting? Is it any good? Compare the test accuracy
 with a "model" that predicts no diabetes for everybody: it would be right for
-the 97 of 150 test patients without diabetes, an accuracy of 0.647.
+the 95 of 150 test patients without diabetes, an accuracy of 0.633.
 
 Training and test metrics are similar, so there is no strong sign of
-overfitting. But the age-only model is no more accurate than predicting "no
-diabetes" for everyone, and it finds fewer than one in five of the people with
+overfitting. But the age-only model is hardly more accurate than predicting "no
+diabetes" for everyone (0.640 against 0.633), and it finds fewer than one in five of the people with
 diabetes. It **underfits**: age alone is not enough.
 
 > **Learning points**
@@ -259,11 +258,11 @@ log_fit2 <- log_wf2 |>
 tidy(log_fit2)
 ```
 
-Glucose has by far the largest coefficient, 1.02 log-odds per standard
-deviation, followed by body mass (0.46). Once glucose is in the model, age adds
-little (0.15). (R's `step_normalize()` divides by the standard deviation with
-$n - 1$, Python's `StandardScaler()` with $n$; the coefficients differ in the
-fourth digit, the predictions do not.)
+Glucose has by far the largest coefficient, 1.12 log-odds per standard
+deviation, followed by body mass (0.43). Once glucose is in the model, age adds
+little (0.12). (R's `step_normalize()` divides by the standard deviation with
+$n - 1$, Python's `StandardScaler()` with $n$; on the same rows the coefficients
+would differ only in the fourth digit, and the predictions not at all.)
 
 Predict both sets and compute the metrics:
 
@@ -284,7 +283,7 @@ class_metrics(test_preds2, truth = diabetes, estimate = pred_class,
               event_level = "second")
 ```
 
-Test accuracy rises from 0.647 to 0.767 and sensitivity from 0.189 to 0.528.
+Test accuracy rises from 0.640 to 0.753 and sensitivity from 0.182 to 0.582.
 Training and test are still close, so the richer model does not overfit
 either. Complete the code for its ROC curve and AUC on the test rows:
 
@@ -313,12 +312,13 @@ ggplot(roc_both, aes(x = 1 - specificity, y = sensitivity, colour = model)) +
   labs(colour = NULL, title = "ROC curves on the test rows")
 ```
 
-**Question!** The richer model is better on every metric. Could adding even more
+**Question!** The richer model is better on almost every metric; only
+specificity falls a little. Could adding even more
 predictors ever make a model worse on the test rows? What would you look for?
 
 > **Learning points**
 >
-> - Adding relevant predictors improved every metric and the AUC, on training and test alike.
+> - Adding relevant predictors improved accuracy, precision, sensitivity and the AUC, on training and test alike; specificity fell a little.
 > - Standardise the predictors when you want to compare the sizes of their coefficients.
 > - More flexible models can still overfit: keep comparing training and test.
 
