@@ -20,8 +20,8 @@ single trees partly cancel out.
 
 **Goal.** In this exercise you will:
 
-- tune a random forest with a workflow and 5-fold cross-validation, as you did
-  for the tree in Exercise 5.3;
+- tune a random forest with a grid search and 5-fold cross-validation, as you
+  did for the tree in Exercise 5.3;
 - fit the final forest and evaluate it once on the test rows;
 - compare it with your tuned tree.
 
@@ -79,17 +79,13 @@ Two hyperparameters are marked with `tune()`:
 - `mtry`: how many predictors each split may choose from (1 to 5 here);
 - `min_n`: the smallest node that may still be split, as for the tree.
 
-The model and the recipe go into a workflow, exactly as in Exercise 5.3. Only
-the model line has changed.
+As for the tree in Exercise 5.3, only the model line changes. The formula
+`diabetes ~ .` is given when we tune and when we fit.
 
 ```{r}
 rf_spec <- rand_forest(mtry = tune(), min_n = tune(), trees = 500) |>
   set_engine("ranger") |>
   set_mode("classification")
-
-rf_wf <- workflow() |>
-  add_model(rf_spec) |>
-  add_recipe(recipe(diabetes ~ ., data = train))
 ```
 
 ::: {.callout-important}
@@ -124,7 +120,8 @@ set.seed(123)
 folds <- vfold_cv(train, v = 5, strata = diabetes)
 
 rf_res <- tune_grid(
-  rf_wf,
+  rf_spec,
+  diabetes ~ .,
   resamples = folds,
   grid      = rf_grid,
   metrics   = metric_set(roc_auc),
@@ -166,7 +163,7 @@ differences large compared with the standard errors?
 
 ::: {.callout-important}
 ## Learning points
-- Tuning a forest uses the same workflow, grid and folds as tuning a tree.
+- Tuning a forest uses the same grid search and folds as tuning a tree.
 - Look at the whole grid, not only the winner: many combinations are close.
 :::
 
@@ -174,19 +171,19 @@ differences large compared with the standard errors?
 
 ### Part 3 — The final forest, evaluated once
 
-Put the best combination into the workflow and fit it once on all 600 training
-rows:
+Put the best combination into the model with `finalize_model()` and fit it once
+on all 600 training rows:
 
 ```{r}
 best_rf <- select_best(rf_res, metric = "roc_auc")
 
 set.seed(123)
-final_rf_fit <- finalize_workflow(rf_wf, best_rf) |>
-  fit(data = train)
+final_rf_fit <- finalize_model(rf_spec, best_rf) |>
+  fit(diabetes ~ ., data = train)
 
-test_preds <- predict(final_rf_fit, new_data = test, type = "prob") |>
-  bind_cols(predict(final_rf_fit, new_data = test, type = "class")) |>
-  bind_cols(test)
+test_preds <- test |>
+  bind_cols(predict(final_rf_fit, new_data = test, type = "prob"),
+            predict(final_rf_fit, new_data = test))
 ```
 
 Now evaluate it on the test rows:
@@ -217,7 +214,7 @@ roc_auc(test_preds, truth = diabetes, .pred_pos, event_level = "second")
 ```
 
 The forest uses `mtry` 1 and `min_n` 8. On the test rows: accuracy 0.733,
-sensitivity 0.618, specificity 0.800, AUC 0.765.
+sensitivity 0.618, specificity 0.800, AUC 0.764.
 :::
 :::
 
@@ -435,7 +432,7 @@ better on the test rows? Is it worth losing a single tree that you can read?
 ::: {.content-visible when-profile="instructor"}
 ::: {.instructor}
 **Teaching choice.** Cut to three parts: what a forest is, tuning with the same
-workflow and 5-fold cross-validation as the tree, and one evaluation on the
+grid search and 5-fold cross-validation as the tree, and one evaluation on the
 test rows. The grid keeps the module lead's shape (five levels each); `mtry`
 runs 1 to 5 because there are five predictors, `min_n` 2 to 10. In Python
 `min_samples_split` mirrors ranger's `min.node.size`. The forest is compared
@@ -444,7 +441,7 @@ with the student's own tuned tree from Exercise 5.3.
 **Expected values.** R (`set.seed(42)` split, `set.seed(123)`, ranger, 500
 trees): best `mtry` 1, `min_n` 8, CV AUC 0.809 (SE 0.014); the whole grid lies
 between 0.784 and 0.809. Test accuracy 0.733, sensitivity 0.618, specificity
-0.800, AUC 0.765. Python (`random_state=42` split, `random_state=123`, 500
+0.800, AUC 0.764. Python (`random_state=42` split, `random_state=123`, 500
 trees): best `max_features` 1, `min_samples_split` 10, CV AUC 0.800 (fold SD
 0.032); the whole grid lies between 0.779 and 0.800. Test accuracy 0.747,
 sensitivity 0.544, specificity 0.871, AUC 0.814. Students compare these with
