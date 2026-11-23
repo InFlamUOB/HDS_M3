@@ -13,8 +13,9 @@ column; a large one sets more and more coefficients to exactly zero.
 
 We choose $\lambda$ by trying several values and keeping the one that predicts
 best on rows the model was not fitted on: a **validation set**. The test set
-stays untouched until the very end. In this exercise you build the whole search
-with the standard tools, then look inside each piece.
+stays untouched until the very end. This exercise has no blanks: every cell is
+filled in. Run each one, read what it prints, and make sure you understand each
+step of the search.
 
 ::: {.callout-note}
 ## The plots are for looking at
@@ -28,11 +29,11 @@ expected to write it yourself.
 ## R
 
 ::: {.content-hidden when-meta="show-solutions"}
-[**Download this exercise as an R Markdown notebook (.Rmd)**](code/day5-02-regularisation.Rmd){download="day5-02-regularisation.Rmd"}: the text and every code cell of the R version, including the code for the plots, with the blanks left for you to fill in. Open it in RStudio and run it a chunk at a time.
+[**Download this exercise as an R Markdown notebook (.Rmd)**](code/day5-02-regularisation.Rmd){download="day5-02-regularisation.Rmd"}: the text and every code cell of the R version, including the code for the plots, ready to run. Open it in RStudio and run it a chunk at a time.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
-[**Download the R notebook with the solutions (.Rmd)**](code/day5-02-regularisation-solutions.Rmd){download="day5-02-regularisation-solutions.Rmd"}: the same notebook with the worked answers filled in.
+[**Download the R notebook with the solutions (.Rmd)**](code/day5-02-regularisation-solutions.Rmd){download="day5-02-regularisation-solutions.Rmd"}: the same notebook.
 :::
 
 ### Packages and data
@@ -111,12 +112,31 @@ lasso_wf
 
 ### Part 3 — The grid
 
-The grid is simply the list of penalties to try, one per row:
+The grid is the list of penalties to try, one per row. `grid_regular()` from
+dials (loaded with tidymodels) makes it for us. `penalty()` knows that
+penalties are best spread out on a log scale, so `range = c(-2, 1)` means from
+$10^{-2} = 0.01$ to $10^{1} = 10$, and `levels = 10` gives 10 values evenly
+spaced on that scale:
 
 ```{r}
-penalty_grid <- tibble(penalty = c(0.01, 0.1, 0.3, 1, 2, 3, 5, 10))
+penalty_grid <- grid_regular(penalty(range = c(-2, 1)), levels = 10)
 penalty_grid
 ```
+
+Small penalties are close together and large ones far apart, so each step
+changes the model by a similar amount.
+
+::: {.callout-tip}
+## Other kinds of grid
+A regular grid is the simplest choice. dials also has `grid_random()` (random
+values) and `grid_space_filling()` (values spread out to cover the range well,
+for example a Latin hypercube), which help when there are several
+hyperparameters at once. See the
+[dials grid functions](https://dials.tidymodels.org/reference/grid_regular.html),
+[space-filling grids](https://dials.tidymodels.org/reference/grid_space_filling.html),
+and the chapter on grid search in
+[Tidy Modeling with R](https://www.tmwr.org/grid-search).
+:::
 
 ------------------------------------------------------------------------
 
@@ -126,26 +146,6 @@ penalty_grid
 on the 450 training rows and computes the RMSE on the 150 validation rows.
 
 ```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-lasso_res <- tune_grid(lasso_wf,
-                       resamples = ______,
-                       grid      = ______,
-                       metrics   = metric_set(rmse))
-
-collect_metrics(lasso_res)
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The resamples are the training/validation pair from Part 1, `val_set`, and the
-grid is `penalty_grid` from Part 3.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
 lasso_res <- tune_grid(lasso_wf,
                        resamples = val_set,
                        grid      = penalty_grid,
@@ -153,8 +153,6 @@ lasso_res <- tune_grid(lasso_wf,
 
 collect_metrics(lasso_res)
 ```
-:::
-:::
 
 `collect_metrics()` shows one row per penalty. The `mean` column is the
 validation RMSE (`n` is 1 because there is one validation set).
@@ -175,7 +173,7 @@ best_penalty
 to the RMSE with a smaller and with a larger penalty?
 
 The validation RMSE is 35.49 with the smallest penalty, falls to
-30.41 at a penalty of 3, and rises again to 31.58 at 10.
+30.41 at a penalty of 2.154, and rises again to 31.58 at 10.
 Too small a penalty lets the model use the random markers; too large a penalty
 also removes real measurements.
 
@@ -188,30 +186,11 @@ then refits it on the training and validation rows together (600 people) and
 evaluates it once on the 150 test rows.
 
 ```{r}
-#| eval: false
-# Replace every ______ below, then run this cell.
-final_wf  <- finalize_workflow(lasso_wf, ______)
-final_fit <- last_fit(final_wf, split, add_validation_set = TRUE)
-
-collect_metrics(final_fit)
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The chosen penalty is `best_penalty`, from `select_best()` in Part 4.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{r}
 final_wf  <- finalize_workflow(lasso_wf, best_penalty)
 final_fit <- last_fit(final_wf, split, add_validation_set = TRUE)
 
 collect_metrics(final_fit)
 ```
-:::
-:::
 
 Which columns did the lasso keep? These are the coefficients that are not zero:
 
@@ -230,9 +209,9 @@ collect_metrics(plain_fit)
 **Question!** How many of the 150 markers did the lasso keep? Which model
 predicts the test rows better?
 
-The lasso kept one marker and set the other 149 to zero. Of the real
-measurements it kept `mass`, `age` and `diabetes`. Its
-test RMSE is 28.24, against 29.11 without a penalty: the model
+The lasso kept 8 markers, with small coefficients, and set the other 142 to
+zero. Of the real measurements it kept `mass`, `age` and `diabetes`. Its
+test RMSE is 27.93, against 29.11 without a penalty: the model
 without a penalty uses every marker, and the noise it learnt from them costs it
 on new people.
 
@@ -247,11 +226,11 @@ on new people.
 ## Python
 
 ::: {.content-hidden when-meta="show-solutions"}
-[**Download this exercise as a Jupyter notebook (.ipynb)**](code/day5-02-regularisation.ipynb){download="day5-02-regularisation.ipynb"}: the text and every code cell of the Python version, including the code for the plots, with the blanks left for you to fill in. Open it in Jupyter or VS Code and run it a cell at a time.
+[**Download this exercise as a Jupyter notebook (.ipynb)**](code/day5-02-regularisation.ipynb){download="day5-02-regularisation.ipynb"}: the text and every code cell of the Python version, including the code for the plots, ready to run. Open it in Jupyter or VS Code and run it a cell at a time.
 :::
 
 ::: {.content-visible when-meta="show-solutions"}
-[**Download the Jupyter notebook with the solutions (.ipynb)**](code/day5-02-regularisation-solutions.ipynb){download="day5-02-regularisation-solutions.ipynb"}: the same notebook with the worked answers filled in.
+[**Download the Jupyter notebook with the solutions (.ipynb)**](code/day5-02-regularisation-solutions.ipynb){download="day5-02-regularisation-solutions.ipynb"}: the same notebook.
 :::
 
 ### Packages and data
@@ -265,7 +244,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-from sklearn.model_selection import train_test_split, GridSearchCV, PredefinedSplit, ParameterGrid
+from sklearn.model_selection import train_test_split, GridSearchCV, PredefinedSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Lasso, LinearRegression
@@ -332,13 +311,27 @@ lasso_pipe
 
 ### Part 3 — The grid
 
-The grid is the list of penalties to try. Its name says which step and which
-setting it is for: `model__alpha` is the `alpha` of the step called `model`.
+The grid is the list of penalties to try. `np.logspace(-2, 1, 10)` gives 10
+values from $10^{-2} = 0.01$ to $10^{1} = 10$, evenly spaced on a log scale,
+which suits penalties. The name says which step and which setting the values
+are for: `model__alpha` is the `alpha` of the step called `model`.
 
 ```{python}
-penalty_grid = {"model__alpha": [0.01, 0.1, 0.3, 1, 2, 3, 5, 10]}
-list(ParameterGrid(penalty_grid))
+penalty_grid = {"model__alpha": np.logspace(-2, 1, 10)}
+print(penalty_grid["model__alpha"].round(3))
 ```
+
+Small penalties are close together and large ones far apart, so each step
+changes the model by a similar amount.
+
+::: {.callout-tip}
+## Other kinds of grid
+A regular grid is the simplest choice. scikit-learn also has
+`RandomizedSearchCV()`, which tries random values instead of a fixed list and
+helps when there are several hyperparameters at once. See the scikit-learn
+guide to
+[tuning hyperparameters](https://scikit-learn.org/stable/modules/grid_search.html).
+:::
 
 ------------------------------------------------------------------------
 
@@ -349,29 +342,6 @@ pipeline on the 450 training rows and scores it on the 150 validation rows.
 scikit-learn always maximises its score, so the RMSE comes out negative.
 
 ```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-lasso_search = GridSearchCV(lasso_pipe,
-                            param_grid=______,
-                            cv=______,
-                            scoring="neg_root_mean_squared_error")
-lasso_search.fit(X_both, y_both)
-
-results = pd.DataFrame({"penalty": lasso_search.cv_results_["param_model__alpha"],
-                        "val_rmse": -lasso_search.cv_results_["mean_test_score"]})
-print(results.round(2))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-The grid is `penalty_grid` from Part 3 and `cv` is the training/validation
-split from Part 1, `val_set`.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
 lasso_search = GridSearchCV(lasso_pipe,
                             param_grid=penalty_grid,
                             cv=val_set,
@@ -380,10 +350,8 @@ lasso_search.fit(X_both, y_both)
 
 results = pd.DataFrame({"penalty": lasso_search.cv_results_["param_model__alpha"],
                         "val_rmse": -lasso_search.cv_results_["mean_test_score"]})
-print(results.round(2))
+print(results.astype(float).round(3))
 ```
-:::
-:::
 
 One row per penalty, with its validation RMSE.
 
@@ -407,7 +375,7 @@ print(lasso_search.best_params_)
 to the RMSE with a smaller and with a larger penalty?
 
 The validation RMSE is 32.64 with the smallest penalty, falls to
-26.30 at a penalty of 2, and rises again to 28.06 at 10.
+26.22 at a penalty of 2.154, and rises again to 28.06 at 10.
 Too small a penalty lets the model use the random markers; too large a penalty
 also removes real measurements.
 
@@ -420,26 +388,9 @@ chosen penalty on the training and validation rows together (600 people):
 that is `best_estimator_`. Check it once on the 150 test rows.
 
 ```{python}
-#| eval: false
-# Replace every ______ below, then run this cell.
-final_model = lasso_search.best_estimator_
-print("test RMSE:", round(root_mean_squared_error(y_test, final_model.predict(______)), 2))
-```
-
-::: {.callout-tip collapse="true"}
-## Stuck?
-Predict the test predictors, `X_test`.
-:::
-
-::: {.content-visible when-meta="show-solutions"}
-::: {.callout-note appearance="simple"}
-## Worked answer
-```{python}
 final_model = lasso_search.best_estimator_
 print("test RMSE:", round(root_mean_squared_error(y_test, final_model.predict(X_test)), 2))
 ```
-:::
-:::
 
 Which columns did the lasso keep? These are the coefficients that are not zero:
 
@@ -459,9 +410,9 @@ print("test RMSE:", round(root_mean_squared_error(y_test, plain.predict(X_test))
 **Question!** How many of the 150 markers did the lasso keep? Which model
 predicts the test rows better?
 
-The lasso kept 10 markers, with small coefficients, and set the other 140 to
+The lasso kept 8 markers, with small coefficients, and set the other 142 to
 zero. Of the real measurements it kept `mass`, `age` and `diabetes`. Its
-test RMSE is 27.23, against 31.24 without a penalty: the model
+test RMSE is 27.19, against 31.24 without a penalty: the model
 without a penalty uses every marker, and the noise it learnt from them costs it
 on new people.
 
@@ -489,7 +440,8 @@ lasso can set a coefficient to exactly zero.
 ::: {.content-visible when-profile="instructor"}
 ::: {.instructor}
 **Teaching choice.** Rewritten at the module lead's request: short, one
-finished workflow with the standard tools, then a look inside each piece (the
+finished workflow with the standard tools and no blanks (students are learning
+the tools), then a look inside each piece (the
 three sets, the grid, the RMSE per penalty, the kept coefficients). The data
 are the 750 diabetes people with five real predictors and 150 random markers
 (`data/diabetes_markers.csv`, see `data/PROVENANCE.txt`), so the lasso's job is
@@ -498,17 +450,21 @@ visible: drop the markers. R uses `initial_validation_split()` (60/20/20) with
 twice with `train_test_split()` and passes the pair as `PredefinedSplit()`;
 `best_estimator_` is refitted on training + validation, matching R.
 
-**Expected values.** R and Python draw different random splits, so their
-numbers differ. Validation RMSE at penalties 0.01, 0.1, 0.3, 1, 2, 3, 5, 10:
-R 35.49, 34.56, 33.14, 30.83, 30.43, 30.41, 30.59, 31.58 (best 3); Python 32.64, 31.86, 30.52, 27.79, 26.30, 26.34, 26.72, 28.06 (best 2).
-Test RMSE, lasso vs no penalty: R 28.24 vs 29.11; Python
-27.23 vs 31.24. Markers kept: R 1, Python 10.
-Real measurements kept: R mass, age, diabetes; Python mass, age, diabetes.
+**Expected values.** The grid is the same in both languages: 10 penalties from
+0.01 to 10, evenly spaced on a log scale (0.01, 0.022, 0.046, 0.1, 0.215,
+0.464, 1, 2.154, 4.642, 10). R and Python draw different random splits, so the
+other numbers differ. Validation RMSE along the grid: R 35.49, 35.36, 35.09,
+34.56, 33.64, 32.39, 30.83, 30.41, 30.55, 31.58; Python 32.64, 32.53, 32.31,
+31.86, 31.03, 29.67, 27.79, 26.22, 26.66, 28.06. Both choose 2.154. Test RMSE,
+lasso vs no penalty: R 27.93 vs 29.11; Python 27.19 vs 31.24. Markers kept: 8
+of 150 in both. Real measurements kept: mass, age and diabetes in both.
 
-**Common failures.** (1) Passing `train` instead of `val_set` as the
-resamples. (2) In Python, reading the negative scores as they are: the RMSE is
-minus `mean_test_score`. (3) Forgetting `add_validation_set = TRUE`, which
-refits on 450 rows instead of 600 and gives slightly different numbers.
+**Common questions.** (1) Why are the Python scores negative? scikit-learn
+maximises its score, so the RMSE is minus `mean_test_score`. (2) What does
+`add_validation_set = TRUE` do? It refits on training + validation (600 rows),
+as `best_estimator_` does in Python; without it R refits on 450 rows.
+(3) Why a log scale for the grid? A step from 0.01 to 0.02 changes the lasso
+about as much as a step from 5 to 10.
 
 **Timing.** About 30 minutes.
 :::

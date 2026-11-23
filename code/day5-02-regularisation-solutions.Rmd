@@ -14,8 +14,9 @@ column; a large one sets more and more coefficients to exactly zero.
 
 We choose $\lambda$ by trying several values and keeping the one that predicts
 best on rows the model was not fitted on: a **validation set**. The test set
-stays untouched until the very end. In this exercise you build the whole search
-with the standard tools, then look inside each piece.
+stays untouched until the very end. This exercise has no blanks: every cell is
+filled in. Run each one, read what it prints, and make sure you understand each
+step of the search.
 
 > **The plots are for looking at**
 >
@@ -97,12 +98,30 @@ lasso_wf
 
 ### Part 3 — The grid
 
-The grid is simply the list of penalties to try, one per row:
+The grid is the list of penalties to try, one per row. `grid_regular()` from
+dials (loaded with tidymodels) makes it for us. `penalty()` knows that
+penalties are best spread out on a log scale, so `range = c(-2, 1)` means from
+$10^{-2} = 0.01$ to $10^{1} = 10$, and `levels = 10` gives 10 values evenly
+spaced on that scale:
 
 ```{r}
-penalty_grid <- tibble(penalty = c(0.01, 0.1, 0.3, 1, 2, 3, 5, 10))
+penalty_grid <- grid_regular(penalty(range = c(-2, 1)), levels = 10)
 penalty_grid
 ```
+
+Small penalties are close together and large ones far apart, so each step
+changes the model by a similar amount.
+
+> **Other kinds of grid**
+>
+> A regular grid is the simplest choice. dials also has `grid_random()` (random
+> values) and `grid_space_filling()` (values spread out to cover the range well,
+> for example a Latin hypercube), which help when there are several
+> hyperparameters at once. See the
+> [dials grid functions](https://dials.tidymodels.org/reference/grid_regular.html),
+> [space-filling grids](https://dials.tidymodels.org/reference/grid_space_filling.html),
+> and the chapter on grid search in
+> [Tidy Modeling with R](https://www.tmwr.org/grid-search).
 
 ------------------------------------------------------------------------
 
@@ -110,13 +129,6 @@ penalty_grid
 
 `tune_grid()` does the work: for each penalty in the grid, it fits the workflow
 on the 450 training rows and computes the RMSE on the 150 validation rows.
-
-> **Stuck?**
->
-> The resamples are the training/validation pair from Part 1, `val_set`, and the
-> grid is `penalty_grid` from Part 3.
-
-> **Worked answer**
 
 ```{r}
 lasso_res <- tune_grid(lasso_wf,
@@ -144,7 +156,7 @@ best_penalty
 to the RMSE with a smaller and with a larger penalty?
 
 The validation RMSE is 35.49 with the smallest penalty, falls to
-30.41 at a penalty of 3, and rises again to 31.58 at 10.
+30.41 at a penalty of 2.154, and rises again to 31.58 at 10.
 Too small a penalty lets the model use the random markers; too large a penalty
 also removes real measurements.
 
@@ -155,12 +167,6 @@ also removes real measurements.
 `finalize_workflow()` puts the chosen penalty into the workflow. `last_fit()`
 then refits it on the training and validation rows together (600 people) and
 evaluates it once on the 150 test rows.
-
-> **Stuck?**
->
-> The chosen penalty is `best_penalty`, from `select_best()` in Part 4.
-
-> **Worked answer**
 
 ```{r}
 final_wf  <- finalize_workflow(lasso_wf, best_penalty)
@@ -186,9 +192,9 @@ collect_metrics(plain_fit)
 **Question!** How many of the 150 markers did the lasso keep? Which model
 predicts the test rows better?
 
-The lasso kept one marker and set the other 149 to zero. Of the real
-measurements it kept `mass`, `age` and `diabetes`. Its
-test RMSE is 28.24, against 29.11 without a penalty: the model
+The lasso kept 8 markers, with small coefficients, and set the other 142 to
+zero. Of the real measurements it kept `mass`, `age` and `diabetes`. Its
+test RMSE is 27.93, against 29.11 without a penalty: the model
 without a penalty uses every marker, and the noise it learnt from them costs it
 on new people.
 
