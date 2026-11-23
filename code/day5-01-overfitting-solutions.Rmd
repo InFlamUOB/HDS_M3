@@ -15,8 +15,8 @@ the test rows, which it has never seen.
 - **Overfitting**: the model is too flexible. It also learns the noise in the
   training rows, so the training error is small but the test error is larger.
 
-We will see both with one predictor and three curves: a straight line, a gentle
-curve and a very bendy one.
+We will see both with one predictor and three models: a straight line, a
+gentle curve and a very bendy one.
 
 > **The plots are for looking at**
 >
@@ -77,36 +77,109 @@ that.
 ### Part 2 — Three models
 
 All three are linear regressions of `concentration` on `hours`. Only the
-recipe changes: `step_poly(hours, degree = 3)` adds columns for $\text{hours}^2$ and
-$\text{hours}^3$, which lets the fitted line bend. The higher the degree, the
-more it can bend.
+recipe changes. `step_poly(hours, degree = 3)` turns the one column `hours`
+into three columns, built from $\text{hours}$, $\text{hours}^2$ and
+$\text{hours}^3$, and the extra columns let the fitted line bend. (step_poly
+also adjusts the three columns a little so they are less alike; the fitted
+curve is the same.) The higher the degree, the more the line can bend.
+
+See the three columns it makes:
+
+```{r}
+rec_3 <- recipe(concentration ~ hours, data = train) |>
+  step_poly(hours, degree = 3)
+
+rec_3 |> prep() |> bake(new_data = NULL) |> head(3)
+```
+
+One column has become three. The numbers do not look like hours, hours² and
+hours³ because of that small adjustment.
+
+Now fit the three models on the training rows: a straight line (degree 1), a
+gentle curve (degree 3) and a very bendy curve (degree 6).
 
 > **Stuck?**
 >
-> Every model is fitted on the training rows only, so `data = train`. The bendy
-> curve has degree 6.
+> The bendy curve has degree 6, and every model is fitted on the training rows
+> only, so `data = train`.
 
 > **Worked answer**
 
 ```{r}
-fit_degree <- function(degree) {
-  rec <- recipe(concentration ~ hours, data = train) |>
-    step_poly(hours, degree = degree)
-  workflow(rec, linear_reg()) |>
-    fit(data = train)
-}
+rec_1 <- recipe(concentration ~ hours, data = train) |>
+  step_poly(hours, degree = 1)
+fit_1 <- workflow(rec_1, linear_reg()) |>
+  fit(data = train)
 
-fit_1 <- fit_degree(1)   # a straight line
-fit_3 <- fit_degree(3)   # a gentle curve
-fit_6 <- fit_degree(6)   # a very bendy curve
+fit_3 <- workflow(rec_3, linear_reg()) |>
+  fit(data = train)
+
+rec_6 <- recipe(concentration ~ hours, data = train) |>
+  step_poly(hours, degree = 6)
+fit_6 <- workflow(rec_6, linear_reg()) |>
+  fit(data = train)
 ```
+
+------------------------------------------------------------------------
+
+### Part 3 — Training error and test error
+
+For each model we predict the training rows and the test rows, and measure the
+error with the RMSE: the square root of the mean squared error from Day 3, in
+the units of the outcome (mg/L). Here is the straight line:
+
+```{r}
+pred_train_1 <- predict(fit_1, new_data = train) |> bind_cols(train)
+pred_test_1  <- predict(fit_1, new_data = test)  |> bind_cols(test)
+
+train_rmse_1 <- rmse(pred_train_1, truth = concentration, estimate = .pred)$.estimate
+test_rmse_1  <- rmse(pred_test_1,  truth = concentration, estimate = .pred)$.estimate
+```
+
+Do the same for the other two models:
+
+> **Stuck?**
+>
+> Copy the straight-line cell: the test predictions use the test rows,
+> `new_data = test` and `bind_cols(test)`.
+
+> **Worked answer**
+
+```{r}
+pred_train_3 <- predict(fit_3, new_data = train) |> bind_cols(train)
+pred_test_3  <- predict(fit_3, new_data = test)  |> bind_cols(test)
+train_rmse_3 <- rmse(pred_train_3, truth = concentration, estimate = .pred)$.estimate
+test_rmse_3  <- rmse(pred_test_3,  truth = concentration, estimate = .pred)$.estimate
+
+pred_train_6 <- predict(fit_6, new_data = train) |> bind_cols(train)
+pred_test_6  <- predict(fit_6, new_data = test)  |> bind_cols(test)
+train_rmse_6 <- rmse(pred_train_6, truth = concentration, estimate = .pred)$.estimate
+test_rmse_6  <- rmse(pred_test_6,  truth = concentration, estimate = .pred)$.estimate
+```
+
+------------------------------------------------------------------------
+
+### Part 4 — Compare the three models
+
+All the results in one table:
+
+```{r}
+results <- tibble(
+  model      = c("degree 1", "degree 3", "degree 6"),
+  train_rmse = c(train_rmse_1, train_rmse_3, train_rmse_6),
+  test_rmse  = c(test_rmse_1,  test_rmse_3,  test_rmse_6)
+)
+results
+```
+
+And the three fitted curves:
 
 ```{r}
 hours_grid <- tibble(hours = seq(min(drugs$hours), max(drugs$hours), length.out = 300))
 curves <- bind_rows(
-  augment(fit_1, hours_grid) |> mutate(model = "degree 1"),
-  augment(fit_3, hours_grid) |> mutate(model = "degree 3"),
-  augment(fit_6, hours_grid) |> mutate(model = "degree 6")
+  predict(fit_1, new_data = hours_grid) |> bind_cols(hours_grid) |> mutate(model = "degree 1"),
+  predict(fit_3, new_data = hours_grid) |> bind_cols(hours_grid) |> mutate(model = "degree 3"),
+  predict(fit_6, new_data = hours_grid) |> bind_cols(hours_grid) |> mutate(model = "degree 6")
 )
 
 ggplot() +
@@ -118,45 +191,6 @@ ggplot() +
        title = "Three fitted curves; training patients black, test patients red")
 ```
 
-**Question!** Which curve follows the shape of the data? Which one bends to
-reach individual training points?
-
-The straight line misses the rise and fall. The degree-3 curve follows it. The
-degree-6 curve shoots up to about 13 mg/L before the first hour, to pass
-through the one high training patient, a peak no other patient comes near.
-
-------------------------------------------------------------------------
-
-### Part 3 — Training error against test error
-
-We measure each model with the RMSE, the square root of the mean squared error
-from Day 3. It is in the units of the outcome, mg/L. `rmse_on()` predicts the
-rows you give it and returns their RMSE.
-
-```{r}
-rmse_on <- function(model, data) {
-  augment(model, data) |>
-    rmse(truth = concentration, estimate = .pred) |>
-    pull(.estimate)
-}
-```
-
-> **Stuck?**
->
-> The test RMSE uses the test rows: `rmse_on(fit_1, test)`, and the same for the
-> other two.
-
-> **Worked answer**
-
-```{r}
-results <- tibble(
-  model      = c("degree 1", "degree 3", "degree 6"),
-  train_rmse = c(rmse_on(fit_1, train), rmse_on(fit_3, train), rmse_on(fit_6, train)),
-  test_rmse  = c(rmse_on(fit_1, test), rmse_on(fit_3, test), rmse_on(fit_6, test))
-)
-results
-```
-
 **Question!** Which model underfits, which overfits, and which would you use?
 
 | Model | Training RMSE | Test RMSE | |
@@ -165,9 +199,12 @@ results
 | degree 3 | 1.03 | 0.62 | fits: small on both |
 | degree 6 | 0.70 | 1.02 | overfits: smallest on training, larger on test |
 
-The degree-6 curve has the smallest training error of the three, but on the
-test patients it is worse than the degree-3 curve. A smaller training error
-does not mean a better model. Only the test rows can tell.
+The straight line misses the rise and fall, so its error is large on both sets.
+The degree-3 curve follows the shape. The degree-6 curve shoots up to about
+13 mg/L before the first hour, to pass through the one high training patient:
+it has the smallest training error of the three, but on the test patients it is
+worse than the degree-3 curve. A smaller training error does not mean a better
+model. Only the test rows can tell.
 
 > **Key points**
 >
