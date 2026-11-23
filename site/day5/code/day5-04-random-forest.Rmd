@@ -1,0 +1,175 @@
+---
+title: "Exercise 5.4 — Random forests"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day5/day5-04-random-forest.html>.*
+
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+
+A single decision tree is easy to read but unstable. A few different people in
+the training rows can give a very different tree. A **random forest** grows
+many trees and lets them vote. Two things make the trees differ from each
+other:
+
+- each tree is grown on a **bootstrap sample** of the training rows: as many
+  rows as the training set, drawn at random with replacement;
+- at each split, each tree may only try a **random subset of the predictors**.
+
+The forest's prediction is the average of the trees' votes. The errors of the
+single trees partly cancel out.
+
+**Goal.** In this exercise you will:
+
+- tune a random forest with a workflow and 5-fold cross-validation, as you did
+  for the tree in Exercise 5.3;
+- fit the final forest and evaluate it once on the test rows;
+- compare it with your tuned tree.
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "ranger"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())          # white background for every plot
+options(pillar.sigfig = 3)     # show three significant figures in tables
+```
+
+The same 750 people and five predictors as Exercise 5.3, from
+[`data/diabetes_clean.csv`](data/diabetes_clean.csv). The outcome has the levels
+`neg` then `pos`.
+
+```{r}
+diabetes <- read_csv("data/diabetes_clean.csv") |>
+  select(pregnant, glucose, mass, pedigree, age, diabetes) |>
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+```
+
+The same split as before: 600 people for training and 150 for testing.
+
+```{r}
+set.seed(42)
+split <- initial_split(diabetes, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — From one tree to a forest
+
+`rand_forest()` with the `ranger` engine. The number of trees is fixed at 500.
+Two hyperparameters are marked with `tune()`:
+
+- `mtry`: how many predictors each split may choose from (1 to 5 here);
+- `min_n`: the smallest node that may still be split, as for the tree.
+
+The model and the recipe go into a workflow, exactly as in Exercise 5.3. Only
+the model line has changed.
+
+```{r}
+rf_spec <- rand_forest(mtry = tune(), min_n = tune(), trees = 500) |>
+  set_engine("ranger") |>
+  set_mode("classification")
+
+rf_wf <- workflow() |>
+  add_model(rf_spec) |>
+  add_recipe(recipe(diabetes ~ ., data = train))
+```
+
+> **Learning points**
+>
+> - A random forest is many trees, each grown on a bootstrap sample of the rows and trying a random subset of predictors at each split. Their votes are averaged.
+> - A small `mtry` makes the trees more different from each other.
+
+------------------------------------------------------------------------
+
+### Part 2 — Tuning `mtry` and `min_n`
+
+Five values of each, 25 combinations. Each one is judged by 5-fold
+cross-validation on the training rows, as in Exercise 5.3. That is 125 forests,
+which takes a few seconds.
+
+```{r}
+rf_grid <- grid_regular(mtry(range = c(1L, 5L)),
+                        min_n(range = c(2L, 10L)),
+                        levels = 5)
+
+set.seed(123)
+folds <- vfold_cv(train, v = 5, strata = diabetes)
+
+rf_res <- tune_grid(
+  rf_wf,
+  resamples = folds,
+  grid      = rf_grid,
+  metrics   = metric_set(roc_auc),
+  control   = control_grid(event_level = "second")
+)
+
+autoplot(rf_res)
+```
+
+Now show the five best combinations by AUC:
+
+```{r}
+# Replace every ______ below, then run this cell.
+show_best(rf_res, metric = ______, n = 5)
+```
+
+> **Stuck?**
+>
+> The metric is the one given to `metric_set()` above, written in quotes.
+
+**Question!** Which values of `mtry` and `min_n` work best? Are the
+differences large compared with the standard errors?
+
+> **Learning points**
+>
+> - Tuning a forest uses the same workflow, grid and folds as tuning a tree.
+> - Look at the whole grid, not only the winner: many combinations are close.
+
+------------------------------------------------------------------------
+
+### Part 3 — The final forest, evaluated once
+
+Put the best combination into the workflow and fit it once on all 600 training
+rows:
+
+```{r}
+best_rf <- select_best(rf_res, metric = "roc_auc")
+
+set.seed(123)
+final_rf_fit <- finalize_workflow(rf_wf, best_rf) |>
+  fit(data = train)
+
+test_preds <- predict(final_rf_fit, new_data = test, type = "prob") |>
+  bind_cols(predict(final_rf_fit, new_data = test, type = "class")) |>
+  bind_cols(test)
+```
+
+Now evaluate it on the test rows:
+
+```{r}
+# Replace every ______ below, then run this cell.
+class_metrics <- metric_set(accuracy, sens, spec)
+class_metrics(______, truth = diabetes, estimate = .pred_class,
+              event_level = "second")
+roc_auc(test_preds, truth = diabetes, ______, event_level = "second")
+```
+
+> **Stuck?**
+>
+> The predictions are in `test_preds`. The AUC needs the predicted probability of
+> `pos`, which is the column `.pred_pos`.
+
+**Question!** Look back at your tuned tree in Exercise 5.3. Is the forest
+better on the test rows? Is it worth losing a single tree that you can read?
+
+> **Learning points**
+>
+> - Fit the final forest once on all the training rows, then use the test rows once.
+> - A forest is usually more accurate than a single tree, but it cannot be read as a picture.

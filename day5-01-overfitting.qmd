@@ -1,0 +1,455 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 5.1 — Overfitting and underfitting {#sec-overfitting}
+
+A model is only useful if it predicts **people it has not seen**. So we always
+compare two errors: on the training rows, which the model was fitted on, and on
+the test rows, which it has never seen.
+
+- **Underfitting**: the model is too simple. The error is large on both.
+- **Overfitting**: the model is too flexible. It also learns the noise in the
+  training rows, so the training error is small but the test error is larger.
+
+We will see both with one predictor and three curves: a straight line, a gentle
+curve and a very bendy one.
+
+::: {.callout-note}
+## The plots are for looking at
+The code for every plot is folded away just above it, in case you are curious,
+and all of it is in the notebook linked at the top of each tab. You are not
+expected to write it yourself.
+:::
+
+:::::: {.panel-tabset group="language"}
+
+## R
+
+::: {.content-hidden when-meta="show-solutions"}
+[**Download this exercise as an R Markdown notebook (.Rmd)**](code/day5-01-overfitting.Rmd){download="day5-01-overfitting.Rmd"}: the text and every code cell of the R version, including the code for the plots, with the blanks left for you to fill in. Open it in RStudio and run it a chunk at a time.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+[**Download the R notebook with the solutions (.Rmd)**](code/day5-01-overfitting-solutions.Rmd){download="day5-01-overfitting-solutions.Rmd"}: the same notebook with the worked answers filled in.
+:::
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())          # white background for every plot
+```
+
+The data are in [`data/drug_levels.csv`](data/drug_levels.csv): a small pilot
+study of 20 patients. Each patient had one blood sample taken between 0 and 3
+hours after a dose of a drug. `hours` is the time since the dose and
+`concentration` the drug level in the blood (mg/L). As always, 80% of the
+patients are used for training and 20% are held back as the test set.
+
+```{r}
+drugs <- read_csv("data/drug_levels.csv")
+
+set.seed(42)
+split <- initial_split(drugs, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
+
+nrow(train)
+nrow(test)
+```
+
+16 patients for training and 4 for testing. A small study, which is exactly
+where overfitting is easiest to fall into.
+
+------------------------------------------------------------------------
+
+### Part 1 — Look at the data
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+ggplot() +
+  geom_point(data = train, aes(hours, concentration), size = 2) +
+  geom_point(data = test,  aes(hours, concentration), colour = "red", size = 3) +
+  labs(x = "Hours since the dose", y = "Concentration (mg/L)",
+       title = "Training patients (black) and test patients (red)")
+```
+
+**Question!** Would a straight line describe these points well?
+
+The level rises for about an hour and then falls. A straight line cannot do
+that.
+
+------------------------------------------------------------------------
+
+### Part 2 — Three models
+
+All three are linear regressions of `concentration` on `hours`. Only the
+recipe changes: `step_poly(hours, degree = 3)` adds columns for $\text{hours}^2$ and
+$\text{hours}^3$, which lets the fitted line bend. The higher the degree, the
+more it can bend.
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+fit_degree <- function(degree) {
+  rec <- recipe(concentration ~ hours, data = train) |>
+    step_poly(hours, degree = degree)
+  workflow(rec, linear_reg()) |>
+    fit(data = ______)
+}
+
+fit_1 <- fit_degree(1)   # a straight line
+fit_3 <- fit_degree(3)   # a gentle curve
+fit_6 <- fit_degree(______)   # a very bendy curve
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Every model is fitted on the training rows only, so `data = train`. The bendy
+curve has degree 6.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+fit_degree <- function(degree) {
+  rec <- recipe(concentration ~ hours, data = train) |>
+    step_poly(hours, degree = degree)
+  workflow(rec, linear_reg()) |>
+    fit(data = train)
+}
+
+fit_1 <- fit_degree(1)   # a straight line
+fit_3 <- fit_degree(3)   # a gentle curve
+fit_6 <- fit_degree(6)   # a very bendy curve
+```
+:::
+:::
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+hours_grid <- tibble(hours = seq(min(drugs$hours), max(drugs$hours), length.out = 300))
+curves <- bind_rows(
+  augment(fit_1, hours_grid) |> mutate(model = "degree 1"),
+  augment(fit_3, hours_grid) |> mutate(model = "degree 3"),
+  augment(fit_6, hours_grid) |> mutate(model = "degree 6")
+)
+
+ggplot() +
+  geom_line(data = curves, aes(hours, .pred), colour = "steelblue", linewidth = 1) +
+  geom_point(data = train, aes(hours, concentration), size = 2) +
+  geom_point(data = test,  aes(hours, concentration), colour = "red", size = 3) +
+  facet_wrap(~ model) +
+  labs(x = "Hours since the dose", y = "Concentration (mg/L)",
+       title = "Three fitted curves; training patients black, test patients red")
+```
+
+**Question!** Which curve follows the shape of the data? Which one bends to
+reach individual training points?
+
+The straight line misses the rise and fall. The degree-3 curve follows it. The
+degree-6 curve shoots up to about 13 mg/L before the first hour, to pass
+through the one high training patient, a peak no other patient comes near.
+
+------------------------------------------------------------------------
+
+### Part 3 — Training error against test error
+
+We measure each model with the RMSE, the square root of the mean squared error
+from Day 3. It is in the units of the outcome, mg/L. `rmse_on()` predicts the
+rows you give it and returns their RMSE.
+
+```{r}
+rmse_on <- function(model, data) {
+  augment(model, data) |>
+    rmse(truth = concentration, estimate = .pred) |>
+    pull(.estimate)
+}
+```
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+results <- tibble(
+  model      = c("degree 1", "degree 3", "degree 6"),
+  train_rmse = c(rmse_on(fit_1, train), rmse_on(fit_3, train), rmse_on(fit_6, train)),
+  test_rmse  = c(rmse_on(fit_1, ______), rmse_on(fit_3, ______), rmse_on(fit_6, ______))
+)
+results
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The test RMSE uses the test rows: `rmse_on(fit_1, test)`, and the same for the
+other two.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+results <- tibble(
+  model      = c("degree 1", "degree 3", "degree 6"),
+  train_rmse = c(rmse_on(fit_1, train), rmse_on(fit_3, train), rmse_on(fit_6, train)),
+  test_rmse  = c(rmse_on(fit_1, test), rmse_on(fit_3, test), rmse_on(fit_6, test))
+)
+results
+```
+:::
+:::
+
+**Question!** Which model underfits, which overfits, and which would you use?
+
+| Model | Training RMSE | Test RMSE | |
+|:-|:-:|:-:|:-|
+| degree 1 | 2.10 | 1.57 | underfits: large on both |
+| degree 3 | 1.03 | 0.62 | fits: small on both |
+| degree 6 | 0.70 | 1.02 | overfits: smallest on training, larger on test |
+
+The degree-6 curve has the smallest training error of the three, but on the
+test patients it is worse than the degree-3 curve. A smaller training error
+does not mean a better model. Only the test rows can tell.
+
+::: {.callout-tip}
+## Key points
+- Always compare the error on the training rows with the error on the test rows.
+- Underfitting: large error on both. The model is too simple.
+- Overfitting: small error on training, larger on test. The model has learnt the noise.
+- More flexibility always lowers the training error, so the training error cannot choose a model.
+:::
+
+## Python
+
+::: {.content-hidden when-meta="show-solutions"}
+[**Download this exercise as a Jupyter notebook (.ipynb)**](code/day5-01-overfitting.ipynb){download="day5-01-overfitting.ipynb"}: the text and every code cell of the Python version, including the code for the plots, with the blanks left for you to fill in. Open it in Jupyter or VS Code and run it a cell at a time.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+[**Download the Jupyter notebook with the solutions (.ipynb)**](code/day5-01-overfitting-solutions.ipynb){download="day5-01-overfitting-solutions.ipynb"}: the same notebook with the worked answers filled in.
+:::
+
+### Packages and data
+
+```{python}
+# Packages for this exercise. If one is missing, install it once from a terminal
+# (in a Jupyter notebook, type %pip instead of pip):
+# pip install pandas numpy matplotlib scikit-learn
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import root_mean_squared_error
+```
+
+The data are in [`data/drug_levels.csv`](data/drug_levels.csv): a small pilot
+study of 20 patients. Each patient had one blood sample taken between 0 and 3
+hours after a dose of a drug. `hours` is the time since the dose and
+`concentration` the drug level in the blood (mg/L). As always, 80% of the
+patients are used for training and 20% are held back as the test set.
+
+```{python}
+drugs = pd.read_csv("data/drug_levels.csv")
+
+train, test = train_test_split(drugs, test_size=0.2, random_state=42)
+
+print(len(train), len(test))
+```
+
+16 patients for training and 4 for testing. A small study, which is exactly
+where overfitting is easiest to fall into.
+
+------------------------------------------------------------------------
+
+### Part 1 — Look at the data
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+fig, ax = plt.subplots(figsize=(6, 3.5))
+ax.scatter(train["hours"], train["concentration"], color="black", s=20)
+ax.scatter(test["hours"], test["concentration"], color="red", s=40)
+ax.set_xlabel("Hours since the dose")
+ax.set_ylabel("Concentration (mg/L)")
+ax.set_title("Training patients (black) and test patients (red)")
+plt.show()
+```
+
+**Question!** Would a straight line describe these points well?
+
+The level rises for about an hour and then falls. A straight line cannot do
+that.
+
+------------------------------------------------------------------------
+
+### Part 2 — Three models
+
+All three are linear regressions of `concentration` on `hours`. Only the first
+step of the pipeline changes: `PolynomialFeatures(degree=3)` adds columns for
+$\text{hours}^2$ and $\text{hours}^3$, which lets the fitted line bend. The
+higher the degree, the more it can bend.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+X_train, y_train = train[["hours"]], train["concentration"]
+X_test,  y_test  = test[["hours"]],  test["concentration"]
+
+def fit_degree(degree):
+    model = Pipeline([("poly", PolynomialFeatures(degree=degree)),
+                      ("linreg", LinearRegression())])
+    return model.fit(______, y_train)
+
+fit_1 = fit_degree(1)   # a straight line
+fit_3 = fit_degree(3)   # a gentle curve
+fit_6 = fit_degree(______)   # a very bendy curve
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Every model is fitted on the training rows only, so `X_train`. The bendy curve
+has degree 6.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+X_train, y_train = train[["hours"]], train["concentration"]
+X_test,  y_test  = test[["hours"]],  test["concentration"]
+
+def fit_degree(degree):
+    model = Pipeline([("poly", PolynomialFeatures(degree=degree)),
+                      ("linreg", LinearRegression())])
+    return model.fit(X_train, y_train)
+
+fit_1 = fit_degree(1)   # a straight line
+fit_3 = fit_degree(3)   # a gentle curve
+fit_6 = fit_degree(6)   # a very bendy curve
+```
+:::
+:::
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+hours_grid = pd.DataFrame({"hours": np.linspace(drugs["hours"].min(), drugs["hours"].max(), 300)})
+fig, axes = plt.subplots(1, 3, figsize=(10, 3.5), sharey=True)
+for ax, model, name in zip(axes, [fit_1, fit_3, fit_6], ["degree 1", "degree 3", "degree 6"]):
+    ax.plot(hours_grid["hours"], model.predict(hours_grid), color="steelblue", linewidth=2)
+    ax.scatter(train["hours"], train["concentration"], color="black", s=20)
+    ax.scatter(test["hours"], test["concentration"], color="red", s=40)
+    ax.set_title(name)
+    ax.set_xlabel("Hours since the dose")
+axes[0].set_ylabel("Concentration (mg/L)")
+fig.suptitle("Three fitted curves; training patients black, test patients red")
+plt.tight_layout()
+plt.show()
+```
+
+**Question!** Which curve follows the shape of the data? Which one bends to
+reach individual training points?
+
+The straight line misses the rise and fall. The degree-3 curve follows it. The
+degree-6 curve shoots up to about 16 mg/L before the first hour, to pass
+through the one high training patient, a peak no other patient comes near.
+
+------------------------------------------------------------------------
+
+### Part 3 — Training error against test error
+
+We measure each model with the RMSE, the square root of the mean squared error
+from Day 3. It is in the units of the outcome, mg/L.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+results = pd.DataFrame({
+    "model": ["degree 1", "degree 3", "degree 6"],
+    "train_rmse": [root_mean_squared_error(y_train, m.predict(X_train)) for m in [fit_1, fit_3, fit_6]],
+    "test_rmse":  [root_mean_squared_error(______, m.predict(______)) for m in [fit_1, fit_3, fit_6]],
+})
+print(results.round(2))
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The test RMSE compares the test outcomes, `y_test`, with the predictions for
+the test rows, `m.predict(X_test)`.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+results = pd.DataFrame({
+    "model": ["degree 1", "degree 3", "degree 6"],
+    "train_rmse": [root_mean_squared_error(y_train, m.predict(X_train)) for m in [fit_1, fit_3, fit_6]],
+    "test_rmse":  [root_mean_squared_error(y_test, m.predict(X_test)) for m in [fit_1, fit_3, fit_6]],
+})
+print(results.round(2))
+```
+:::
+:::
+
+**Question!** Which model underfits, which overfits, and which would you use?
+
+| Model | Training RMSE | Test RMSE | |
+|:-|:-:|:-:|:-|
+| degree 1 | 2.15 | 1.28 | underfits: large on both |
+| degree 3 | 1.04 | 0.65 | fits: small on both |
+| degree 6 | 0.63 | 1.37 | overfits: smallest on training, larger on test |
+
+The degree-6 curve has the smallest training error of the three, but on the
+test patients it is worse than the degree-3 curve. A smaller training error
+does not mean a better model. Only the test rows can tell.
+
+::: {.callout-tip}
+## Key points
+- Always compare the error on the training rows with the error on the test rows.
+- Underfitting: large error on both. The model is too simple.
+- Overfitting: small error on training, larger on test. The model has learnt the noise.
+- More flexibility always lowers the training error, so the training error cannot choose a model.
+:::
+
+::::::
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Teaching choice.** Rewritten at the module lead's request to be short, with
+one predictor and a pre-made dataset (`data/drug_levels.csv`, simulated, see
+`data/PROVENANCE.txt`): true curve $10\,h\,e^{1-h}$ plus noise with SD 1. The
+earlier version (cubic in age on the diabetes data) showed no overfitting
+because 600 training rows are too many for one predictor. The degrees are 1, 3
+and 6. Hours stay below 3 so that scikit-learn's raw powers are fitted
+exactly; beyond degree 6 `PolynomialFeatures` + `LinearRegression` loses
+precision on these data and the training RMSE can go up instead of down.
+
+**Expected values.** Train 16, test 4 in both languages. R and Python draw
+different random splits, so their numbers differ.
+R RMSE (train / test): degree 1 2.10 / 1.57; degree 3 1.03 / 0.62; degree 6 0.70 / 1.02.
+Python: degree 1 2.15 / 1.28; degree 3 1.04 / 0.65; degree 6 0.63 / 1.37.
+
+**Common failures.** (1) Fitting on `drugs` or `test` instead of `train`.
+(2) Raising the degree past 6 in Python (see above). (3) Reading the test RMSE
+as exact: with 4 test patients it moves a lot from split to split, which is a
+good point to discuss.
+
+**Timing.** About 25 minutes.
+:::
+:::

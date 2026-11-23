@@ -1,0 +1,362 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Reading — Lasso and ridge in a picture {#sec-lasso-ridge-picture}
+
+This page has no code to write. Read it after Exercise 5.2. It explains one
+picture that you will meet in almost every textbook on regularisation, and it
+shows why the lasso can set a coefficient to exactly zero while ridge cannot.
+
+```{r}
+#| include: false
+library(ggplot2)
+library(patchwork)
+red <- "#c0392b"; fillc <- "#7ee8f2"; edgec <- "#1fa7b8"
+
+# Shapes ------------------------------------------------------------
+diamond <- function(s) data.frame(x = c(s, 0, -s, 0), y = c(0, s, 0, -s))
+circle  <- function(r, cx = 0, cy = 0, n = 400) {
+  t <- seq(0, 2 * pi, length.out = n); data.frame(x = cx + r * cos(t), y = cy + r * sin(t))
+}
+# Axes drawn through the origin, as on a blackboard
+axes <- function(lo, hi) list(
+  annotate("segment", x = lo, xend = hi, y = 0, yend = 0,
+           arrow = arrow(length = unit(2, "mm"), type = "closed")),
+  annotate("segment", x = 0, xend = 0, y = lo, yend = hi,
+           arrow = arrow(length = unit(2, "mm"), type = "closed")),
+  annotate("text", x = hi, y = -0.25, label = "beta[1]", parse = TRUE, size = 4.5, hjust = 1),
+  annotate("text", x = 0.2, y = hi, label = "beta[2]", parse = TRUE, size = 4.5, hjust = 0, vjust = 1),
+  coord_equal(xlim = c(lo, hi), ylim = c(lo, hi), expand = FALSE),
+  theme_void(), theme(plot.title = element_text(hjust = 0.5, size = 12)))
+
+
+# The four-patient example: MSE = (3 - b1)^2 + (1 - b2)^2 ------------
+ex_panel <- function(s, b, title, shape = "diamond", lo = -2.4, hi = 4.8) {
+  r <- sqrt((3 - b[1])^2 + (1 - b[2])^2)     # the MSE circle that first touches
+  poly <- if (shape == "diamond") diamond(s) else circle(s)
+  p <- ggplot() + axes(lo, hi)
+  if (s > 0) p <- p + geom_polygon(data = poly, aes(x, y), fill = fillc, colour = edgec)
+  for (k in c(0.35, 0.7)) if (r > 0) p <- p + geom_path(data = circle(k * r, 3, 1), aes(x, y), colour = red, alpha = 0.5)
+  if (r > 0) p <- p + geom_path(data = circle(r, 3, 1), aes(x, y), colour = red, linewidth = 0.8)
+  p + annotate("point", x = 3, y = 1, size = 2.3) +
+    annotate("point", x = b[1], y = b[2], size = 3, shape = 21, fill = "white", stroke = 1.2) +
+    labs(title = parse(text = title))
+}
+```
+
+## The two penalties
+
+An ordinary linear regression chooses the coefficients that give the lowest
+training MSE. Lasso and ridge add a price for large coefficients. With two
+predictors, they choose the pair $(\beta_1, \beta_2)$ that minimises
+
+$$\text{Lasso:}\quad \text{MSE} + \lambda\,\big(|\beta_1| + |\beta_2|\big)
+\qquad\qquad
+\text{Ridge:}\quad \text{MSE} + \lambda \times \tfrac{1}{2}\big(\beta_1^2 + \beta_2^2\big)$$
+
+You choose $\lambda$. With $\lambda = 0$ there is no price, and you get the
+ordinary fit, written $\hat\beta$. The larger $\lambda$ is, the more the
+coefficients are pulled towards zero.
+
+## The picture
+
+Each point of the plane below is one possible pair $(\beta_1, \beta_2)$.
+
+- The **black dot** $\hat\beta$ is the ordinary fit: the pair with the lowest
+  training MSE.
+- The **red curves** are contours of the training MSE, like the contour lines
+  of a map. Every pair on one curve has the same MSE, and the MSE grows as you
+  move outwards from $\hat\beta$. They are ellipses here because the two
+  predictors are correlated.
+- The **blue shape** holds every pair whose penalty is no more than a budget
+  $s$. For the lasso, $|\beta_1| + |\beta_2| \le s$ is a diamond. For ridge,
+  $\beta_1^2 + \beta_2^2 \le s^2$ is a circle.
+- The **white dot** is the fitted model: the first point where a red curve,
+  growing outwards from $\hat\beta$, touches the blue shape.
+
+```{r}
+#| echo: false
+#| fig-width: 8
+#| fig-height: 4.4
+#| fig-alt: "Two panels. Left, lasso: red elliptical MSE contours around the ordinary fit first touch a blue diamond at its top corner, where beta 1 is zero. Right, ridge: the same contours first touch a blue circle at a point where both coefficients are non-zero."
+# Figure 1: the general picture, elliptical contours -----------------
+A  <- matrix(c(1, -0.6, -0.6, 1), 2)        # predictors that are correlated
+bh <- c(1.7, 2.7)                           # the unpenalised (OLS) fit
+Q  <- function(b1, b2) { d1 <- b1 - bh[1]; d2 <- b2 - bh[2]
+  A[1,1]*d1^2 + 2*A[1,2]*d1*d2 + A[2,2]*d2^2 }
+grid <- expand.grid(b1 = seq(-2, 5, length.out = 400), b2 = seq(-2, 5.5, length.out = 400))
+grid$mse <- Q(grid$b1, grid$b2)
+first_touch <- function(shape) {             # the point of the shape's edge with lowest MSE
+  t <- seq(0, 2*pi, length.out = 20001); p <- cbind(cos(t), sin(t))
+  if (shape == "diamond") p <- p / (abs(p[, 1]) + abs(p[, 2]))
+  q <- Q(p[, 1], p[, 2]); list(b = p[which.min(q), ], q = min(q))
+}
+panel <- function(shape, title, constraint) {
+  ft <- first_touch(shape)
+  poly <- if (shape == "diamond") diamond(1) else circle(1)
+  ggplot() +
+    geom_polygon(data = poly, aes(x, y), fill = fillc, colour = edgec) +
+    axes(-1.6, 4.2) +
+    geom_contour(data = grid, aes(b1, b2, z = mse),
+                 breaks = ft$q * c(0.12, 0.4, 1), colour = red, linewidth = 0.7) +
+    annotate("point", x = bh[1], y = bh[2], size = 2.5) +
+    annotate("text", x = bh[1] + 0.15, y = bh[2] + 0.05, label = "hat(beta)",
+             parse = TRUE, hjust = 0, size = 5) +
+    annotate("point", x = ft$b[1], y = ft$b[2], size = 3, shape = 21,
+             fill = "white", colour = "black", stroke = 1.2) +
+    annotate("text", x = -1.5, y = -1.35, label = constraint, parse = TRUE,
+             hjust = 0, size = 4) +
+    labs(title = title)
+}
+f1 <- panel("diamond", "Lasso", "abs(beta[1]) + abs(beta[2]) <= s") |
+      panel("circle",  "Ridge", "beta[1]^2 + beta[2]^2 <= s^2")
+f1
+```
+
+The fitted model is the pair with the lowest MSE that stays within the
+budget. On the left, the first touch is at the top corner of the diamond, so
+$\beta_1 = 0$: the lasso has dropped the first predictor. On the right, the
+circle has no corners, and the first touch is at a point where both
+coefficients are smaller than in $\hat\beta$ but neither is zero.
+
+The penalty $\lambda$ and the budget $s$ are two descriptions of the same fit.
+We choose $\lambda$ and fit the model. Adding up the absolute values of the
+fitted coefficients then gives $s$, which tells us how big to draw the
+diamond. The worked example below does exactly that.
+
+## A worked example with four patients
+
+To keep the arithmetic small, take four patients and two predictors that have
+already been standardised.
+
+| Patient | $x_1$ | $x_2$ | $y$ |
+|:-------:|:-----:|:-----:|:---:|
+| A       | 1     | 1     | 4   |
+| B       | 1     | −1    | 2   |
+| C       | −1    | 1     | −2  |
+| D       | −1    | −1    | −4  |
+
+Every column averages 0, so the model needs no intercept:
+$\hat y = \beta_1 x_1 + \beta_2 x_2$. The ordinary fit is $(3, 1)$, which
+predicts all four $y$ values exactly, so its MSE is 0.
+
+### Step 1 — The red contours
+
+For any pair $(\beta_1, \beta_2)$, predict the four $y$ values and average the
+squared residuals. With these data, the calculation simplifies to
+
+$$\text{MSE} = (3 - \beta_1)^2 + (1 - \beta_2)^2 .$$
+
+So in this example the red contours are circles centred at $(3, 1)$. The
+farther out we go, the higher the training MSE. (They are circles rather than
+ellipses because $x_1$ and $x_2$ are uncorrelated here.)
+
+### Step 2 — Choose $\lambda$ and fit the lasso
+
+Set $\lambda = 2$. The lasso chooses the pair that minimises training MSE plus
+$2 \times$ the sum of the absolute coefficients. Here is how a few candidate
+pairs compare.
+
+| Candidate $(\beta_1, \beta_2)$ | Training MSE | $|\beta_1| + |\beta_2|$ | Total at $\lambda = 2$ |
+|:-------------------------------|:------------:|:-----------------------:|:----------------------:|
+| $(3, 1)$, the ordinary fit     | 0            | 4                       | 8                      |
+| $(2, 1)$                       | 1            | 3                       | 7                      |
+| **$(2, 0)$, the lasso fit**    | **2**        | **2**                   | **6**                  |
+| $(1, 0)$                       | 5            | 1                       | 7                      |
+| $(0, 0)$                       | 10           | 0                       | 10                     |
+
+Take the move from $(2, 1)$ to $(2, 0)$. Setting $\beta_2$ to zero increases
+the training MSE by 1 but saves 2 in penalty, so the total drops from 7 to 6.
+Moving farther towards zero, to $(1, 0)$, increases the MSE by 3 and saves only
+2, so the total goes back up.
+
+### Step 3 — Draw the diamond from the fitted coefficients
+
+The winner, $(2, 0)$, uses a budget of $s = |2| + |0| = 2$. Draw the diamond
+holding all pairs whose absolute coefficients add up to at most 2. Its four
+corners are $(2, 0)$, $(0, 2)$, $(-2, 0)$ and $(0, -2)$.
+
+```{r}
+#| echo: false
+#| fig-width: 4.2
+#| fig-height: 4.2
+#| fig-alt: "Red circles centred at (3, 1) grow outwards and first touch a blue diamond with corners at plus and minus 2 on each axis, at its right-hand corner (2, 0)."
+ex_panel(2, c(2, 0), "lambda == 2 * ':  lasso gives (2, 0)'")
+```
+
+Now picture a red circle growing outwards from $(3, 1)$. The first touch is at
+$(2, 0)$, the right-hand corner of the diamond. Why? If a point inside the
+diamond had a lower MSE, it would also have an equal or smaller penalty, and so
+it would have beaten $(2, 0)$ in the lasso fit.
+
+### Step 4 — Turn up $\lambda$ and watch the diamond shrink
+
+| $\lambda$ | Lasso fit $(\hat\beta_1, \hat\beta_2)$ | $s = |\hat\beta_1| + |\hat\beta_2|$ | The diamond reaches |
+|:---------:|:--------------------------------------:|:-----------------------------------:|:--------------------|
+| 0         | $(3, 1)$                               | 4                                   | 4 units along each axis |
+| 2         | $(2, 0)$                               | 2                                   | 2 units along each axis |
+| 4         | $(1, 0)$                               | 1                                   | 1 unit along each axis  |
+| 6         | $(0, 0)$                               | 0                                   | Only the origin         |
+
+At $\lambda = 4$, the move from $(2, 0)$ to $(1, 0)$ still increases the MSE by
+3, but now it saves 4 in penalty. That is why the stronger penalty favours the smaller
+coefficient and gives a smaller diamond.
+
+```{r}
+#| echo: false
+#| fig-width: 8
+#| fig-height: 8
+#| fig-alt: "Four panels for lambda 0, 2, 4 and 6. The diamond shrinks from 4 units to 2, 1 and finally the origin, and the red circle centred at (3, 1) grows until it first touches the diamond at (3, 1), (2, 0), (1, 0) and (0, 0)."
+(ex_panel(4, c(3, 1), "lambda == 0 * ':  (3, 1)'", lo = -4.3, hi = 6.4) |
+   ex_panel(2, c(2, 0), "lambda == 2 * ':  (2, 0)'", lo = -4.3, hi = 6.4)) /
+  (ex_panel(1, c(1, 0), "lambda == 4 * ':  (1, 0)'", lo = -4.3, hi = 6.4) |
+     ex_panel(0, c(0, 0), "lambda == 6 * ':  (0, 0)'", lo = -4.3, hi = 6.4))
+```
+
+Read the panels in order. $\beta_2$ reaches zero first, at $\lambda = 2$, and
+$\beta_1$ follows at $\lambda = 6$. At $\lambda = 0$ there is no penalty, and the
+diamond simply passes through the ordinary fit. The lasso has dropped the
+weaker predictor first. With many predictors, this is how the lasso selects
+variables.
+
+## The same example with ridge
+
+Keep $\lambda = 2$, but use the ridge penalty $\lambda \times \tfrac{1}{2}(\beta_1^2 + \beta_2^2)$.
+The last two columns compare ridge with the lasso for the same candidates.
+
+| Candidate $(\beta_1, \beta_2)$ | Training MSE | Ridge penalty | Ridge total | Lasso total |
+|:-------------------------------|:------------:|:-------------:|:-----------:|:-----------:|
+| $(3, 1)$, the ordinary fit     | 0            | 10            | 10          | 8           |
+| $(2, 0)$                       | 2            | 4             | 6           | **6**       |
+| $(1.5, 0.5)$                   | 2.5          | 2.5           | **5**       | 6.5         |
+| $(1, 0)$                       | 5            | 1             | 6           | 7           |
+| $(0, 0)$                       | 10           | 0             | 10          | 10          |
+
+The lasso's winner, $(2, 0)$, loses under ridge. Ridge prefers $(1.5, 0.5)$,
+which keeps both coefficients. Squaring makes small coefficients very cheap: a
+coefficient of 0.5 adds only $0.5^2 = 0.25$ before $\lambda$ is applied, so
+there is little to gain by pushing it all the way to zero.
+
+```{r}
+#| echo: false
+#| fig-width: 8
+#| fig-height: 4.2
+#| fig-alt: "Two panels with the same red circles centred at (3, 1). Left, lasso: the first touch is the diamond's corner (2, 0) on the beta 1 axis. Right, ridge: the first touch is on the edge of a blue circle at (1.5, 0.5), off both axes."
+ex_panel(2, c(2, 0), "'Lasso, ' * lambda == 2 * ':  (2, 0)'") |
+  ex_panel(sqrt(1.5^2 + 0.5^2), c(1.5, 0.5), "'Ridge, ' * lambda == 2 * ':  (1.5, 0.5)'", "circle")
+```
+
+Turning up $\lambda$ shrinks the ridge circle, but the fit never lands on an
+axis:
+
+| $\lambda$ | Ridge fit $(\hat\beta_1, \hat\beta_2)$ | Lasso fit $(\hat\beta_1, \hat\beta_2)$ |
+|:---------:|:--------------------------------------:|:--------------------------------------:|
+| 0         | $(3, 1)$                               | $(3, 1)$                               |
+| 2         | $(1.5, 0.5)$                           | $(2, 0)$                               |
+| 6         | $(0.75, 0.25)$                         | $(0, 0)$                               |
+| 18        | $(0.3, 0.1)$                           | $(0, 0)$                               |
+
+In this tidy example, with uncorrelated predictors, there is a simple pattern.
+Ridge **divides** both coefficients by the same number, $1 + \lambda/2$, so
+they get smaller but never reach zero. The lasso **subtracts** the same
+amount, $\lambda/2$, from each coefficient's size and stops at zero, so the
+smaller coefficient reaches zero first. With correlated predictors the
+arithmetic is messier, but the pictures tell the same story.
+
+## How $s$ and $\lambda$ are linked
+
+The fit can be described in two ways: by the penalty $\lambda$ we chose, or by
+the budget $s$, the size of the shape it ends up in. For the lasso
+$s = |\hat\beta_1| + |\hat\beta_2|$, the sum of the absolute fitted
+coefficients. For ridge $s = \sqrt{\hat\beta_1^2 + \hat\beta_2^2}$, the radius
+of the circle. Here is $s$ for every $\lambda$ from 0 to 8 in the four-patient
+example:
+
+```{r}
+#| echo: false
+#| fig-width: 6.5
+#| fig-height: 4
+#| fig-alt: "Budget s against lambda for the four-patient example. The lasso line falls from 4 at lambda 0 to 2 at lambda 2, more slowly to 0 at lambda 6, and stays at 0. The ridge curve falls from about 3.16 towards zero but never reaches it."
+lam <- seq(0, 8, by = 0.01)
+budget <- rbind(
+  data.frame(lambda = lam, s = pmax(3 - lam / 2, 0) + pmax(1 - lam / 2, 0), penalty = "Lasso"),
+  data.frame(lambda = lam, s = sqrt(10) / (1 + lam / 2), penalty = "Ridge"))
+marks <- data.frame(lambda = c(0, 2, 4, 6), s = c(4, 2, 1, 0),
+                    label = c("(3, 1)", "(2, 0)", "(1, 0)", "(0, 0)"))
+ggplot(budget, aes(lambda, s, colour = penalty)) +
+  geom_line(linewidth = 1) +
+  geom_point(data = marks, aes(lambda, s), inherit.aes = FALSE, size = 2.5) +
+  geom_text(data = marks, aes(lambda, s, label = label), inherit.aes = FALSE,
+            nudge_x = 0.25, nudge_y = 0.22, hjust = 0, size = 3.5) +
+  scale_colour_manual(values = c(Lasso = edgec, Ridge = red)) +
+  labs(x = expression(lambda), y = "Budget s", colour = NULL,
+       title = "A larger penalty means a smaller budget") +
+  theme_bw()
+```
+
+- **Larger $\lambda$, smaller $s$.** Each $\lambda$ gives one fit, and so one
+  $s$. Turning up the penalty always shrinks the shape.
+- **The kink at $\lambda = 2$.** Up to $\lambda = 2$ both lasso coefficients
+  shrink, and $s$ falls by 1 for each unit of $\lambda$. At $\lambda = 2$,
+  $\beta_2$ reaches zero. From then on only $\beta_1$ shrinks, so $s$ falls
+  half as fast, and it reaches 0 at $\lambda = 6$. Every larger $\lambda$ also
+  gives $s = 0$.
+- **Ridge never reaches 0.** Its budget keeps shrinking but never reaches
+  zero, just as its coefficients never do.
+
+The software asks for $\lambda$; the textbook picture is drawn with $s$. They
+are two descriptions of the same choice, so choosing $\lambda$ in Exercise 5.2
+is choosing how big the diamond is.
+
+::: {.callout-note collapse="true"}
+## Optional: read $s$ off a fitted model
+In Exercise 5.2 you can add up the absolute coefficients of the final lasso
+(the coefficients of the standardised columns, without the intercept):
+
+::: {.panel-tabset group="language"}
+## R
+```r
+tidy(extract_fit_parsnip(final_fit)) |>
+  filter(term != "(Intercept)") |>
+  summarise(s = sum(abs(estimate)))
+```
+## Python
+```python
+np.abs(final_model["model"].coef_).sum()
+```
+:::
+
+Refit with a smaller and a larger penalty and compare: the larger penalty
+gives the smaller $s$, and leaves fewer columns.
+:::
+
+## Why the corners matter
+
+The diamond's corners lie on the axes, and every point on an axis has one
+coefficient equal to zero. A red contour arriving from many directions meets
+a corner before it meets an edge. A circle has no corners, so a first touch
+exactly on an axis would be a coincidence. With ten predictors the diamond
+becomes a shape in ten dimensions with many corners and edges, each one a
+place where some of the coefficients are exactly zero. That is why the lasso
+often keeps only a handful of predictors, while ridge keeps them all.
+
+## Looking back at Exercise 5.2
+
+- **Why the recipe standardised first.** The penalty treats every coefficient alike. A
+  coefficient for age per year is ten times smaller than the same coefficient
+  for age per decade, so without standardising, the penalty would depend on
+  the units you happened to choose.
+- **Choosing $\lambda$.** In Exercise 5.2 you tried several values of
+  $\lambda$ and kept the one that predicted best on the validation rows. Each value is one picture like the ones above: the larger
+  $\lambda$, the smaller the shape, and the fewer columns the lasso keeps.
+
+::: {.callout-tip}
+## Key points
+- Lasso and ridge minimise the training misfit plus $\lambda$ times a penalty on the coefficients.
+- Each fit can be drawn as the first touch between the misfit contours and a budget shape: a diamond for the lasso, a circle for ridge.
+- The diamond has corners on the axes, so the lasso can set coefficients exactly to zero and select predictors. Ridge shrinks every coefficient and drops none.
+- A larger $\lambda$ means a smaller budget $s$, and so a smaller shape.
+:::
