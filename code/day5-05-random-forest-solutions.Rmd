@@ -1,0 +1,294 @@
+---
+title: "Exercise 5.5 — Random forests and tuning with a workflow (with solutions)"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day5/day5-05-random-forest.html>.*
+
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+
+A single decision tree is easy to read but unstable: a few different people in
+the training rows can give a very different tree, and a deep tree overfits.
+A **random forest** grows hundreds of trees, each on a different bootstrap
+sample of the training rows and each allowed to look at only a random subset of
+the predictors at every split, and averages their votes. The averaging cancels
+much of the noise that each single tree has memorised.
+
+**Goal.** In this exercise you will:
+
+- fit a random forest classifier to the diabetes data;
+- tune its key hyperparameters with a workflow (R) or a pipeline search
+  (Python);
+- compare training and test performance;
+- reflect on what workflows and pipelines give you.
+
+**Theory:** bagging and random predictor subsets; the hyperparameters `mtry`
+and `min_n`; grid search with cross-validation; finalising a tuned model; why a
+forest's training performance says little.
+
+> **The plots are for looking at**
+>
+> The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "ranger"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())          # white background for every plot
+options(pillar.sigfig = 3)     # show three significant figures in tables
+```
+
+The same 750 people and split as Exercises 5.3 and 5.4, from
+[`data/diabetes_clean.csv`](data/diabetes_clean.csv), with the five predictors pregnant,
+glucose, mass, pedigree and age (triceps, insulin and blood pressure are left
+out because a zero there means "not measured"). The outcome has the levels
+`neg` then `pos`.
+
+```{r}
+diabetes <- read_csv("data/diabetes_clean.csv") |>
+  select(pregnant, glucose, mass, pedigree, age, diabetes) |>
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
+
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+test  <- diabetes[test_rows, ]
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — A random forest with tunable hyperparameters
+
+`rand_forest()` with the `ranger` engine. Two hyperparameters are marked with
+`tune()`, to be chosen by the search, and one is fixed:
+
+- `mtry`: the number of predictors drawn at random as candidates at each split
+  (1 to 5 here);
+- `min_n`: the minimum number of people a node must hold to be split;
+- `trees`: the number of trees, fixed at 500.
+
+The names of the hyperparameters depend on the model and the engine; the
+[parsnip page for ranger](https://parsnip.tidymodels.org/reference/details_rand_forest_ranger.html)
+lists them.
+
+```{r}
+rf_spec <- rand_forest(mtry = tune(), min_n = tune(), trees = 500) |>
+  set_engine("ranger") |>
+  set_mode("classification")
+
+rf_rec <- recipe(diabetes ~ ., data = train)
+
+rf_wf <- workflow() |>
+  add_model(rf_spec) |>
+  add_recipe(rf_rec)
+
+rf_wf
+```
+
+> **Learning points**
+>
+> - A random forest averages many trees, each grown on a bootstrap sample with a random subset of predictors at every split.
+> - `mtry` (`max_features`) controls how different the trees are from each other; `min_n` (`min_samples_split`) how far each tree may grow.
+
+------------------------------------------------------------------------
+
+### Part 2 — The grid, the folds and the search
+
+Five values of `mtry` and five of `min_n`, 25 combinations:
+
+```{r}
+rf_grid <- grid_regular(mtry(range = c(1L, 5L)),
+                        min_n(range = c(2L, 10L)),
+                        levels = 5)
+rf_grid
+```
+
+Each combination is judged by 5-fold cross-validation on the training rows, as
+in Exercise 5.4: 25 combinations times 5 folds is 125 forests of 500 trees, which
+takes a few seconds. `set.seed()` fixes the folds and the forests' random draws.
+
+```{r}
+set.seed(123)
+folds <- vfold_cv(train, v = 5, strata = diabetes)
+
+rf_res <- tune_grid(
+  rf_wf,
+  resamples = folds,
+  grid      = rf_grid,
+  metrics   = metric_set(accuracy, roc_auc),
+  control   = control_grid(event_level = "second")
+)
+
+rf_metrics <- collect_metrics(rf_res)
+rf_metrics
+```
+
+> **Learning points**
+>
+> - A grid search fits one model per combination and fold; keep the grid small and the number of trees modest.
+> - Cross-validation uses the training rows only; the test rows stay untouched.
+
+------------------------------------------------------------------------
+
+### Part 3 — Inspect the tuning results
+
+Plot the cross-validated AUC of every combination:
+
+```{r}
+autoplot(rf_res, metric = "roc_auc")
+```
+
+Now list the five best combinations by AUC:
+
+> **Worked answer**
+
+```{r}
+rf_metrics |>
+  filter(.metric == "roc_auc") |>
+  arrange(desc(mean)) |>
+  head(5)
+```
+
+> R: `mtry` 1 with `min_n` 10 (AUC 0.783), 2 with 10 (0.781), 1 with 8 (0.779),
+> 1 with 6 (0.778), 2 with 8 (0.777), each with a standard error of about 0.012.
+> Python: `max_features` 1 with `min_samples_split` 10 (0.786), 1 with 8 (0.784),
+> 2 with 10 (0.781), 2 with 8 (0.778), 1 with 6 (0.778). Python's
+> `std_test_score` is the standard deviation across the 5 folds, about 0.039;
+> divided by $\sqrt{5}$ it gives a standard error of about 0.018. In both
+> languages the smallest `mtry` and the largest `min_n` win, and the best `min_n`
+> lies at the edge of the grid.
+
+**Question!** Which combinations of `mtry` and `min_n` seem to work best? Do
+more flexible forests (more predictors per split, smaller nodes) always perform
+better? How large are the differences compared with the standard errors?
+
+> **Learning points**
+>
+> - Look at the whole grid, not only the winner: here many combinations are within one standard error of the best.
+> - Small `mtry` makes the trees more different from one another, which is what makes averaging them work.
+
+------------------------------------------------------------------------
+
+### Part 4 — The final forest, evaluated once
+
+Select the best combination by AUC, put it into the workflow, and fit one final
+forest on all 600 training rows:
+
+```{r}
+best_rf <- select_best(rf_res, metric = "roc_auc")
+best_rf
+
+final_rf_wf <- finalize_workflow(rf_wf, best_rf)
+
+set.seed(123)
+final_rf_fit <- final_rf_wf |>
+  fit(data = train)
+```
+
+Predict both sets and compute the metrics, starting with the training rows:
+
+```{r}
+train_preds <- predict(final_rf_fit, new_data = train, type = "prob") |>
+  bind_cols(predict(final_rf_fit, new_data = train, type = "class")) |>
+  bind_cols(train)
+test_preds <- predict(final_rf_fit, new_data = test, type = "prob") |>
+  bind_cols(predict(final_rf_fit, new_data = test, type = "class")) |>
+  bind_cols(test)
+
+class_metrics <- metric_set(accuracy, precision, recall, sens, spec)
+
+class_metrics(train_preds, truth = diabetes, estimate = .pred_class,
+              event_level = "second")
+roc_auc(train_preds, truth = diabetes, .pred_pos, event_level = "second")
+```
+
+Now the test rows:
+
+> **Worked answer**
+
+```{r}
+class_metrics(test_preds, truth = diabetes, estimate = .pred_class,
+              event_level = "second")
+roc_auc(test_preds, truth = diabetes, .pred_pos, event_level = "second")
+```
+
+> R: test accuracy 0.767, precision 0.725, sensitivity 0.547, specificity 0.887,
+> AUC 0.825 (training accuracy 0.912, AUC 0.982). Python: 0.780, 0.750, 0.566,
+> 0.897, AUC 0.825 (training accuracy 0.895, AUC 0.970).
+
+Forests are random (bootstrap samples, predictor subsets, fold assignment), and
+R and Python draw different random numbers, so the two languages do not give
+the same forest or exactly the same numbers.
+
+**Question!** Is there still a big gap between training and test performance?
+A forest predicts its own training rows with trees that have seen most of them,
+so its training performance is always flattering: judge it on the test rows or
+by cross-validation.
+
+> **Learning points**
+>
+> - Finalise: put the best hyperparameters into the workflow and fit once on all the training rows.
+> - A forest's training performance is close to perfect by construction; its test or cross-validated performance is the one to report.
+> - The test rows are used once, at the end.
+
+------------------------------------------------------------------------
+
+### Part 5 — Extra: was the tuning worth it?
+
+Fit a basic forest with the default hyperparameters (ranger chooses `mtry` as
+the square root of the number of predictors, rounded down: 2) and compare it on
+the test rows with the tuned forest. The Python tab does the same with
+scikit-learn's defaults; open it to compare the code.
+
+```{r}
+set.seed(123)
+rf_basic_fit <- workflow() |>
+  add_model(rand_forest(mode = "classification") |> set_engine("ranger")) |>
+  add_recipe(rf_rec) |>
+  fit(data = train)
+
+test_preds_basic <- predict(rf_basic_fit, new_data = test, type = "prob") |>
+  bind_cols(predict(rf_basic_fit, new_data = test, type = "class")) |>
+  bind_cols(test)
+
+class_metrics(test_preds_basic, truth = diabetes, estimate = .pred_class,
+              event_level = "second")
+roc_auc(test_preds_basic, truth = diabetes, .pred_pos, event_level = "second")
+```
+
+The untuned forest does as well as the tuned one on the test rows: test AUC
+0.832 against 0.825 in R, and 0.835 against 0.825 in Python (test accuracy 0.773
+against 0.767 in R, 0.727 against 0.780 in Python). The cross-validated AUCs of
+the whole grid lay within about 0.02 of each other, one or two standard errors,
+and 150 test patients cannot tell differences that small apart. Tuning is still
+the right procedure; here it simply has little to find.
+
+**Question! Why pipelines?** Look back at the code of this exercise and of
+Exercise 5.4.
+
+- What do workflows (R) and pipelines (Python) give you, compared with writing
+  the model, the formula, the pre-processing and the predictions separately by
+  hand?
+- How does a workflow help when you change the model, say from a tree to a
+  random forest to a logistic regression? Which lines changed between
+  Exercise 5.4 and this one?
+- How does it help when you add pre-processing steps such as scaling,
+  imputation or dummy variables, especially during cross-validation, where those
+  steps must be learned again on each fold's training part?
+
+> **Learning points**
+>
+> - Compare a tuned model with the untuned default: tuning costs time and does not always pay.
+> - A workflow or pipeline keeps pre-processing and model together, so changing either is one line, and cross-validation repeats both on every fold.
+
+## Stretch
+
+> **Stretch — the forest against the logistic regression**
+>
+> Exercise 5.3 fitted a logistic regression on the same five predictors and the
+> same split. Put its test AUC next to the tuned forest's. Which model would you
+> take to a clinic, and what besides the AUC would you weigh?

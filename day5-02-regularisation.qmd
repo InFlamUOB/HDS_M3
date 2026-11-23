@@ -1,0 +1,1009 @@
+---
+engine: knitr
+---
+
+{{< include _common.qmd >}}
+
+# Exercise 5.2 — Hyperparameters: choosing the lasso and ridge penalty {#sec-regularisation}
+
+Some settings of a model are not learnt from the data: we choose them before
+fitting. They are called **hyperparameters**. Here they are the two settings
+of the penalty: its size, $\lambda$, and the mix of lasso and ridge (see
+[Lasso and ridge in a picture](day5-01b-lasso-ridge-picture.qmd)). We choose
+them by trying several values and keeping the ones that predict best on rows
+the model was not fitted on.
+
+**Theory:** hyperparameters; grid search; validation set; `tune_grid()` and
+`GridSearchCV()`; refitting the chosen model.
+
+::: {.callout-note}
+## The plots are for looking at
+The code for every plot is folded away just above it, in case you are curious,
+and all of it is in the notebook linked at the top of each tab. You are not
+expected to write it yourself.
+:::
+
+:::::: {.panel-tabset group="language"}
+
+## R
+
+::: {.content-hidden when-meta="show-solutions"}
+[**Download this exercise as an R Markdown notebook (.Rmd)**](code/day5-02-regularisation.Rmd){download="day5-02-regularisation.Rmd"}: the text and every code cell of the R version, including the code for the plots, with the blanks left for you to fill in. Open it in RStudio and run it a chunk at a time.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+[**Download the R notebook with the solutions (.Rmd)**](code/day5-02-regularisation-solutions.Rmd){download="day5-02-regularisation-solutions.Rmd"}: the same notebook with the worked answers filled in.
+:::
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels", "glmnet"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())          # white background for every plot
+options(pillar.sigfig = 4)     # show four significant figures in tables
+```
+
+The same 750 people and the same split as Exercise 5.1, from
+[`data/diabetes_clean.csv`](data/diabetes_clean.csv). The outcome is glucose
+again, but this time the other seven measurements are the predictors. In
+`pressure`, `triceps` and `insulin` a zero means "not measured", so we turn the
+zeros into `NA` and let the recipe fill them in.
+
+```{r}
+diabetes <- read_csv("data/diabetes_clean.csv") |>
+  select(-diabetes) |>                                          # glucose is the outcome
+  mutate(across(c(pressure, triceps, insulin), ~ na_if(.x, 0)))  # 0 means "not measured"
+
+test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
+train <- diabetes[-test_rows, ]
+test  <- diabetes[test_rows, ]
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — A model with room to overfit
+
+The recipe fills in the missing values with the median (Day 2), adds every
+product of two predictors (`pregnant_x_age`, …) and every square, and
+standardises the result. Seven predictors become 35 columns: plenty of room to
+fit noise.
+
+```{r}
+glucose_rec <- recipe(glucose ~ ., data = train) |>
+  step_impute_median(all_predictors()) |>                        # fill the missing values
+  step_interact(terms = ~ all_predictors():all_predictors()) |>  # products of two predictors
+  step_poly(all_predictors(), -contains("_x_"), degree = 2,
+            options = list(raw = TRUE)) |>                       # each predictor and its square
+  step_normalize(all_predictors())                               # one scale for every column
+
+glucose_rec |>
+  prep() |>
+  bake(new_data = NULL) |>
+  dim()
+```
+
+600 rows: glucose and the 35 predictor columns.
+
+The model is the lasso: `linear_reg()` with `mixture = 1` and the glmnet
+engine. Its $\lambda$ is called `penalty`. We mark it with `tune()`, a
+placeholder for "to be chosen":
+
+```{r}
+lasso_wf <- workflow() |>
+  add_recipe(glucose_rec) |>
+  add_model(linear_reg(penalty = tune(), mixture = 1) |>
+              set_engine("glmnet"))
+```
+
+------------------------------------------------------------------------
+
+### Part 2 — A grid search, scored on the training rows
+
+A **grid search** tries a list of values, fits one model for each, and keeps
+the one with the lowest error. Try seven penalties, each about three times the
+one before. Fit each model on the training rows and, for now, measure its RMSE
+on the **same** rows:
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+penalties <- c(0.01, 0.03, 0.1, 0.3, 1, 3, 10)
+train_results <- data.frame()
+
+for (p in penalties) {
+  lasso_fit <- lasso_wf |>
+    finalize_workflow(tibble(penalty = p)) |>     # fill in the placeholder
+    fit(data = train)
+
+  train_rmse <- augment(lasso_fit, new_data = ______) |>
+    rmse(truth = glucose, estimate = .pred)
+
+  train_results <- bind_rows(train_results,
+                             data.frame(penalty = p, train_rmse = train_rmse$.estimate))
+}
+
+train_results
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+For now, the model is scored on the rows it was fitted on.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+penalties <- c(0.01, 0.03, 0.1, 0.3, 1, 3, 10)
+train_results <- data.frame()
+
+for (p in penalties) {
+  lasso_fit <- lasso_wf |>
+    finalize_workflow(tibble(penalty = p)) |>     # fill in the placeholder
+    fit(data = train)
+
+  train_rmse <- augment(lasso_fit, new_data = train) |>
+    rmse(truth = glucose, estimate = .pred)
+
+  train_results <- bind_rows(train_results,
+                             data.frame(penalty = p, train_rmse = train_rmse$.estimate))
+}
+
+train_results
+```
+:::
+:::
+
+The RMSE only ever goes up: 26.83 at a penalty of 0.01, 30.78 at 10. Scored on
+its own training rows, the smallest penalty always wins, and no penalty at all
+would win outright.
+
+**Question!** Does that mean the penalty is useless?
+
+------------------------------------------------------------------------
+
+### Part 3 — The same grid search, scored on a validation set
+
+The training RMSE cannot show overfitting: the noise the model has learnt is in
+the very rows it is scored on. We need rows it has **not** seen. Not the test
+rows: they are kept for one final check, and choosing with them would make that
+check too optimistic (the Stretch of Exercise 5.1). So we split the training
+rows once more: every fourth training row becomes a **validation** row.
+
+```{r}
+val_rows   <- seq(1, nrow(train), by = 4)       # every fourth training row
+fitting    <- train[-val_rows, ]
+validation <- train[val_rows, ]
+
+nrow(fitting)
+nrow(validation)
+```
+
+Run the grid search again: fit on `fitting`, score on both sets.
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+val_results <- data.frame()
+
+for (p in penalties) {
+  lasso_fit <- lasso_wf |>
+    finalize_workflow(tibble(penalty = p)) |>
+    fit(data = ______)
+
+  fit_rmse <- augment(lasso_fit, new_data = fitting) |>
+    rmse(truth = glucose, estimate = .pred)
+  val_rmse <- augment(lasso_fit, new_data = ______) |>
+    rmse(truth = glucose, estimate = .pred)
+
+  val_results <- bind_rows(val_results,
+                           data.frame(penalty  = p,
+                                      fit_rmse = fit_rmse$.estimate,
+                                      val_rmse = val_rmse$.estimate))
+}
+
+val_results
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Each candidate is fitted on the 450 `fitting` rows and scored on the 150 rows
+it has not seen.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+val_results <- data.frame()
+
+for (p in penalties) {
+  lasso_fit <- lasso_wf |>
+    finalize_workflow(tibble(penalty = p)) |>
+    fit(data = fitting)
+
+  fit_rmse <- augment(lasso_fit, new_data = fitting) |>
+    rmse(truth = glucose, estimate = .pred)
+  val_rmse <- augment(lasso_fit, new_data = validation) |>
+    rmse(truth = glucose, estimate = .pred)
+
+  val_results <- bind_rows(val_results,
+                           data.frame(penalty  = p,
+                                      fit_rmse = fit_rmse$.estimate,
+                                      val_rmse = val_rmse$.estimate))
+}
+
+val_results
+```
+:::
+:::
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+val_results |>
+  pivot_longer(c(fit_rmse, val_rmse), names_to = "rows", values_to = "rmse") |>
+  ggplot(aes(x = penalty, y = rmse, colour = rows)) +
+  geom_line() +
+  geom_point() +
+  scale_x_log10() +
+  labs(x = "Penalty (log scale)", y = "RMSE (mg/dL)", colour = NULL,
+       title = "The lasso: fitting and validation RMSE for each penalty")
+```
+
+The fitting RMSE rises with the penalty, as in Part 2. The validation RMSE
+**falls**, from 30.24 to 29.74 at a penalty of 0.3, and then rises again, to
+31.85 at 10. With a small penalty the model learns noise in the fitting rows
+that does not repeat in the validation rows (**overfitting**); with a large
+penalty it misses the real pattern too (**underfitting**). The validation rows
+show both, so we choose the penalty with the lowest validation RMSE: 0.3. This
+is the normal way to choose a hyperparameter.
+
+------------------------------------------------------------------------
+
+### Part 4 — The same search with `tune_grid()`
+
+tidymodels runs this loop for you. `tune_grid()` takes the workflow, the grid
+of candidates, and the split to score them on. It expects the split as a
+**resampling object**; here that object holds our one split, with the fitting
+rows for fitting and the validation rows for scoring.
+
+```{r}
+one_split <- make_splits(list(analysis   = setdiff(1:nrow(train), val_rows),  # fit on these
+                              assessment = as.integer(val_rows)),             # score on these
+                         data = train)
+val_set <- manual_rset(list(one_split), ids = "validation")
+val_set
+```
+
+```{r}
+lasso_res <- tune_grid(lasso_wf,
+                       resamples = val_set,
+                       grid      = tibble(penalty = penalties),
+                       metrics   = metric_set(rmse))
+
+collect_metrics(lasso_res)
+select_best(lasso_res, metric = "rmse")
+```
+
+The `mean` column is the validation RMSE of your loop, number for number, and
+`select_best()` picks the same penalty, 0.3. `autoplot()` draws the results:
+
+```{r}
+autoplot(lasso_res) +
+  labs(title = "tune_grid(): validation RMSE for each penalty")
+```
+
+| Your loop in Part 3 | `tune_grid()` |
+|:--------------------|:--------------|
+| `for (p in penalties)` | `grid = tibble(penalty = penalties)` |
+| `fit(data = fitting)` | the analysis rows of `val_set` |
+| `augment(..., new_data = validation)` and `rmse()` | the assessment rows of `val_set`, `metrics = metric_set(rmse)` |
+| read the table for the lowest `val_rmse` | `select_best(lasso_res, metric = "rmse")` |
+
+::: {.callout-tip}
+## Where to find a model's hyperparameters
+`extract_parameter_set_dials()` lists the ones marked with `tune()` in a
+workflow. The
+[parsnip page for `linear_reg()` with glmnet](https://parsnip.tidymodels.org/reference/details_linear_reg_glmnet.html)
+lists those the model offers (`penalty` and `mixture`), and chapter 12 of
+[Tidy Modeling with R](https://www.tmwr.org/tuning) explains tuning in
+tidymodels.
+:::
+
+```{r}
+extract_parameter_set_dials(lasso_wf)
+```
+
+------------------------------------------------------------------------
+
+### Part 5 — Tuning the mix of lasso and ridge
+
+`mixture` is the other hyperparameter: 1 is the lasso, 0 is ridge, and values
+in between mix the two penalties. Keep the penalty at 0.3 and tune only the
+mixture. (glmnet needs a penalty in every row of the grid, so we mark both with
+`tune()` and give the penalty a single value.)
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+mix_wf <- workflow() |>
+  add_recipe(glucose_rec) |>
+  add_model(linear_reg(penalty = tune(), mixture = tune()) |>
+              set_engine("glmnet"))
+
+mix_res <- tune_grid(mix_wf,
+                     resamples = val_set,
+                     grid      = tibble(penalty = 0.3,
+                                        mixture = c(0, 0.25, 0.5, 0.75, ______)),
+                     metrics   = metric_set(rmse),
+                     control   = control_grid(save_workflow = TRUE))   # keep the workflow for fit_best()
+
+collect_metrics(mix_res)
+select_best(mix_res, metric = "rmse")
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The mixture runs from 0 (ridge) to 1 (lasso).
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+mix_wf <- workflow() |>
+  add_recipe(glucose_rec) |>
+  add_model(linear_reg(penalty = tune(), mixture = tune()) |>
+              set_engine("glmnet"))
+
+mix_res <- tune_grid(mix_wf,
+                     resamples = val_set,
+                     grid      = tibble(penalty = 0.3,
+                                        mixture = c(0, 0.25, 0.5, 0.75, 1)),
+                     metrics   = metric_set(rmse),
+                     control   = control_grid(save_workflow = TRUE))   # keep the workflow for fit_best()
+
+collect_metrics(mix_res)
+select_best(mix_res, metric = "rmse")
+```
+
+A half-and-half mix (`mixture = 0.5`) is best, at 29.59, against 29.74 for the
+lasso and 29.86 for ridge. The differences are small.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### Part 6 — Refitting the chosen model, and its one test
+
+Every candidate was fitted on the 450 fitting rows only. The chosen one is now
+fitted once more on all 600 training rows, with the same settings: the
+**refit**. Do it by hand, then with the tool, and check that they agree.
+
+**By hand.** Take the row with the lowest validation RMSE, put its values into
+the workflow with `finalize_workflow()`, and fit:
+
+```{r}
+#| eval: false
+# Replace every ______ below, then run this cell.
+best <- collect_metrics(mix_res) |>
+  slice_min(mean, n = 1) |>                        # the lowest validation RMSE
+  select(penalty, mixture)
+best
+
+refit_by_hand <- mix_wf |>
+  finalize_workflow(best) |>                       # put the chosen values in
+  fit(data = ______)                               # all 600 training rows
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The refit uses every training row, fitting and validation together.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{r}
+best <- collect_metrics(mix_res) |>
+  slice_min(mean, n = 1) |>                        # the lowest validation RMSE
+  select(penalty, mixture)
+best
+
+refit_by_hand <- mix_wf |>
+  finalize_workflow(best) |>                       # put the chosen values in
+  fit(data = train)                                # all 600 training rows
+```
+:::
+:::
+
+**With the tool.** `fit_best()` does the same three steps in one: it finds the
+best candidate, puts its values into the workflow, and fits it on all the
+training rows of the search. (It needs the search to have kept the workflow,
+which is why Part 5 used `control_grid(save_workflow = TRUE)`.)
+
+```{r}
+refit_by_tool <- fit_best(mix_res)
+```
+
+Are they the same model? Put the coefficients side by side:
+
+```{r}
+coefs <- tidy(refit_by_hand) |>
+  select(term, by_hand = estimate) |>
+  left_join(tidy(refit_by_tool) |> select(term, fit_best = estimate), by = "term")
+
+head(coefs)
+all.equal(coefs$by_hand, coefs$fit_best)
+```
+
+`TRUE`: every coefficient is the same. `fit_best()` is the refit you did by
+hand.
+
+Now the **one** test check, with the unpenalised model for comparison:
+
+```{r}
+plain_fit <- workflow() |>
+  add_recipe(glucose_rec) |>
+  add_model(linear_reg()) |>
+  fit(data = train)
+
+augment(refit_by_tool, new_data = test) |>
+  rmse(truth = glucose, estimate = .pred)
+augment(plain_fit, new_data = test) |>
+  rmse(truth = glucose, estimate = .pred)
+
+tidy(refit_by_tool) |>
+  filter(term != "(Intercept)", estimate != 0) |>
+  nrow()                                           # columns kept
+```
+
+The chosen model (penalty 0.3, mixture 0.5) has a test RMSE of 26.90 against
+27.12 for the unpenalised model, and it uses 20 of the 35 columns.
+
+**Question!** The penalised model is only a little more accurate on the test
+rows, but it uses fewer columns. Why might that still matter?
+
+::: {.callout-note}
+## From one validation set to cross-validation
+One validation set depends on which 150 people landed in it (try the Stretch).
+Exercise 5.4 introduces **cross-validation**, which repeats the comparison on
+several splits and averages. In the code only the split changes (`vfold_cv()`
+instead of `val_set`); `select_best()` and `fit_best()` work as here.
+
+```r
+val_set <- manual_rset(list(one_split), ids = "validation")   # this exercise
+folds   <- vfold_cv(train, v = 5)                             # Exercise 5.4
+tune_grid(lasso_wf, resamples = folds, grid = ...)
+```
+:::
+
+::: {.callout-important}
+## Key points
+- A hyperparameter is chosen, not fitted: try several values, score each on rows the model was not fitted on, and keep the best.
+- Scored on its own training rows, the least restrained model always wins. That is why we score on validation rows.
+- `tune_grid()` is the loop of Part 3 written for you; `select_best()` picks the winner and `fit_best()` does the refit.
+- Refit the chosen model on all the training rows, then check it once on the test rows.
+:::
+
+## Python
+
+::: {.content-hidden when-meta="show-solutions"}
+[**Download this exercise as a Jupyter notebook (.ipynb)**](code/day5-02-regularisation.ipynb){download="day5-02-regularisation.ipynb"}: the text and every code cell of the Python version, including the code for the plots, with the blanks left for you to fill in. Open it in Jupyter or VS Code and run it a cell at a time.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+[**Download the Jupyter notebook with the solutions (.ipynb)**](code/day5-02-regularisation-solutions.ipynb){download="day5-02-regularisation-solutions.ipynb"}: the same notebook with the worked answers filled in.
+:::
+
+### Packages and data
+
+```{python}
+# Packages for this exercise. If one is missing, install it once from a terminal
+# (in a Jupyter notebook, type %pip instead of pip):
+# pip install pandas numpy matplotlib scikit-learn
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import LinearRegression, Lasso, ElasticNet
+from sklearn.model_selection import GridSearchCV, PredefinedSplit, ValidationCurveDisplay
+from sklearn.metrics import root_mean_squared_error
+```
+
+The same 750 people and the same split as Exercise 5.1, from
+[`data/diabetes_clean.csv`](data/diabetes_clean.csv). The outcome is glucose
+again, but this time the other seven measurements are the predictors. In
+`pressure`, `triceps` and `insulin` a zero means "not measured", so we turn the
+zeros into missing values and let the pipeline fill them in.
+
+```{python}
+diabetes = pd.read_csv("data/diabetes_clean.csv").drop(columns="diabetes")   # glucose is the outcome
+for col in ["pressure", "triceps", "insulin"]:
+    diabetes[col] = diabetes[col].replace(0, np.nan)                         # 0 means "not measured"
+
+predictors = ["pregnant", "pressure", "triceps", "insulin", "mass", "pedigree", "age"]
+
+is_test = diabetes.index % 5 == 0               # every fifth person is held back
+train = diabetes[~is_test]
+test  = diabetes[is_test]
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — A model with room to overfit
+
+The pipeline fills in the missing values with the median (Day 2), adds every
+square and every product of two predictors with
+`PolynomialFeatures(degree=2)`, and standardises the result. Seven predictors
+become 35 columns: plenty of room to fit noise.
+
+The model is the lasso, `Lasso()`. Its $\lambda$ is called `alpha`.
+(`max_iter` lets the fitting run longer than the default, because the squares
+and products are correlated and take longer to fit.)
+
+```{python}
+lasso_pipe = Pipeline([
+    ("impute", SimpleImputer(strategy="median")),                # fill the missing values
+    ("poly", PolynomialFeatures(degree=2, include_bias=False)),  # squares and products
+    ("scale", StandardScaler()),                                 # one scale for every column
+    ("model", Lasso(max_iter=100000)),
+])
+```
+
+The hyperparameter of a step in a pipeline is set with `set_params()`, using
+the step's name, two underscores and the setting's name: `model__alpha`.
+
+------------------------------------------------------------------------
+
+### Part 2 — A grid search, scored on the training rows
+
+A **grid search** tries a list of values, fits one model for each, and keeps
+the one with the lowest error. Try seven penalties, each about three times the
+one before. Fit each model on the training rows and, for now, measure its RMSE
+on the **same** rows:
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+penalties = [0.01, 0.03, 0.1, 0.3, 1, 3, 10]
+rows = []
+
+for p in penalties:
+    lasso_pipe.set_params(model__alpha=p)                  # fill in the hyperparameter
+    lasso_pipe.fit(train[predictors], train["glucose"])
+
+    train_rmse = root_mean_squared_error(______["glucose"], lasso_pipe.predict(______[predictors]))
+    rows.append({"penalty": p, "train_rmse": train_rmse})
+
+train_results = pd.DataFrame(rows)
+train_results.round(2)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+For now, the model is scored on the rows it was fitted on.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+penalties = [0.01, 0.03, 0.1, 0.3, 1, 3, 10]
+rows = []
+
+for p in penalties:
+    lasso_pipe.set_params(model__alpha=p)                  # fill in the hyperparameter
+    lasso_pipe.fit(train[predictors], train["glucose"])
+
+    train_rmse = root_mean_squared_error(train["glucose"], lasso_pipe.predict(train[predictors]))
+    rows.append({"penalty": p, "train_rmse": train_rmse})
+
+train_results = pd.DataFrame(rows)
+train_results.round(2)
+```
+:::
+:::
+
+The RMSE only ever goes up: 26.83 at a penalty of 0.01, 30.78 at 10. Scored on
+its own training rows, the smallest penalty always wins, and no penalty at all
+would win outright.
+
+**Question!** Does that mean the penalty is useless?
+
+------------------------------------------------------------------------
+
+### Part 3 — The same grid search, scored on a validation set
+
+The training RMSE cannot show overfitting: the noise the model has learnt is in
+the very rows it is scored on. We need rows it has **not** seen. Not the test
+rows: they are kept for one final check, and choosing with them would make that
+check too optimistic (the Stretch of Exercise 5.1). So we split the training
+rows once more: every fourth training row becomes a **validation** row.
+
+```{python}
+is_val = np.arange(len(train)) % 4 == 0          # every fourth training row
+fitting    = train[~is_val]
+validation = train[is_val]
+
+print(len(fitting), len(validation))
+```
+
+Run the grid search again: fit on `fitting`, score on both sets.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+rows = []
+
+for p in penalties:
+    lasso_pipe.set_params(model__alpha=p)
+    lasso_pipe.fit(______[predictors], ______["glucose"])
+
+    fit_rmse = root_mean_squared_error(fitting["glucose"], lasso_pipe.predict(fitting[predictors]))
+    val_rmse = root_mean_squared_error(______["glucose"], lasso_pipe.predict(______[predictors]))
+    rows.append({"penalty": p, "fit_rmse": fit_rmse, "val_rmse": val_rmse})
+
+val_results = pd.DataFrame(rows)
+val_results.round(2)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+Each candidate is fitted on the 450 `fitting` rows and scored on the 150 rows
+it has not seen.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+rows = []
+
+for p in penalties:
+    lasso_pipe.set_params(model__alpha=p)
+    lasso_pipe.fit(fitting[predictors], fitting["glucose"])
+
+    fit_rmse = root_mean_squared_error(fitting["glucose"], lasso_pipe.predict(fitting[predictors]))
+    val_rmse = root_mean_squared_error(validation["glucose"], lasso_pipe.predict(validation[predictors]))
+    rows.append({"penalty": p, "fit_rmse": fit_rmse, "val_rmse": val_rmse})
+
+val_results = pd.DataFrame(rows)
+val_results.round(2)
+```
+:::
+:::
+
+```{python}
+#| code-fold: true
+#| code-summary: "Code for this plot (optional)"
+fig, ax = plt.subplots()
+ax.plot(val_results["penalty"], val_results["fit_rmse"], marker="o", label="fit_rmse")
+ax.plot(val_results["penalty"], val_results["val_rmse"], marker="o", label="val_rmse")
+ax.set_xscale("log")
+ax.set_xlabel("Penalty (log scale)")
+ax.set_ylabel("RMSE (mg/dL)")
+ax.set_title("The lasso: fitting and validation RMSE for each penalty")
+ax.legend()
+plt.show()
+```
+
+The fitting RMSE rises with the penalty, as in Part 2. The validation RMSE
+**falls**, from 30.26 to 29.75 at a penalty of 0.3, and then rises again, to
+31.85 at 10. With a small penalty the model learns noise in the fitting rows
+that does not repeat in the validation rows (**overfitting**); with a large
+penalty it misses the real pattern too (**underfitting**). The validation rows
+show both, so we choose the penalty with the lowest validation RMSE: 0.3. This
+is the normal way to choose a hyperparameter.
+
+------------------------------------------------------------------------
+
+### Part 4 — The same search with `GridSearchCV()`
+
+scikit-learn runs this loop for you. `GridSearchCV()` takes the pipeline, the
+grid of candidates, and the split to score them on. `PredefinedSplit()` gives
+it our one split: rows marked `-1` are always used for fitting, rows marked `0`
+are the validation rows. `GridSearchCV()` always looks for the **highest**
+score, so for an error it uses the negative RMSE.
+
+```{python}
+one_split = PredefinedSplit(np.where(is_val, 0, -1))   # 0 = validation row, -1 = fitting row
+
+lasso_search = GridSearchCV(lasso_pipe,
+                            param_grid={"model__alpha": penalties},
+                            cv=one_split,
+                            scoring="neg_root_mean_squared_error")
+lasso_search.fit(train[predictors], train["glucose"])
+
+results = pd.DataFrame(lasso_search.cv_results_)
+results["val_rmse"] = -results["mean_test_score"]      # back to a positive RMSE
+print(results[["param_model__alpha", "val_rmse"]].round(2))
+print(lasso_search.best_params_)
+```
+
+The `val_rmse` column is the validation RMSE of your loop, number for number,
+and `best_params_` is the same penalty, 0.3. (scikit-learn calls the held-out
+rows "test" in its names, such as `mean_test_score`; here they are our
+validation rows.) `ValidationCurveDisplay` draws the fitting and the validation
+error for each value:
+
+```{python}
+display = ValidationCurveDisplay.from_estimator(
+    lasso_pipe, train[predictors], train["glucose"],
+    param_name="model__alpha", param_range=penalties,
+    cv=one_split, scoring="neg_root_mean_squared_error", negate_score=True,
+    std_display_style=None)
+display.ax_.set_xscale("log")
+display.ax_.legend(["fitting rows", "validation rows"])
+display.ax_.set_title("ValidationCurveDisplay: RMSE for each penalty")
+plt.show()
+```
+
+| Your loop in Part 3 | `GridSearchCV()` |
+|:--------------------|:-----------------|
+| `for p in penalties:` | `param_grid={"model__alpha": penalties}` |
+| `fit(fitting[...])` | the rows marked `-1` in `one_split` |
+| score on `validation` with `root_mean_squared_error` | the rows marked `0`, `scoring="neg_root_mean_squared_error"` |
+| read the table for the lowest `val_rmse` | `best_params_` |
+
+::: {.callout-tip}
+## Where to find a model's hyperparameters
+`get_params()` lists every setting of every step of a pipeline, under the names
+that `set_params()` and `param_grid` use. The
+[scikit-learn page for `ElasticNet`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.ElasticNet.html)
+explains `alpha` and `l1_ratio`, and the user guide on
+[tuning the hyper-parameters of an estimator](https://scikit-learn.org/stable/modules/grid_search.html)
+covers the search tools.
+:::
+
+```{python}
+[name for name in lasso_pipe.get_params() if name.startswith("model__")]
+```
+
+------------------------------------------------------------------------
+
+### Part 5 — Tuning the mix of lasso and ridge
+
+`ElasticNet()` has a second hyperparameter, `l1_ratio`: 1 is the lasso, 0 is
+ridge, and values in between mix the two penalties. Keep the penalty at 0.3
+and tune only `l1_ratio`:
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+mix_pipe = Pipeline([
+    ("impute", SimpleImputer(strategy="median")),
+    ("poly", PolynomialFeatures(degree=2, include_bias=False)),
+    ("scale", StandardScaler()),
+    ("model", ElasticNet(alpha=0.3, max_iter=100000)),
+])
+
+mix_search = GridSearchCV(mix_pipe,
+                          param_grid={"model__l1_ratio": [0, 0.25, 0.5, 0.75, ______]},
+                          cv=one_split,
+                          scoring="neg_root_mean_squared_error")
+mix_search.fit(train[predictors], train["glucose"])
+
+mix_results = pd.DataFrame(mix_search.cv_results_)
+mix_results["val_rmse"] = -mix_results["mean_test_score"]
+print(mix_results[["param_model__l1_ratio", "val_rmse"]].round(2))
+print(mix_search.best_params_)
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+`l1_ratio` runs from 0 (ridge) to 1 (lasso).
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+mix_pipe = Pipeline([
+    ("impute", SimpleImputer(strategy="median")),
+    ("poly", PolynomialFeatures(degree=2, include_bias=False)),
+    ("scale", StandardScaler()),
+    ("model", ElasticNet(alpha=0.3, max_iter=100000)),
+])
+
+mix_search = GridSearchCV(mix_pipe,
+                          param_grid={"model__l1_ratio": [0, 0.25, 0.5, 0.75, 1]},
+                          cv=one_split,
+                          scoring="neg_root_mean_squared_error")
+mix_search.fit(train[predictors], train["glucose"])
+
+mix_results = pd.DataFrame(mix_search.cv_results_)
+mix_results["val_rmse"] = -mix_results["mean_test_score"]
+print(mix_results[["param_model__l1_ratio", "val_rmse"]].round(2))
+print(mix_search.best_params_)
+```
+
+The lasso (`l1_ratio = 1`) is best, at 29.75, against 30.02 to 30.08 for the
+mixes and ridge. The differences are small.
+:::
+:::
+
+------------------------------------------------------------------------
+
+### Part 6 — Refitting the chosen model, and its one test
+
+Every candidate was fitted on the 450 fitting rows only. The chosen one is now
+fitted once more on all 600 training rows, with the same settings: the
+**refit**. Do it by hand, then with the tool, and check that they agree.
+
+**By hand.** Take the row with the lowest validation RMSE, put its value into a
+fresh copy of the pipeline with `set_params()`, and fit. `clone()` makes an
+unfitted copy of the pipeline, so the one inside the search is left alone.
+
+```{python}
+#| eval: false
+# Replace every ______ below, then run this cell.
+from sklearn.base import clone
+
+best = mix_results.loc[mix_results["val_rmse"].idxmin(), "param_model__l1_ratio"]   # the lowest validation RMSE
+print("best l1_ratio:", best)
+
+refit_by_hand = clone(mix_pipe).set_params(model__l1_ratio=best)   # put the chosen value in
+refit_by_hand.fit(______[predictors], ______["glucose"])           # all 600 training rows
+```
+
+::: {.callout-tip collapse="true"}
+## Stuck?
+The refit uses every training row, fitting and validation together.
+:::
+
+::: {.content-visible when-meta="show-solutions"}
+::: {.callout-note appearance="simple"}
+## Worked answer
+```{python}
+from sklearn.base import clone
+
+best = mix_results.loc[mix_results["val_rmse"].idxmin(), "param_model__l1_ratio"]   # the lowest validation RMSE
+print("best l1_ratio:", best)
+
+refit_by_hand = clone(mix_pipe).set_params(model__l1_ratio=best)   # put the chosen value in
+refit_by_hand.fit(train[predictors], train["glucose"])             # all 600 training rows
+```
+:::
+:::
+
+**With the tool.** `GridSearchCV()` has already done the refit: after the
+search it puts the best value into the pipeline and fits it on all the rows it
+was given (`refit=True`, the default). The result is in `best_estimator_`.
+
+```{python}
+refit_by_tool = mix_search.best_estimator_
+```
+
+Are they the same model? Put the coefficients side by side:
+
+```{python}
+coefs = pd.DataFrame({"by_hand": refit_by_hand["model"].coef_,
+                      "best_estimator_": refit_by_tool["model"].coef_},
+                     index=refit_by_tool[:-1].get_feature_names_out())   # the 35 column names
+print(coefs.head().round(3))
+print("same model:", np.allclose(coefs["by_hand"], coefs["best_estimator_"]))
+```
+
+`True`: every coefficient is the same. `best_estimator_` is the refit you did
+by hand.
+
+Now the **one** test check, with the unpenalised model for comparison:
+
+```{python}
+plain_pipe = Pipeline(mix_pipe.steps[:-1] + [("model", LinearRegression())])
+plain_pipe.fit(train[predictors], train["glucose"])
+
+print("chosen model, test RMSE:     ", round(root_mean_squared_error(test["glucose"], refit_by_tool.predict(test[predictors])), 2))
+print("unpenalised model, test RMSE:", round(root_mean_squared_error(test["glucose"], plain_pipe.predict(test[predictors])), 2))
+print("columns kept:", (refit_by_tool["model"].coef_ != 0).sum())
+```
+
+The chosen model (penalty 0.3, `l1_ratio` 1, the lasso) has a test RMSE of
+27.04 against 27.12 for the unpenalised model, and it uses 14 of the 35
+columns.
+
+**Question!** The penalised model is only a little more accurate on the test
+rows, but it uses far fewer columns. Why might that still matter?
+
+::: {.callout-note}
+## From one validation set to cross-validation
+One validation set depends on which 150 people landed in it (try the Stretch).
+Exercise 5.4 introduces **cross-validation**, which repeats the comparison on
+several splits and averages. In the code only `cv` changes (`cv=5` instead of
+`one_split`); `best_params_` and `best_estimator_` work as here.
+
+```python
+GridSearchCV(lasso_pipe, param_grid=..., cv=one_split, ...)   # this exercise
+GridSearchCV(lasso_pipe, param_grid=..., cv=5, ...)           # Exercise 5.4
+```
+:::
+
+::: {.callout-important}
+## Key points
+- A hyperparameter is chosen, not fitted: try several values, score each on rows the model was not fitted on, and keep the best.
+- Scored on its own training rows, the least restrained model always wins. That is why we score on validation rows.
+- `GridSearchCV()` is the loop of Part 3 written for you; `best_params_` is the winner and `best_estimator_` is the refit.
+- Refit the chosen model on all the training rows, then check it once on the test rows.
+:::
+
+::::::
+
+::: {.callout-note}
+## Other ways to choose the candidates
+A regular grid is the simplest way to choose which values to try, but not the
+only one. **Random search** draws the candidates at random from a range
+(`grid_random()` in tidymodels, `RandomizedSearchCV()` in scikit-learn).
+**Space-filling designs**, such as the **Latin hypercube**, spread a fixed
+number of candidates evenly over the range
+([`grid_space_filling()`](https://dials.tidymodels.org/reference/grid_space_filling.html)).
+**Iterative** searches, such as Bayesian optimisation, choose each new
+candidate from the results so far. All of them score the candidates the same
+way as here. Read more in chapters 13 and 14 of Tidy Modeling with R
+([grid search](https://www.tmwr.org/grid-search),
+[iterative search](https://www.tmwr.org/iterative-search)) and in the
+scikit-learn guide to
+[tuning hyper-parameters](https://scikit-learn.org/stable/modules/grid_search.html).
+:::
+
+## Stretch
+
+::: {.callout-note appearance="simple"}
+## Stretch — a different validation set
+Make the validation rows every fourth training row starting from the second
+(`seq(2, nrow(train), by = 4)` in R, `np.arange(len(train)) % 4 == 1` in
+Python) and run the search of Part 3 or Part 4 again. Is the same penalty
+chosen? What does that tell you about choosing with a single validation set?
+:::
+
+::: {.content-visible when-profile="instructor"}
+::: {.instructor}
+**Teaching choice.** Placed straight after Exercise 5.1 so that hyperparameters,
+and choosing them on rows the model was not fitted on, come before the trees
+and forests. The exercise first scores a grid search on the training rows
+(the smallest penalty always wins), then on a single validation set (every
+fourth training row; a clear minimum), and then shows that `tune_grid()` and
+`GridSearchCV()` reproduce the hand-written loop exactly. Students have not met
+resampling yet: the single split is passed to the tools as `manual_rset()` in R
+and `PredefinedSplit()` in Python, and the closing note shows that Exercise 5.4
+only swaps it for 5-fold cross-validation. Part 6 refits the chosen model on
+all 600 training rows twice, by hand (`finalize_workflow()` and `fit()`;
+`clone()`, `set_params()` and `fit()`) and with the tool (`fit_best()`;
+`best_estimator_`), and prints that the coefficients are identical. The model is a degree-2 polynomial of
+seven predictors (squares and pairwise products, 35 columns), with zeros in
+pressure, triceps and insulin treated as missing and imputed with the median.
+
+**Expected values.** Training-scored lasso RMSE at penalties 0.01 to 10: R
+26.83, 26.88, 27.14, 27.77, 28.35, 28.72, 30.78; Python 26.83, 26.87, 27.14,
+27.76, 28.35, 28.72, 30.78. Fitting 450, validation 150. Validation RMSE: R
+30.24, 30.14, 29.77, 29.74, 29.95, 30.30, 31.85; Python 30.26, 30.15, 29.79,
+29.75, 29.96, 30.29, 31.85; both choose 0.3, and the built-in tools give the
+same numbers as the loop. Mixture at penalty 0.3: R 29.86, 29.64, 29.59, 29.62,
+29.74 for 0 to 1 (best 0.5); Python 30.08, 30.07, 30.05, 30.02, 29.75 (best 1).
+glmnet scales the ridge part of the penalty differently from scikit-learn, so
+the two languages differ when the mixture is below 1. Test RMSE: R 26.90 (20
+columns), Python 27.04 (14 columns), unpenalised 27.12 in both. Stretch: with
+the validation rows starting from the second, the lasso search picks 0.1, not
+0.3 (validation RMSE 28.44 against 28.53), which is the point of the Stretch.
+
+**Common failures.** (1) Scoring the candidates on `fitting` or `train` and
+choosing the smallest penalty. (2) Scoring them on `test`. (3) In R, tuning only
+`mixture` with a fixed `penalty` in `linear_reg()`: glmnet then stops with "At
+least one penalty value is required". (4) In R, calling `fit_best()` on a
+search run without `control_grid(save_workflow = TRUE)`. (5) In Python, reading
+`mean_test_score` as a test-set score, or forgetting that it is negative.
+
+**Timing.** Part 1 five minutes, Parts 2 and 3 twenty, Part 4 fifteen, Part 5
+ten, Part 6 ten.
+:::
+:::
