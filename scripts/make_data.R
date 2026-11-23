@@ -503,3 +503,47 @@ cvd_event <- ifelse(runif(n_cvd) < plogis(logit_cvd), "yes", "no")
 cvd_risk <- data.frame(age = age_cvd, systolic_bp = sbp_cvd, cvd = cvd_event)
 readr::write_csv(cvd_risk, "data/cvd_risk.csv")
 message("wrote cvd_risk.csv: ", nrow(cvd_risk), " rows")
+
+
+# ---------------------------------------------------------------------------
+# data/drug_levels.csv - for Exercise 5.1 (overfitting and underfitting).
+# Simulated: a small pilot study of 20 patients, each with one blood sample
+# taken between 0.1 and 3 hours after a dose of a short-acting drug. The level
+# rises to a peak at about 1 hour and then falls, so a straight line underfits,
+# a degree-3 curve fits, and a degree-6 curve chases the training points.
+# The predictor stays below 3 so that raw powers up to degree 6 are fitted
+# exactly in Python (larger values or degrees lose precision in
+# PolynomialFeatures + LinearRegression).
+# True model: concentration = 10 * hours * exp(1 - hours) + N(0, 1).
+# ---------------------------------------------------------------------------
+set.seed(194)
+n_drug <- 20
+hours <- round(runif(n_drug, 0.1, 3), 2)
+concentration <- round(10 * hours * exp(1 - hours) + rnorm(n_drug, 0, 1), 1)
+drug_levels <- data.frame(hours, concentration)
+readr::write_csv(drug_levels, "data/drug_levels.csv")
+message("wrote drug_levels.csv: ", nrow(drug_levels), " rows")
+
+# ---------------------------------------------------------------------------
+# data/diabetes_markers.csv - for Exercise 5.2 (choosing the lasso penalty).
+# The 750 people of data/diabetes_clean.csv with glucose (the outcome), five
+# real measurements (pregnant, mass, pedigree, age, and diabetes coded 1 = pos,
+# 0 = neg) and 150 extra "blood markers" that are pure random numbers
+# (normal, mean 50, SD 10) unrelated to anything. pressure, triceps and insulin
+# are left out because their zeros mean "not measured". The unpenalised model
+# uses the markers to fit noise; the lasso sets most of them to zero.
+# ---------------------------------------------------------------------------
+set.seed(2024)
+dm_base <- readr::read_csv("data/diabetes_clean.csv", show_col_types = FALSE)
+dm_base <- data.frame(glucose = dm_base$glucose, pregnant = dm_base$pregnant,
+                      mass = dm_base$mass, pedigree = dm_base$pedigree,
+                      age = dm_base$age,
+                      diabetes = as.integer(dm_base$diabetes == "pos"))
+n_markers <- 150
+markers <- matrix(round(rnorm(nrow(dm_base) * n_markers, 50, 10), 1),
+                  ncol = n_markers,
+                  dimnames = list(NULL, sprintf("marker_%03d", 1:n_markers)))
+diabetes_markers <- cbind(dm_base, as.data.frame(markers))
+readr::write_csv(diabetes_markers, "data/diabetes_markers.csv")
+message("wrote diabetes_markers.csv: ", nrow(diabetes_markers), " rows, ",
+        ncol(diabetes_markers), " columns")

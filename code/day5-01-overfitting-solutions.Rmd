@@ -1,0 +1,177 @@
+---
+title: "Exercise 5.1 — Overfitting and underfitting (with solutions)"
+output: html_document
+---
+
+*HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day5/day5-01-overfitting.html>.*
+
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
+
+A model is only useful if it predicts **people it has not seen**. So we always
+compare two errors: on the training rows, which the model was fitted on, and on
+the test rows, which it has never seen.
+
+- **Underfitting**: the model is too simple. The error is large on both.
+- **Overfitting**: the model is too flexible. It also learns the noise in the
+  training rows, so the training error is small but the test error is larger.
+
+We will see both with one predictor and three curves: a straight line, a gentle
+curve and a very bendy one.
+
+> **The plots are for looking at**
+>
+> The code for every plot is included, so that you can run it and see the figure. You are not expected to write it yourself.
+
+### Packages and data
+
+```{r}
+# Packages for this exercise. If one is missing, remove the # and run this line once:
+# install.packages(c("tidyverse", "tidymodels"))
+
+library(tidyverse)
+library(tidymodels)
+
+theme_set(theme_bw())          # white background for every plot
+```
+
+The data are in [`data/drug_levels.csv`](data/drug_levels.csv): a small pilot
+study of 20 patients. Each patient had one blood sample taken between 0 and 3
+hours after a dose of a drug. `hours` is the time since the dose and
+`concentration` the drug level in the blood (mg/L). As always, 80% of the
+patients are used for training and 20% are held back as the test set.
+
+```{r}
+drugs <- read_csv("data/drug_levels.csv")
+
+set.seed(42)
+split <- initial_split(drugs, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
+
+nrow(train)
+nrow(test)
+```
+
+16 patients for training and 4 for testing. A small study, which is exactly
+where overfitting is easiest to fall into.
+
+------------------------------------------------------------------------
+
+### Part 1 — Look at the data
+
+```{r}
+ggplot() +
+  geom_point(data = train, aes(hours, concentration), size = 2) +
+  geom_point(data = test,  aes(hours, concentration), colour = "red", size = 3) +
+  labs(x = "Hours since the dose", y = "Concentration (mg/L)",
+       title = "Training patients (black) and test patients (red)")
+```
+
+**Question!** Would a straight line describe these points well?
+
+The level rises for about an hour and then falls. A straight line cannot do
+that.
+
+------------------------------------------------------------------------
+
+### Part 2 — Three models
+
+All three are linear regressions of `concentration` on `hours`. Only the
+recipe changes: `step_poly(hours, degree = 3)` adds columns for $\text{hours}^2$ and
+$\text{hours}^3$, which lets the fitted line bend. The higher the degree, the
+more it can bend.
+
+> **Stuck?**
+>
+> Every model is fitted on the training rows only, so `data = train`. The bendy
+> curve has degree 6.
+
+> **Worked answer**
+
+```{r}
+fit_degree <- function(degree) {
+  rec <- recipe(concentration ~ hours, data = train) |>
+    step_poly(hours, degree = degree)
+  workflow(rec, linear_reg()) |>
+    fit(data = train)
+}
+
+fit_1 <- fit_degree(1)   # a straight line
+fit_3 <- fit_degree(3)   # a gentle curve
+fit_6 <- fit_degree(6)   # a very bendy curve
+```
+
+```{r}
+hours_grid <- tibble(hours = seq(min(drugs$hours), max(drugs$hours), length.out = 300))
+curves <- bind_rows(
+  augment(fit_1, hours_grid) |> mutate(model = "degree 1"),
+  augment(fit_3, hours_grid) |> mutate(model = "degree 3"),
+  augment(fit_6, hours_grid) |> mutate(model = "degree 6")
+)
+
+ggplot() +
+  geom_line(data = curves, aes(hours, .pred), colour = "steelblue", linewidth = 1) +
+  geom_point(data = train, aes(hours, concentration), size = 2) +
+  geom_point(data = test,  aes(hours, concentration), colour = "red", size = 3) +
+  facet_wrap(~ model) +
+  labs(x = "Hours since the dose", y = "Concentration (mg/L)",
+       title = "Three fitted curves; training patients black, test patients red")
+```
+
+**Question!** Which curve follows the shape of the data? Which one bends to
+reach individual training points?
+
+The straight line misses the rise and fall. The degree-3 curve follows it. The
+degree-6 curve shoots up to about 13 mg/L before the first hour, to pass
+through the one high training patient, a peak no other patient comes near.
+
+------------------------------------------------------------------------
+
+### Part 3 — Training error against test error
+
+We measure each model with the RMSE, the square root of the mean squared error
+from Day 3. It is in the units of the outcome, mg/L. `rmse_on()` predicts the
+rows you give it and returns their RMSE.
+
+```{r}
+rmse_on <- function(model, data) {
+  augment(model, data) |>
+    rmse(truth = concentration, estimate = .pred) |>
+    pull(.estimate)
+}
+```
+
+> **Stuck?**
+>
+> The test RMSE uses the test rows: `rmse_on(fit_1, test)`, and the same for the
+> other two.
+
+> **Worked answer**
+
+```{r}
+results <- tibble(
+  model      = c("degree 1", "degree 3", "degree 6"),
+  train_rmse = c(rmse_on(fit_1, train), rmse_on(fit_3, train), rmse_on(fit_6, train)),
+  test_rmse  = c(rmse_on(fit_1, test), rmse_on(fit_3, test), rmse_on(fit_6, test))
+)
+results
+```
+
+**Question!** Which model underfits, which overfits, and which would you use?
+
+| Model | Training RMSE | Test RMSE | |
+|:-|:-:|:-:|:-|
+| degree 1 | 2.10 | 1.57 | underfits: large on both |
+| degree 3 | 1.03 | 0.62 | fits: small on both |
+| degree 6 | 0.70 | 1.02 | overfits: smallest on training, larger on test |
+
+The degree-6 curve has the smallest training error of the three, but on the
+test patients it is worse than the degree-3 curve. A smaller training error
+does not mean a better model. Only the test rows can tell.
+
+> **Key points**
+>
+> - Always compare the error on the training rows with the error on the test rows.
+> - Underfitting: large error on both. The model is too simple.
+> - Overfitting: small error on training, larger on test. The model has learnt the noise.
+> - More flexibility always lowers the training error, so the training error cannot choose a model.
