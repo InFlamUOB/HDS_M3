@@ -1,11 +1,11 @@
 ---
-title: "Exercise 4.2 — The decision boundary"
+title: "Exercise 4.2 — The decision boundary (with solutions)"
 output: html_document
 ---
 
 *HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day4/day4-02-decision-boundary.html>.*
 
-*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
 In Exercise 4.1 the map of the logistic regression's probability had a black
 line across it: to one side the model says `yes`, to the other `no`. That line
@@ -98,17 +98,21 @@ Round the coefficients printed above to four significant figures and calculate,
 by hand, the age at which the class changes for a blood pressure of 120 mmHg.
 Then do the same for 160 mmHg.
 
-```{r}
-# Replace every ______ below, then run this cell.
-boundary_120 <- (-(______) - ______ * 120) / ______
-boundary_160 <- (-(______) - ______ * 160) / ______
-c(boundary_120, boundary_160)
-```
-
 > **Stuck?**
 >
 > In order: the intercept, the blood-pressure weight, and the age weight. The
 > intercept is negative, so minus the intercept is a positive number.
+
+> **Worked answer**
+
+```{r}
+boundary_120 <- (-(-13.83) - 0.05083 * 120) / 0.1019
+boundary_160 <- (-(-13.83) - 0.05083 * 160) / 0.1019
+c(boundary_120, boundary_160)
+```
+
+> With a blood pressure of 120 the model predicts an event from about age 76;
+> with 160, from about age 56.
 
 Check it with `predict()`: a person on the boundary should get a probability
 of 0.5.
@@ -188,6 +192,24 @@ plotly::plot_ly() |>
 > 3. A model with three predictors (say age, blood pressure and cholesterol) also
 >    has a boundary. What shape would it be?
 
+> **Worked answer**
+
+```{r}
+predict(log_fit, new_data = data.frame(age = c(70, 55), systolic_bp = c(128, 165)),
+        type = "prob")
+```
+
+> 1. About 5 years: 10 × 0.0508 / 0.1019 = 5.0. Adding 10 mmHg raises the
+>    log-odds as much as 5 extra years. That is the tilt of the line: going 10
+>    mmHg up, the boundary moves 5 years younger (from 76 at 120 mmHg to 56 at
+>    160 mmHg).
+> 2. The 70-year-old is just below the line (probability 0.45, `no`); the
+>    55-year-old is above it (0.54, `yes`). The younger person is called `yes`
+>    because of the blood pressure. Neither measurement decides alone.
+> 3. Still flat: one linear equation in three measurements is a flat plane in
+>    three dimensions. A logistic regression always has a flat boundary in the
+>    predictors you give it.
+
 ### Part 2 — Other thresholds, other lines
 
 The cut-off of 0.5 is called the **decision threshold**. Nothing forces it to
@@ -235,6 +257,15 @@ c(t_0.3 = sum(test_probs >= 0.3), t_0.5 = sum(test_probs >= 0.5),
 > Lowering the threshold from 0.5 to 0.3 calls many more test patients `yes`.
 > On the plot, which patients change side when the line moves from 0.5 to 0.3:
 > triangles (they had an event), circles (they did not), or both?
+
+> **Worked answer**
+>
+> 50 patients are called `yes` at 0.3, 34 at 0.5 and 17 at 0.7. Moving the line
+> down (0.3) brings more of the triangles onto the `yes` side, but it brings over
+> circles too. Moving it up (0.7) does the opposite: fewer circles called `yes`,
+> but more triangles missed. The model, its coefficients and the tilt of the line
+> are the same; only the decision changed. Why you might want to move it is the
+> subject of Exercise 4.3.
 
 > **Learning points**
 >

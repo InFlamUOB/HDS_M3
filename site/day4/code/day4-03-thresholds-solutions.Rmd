@@ -1,11 +1,11 @@
 ---
-title: "Exercise 4.3 — The decision threshold"
+title: "Exercise 4.3 — The decision threshold (with solutions)"
 output: html_document
 ---
 
 *HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day4/day4-03-thresholds.html>.*
 
-*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
 In Exercise 4.2 every threshold gave a different line, and 0.5, where both
 classes are equally likely, was only the default. Why would anyone move it?
@@ -143,27 +143,34 @@ $$\text{Sensitivity} = \frac{TP}{TP + FN} \qquad\qquad
 Complete the code so that it counts the false negatives and computes the
 specificity:
 
+> **Stuck?**
+>
+> A false negative is a person who truly had an event (`cvd_true == 1`) but
+> was predicted not to (`predicted == 0`). Specificity uses TN and FP, in the
+> same way as sensitivity uses TP and FN.
+
+> **Worked answer**
+
 ```{r}
-# Replace every ______ below, then run this cell.
 threshold_compare <- prediction_15 |>
   pivot_longer(c(class_0.3, class_0.5, class_0.7),
                names_to = "threshold", values_to = "predicted") |>
   group_by(threshold) |>
   summarise(TP = sum(cvd_true == 1 & predicted == 1),
             FP = sum(cvd_true == 0 & predicted == 1),
-            FN = sum(______),
+            FN = sum(cvd_true == 1 & predicted == 0),
             TN = sum(cvd_true == 0 & predicted == 0)) |>
   mutate(sensitivity = TP / (TP + FN),
-         specificity = ______)
+         specificity = TN / (TN + FP))
 
 threshold_compare
 ```
 
-> **Stuck?**
->
-> A false negative is a person who truly had an event (`cvd_true == 1`) but
-> was predicted not to (`predicted == 0`). Specificity uses TN and FP, in the
-> same way as sensitivity uses TP and FN.
+> | Threshold | TP | FP | FN | TN | Sensitivity | Specificity |
+> |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+> | 0.3 | 7 | 3 | 1 | 4 | 0.875 | 0.571 |
+> | 0.5 | 6 | 2 | 2 | 5 | 0.750 | 0.714 |
+> | 0.7 | 2 | 0 | 6 | 7 | 0.250 | 1.000 |
 
 Changing the threshold changes the kind of mistakes the model makes. A **low**
 threshold catches more of the people who had an event (higher sensitivity) at the

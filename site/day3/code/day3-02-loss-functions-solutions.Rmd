@@ -1,11 +1,11 @@
 ---
-title: "Exercise 3.2 — Residuals and loss functions"
+title: "Exercise 3.2 — Residuals and loss functions (with solutions)"
 output: html_document
 ---
 
 *HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day3/day3-02-loss-functions.html>.*
 
-*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
 A loss function scores a candidate line against the data; the fitting procedure
 returns the line with the lowest score. Here you will aim to understand what a
@@ -105,11 +105,18 @@ ggplot(three, aes(x = age, y = glucose)) +
    - **RMSE**, the root mean squared error: the square root of the MSE.
 4. Verify your calculations in code. Each new column is one step of the table.
 
+> **Stuck?**
+>
+> A residual is the observed value minus the predicted value. Both are columns of
+> `three`: one was there from the start, and the other is created on the line
+> above the blanks.
+
+> **Worked answer**
+
 ```{r}
-# Replace every ______ below, then run this cell.
 three <- three |>
   mutate(predicted = 110 + 0.3 * age,
-         residual  = ______ - ______,
+         residual  = glucose - predicted,
          absolute  = abs(residual),
          squared   = residual^2)
 
@@ -121,11 +128,20 @@ three |>
             RMSE = sqrt(mean(squared)))
 ```
 
-> **Stuck?**
+> | Person | Age | Observed glucose | Predicted glucose | Residual | Absolute residual | Squared residual |
+> |:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+> | A | 28 | 194 | 118.4 | 75.6 | 75.6 | 5715.36 |
+> | B | 30 | 115 | 119.0 | −4.0 | 4.0 | 16.00 |
+> | C | 55 | 111 | 126.5 | −15.5 | 15.5 | 240.25 |
 >
-> A residual is the observed value minus the predicted value. Both are columns of
-> `three`: one was there from the start, and the other is created on the line
-> above the blanks.
+> A **positive** residual means the person's glucose is higher than the line
+> predicts: the point is above the line, and the line under-predicts (person A).
+> A **negative** residual means the glucose is lower than the line predicts: the
+> point is below the line, and the line over-predicts (persons B and C).
+>
+> $$\text{MAE} = \frac{75.6 + 4.0 + 15.5}{3} = 31.70 \qquad
+> \text{MSE} = \frac{5715.36 + 16.00 + 240.25}{3} = 1990.54 \qquad
+> \text{RMSE} = \sqrt{1990.54} = 44.62$$
 
 **What squaring does.** This picture draws the same three residuals twice. The
 thick line under each square is the absolute residual: a length. The shaded
@@ -253,10 +269,16 @@ $$\widehat{\text{glucose}} = 120 + 0.5 \times \text{age}$$
 
 Score it in the same way. Which of the two lines fits these 80 people better?
 
+> **Stuck?**
+>
+> The prediction is the equation of the hand-drawn line, written with the `age`
+> column, in the same way as `110 + 0.3 * age` was written for the first line.
+
+> **Worked answer**
+
 ```{r}
-# Replace every ______ below, then run this cell.
 glu |>
-  mutate(predicted_hand = ______,
+  mutate(predicted_hand = 120 + 0.5 * age,
          residual_hand  = glucose - predicted_hand) |>
   summarise(SSR  = sum(residual_hand^2),
             MSE  = mean(residual_hand^2),
@@ -264,10 +286,9 @@ glu |>
             MAE  = mean(abs(residual_hand)))
 ```
 
-> **Stuck?**
->
-> The prediction is the equation of the hand-drawn line, written with the `age`
-> column, in the same way as `110 + 0.3 * age` was written for the first line.
+> The hand-drawn line has an MSE of 1,135.9 against 847.6, and an MAE of 28.7
+> against 22.3. Both losses are lower for the fitted line, so that line
+> fits these 80 people better.
 
 > **Learning points**
 >

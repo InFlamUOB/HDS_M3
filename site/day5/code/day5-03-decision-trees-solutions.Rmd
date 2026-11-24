@@ -1,11 +1,11 @@
 ---
-title: "Exercise 5.3 — Decision trees, overfitting and tuning"
+title: "Exercise 5.3 — Decision trees, overfitting and tuning (with solutions)"
 output: html_document
 ---
 
 *HDS MSc · Module 3 · the R version of this exercise; the web page is at <https://inflamuob.github.io/HDS_M3/day5/day5-03-decision-trees.html>.*
 
-*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. Cells with `______` are blanks for you to fill in.*
+*Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
 A decision tree predicts by asking yes-or-no questions: is glucose above 128?
 If so, is body mass above 30? Each answer sends a person down one branch until
@@ -85,14 +85,20 @@ Follow this person down the tree by hand: at each box, go left if the answer is
 yes. Which leaf do they reach, and what probability of diabetes does it give?
 Then check your answer with `predict()`.
 
-```{r}
-# Replace every ______ below, then run this cell.
-predict(tree_fit_small, new_data = ______, type = "prob")
-```
-
 > **Stuck?**
 >
 > `patient` holds one row; pass it as `new_data`.
+
+> **Worked answer**
+
+```{r}
+predict(tree_fit_small, new_data = patient, type = "prob")
+```
+
+> This person has glucose 194. At the first box, glucose < 151 is "no", so
+> they go right and reach a leaf at once. In that leaf 79% of the training people
+> had diabetes, and `predict()` gives the same 0.789. In fact this person does
+> not have diabetes: a leaf gives a probability, not a certainty.
 
 ------------------------------------------------------------------------
 
@@ -121,8 +127,13 @@ is guessing, 1 is perfect. `event_level = "second"` says that `pos` is the
 event. Add the predicted probabilities and classes to the training rows and to the
 test rows, as in Day 4, and score both:
 
+> **Stuck?**
+>
+> Only the data changes: the test rows are in `test`.
+
+> **Worked answer**
+
 ```{r}
-# Replace every ______ below, then run this cell.
 tree_metrics <- metric_set(accuracy, roc_auc)
 
 train_preds <- train |>
@@ -132,15 +143,15 @@ tree_metrics(train_preds, truth = diabetes, estimate = .pred_class, .pred_pos,
              event_level = "second")
 
 test_preds <- test |>
-  bind_cols(predict(tree_fit_full, new_data = ______, type = "prob"),
-            predict(tree_fit_full, new_data = ______))
+  bind_cols(predict(tree_fit_full, new_data = test, type = "prob"),
+            predict(tree_fit_full, new_data = test))
 tree_metrics(test_preds, truth = diabetes, estimate = .pred_class, .pred_pos,
              event_level = "second")
 ```
 
-> **Stuck?**
->
-> Only the data changes: the test rows are in `test`.
+> The tree is perfect on the rows it was fitted on. On the test rows accuracy
+> falls from 1.000 to 0.607 and the AUC from 1.000 to 0.582, not much better
+> than guessing.
 
 **Question!** What has the tree learnt from the training rows that does not
 carry over to new people?
@@ -221,8 +232,14 @@ final_tree_fit <- finalize_model(tree_spec_tune, best_tree) |>
 Now, and only now, use the test rows. Score the chosen tree once, next to its
 score on the training rows.
 
+> **Stuck?**
+>
+> The same code as in Part 2: the test rows, and the column of predicted
+> probabilities for `pos`, `.pred_pos`.
+
+> **Worked answer**
+
 ```{r}
-# Replace every ______ below, then run this cell.
 final_train_preds <- train |>
   bind_cols(predict(final_tree_fit, new_data = train, type = "prob"),
             predict(final_tree_fit, new_data = train))
@@ -230,16 +247,16 @@ tree_metrics(final_train_preds, truth = diabetes, estimate = .pred_class, .pred_
              event_level = "second")
 
 final_test_preds <- test |>
-  bind_cols(predict(final_tree_fit, new_data = ______, type = "prob"),
-            predict(final_tree_fit, new_data = ______))
-tree_metrics(final_test_preds, truth = diabetes, estimate = .pred_class, ______,
+  bind_cols(predict(final_tree_fit, new_data = test, type = "prob"),
+            predict(final_tree_fit, new_data = test))
+tree_metrics(final_test_preds, truth = diabetes, estimate = .pred_class, .pred_pos,
              event_level = "second")
 ```
 
-> **Stuck?**
->
-> The same code as in Part 2: the test rows, and the column of predicted
-> probabilities for `pos`, `.pred_pos`.
+> The search chose `tree_depth` 7 and `min_n` 30 (cross-validated AUC 0.792).
+> On the test rows it has accuracy 0.700 and AUC 0.743, against 0.607 and 0.582
+> for the tree that nothing stopped. On the training rows it has accuracy 0.810
+> and AUC 0.856: the gap between training and test is much smaller.
 
 **Question!** Why must the test rows play no part in choosing `tree_depth` and
 `min_n`?
