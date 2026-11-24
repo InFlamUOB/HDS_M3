@@ -34,11 +34,14 @@ library(tidymodels)
 theme_set(theme_bw())          # white background for every plot
 ```
 
-The data are in [`data/drug_levels.csv`](data/drug_levels.csv): a small pilot
-study of 20 patients. Each patient had one blood sample taken between 0 and 3
-hours after a dose of a drug. `hours` is the time since the dose and
+The data are in [`data/drug_levels.csv`](data/drug_levels.csv): a small,
+simulated pilot study of 20 patients. Each patient had one blood sample taken
+between 0 and 3 hours after a dose of a drug. `hours` is the time since the dose and
 `concentration` the drug level in the blood (mg/L). As always, 80% of the
 patients are used for training and 20% are held back as the test set.
+Because the data are simulated, we know the real relationship they were drawn
+from: the level rises to a peak of 10 mg/L at 1 hour and then falls. We will
+draw it at the end to judge the models.
 
 ```{r}
 drugs <- read_csv("data/drug_levels.csv")
@@ -181,14 +184,17 @@ curves <- bind_rows(
   predict(fit_3, new_data = hours_grid) |> bind_cols(hours_grid) |> mutate(model = "degree 3"),
   predict(fit_6, new_data = hours_grid) |> bind_cols(hours_grid) |> mutate(model = "degree 6")
 )
+hours_grid$real <- 10 * hours_grid$hours * exp(1 - hours_grid$hours)   # the real relationship
 
 ggplot() +
+  geom_line(data = hours_grid, aes(hours, real), colour = "grey75", linewidth = 2) +
   geom_line(data = curves, aes(hours, .pred), colour = "steelblue", linewidth = 1) +
   geom_point(data = train, aes(hours, concentration), size = 2) +
   geom_point(data = test,  aes(hours, concentration), colour = "red", size = 3) +
   facet_wrap(~ model) +
   labs(x = "Hours since the dose", y = "Concentration (mg/L)",
-       title = "Three fitted curves; training patients black, test patients red")
+       title = "Three fitted curves (blue) and the real relationship (grey)",
+       subtitle = "Training patients black, test patients red")
 ```
 
 **Question!** Which model underfits, which overfits, and which would you use?
@@ -200,11 +206,14 @@ ggplot() +
 | degree 6 | 0.70 | 1.02 | overfits: smallest on training, larger on test |
 
 The straight line misses the rise and fall, so its error is large on both sets.
-The degree-3 curve follows the shape. The degree-6 curve shoots up to about
-13 mg/L before the first hour, to pass through the one high training patient:
-it has the smallest training error of the three, but on the test patients it is
-worse than the degree-3 curve. A smaller training error does not mean a better
-model. Only the test rows can tell.
+The degree-3 curve lies almost on the grey line: it has found the real
+relationship. The degree-6 curve passes closest to the training points, which is
+why it can look like the best fit, but it leaves the grey line: it shoots up to
+about 13 mg/L before the first hour to pass through one patient whose high
+value is just noise. It has the smallest training error of the three, but on the
+test patients it is worse than the degree-3 curve. A smaller training error does
+not mean a better model. With real data there is no grey line, so the test rows
+are how we tell.
 
 > **Key points**
 >
