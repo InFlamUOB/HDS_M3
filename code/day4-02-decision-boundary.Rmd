@@ -198,6 +198,42 @@ and cuts the sheet at younger ages and lower blood pressures; the plane at 0.7
 sits higher and cuts it further up. Seen from above, the three lines are
 parallel: the same tilt, shifted.
 
+On the left, the sheet with the three planes (turn it with the mouse); on the
+right, the same three lines seen from above, in the same colours.
+
+```{r}
+#| eval: !expr requireNamespace("plotly", quietly = TRUE)
+# uses ages, bps and prob_matrix from the 3D plot in Part 1
+thresholds <- c(0.3, 0.5, 0.7)
+colours    <- c("blue", "red", "purple")
+
+planes_3d <- plotly::plot_ly() |>
+  plotly::add_surface(x = ages, y = bps, z = prob_matrix, opacity = 0.6,
+                      colorscale = list(c(0, 1), c("steelblue", "darkorange")),
+                      showscale = FALSE, name = "probability")
+
+for (i in 1:3) {
+  t <- thresholds[i]
+  # the age where the probability equals t, for each blood pressure
+  cut_age <- (log(t / (1 - t)) - b[1] - b[3] * bps) / b[2]
+  keep <- cut_age >= 40 & cut_age <= 80
+  planes_3d <- planes_3d |>
+    plotly::add_surface(x = ages, y = bps, z = 0 * prob_matrix + t, opacity = 0.25,
+                        colorscale = list(c(0, 1), c(colours[i], colours[i])),
+                        showscale = FALSE, name = paste("P =", t)) |>
+    plotly::add_trace(type = "scatter3d", mode = "lines", x = cut_age[keep],
+                      y = bps[keep], z = rep(t, sum(keep)),
+                      line = list(color = colours[i], width = 8),
+                      name = paste("threshold", t))
+}
+
+planes_3d |>
+  plotly::layout(scene = list(xaxis = list(title = "Age (years)"),
+                              yaxis = list(title = "Systolic BP (mmHg)"),
+                              zaxis = list(title = "Probability of an event")),
+                 legend = list(orientation = "h"))
+```
+
 ```{r}
 lines_t <- data.frame(t = factor(c(0.3, 0.5, 0.7)),
                       log_odds = log(c(0.3, 0.5, 0.7) / (1 - c(0.3, 0.5, 0.7)))) |>
