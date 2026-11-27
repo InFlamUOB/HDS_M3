@@ -547,3 +547,16 @@ diabetes_markers <- cbind(dm_base, as.data.frame(markers))
 readr::write_csv(diabetes_markers, "data/diabetes_markers.csv")
 message("wrote diabetes_markers.csv: ", nrow(diabetes_markers), " rows, ",
         ncol(diabetes_markers), " columns")
+
+# ---------------------------------------------------------------------------
+# data/diabetes_noise.csv - for Exercise 9.1 (variable importance).
+# The 750 people of data/diabetes_clean.csv, all columns unchanged and in the
+# same order, plus one extra column `noise`: pure random numbers (normal,
+# mean 0, SD 1, rounded to 3 decimals) unrelated to anything. Its true
+# importance is zero, so it is the control for the importance measures.
+# ---------------------------------------------------------------------------
+set.seed(2029)
+dn <- readr::read_csv("data/diabetes_clean.csv", show_col_types = FALSE)
+dn$noise <- round(rnorm(nrow(dn)), 3)
+readr::write_csv(dn, "data/diabetes_noise.csv")
+message("wrote diabetes_noise.csv: ", nrow(dn), " rows, ", ncol(dn), " columns")

@@ -107,35 +107,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   }
 }</script>
 
-  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
-  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
-
-<script type="text/javascript">
-const typesetMath = (el) => {
-  if (window.MathJax) {
-    // MathJax Typeset
-    window.MathJax.typeset([el]);
-  } else if (window.katex) {
-    // KaTeX Render
-    var mathElements = el.getElementsByClassName("math");
-    var macros = [];
-    for (var i = 0; i < mathElements.length; i++) {
-      var texText = mathElements[i].firstChild;
-      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
-        window.katex.render(texText.data, mathElements[i], {
-          displayMode: mathElements[i].classList.contains('display'),
-          throwOnError: false,
-          macros: macros,
-          fleqn: false
-        });
-      }
-    }
-  }
-}
-window.Quarto = {
-  typesetMath
-};
-</script>
 
 </head>
 
@@ -204,14 +175,8 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        <nav id="TOC" role="doc-toc" class="toc-active">
-    <h2 id="toc-title">Table of contents</h2>
-   
-  <ul>
-  <li><a href="#stretch" id="toc-stretch" class="nav-link active" data-scroll-target="#stretch">Stretch</a></li>
-  </ul>
-</nav>
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
+        
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
@@ -245,10 +210,10 @@ window.Quarto = {
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>This exercise has no page in the original version of the module. It asks a question Exercises 9.1 to 9.3 leave open: they explained the model as a whole and one patient at a time, but not whether it works equally well for different groups of patients. Accept, rewrite or remove it; nothing else depends on it.</p>
+<p>This exercise has no page in the original version of the module. Exercises 9.1 to 9.3 explain the model as a whole and one patient at a time; this one asks whether it works equally well for different groups of patients. Accept, rewrite or remove it; nothing else depends on it.</p>
 </div>
 </div>
-<p>A single test AUC describes the model for the 150 test patients as a whole. The model can still serve some groups of patients much worse than others, and the overall number will not show it. Here we split the test patients by age and by BMI and compare.</p>
+<p>One test AUC describes the model for all the test patients together. The model can still serve some groups much worse than others, and the overall number will not show it. Here we split the test patients by age and by BMI and compare.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -267,8 +232,8 @@ window.Quarto = {
 <div class="tab-content" data-group="language">
 <div id="tabset-1-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-1-1-tab">
 <p><a href="code/day6-04-subgroups.Rmd" download="day6-04-subgroups.Rmd"><strong>Download this exercise as an R Markdown notebook (.Rmd)</strong></a>: the text and every code cell of the R version, including the code for the plots, with the blanks left for you to fill in. Open it in RStudio and run it a chunk at a time.</p>
-<section id="packages-and-data" class="level3">
-<h3 class="anchored" data-anchor-id="packages-and-data">Packages and data</h3>
+<section id="the-model" class="level3">
+<h3 class="anchored" data-anchor-id="the-model">The model</h3>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Packages for this exercise. If one is missing, remove the # and run this line once:</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages(c("tidyverse", "tidymodels", "ranger"))</span></span>
@@ -279,111 +244,109 @@ window.Quarto = {
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_bw</span>())          <span class="co"># white background for every plot</span></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">pillar.sigfig =</span> <span class="dv">3</span>)     <span class="co"># show three significant figures in tables</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The same data (<a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>), split and random forest as Exercises 9.1 to 9.3, with the predicted probability and the predicted class (threshold 0.5) for each test patient.</p>
+<p>The same data (<a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>) and random forest as Exercises 9.1 to 9.3. As always, 80% of the people are used for training and 20% are held back as the test set.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/diabetes_clean.csv"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pregnant, glucose, mass, pedigree, age, diabetes) <span class="sc">|&gt;</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">diabetes =</span> <span class="fu">factor</span>(diabetes, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"neg"</span>, <span class="st">"pos"</span>)))</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(diabetes), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> diabetes[<span class="sc">-</span>test_rows, ]</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> diabetes[test_rows, ]</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>rf_fit <span class="ot">&lt;-</span> <span class="fu">rand_forest</span>(<span class="at">trees =</span> <span class="dv">500</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>split <span class="ot">&lt;-</span> <span class="fu">initial_split</span>(diabetes, <span class="at">prop =</span> <span class="fl">0.8</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> <span class="fu">training</span>(split)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> <span class="fu">testing</span>(split)</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>rf_spec <span class="ot">&lt;-</span> <span class="fu">rand_forest</span>(<span class="at">trees =</span> <span class="dv">500</span>) <span class="sc">|&gt;</span></span>
 <span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"ranger"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(diabetes <span class="sc">~</span> ., <span class="at">data =</span> train)</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>test_preds <span class="ot">&lt;-</span> <span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(<span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test)) <span class="sc">|&gt;</span>     <span class="co"># adds .pred_class</span></span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(test)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>rf_fit <span class="ot">&lt;-</span> rf_spec <span class="sc">|&gt;</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(diabetes <span class="sc">~</span> ., <span class="at">data =</span> train)</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>test_preds <span class="ot">&lt;-</span> test <span class="sc">|&gt;</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(<span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test, <span class="at">type =</span> <span class="st">"prob"</span>),</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>            <span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
+<p>Evaluate it once on all the test rows (threshold 0.5):</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>class_metrics <span class="ot">&lt;-</span> <span class="fu">metric_set</span>(accuracy, sens)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">class_metrics</span>(test_preds, <span class="at">truth =</span> diabetes, <span class="at">estimate =</span> .pred_class,</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>              <span class="at">event_level =</span> <span class="st">"second"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 2 × 3
+#&gt;   .metric  .estimator .estimate
+#&gt;   &lt;chr&gt;    &lt;chr&gt;          &lt;dbl&gt;
+#&gt; 1 accuracy binary         0.72 
+#&gt; 2 sens     binary         0.618</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">roc_auc</span>(test_preds, <span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 1 × 3
+#&gt;   .metric .estimator .estimate
+#&gt;   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
+#&gt; 1 roc_auc binary         0.753</code></pre>
+</div>
+</div>
+<p>Accuracy 0.720, sensitivity 0.618, AUC 0.753. These are the overall numbers we will now break down.</p>
 <hr>
 </section>
 <section id="part-1-performance-by-age-group" class="level3">
 <h3 class="anchored" data-anchor-id="part-1-performance-by-age-group">Part 1 — Performance by age group</h3>
-<p>Put the test patients into three age groups, and count them first:</p>
+<p>Put the test patients into three age groups. For each group, count the patients, the patients with diabetes and how many of those the model catches, then work out the accuracy and the sensitivity.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>test_preds <span class="ot">&lt;-</span> test_preds <span class="sc">|&gt;</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">cut</span>(age, <span class="at">breaks =</span> <span class="fu">c</span>(<span class="dv">20</span>, <span class="dv">29</span>, <span class="dv">39</span>, <span class="cn">Inf</span>),</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"21-29"</span>, <span class="st">"30-39"</span>, <span class="st">"40 and over"</span>)))</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group) <span class="sc">|&gt;</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">patients =</span> <span class="fu">n</span>(), <span class="at">with_diabetes =</span> <span class="fu">sum</span>(diabetes <span class="sc">==</span> <span class="st">"pos"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>test_preds <span class="ot">&lt;-</span> test_preds <span class="sc">|&gt;</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">cut</span>(age, <span class="at">breaks =</span> <span class="fu">c</span>(<span class="dv">20</span>, <span class="dv">29</span>, <span class="dv">39</span>, <span class="cn">Inf</span>),</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"21-29"</span>, <span class="st">"30-39"</span>, <span class="st">"40 and over"</span>)))</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group) <span class="sc">|&gt;</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">patients =</span> <span class="fu">n</span>(),</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">with_diabetes =</span> <span class="fu">sum</span>(diabetes <span class="sc">==</span> <span class="st">"pos"</span>),</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>            <span class="at">caught =</span> <span class="fu">sum</span>(diabetes <span class="sc">==</span> <span class="st">"pos"</span> <span class="sc">&amp;</span> .pred_class <span class="sc">==</span> <span class="st">"pos"</span>),</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>            <span class="at">accuracy =</span> <span class="fu">mean</span>(.pred_class <span class="sc">==</span> diabetes),</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>            <span class="at">sensitivity =</span> caught <span class="sc">/</span> with_diabetes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; # A tibble: 3 × 3
-#&gt;   age_group   patients with_diabetes
-#&gt;   &lt;fct&gt;          &lt;int&gt;         &lt;int&gt;
-#&gt; 1 21-29             88            21
-#&gt; 2 30-39             22             9
-#&gt; 3 40 and over       40            23</code></pre>
+<pre><code>#&gt; # A tibble: 3 × 6
+#&gt;   age_group   patients with_diabetes caught accuracy sensitivity
+#&gt;   &lt;fct&gt;          &lt;int&gt;         &lt;int&gt;  &lt;int&gt;    &lt;dbl&gt;       &lt;dbl&gt;
+#&gt; 1 21-29             84            24      9    0.75        0.375
+#&gt; 2 30-39             32            12     10    0.781       0.833
+#&gt; 3 40 and over       34            19     15    0.588       0.789</code></pre>
 </div>
 </div>
-<p>Now three measures in each group: the AUC (how well the model <em>ranks</em> the patients of that group), and at the threshold of 0.5 the sensitivity (the share of the people with diabetes it flags) and the specificity (the share of the people without diabetes it clears). yardstick’s functions work on grouped data, one row per group; <code>event_level = "second"</code> because <code>pos</code> is the second level.</p>
+<p>yardstick’s functions also work on grouped data, one row per group. The AUC for each age group:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>auc_by_age <span class="ot">&lt;-</span> test_preds <span class="sc">|&gt;</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group) <span class="sc">|&gt;</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">roc_auc</span>(<span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>)</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>sens_by_age <span class="ot">&lt;-</span> test_preds <span class="sc">|&gt;</span></span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group) <span class="sc">|&gt;</span></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">sens</span>(<span class="at">truth =</span> diabetes, <span class="at">estimate =</span> .pred_class, <span class="at">event_level =</span> <span class="st">"second"</span>)</span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>spec_by_age <span class="ot">&lt;-</span> test_preds <span class="sc">|&gt;</span></span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group) <span class="sc">|&gt;</span></span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">spec</span>(<span class="at">truth =</span> diabetes, <span class="at">estimate =</span> .pred_class, <span class="at">event_level =</span> <span class="st">"second"</span>)</span>
-<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_rows</span>(auc_by_age, sens_by_age, spec_by_age) <span class="sc">|&gt;</span></span>
-<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(age_group, .metric, .estimate) <span class="sc">|&gt;</span></span>
-<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> .metric, <span class="at">values_from =</span> .estimate)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(age_group) <span class="sc">|&gt;</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">roc_auc</span>(<span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; # A tibble: 3 × 4
-#&gt;   age_group   roc_auc  sens  spec
-#&gt;   &lt;fct&gt;         &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
-#&gt; 1 21-29         0.817 0.333 0.955
-#&gt; 2 30-39         0.795 0.778 0.769
-#&gt; 3 40 and over   0.744 0.652 0.706</code></pre>
+#&gt;   age_group   .metric .estimator .estimate
+#&gt;   &lt;fct&gt;       &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
+#&gt; 1 21-29       roc_auc binary         0.737
+#&gt; 2 30-39       roc_auc binary         0.8  
+#&gt; 3 40 and over roc_auc binary         0.558</code></pre>
 </div>
 </div>
-<p>The model ranks the youngest patients best (AUC 0.817) but, at the threshold of 0.5, flags only 7 of the 21 young people with diabetes (sensitivity 0.333), against 7 of 9 aged 30-39 and 15 of 23 aged 40 and over. The older groups pay for their higher sensitivity with a lower specificity.</p>
-<p>The plot shows why: the predicted probabilities for each age group, split by whether the patient really has diabetes.</p>
+<p><strong>Question!</strong> Which age group does the model serve worst?</p>
+<p>It depends on the measure. In the youngest group the accuracy looks fine (0.750), but the model catches only 9 of the 24 people with diabetes (sensitivity 0.375); most young people do not have diabetes, so being right about them keeps the accuracy up. In the oldest group it catches 15 of 19, but it has the lowest accuracy (0.588) and an AUC of 0.558, close to the 0.5 of a coin toss. None of this shows in the overall numbers.</p>
+<p>The plot shows the predicted probabilities in each age group, split by whether the patient really has diabetes. Most of the young people with diabetes sit below the 0.5 line.</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> age_group, <span class="at">y =</span> .pred_pos, <span class="at">colour =</span> diabetes)) <span class="sc">+</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>(<span class="at">outlier.shape =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">position =</span> <span class="fu">position_jitterdodge</span>(<span class="at">jitter.width =</span> <span class="fl">0.15</span>, <span class="at">seed =</span> <span class="dv">1</span>), <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.5</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Age group"</span>, <span class="at">y =</span> <span class="st">"Predicted probability of diabetes"</span>, <span class="at">colour =</span> <span class="st">"Diabetes"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> age_group, <span class="at">y =</span> .pred_pos, <span class="at">colour =</span> diabetes)) <span class="sc">+</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>(<span class="at">outlier.shape =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">position =</span> <span class="fu">position_jitterdodge</span>(<span class="at">jitter.width =</span> <span class="fl">0.15</span>, <span class="at">seed =</span> <span class="dv">1</span>), <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.5</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Age group"</span>, <span class="at">y =</span> <span class="st">"Predicted probability of diabetes"</span>, <span class="at">colour =</span> <span class="st">"Diabetes"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day6-04-subgroups_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+<p><img src="day6-04-subgroups_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
 </figure>
 </div>
-</div>
-</div>
-<p><strong>Question!</strong> The youngest group has the best AUC and the lowest sensitivity. How can both be true?</p>
-<p>The AUC only asks whether, <em>within the group</em>, people with diabetes get higher probabilities than people without. They do. But young patients’ probabilities are low across the board, because the model has learned that diabetes is less common in the young, so most of the young people with diabetes still sit below 0.5. A model can rank a group well and still miss most of its cases at a fixed threshold.</p>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>One overall AUC can hide large differences between groups of patients.</li>
-<li>Ranking within a group (AUC) and catching cases at a threshold (sensitivity) are different questions.</li>
-<li>Always report how many patients, and how many with the outcome, each group’s numbers rest on.</li>
-</ul>
 </div>
 </div>
 <hr>
@@ -392,38 +355,53 @@ window.Quarto = {
 <h3 class="anchored" data-anchor-id="part-2-by-bmi-and-how-far-to-trust-a-small-group">Part 2 — By BMI, and how far to trust a small group</h3>
 <p><strong>Your turn.</strong> Do the same with two BMI groups: under 30, and 30 or over (the usual cut-off for obesity).</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>test_preds <span class="ot">&lt;-</span> test_preds <span class="sc">|&gt;</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">bmi_group =</span> <span class="fu">if_else</span>(mass <span class="sc">&lt;</span> ______, <span class="st">"under 30"</span>, <span class="st">"30 and over"</span>))</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(bmi_group) <span class="sc">|&gt;</span></span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">patients =</span> <span class="fu">n</span>(), <span class="at">with_diabetes =</span> <span class="fu">sum</span>(diabetes <span class="sc">==</span> <span class="st">"pos"</span>))</span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_rows</span>(</span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  test_preds <span class="sc">|&gt;</span> <span class="fu">group_by</span>(bmi_group) <span class="sc">|&gt;</span> <span class="fu">roc_auc</span>(<span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>),</span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  test_preds <span class="sc">|&gt;</span> <span class="fu">group_by</span>(bmi_group) <span class="sc">|&gt;</span> <span class="fu">sens</span>(<span class="at">truth =</span> diabetes, <span class="at">estimate =</span> .pred_class, <span class="at">event_level =</span> <span class="st">"second"</span>),</span>
-<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>  test_preds <span class="sc">|&gt;</span> <span class="fu">group_by</span>(______) <span class="sc">|&gt;</span> <span class="fu">spec</span>(<span class="at">truth =</span> diabetes, <span class="at">estimate =</span> .pred_class, <span class="at">event_level =</span> <span class="st">"second"</span>)</span>
-<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
-<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(bmi_group, .metric, .estimate) <span class="sc">|&gt;</span></span>
-<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> .metric, <span class="at">values_from =</span> .estimate)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>test_preds <span class="ot">&lt;-</span> test_preds <span class="sc">|&gt;</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">bmi_group =</span> <span class="fu">if_else</span>(mass <span class="sc">&lt;</span> ______, <span class="st">"under 30"</span>, <span class="st">"30 and over"</span>))</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(bmi_group) <span class="sc">|&gt;</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">patients =</span> <span class="fu">n</span>(),</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">with_diabetes =</span> <span class="fu">sum</span>(diabetes <span class="sc">==</span> <span class="st">"pos"</span>),</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>            <span class="at">caught =</span> <span class="fu">sum</span>(diabetes <span class="sc">==</span> <span class="st">"pos"</span> <span class="sc">&amp;</span> .pred_class <span class="sc">==</span> <span class="st">"pos"</span>),</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>            <span class="at">accuracy =</span> <span class="fu">mean</span>(.pred_class <span class="sc">==</span> diabetes),</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>            <span class="at">sensitivity =</span> caught <span class="sc">/</span> with_diabetes)</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(______) <span class="sc">|&gt;</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">roc_auc</span>(<span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p><strong>How far can we trust these numbers?</strong> The BMI-under-30 group has only 9 patients with diabetes, and so has the 30-39 age group. A sensitivity of 0.333 there is 3 patients out of 9: one more caught would make it 0.444, one fewer 0.222.</p>
-<p>A rough rule: a sensitivity resting on <span class="math inline">\(k\)</span> patients with the outcome moves by <span class="math inline">\(1/k\)</span> for each patient caught or missed, and its uncertainty is of the order of <span class="math inline">\(\sqrt{p(1-p)/k}\)</span>. With <span class="math inline">\(k = 9\)</span> and <span class="math inline">\(p = 0.33\)</span> that is about <span class="math inline">\(\pm 0.16\)</span> for one standard error. Differences between small groups have to be large before they mean anything, and the test set of a teaching dataset is too small to settle questions of fairness; a real audit needs far more patients in each group.</p>
-<p><strong>Question!</strong> Suppose the youngest group’s low sensitivity holds up in a large data set. What could you do about it: change the model, change the threshold for that group, or add a predictor? What would each of these cost?</p>
-<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-3-contents" aria-controls="callout-3" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Stuck?
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-3" class="callout-3-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>BMI is the column <code>mass</code>, and the cut-off is 30. Group by the new column, <code>bmi_group</code>.</p>
+</div>
+</div>
+</div>
+<p><strong>How far can we trust these numbers?</strong> The sensitivity of 0.364 in the BMI-under-30 group rests on 11 people: 4 caught out of 11. One more caught would make it 0.455, one fewer 0.273. With so few people, one patient moves the number a long way, and a different random split could tell a different story. Differences between small groups are a reason to look again with more data, not a finding. That is why the counts always go beside the metrics.</p>
+<div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
+<span class="screen-reader-only">Tip</span>Key points
 </div>
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>Split the test set by clinically meaningful groups and report the numbers of patients, and of patients with the outcome, beside every metric.</li>
-<li>With a handful of patients with the outcome, one patient more or less moves sensitivity a long way; treat differences between small groups as hypotheses, not findings.</li>
+<li>The overall numbers can hide large differences between groups of patients.</li>
+<li>Which group looks worst depends on the measure: accuracy, sensitivity and AUC answer different questions.</li>
+<li>Always report how many patients, and how many with the outcome, each group’s numbers rest on. A few people give unstable numbers.</li>
 </ul>
 </div>
 </div>
@@ -431,127 +409,111 @@ window.Quarto = {
 </div>
 <div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
 <p><a href="code/day6-04-subgroups.ipynb" download="day6-04-subgroups.ipynb"><strong>Download this exercise as a Jupyter notebook (.ipynb)</strong></a>: the text and every code cell of the Python version, including the code for the plots, with the blanks left for you to fill in. Open it in Jupyter or VS Code and run it a cell at a time.</p>
-<section id="packages-and-data-1" class="level3">
-<h3 class="anchored" data-anchor-id="packages-and-data-1">Packages and data</h3>
+<section id="the-model-1" class="level3">
+<h3 class="anchored" data-anchor-id="the-model-1">The model</h3>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Packages for this exercise. If one is missing, install it once from a terminal</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co"># (in a Jupyter notebook, type %pip instead of pip):</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="co"># pip install pandas numpy matplotlib scikit-learn</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.ensemble <span class="im">import</span> RandomForestClassifier</span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> roc_auc_score</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Packages for this exercise. If one is missing, install it once from a terminal</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="co"># (in a Jupyter notebook, type %pip instead of pip):</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="co"># pip install pandas numpy matplotlib scikit-learn</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.model_selection <span class="im">import</span> train_test_split</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.ensemble <span class="im">import</span> RandomForestClassifier</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> accuracy_score, recall_score, roc_auc_score</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The same data (<a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>), split and random forest as Exercises 9.1 to 9.3, with the predicted probability and the predicted class (threshold 0.5) for each test patient.</p>
+<p>The same data (<a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>) and random forest as Exercises 9.1 to 9.3. As always, 80% of the people are used for training and 20% are held back as the test set.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes_clean.csv"</span>)</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes[[<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>, <span class="st">"diabetes"</span>]]</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>diabetes[<span class="st">"diabetes"</span>] <span class="op">=</span> (diabetes[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"pos"</span>).astype(<span class="bu">int</span>)       <span class="co"># 1 = pos, 0 = neg</span></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> diabetes.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> diabetes[<span class="op">~</span>is_test]</span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>test  <span class="op">=</span> diabetes[is_test]</span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>predictors <span class="op">=</span> [<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>]</span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> RandomForestClassifier(n_estimators<span class="op">=</span><span class="dv">500</span>, random_state<span class="op">=</span><span class="dv">1</span>)</span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> rf.fit(train[predictors], train[<span class="st">"diabetes"</span>])</span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>test_preds <span class="op">=</span> test.copy()</span>
-<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>test_preds[<span class="st">"prob"</span>] <span class="op">=</span> rf.predict_proba(test[predictors])[:, <span class="dv">1</span>]   <span class="co"># probability of diabetes</span></span>
-<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>test_preds[<span class="st">"pred"</span>] <span class="op">=</span> rf.predict(test[predictors])               <span class="co"># predicted class, threshold 0.5</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes_clean.csv"</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes[[<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>, <span class="st">"diabetes"</span>]]</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>diabetes[<span class="st">"diabetes"</span>] <span class="op">=</span> (diabetes[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"pos"</span>).astype(<span class="bu">int</span>)       <span class="co"># 1 = pos, 0 = neg</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>predictors <span class="op">=</span> [<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>]</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>train, test <span class="op">=</span> train_test_split(diabetes, test_size<span class="op">=</span><span class="fl">0.2</span>, random_state<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> RandomForestClassifier(n_estimators<span class="op">=</span><span class="dv">500</span>, random_state<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> rf.fit(train[predictors], train[<span class="st">"diabetes"</span>])</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>test_preds <span class="op">=</span> test.copy()</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>test_preds[<span class="st">"prob"</span>] <span class="op">=</span> rf.predict_proba(test[predictors])[:, <span class="dv">1</span>]   <span class="co"># probability of diabetes</span></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>test_preds[<span class="st">"pred"</span>] <span class="op">=</span> rf.predict(test[predictors])               <span class="co"># predicted class, threshold 0.5</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
+<p>Evaluate it once on all the test rows (threshold 0.5):</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"accuracy   "</span>, <span class="bu">round</span>(accuracy_score(test_preds[<span class="st">"diabetes"</span>], test_preds[<span class="st">"pred"</span>]), <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; accuracy    0.713</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"sensitivity"</span>, <span class="bu">round</span>(recall_score(test_preds[<span class="st">"diabetes"</span>], test_preds[<span class="st">"pred"</span>]), <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; sensitivity 0.474</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"AUC        "</span>, <span class="bu">round</span>(roc_auc_score(test_preds[<span class="st">"diabetes"</span>], test_preds[<span class="st">"prob"</span>]), <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; AUC         0.794</code></pre>
+</div>
+</div>
+<p>Accuracy 0.713, sensitivity 0.474, AUC 0.794. These are the overall numbers we will now break down.</p>
 <hr>
 </section>
 <section id="part-1-performance-by-age-group-1" class="level3">
 <h3 class="anchored" data-anchor-id="part-1-performance-by-age-group-1">Part 1 — Performance by age group</h3>
-<p>Put the test patients into three age groups, and count them first:</p>
+<p>Put the test patients into three age groups. The loop takes one group at a time and records the number of patients, the patients with diabetes, how many of those the model catches, the accuracy, the sensitivity and the AUC.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>test_preds[<span class="st">"age_group"</span>] <span class="op">=</span> pd.cut(test_preds[<span class="st">"age"</span>], bins<span class="op">=</span>[<span class="dv">20</span>, <span class="dv">29</span>, <span class="dv">39</span>, np.inf],</span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>                                 labels<span class="op">=</span>[<span class="st">"21-29"</span>, <span class="st">"30-39"</span>, <span class="st">"40 and over"</span>])</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>test_preds.groupby(<span class="st">"age_group"</span>, observed<span class="op">=</span><span class="va">False</span>).agg(</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    patients<span class="op">=</span>(<span class="st">"diabetes"</span>, <span class="st">"size"</span>),</span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    with_diabetes<span class="op">=</span>(<span class="st">"diabetes"</span>, <span class="st">"sum"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>test_preds[<span class="st">"age_group"</span>] <span class="op">=</span> pd.cut(test_preds[<span class="st">"age"</span>], bins<span class="op">=</span>[<span class="dv">20</span>, <span class="dv">29</span>, <span class="dv">39</span>, np.inf],</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>                                 labels<span class="op">=</span>[<span class="st">"21-29"</span>, <span class="st">"30-39"</span>, <span class="st">"40 and over"</span>])</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> []</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> group, patients <span class="kw">in</span> test_preds.groupby(<span class="st">"age_group"</span>, observed<span class="op">=</span><span class="va">True</span>):</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>    rows.append({<span class="st">"age_group"</span>: group,</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"patients"</span>: <span class="bu">len</span>(patients),</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"with_diabetes"</span>: patients[<span class="st">"diabetes"</span>].<span class="bu">sum</span>(),</span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"caught"</span>: ((patients[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="dv">1</span>) <span class="op">&amp;</span> (patients[<span class="st">"pred"</span>] <span class="op">==</span> <span class="dv">1</span>)).<span class="bu">sum</span>(),</span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"accuracy"</span>: accuracy_score(patients[<span class="st">"diabetes"</span>], patients[<span class="st">"pred"</span>]),</span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"sensitivity"</span>: recall_score(patients[<span class="st">"diabetes"</span>], patients[<span class="st">"pred"</span>]),</span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"roc_auc"</span>: roc_auc_score(patients[<span class="st">"diabetes"</span>], patients[<span class="st">"prob"</span>])})</span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(rows).<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt;              patients  with_diabetes
-#&gt; age_group                           
-#&gt; 21-29              88             21
-#&gt; 30-39              22              9
-#&gt; 40 and over        40             23</code></pre>
+<pre><code>#&gt;      age_group  patients  with_diabetes  caught  accuracy  sensitivity  roc_auc
+#&gt; 0        21-29        89             26      10     0.775        0.385    0.803
+#&gt; 1        30-39        25             11       8     0.720        0.727    0.818
+#&gt; 2  40 and over        36             20       9     0.556        0.450    0.669</code></pre>
 </div>
 </div>
-<p>Now three measures in each group: the AUC (how well the model <em>ranks</em> the patients of that group), and at the threshold of 0.5 the sensitivity (the share of the people with diabetes it flags) and the specificity (the share of the people without diabetes it clears). The loop takes one age group at a time.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> []</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> group, patients <span class="kw">in</span> test_preds.groupby(<span class="st">"age_group"</span>, observed<span class="op">=</span><span class="va">False</span>):</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    has_diabetes <span class="op">=</span> patients[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="dv">1</span></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    flagged      <span class="op">=</span> patients[<span class="st">"pred"</span>] <span class="op">==</span> <span class="dv">1</span></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    rows.append({<span class="st">"age_group"</span>: group,</span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"roc_auc"</span>: roc_auc_score(patients[<span class="st">"diabetes"</span>], patients[<span class="st">"prob"</span>]),</span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"sens"</span>: (has_diabetes <span class="op">&amp;</span> flagged).<span class="bu">sum</span>() <span class="op">/</span> has_diabetes.<span class="bu">sum</span>(),</span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"spec"</span>: (<span class="op">~</span>has_diabetes <span class="op">&amp;</span> <span class="op">~</span>flagged).<span class="bu">sum</span>() <span class="op">/</span> (<span class="op">~</span>has_diabetes).<span class="bu">sum</span>()})</span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>by_age <span class="op">=</span> pd.DataFrame(rows)</span>
-<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>by_age.<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt;      age_group  roc_auc   sens   spec
-#&gt; 0        21-29    0.818  0.333  0.955
-#&gt; 1        30-39    0.774  0.778  0.769
-#&gt; 2  40 and over    0.737  0.696  0.588</code></pre>
-</div>
-</div>
-<p>The model ranks the youngest patients best (AUC 0.818) but, at the threshold of 0.5, flags only 7 of the 21 young people with diabetes (sensitivity 0.333), against 7 of 9 aged 30-39 and 16 of 23 aged 40 and over. The older groups pay for their higher sensitivity with a lower specificity.</p>
-<p>The plot shows why: the predicted probabilities for each age group, split by whether the patient really has diabetes.</p>
+<p><strong>Question!</strong> Which age group does the model serve worst?</p>
+<p>It depends on the measure. In the youngest group the accuracy looks fine (0.775), but the model catches only 10 of the 26 people with diabetes (sensitivity 0.385); most young people do not have diabetes, so being right about them keeps the accuracy up. The oldest group has the lowest accuracy (0.556) and the lowest AUC (0.669), and the model catches only 9 of its 20 cases. None of this shows in the overall numbers.</p>
+<p>The plot shows the predicted probabilities in each age group, split by whether the patient really has diabetes. Most of the young people with diabetes sit below the 0.5 line.</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>groups <span class="op">=</span> [<span class="st">"21-29"</span>, <span class="st">"30-39"</span>, <span class="st">"40 and over"</span>]</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">7</span>, <span class="fl">3.5</span>))</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> shift, outcome, colour <span class="kw">in</span> [(<span class="op">-</span><span class="fl">0.2</span>, <span class="dv">0</span>, <span class="st">"tab:blue"</span>), (<span class="fl">0.2</span>, <span class="dv">1</span>, <span class="st">"tab:red"</span>)]:</span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i, group <span class="kw">in</span> <span class="bu">enumerate</span>(groups):</span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>        values <span class="op">=</span> test_preds.loc[(test_preds[<span class="st">"age_group"</span>] <span class="op">==</span> group) <span class="op">&amp;</span></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>                                (test_preds[<span class="st">"diabetes"</span>] <span class="op">==</span> outcome), <span class="st">"prob"</span>]</span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>        ax.boxplot(values, positions<span class="op">=</span>[i <span class="op">+</span> shift], widths<span class="op">=</span><span class="fl">0.3</span>, showfliers<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>        ax.scatter(np.full(<span class="bu">len</span>(values), i <span class="op">+</span> shift), values, color<span class="op">=</span>colour, alpha<span class="op">=</span><span class="fl">0.5</span>,</span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>                   label<span class="op">=</span>(<span class="st">"diabetes"</span> <span class="cf">if</span> outcome <span class="op">==</span> <span class="dv">1</span> <span class="cf">else</span> <span class="st">"no diabetes"</span>) <span class="cf">if</span> i <span class="op">==</span> <span class="dv">0</span> <span class="cf">else</span> <span class="va">None</span>)</span>
-<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>ax.axhline(<span class="fl">0.5</span>, color<span class="op">=</span><span class="st">"black"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>)</span>
-<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>ax.set_xticks(<span class="bu">range</span>(<span class="bu">len</span>(groups)))</span>
-<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>ax.set_xticklabels(groups)</span>
-<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Age group"</span>)</span>
-<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Predicted probability of diabetes"</span>)</span>
-<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>ax.legend(title<span class="op">=</span><span class="st">"Diabetes"</span>, loc<span class="op">=</span><span class="st">"center left"</span>, bbox_to_anchor<span class="op">=</span>(<span class="dv">1</span>, <span class="fl">0.5</span>))</span>
-<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
-<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>groups <span class="op">=</span> [<span class="st">"21-29"</span>, <span class="st">"30-39"</span>, <span class="st">"40 and over"</span>]</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">7</span>, <span class="fl">3.5</span>))</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> shift, outcome, colour <span class="kw">in</span> [(<span class="op">-</span><span class="fl">0.2</span>, <span class="dv">0</span>, <span class="st">"tab:blue"</span>), (<span class="fl">0.2</span>, <span class="dv">1</span>, <span class="st">"tab:red"</span>)]:</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i, group <span class="kw">in</span> <span class="bu">enumerate</span>(groups):</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>        values <span class="op">=</span> test_preds.loc[(test_preds[<span class="st">"age_group"</span>] <span class="op">==</span> group) <span class="op">&amp;</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>                                (test_preds[<span class="st">"diabetes"</span>] <span class="op">==</span> outcome), <span class="st">"prob"</span>]</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>        ax.boxplot(values, positions<span class="op">=</span>[i <span class="op">+</span> shift], widths<span class="op">=</span><span class="fl">0.3</span>, showfliers<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>        ax.scatter(np.full(<span class="bu">len</span>(values), i <span class="op">+</span> shift), values, color<span class="op">=</span>colour, alpha<span class="op">=</span><span class="fl">0.5</span>,</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>                   label<span class="op">=</span>(<span class="st">"diabetes"</span> <span class="cf">if</span> outcome <span class="op">==</span> <span class="dv">1</span> <span class="cf">else</span> <span class="st">"no diabetes"</span>) <span class="cf">if</span> i <span class="op">==</span> <span class="dv">0</span> <span class="cf">else</span> <span class="va">None</span>)</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>ax.axhline(<span class="fl">0.5</span>, color<span class="op">=</span><span class="st">"black"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>)</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>ax.set_xticks(<span class="bu">range</span>(<span class="bu">len</span>(groups)))</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>ax.set_xticklabels(groups)</span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Age group"</span>)</span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Predicted probability of diabetes"</span>)</span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>ax.legend(title<span class="op">=</span><span class="st">"Diabetes"</span>, loc<span class="op">=</span><span class="st">"center left"</span>, bbox_to_anchor<span class="op">=</span>(<span class="dv">1</span>, <span class="fl">0.5</span>))</span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day6-04-subgroups_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="672"></p>
+<p><img src="day6-04-subgroups_files/figure-html/unnamed-chunk-14-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="672"></p>
 </figure>
 </div>
-</div>
-</div>
-<p><strong>Question!</strong> The youngest group has the best AUC and the lowest sensitivity. How can both be true?</p>
-<p>The AUC only asks whether, <em>within the group</em>, people with diabetes get higher probabilities than people without. They do. But young patients’ probabilities are low across the board, because the model has learned that diabetes is less common in the young, so most of the young people with diabetes still sit below 0.5. A model can rank a group well and still miss most of its cases at a fixed threshold.</p>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>One overall AUC can hide large differences between groups of patients.</li>
-<li>Ranking within a group (AUC) and catching cases at a threshold (sensitivity) are different questions.</li>
-<li>Always report how many patients, and how many with the outcome, each group’s numbers rest on.</li>
-</ul>
 </div>
 </div>
 <hr>
@@ -560,38 +522,52 @@ window.Quarto = {
 <h3 class="anchored" data-anchor-id="part-2-by-bmi-and-how-far-to-trust-a-small-group-1">Part 2 — By BMI, and how far to trust a small group</h3>
 <p><strong>Your turn.</strong> Do the same with two BMI groups: under 30, and 30 or over (the usual cut-off for obesity).</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>test_preds[<span class="st">"bmi_group"</span>] <span class="op">=</span> np.where(test_preds[<span class="st">"mass"</span>] <span class="op">&lt;</span> ______, <span class="st">"under 30"</span>, <span class="st">"30 and over"</span>)</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> []</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> group, patients <span class="kw">in</span> test_preds.groupby(______):</span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>    has_diabetes <span class="op">=</span> patients[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="dv">1</span></span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>    flagged      <span class="op">=</span> patients[<span class="st">"pred"</span>] <span class="op">==</span> <span class="dv">1</span></span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    rows.append({<span class="st">"bmi_group"</span>: group,</span>
-<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"patients"</span>: <span class="bu">len</span>(patients),</span>
-<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"with_diabetes"</span>: has_diabetes.<span class="bu">sum</span>(),</span>
-<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"roc_auc"</span>: roc_auc_score(patients[<span class="st">"diabetes"</span>], patients[<span class="st">"prob"</span>]),</span>
-<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"sens"</span>: (has_diabetes <span class="op">&amp;</span> flagged).<span class="bu">sum</span>() <span class="op">/</span> has_diabetes.<span class="bu">sum</span>(),</span>
-<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"spec"</span>: (<span class="op">~</span>has_diabetes <span class="op">&amp;</span> <span class="op">~</span>flagged).<span class="bu">sum</span>() <span class="op">/</span> (<span class="op">~</span>has_diabetes).<span class="bu">sum</span>()})</span>
-<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(rows).<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>test_preds[<span class="st">"bmi_group"</span>] <span class="op">=</span> np.where(test_preds[<span class="st">"mass"</span>] <span class="op">&lt;</span> ______, <span class="st">"under 30"</span>, <span class="st">"30 and over"</span>)</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> []</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> group, patients <span class="kw">in</span> test_preds.groupby(______):</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>    rows.append({<span class="st">"bmi_group"</span>: group,</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"patients"</span>: <span class="bu">len</span>(patients),</span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"with_diabetes"</span>: patients[<span class="st">"diabetes"</span>].<span class="bu">sum</span>(),</span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"caught"</span>: ((patients[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="dv">1</span>) <span class="op">&amp;</span> (patients[<span class="st">"pred"</span>] <span class="op">==</span> <span class="dv">1</span>)).<span class="bu">sum</span>(),</span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"accuracy"</span>: accuracy_score(patients[<span class="st">"diabetes"</span>], patients[<span class="st">"pred"</span>]),</span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"sensitivity"</span>: recall_score(patients[<span class="st">"diabetes"</span>], patients[<span class="st">"pred"</span>]),</span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"roc_auc"</span>: roc_auc_score(patients[<span class="st">"diabetes"</span>], patients[<span class="st">"prob"</span>])})</span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(rows).<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p><strong>How far can we trust these numbers?</strong> The BMI-under-30 group has only 9 patients with diabetes, and so has the 30-39 age group. A sensitivity of 0.333 there is 3 patients out of 9: one more caught would make it 0.444, one fewer 0.222.</p>
-<p>A rough rule: a sensitivity resting on <span class="math inline">\(k\)</span> patients with the outcome moves by <span class="math inline">\(1/k\)</span> for each patient caught or missed, and its uncertainty is of the order of <span class="math inline">\(\sqrt{p(1-p)/k}\)</span>. With <span class="math inline">\(k = 9\)</span> and <span class="math inline">\(p = 0.33\)</span> that is about <span class="math inline">\(\pm 0.16\)</span> for one standard error. Differences between small groups have to be large before they mean anything, and the test set of a teaching dataset is too small to settle questions of fairness; a real audit needs far more patients in each group.</p>
-<p><strong>Question!</strong> Suppose the youngest group’s low sensitivity holds up in a large data set. What could you do about it: change the model, change the threshold for that group, or add a predictor? What would each of these cost?</p>
-<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-5-contents" aria-controls="callout-5" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Stuck?
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-5" class="callout-5-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>BMI is the column <code>mass</code>, and the cut-off is 30. Group by the new column, <code>"bmi_group"</code>.</p>
+</div>
+</div>
+</div>
+<p><strong>How far can we trust these numbers?</strong> The sensitivity of 0.083 in the BMI-under-30 group rests on 12 people: 1 caught out of 12. One more caught would double it to 0.167. With so few people, one patient moves the number a long way, and a different random split could tell a different story. Differences between small groups are a reason to look again with more data, not a finding. That is why the counts always go beside the metrics.</p>
+<div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
+<span class="screen-reader-only">Tip</span>Key points
 </div>
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>Split the test set by clinically meaningful groups and report the numbers of patients, and of patients with the outcome, beside every metric.</li>
-<li>With a handful of patients with the outcome, one patient more or less moves sensitivity a long way; treat differences between small groups as hypotheses, not findings.</li>
+<li>The overall numbers can hide large differences between groups of patients.</li>
+<li>Which group looks worst depends on the measure: accuracy, sensitivity and AUC answer different questions.</li>
+<li>Always report how many patients, and how many with the outcome, each group’s numbers rest on. A few people give unstable numbers.</li>
 </ul>
 </div>
 </div>
@@ -599,24 +575,8 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<section id="stretch" class="level2">
-<h2 class="anchored" data-anchor-id="stretch">Stretch</h2>
-<div class="callout callout-style-simple callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>Stretch — a threshold per group?
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>In the youngest group, find the threshold that gives a sensitivity of at least 0.7 on the test patients (try 0.2, 0.3, 0.4). How many more of the young people without diabetes are now flagged? Why would you need a separate validation set to choose that threshold honestly?</p>
-</div>
-</div>
 
 
-</section>
 
 </main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
