@@ -176,14 +176,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        <nav id="TOC" role="doc-toc" class="toc-active">
-    <h2 id="toc-title">Table of contents</h2>
-   
-  <ul>
-  <li><a href="#stretch" id="toc-stretch" class="nav-link active" data-scroll-target="#stretch">Stretch</a></li>
-  </ul>
-</nav>
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
+        
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
@@ -207,7 +201,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>Exercise 9.1 ranked the variables for the forest as a whole. It said nothing about <em>direction</em> (does a high BMI push the risk up or down?) and nothing about any one patient. <strong>SHAP values</strong> give both. For every patient and every variable they say how much that variable moved this patient’s predicted probability away from the average, and they add up exactly to the prediction. Averaged over patients, they also give a ranking of their own, which we finish by comparing with every other measure, and with the coefficients of a logistic regression.</p>
+<p>Exercise 9.1 ranked the variables for the forest as a whole. It did not say which way a variable pushes the risk, and it said nothing about any one patient. <strong>SHAP values</strong> do both. For every patient and every variable, a SHAP value says how much that variable moved this patient’s predicted probability away from the average prediction.</p>
+<p><strong>Goal.</strong> In this exercise you will:</p>
+<ul>
+<li>compute SHAP values for the test patients and check that they add up to the prediction;</li>
+<li>read two global plots: the mean absolute SHAP bar plot and the beeswarm;</li>
+<li>read the waterfall plot for one patient.</li>
+</ul>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -230,180 +230,138 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 class="anchored" data-anchor-id="packages-and-data">Packages and data</h3>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Packages for this exercise. If one is missing, remove the # and run this line once:</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages(c("tidyverse", "tidymodels", "kernelshap", "ranger", "shapviz", "vip"))</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages(c("tidyverse", "tidymodels", "ranger", "kernelshap", "shapviz"))</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidymodels)</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(vip)                   <span class="co"># impurity importance, as in Exercise 9.1</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(kernelshap)            <span class="co"># computes SHAP values for any model</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(shapviz)               <span class="co"># plots SHAP values</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_bw</span>())          <span class="co"># white background for every plot</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">pillar.sigfig =</span> <span class="dv">3</span>)     <span class="co"># show three significant figures in tables</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(kernelshap)            <span class="co"># computes SHAP values for any model</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(shapviz)               <span class="co"># plots SHAP values</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_bw</span>())          <span class="co"># white background for every plot</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">pillar.sigfig =</span> <span class="dv">3</span>)     <span class="co"># show three significant figures in tables</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The same data (<a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>), split, predictors and random forest as Exercise 9.1.</p>
+<p>The same data (<a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>), outcome and five predictors as Exercise 9.1.</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/diabetes_clean.csv"</span>) <span class="sc">|&gt;</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pregnant, glucose, mass, pedigree, age, diabetes) <span class="sc">|&gt;</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">diabetes =</span> <span class="fu">factor</span>(diabetes, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"neg"</span>, <span class="st">"pos"</span>)))</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>test_rows <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">1</span>, <span class="fu">nrow</span>(diabetes), <span class="at">by =</span> <span class="dv">5</span>)     <span class="co"># every fifth person is held back</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> diabetes[<span class="sc">-</span>test_rows, ]</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> diabetes[test_rows, ]</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>rf_fit <span class="ot">&lt;-</span> <span class="fu">rand_forest</span>(<span class="at">trees =</span> <span class="dv">500</span>) <span class="sc">|&gt;</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"ranger"</span>, <span class="at">importance =</span> <span class="st">"impurity"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(diabetes <span class="sc">~</span> ., <span class="at">data =</span> train)</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>test_preds <span class="ot">&lt;-</span> <span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(test)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">diabetes =</span> <span class="fu">factor</span>(diabetes, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"neg"</span>, <span class="st">"pos"</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
+<p>As always, 80% of the people are used for training and 20% are held back as the test set.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>split <span class="ot">&lt;-</span> <span class="fu">initial_split</span>(diabetes, <span class="at">prop =</span> <span class="fl">0.8</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>train <span class="ot">&lt;-</span> <span class="fu">training</span>(split)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>test  <span class="ot">&lt;-</span> <span class="fu">testing</span>(split)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The same random forest as Exercise 9.1, fitted on the training rows and evaluated once on the test rows.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>rf_spec <span class="ot">&lt;-</span> <span class="fu">rand_forest</span>(<span class="at">trees =</span> <span class="dv">500</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"ranger"</span>, <span class="at">importance =</span> <span class="st">"impurity"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>rf_fit <span class="ot">&lt;-</span> rf_spec <span class="sc">|&gt;</span> <span class="fu">fit</span>(diabetes <span class="sc">~</span> ., <span class="at">data =</span> train)</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>test_preds <span class="ot">&lt;-</span> test <span class="sc">|&gt;</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(<span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test, <span class="at">type =</span> <span class="st">"prob"</span>),</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>            <span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test))</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="fu">roc_auc</span>(test_preds, <span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 1 × 3
+#&gt;   .metric .estimator .estimate
+#&gt;   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
+#&gt; 1 roc_auc binary         0.753</code></pre>
+</div>
+</div>
+<p>The forest reaches a test AUC of 0.753.</p>
 <hr>
 </section>
 <section id="part-1-shap-values-for-the-test-patients" class="level3">
 <h3 class="anchored" data-anchor-id="part-1-shap-values-for-the-test-patients">Part 1 — SHAP values for the test patients</h3>
-<p>SHAP (SHapley Additive exPlanations) borrows an idea from game theory. Think of the five predictors as players who together produce a payout: this patient’s predicted probability, minus the average prediction (the <strong>baseline</strong>). The <strong>Shapley value</strong> of a player is its contribution averaged over every order in which the players could have joined the team. For a variable, that means: how much does the prediction change when we learn this patient’s value of the variable, averaged over all the combinations of the other variables we might already know?</p>
-<p>Shapley values have properties that make them easy to read:</p>
-<ul>
-<li><strong>Additivity (efficiency):</strong> baseline + the SHAP values of all variables = the prediction for that patient, exactly.</li>
-<li><strong>Symmetry:</strong> two variables that contribute the same get the same value.</li>
-<li><strong>Dummy:</strong> a variable that never changes the prediction gets zero.</li>
-</ul>
-<p>A positive SHAP value pushes this patient’s risk <strong>up</strong>; a negative one pushes it <strong>down</strong>.</p>
-<p>In R, <strong>kernelshap</strong> computes SHAP values for any model that can predict. To stand for “a variable we do not know yet” it fills the variable in from a <strong>background</strong> sample of patients; 100 training rows are plenty. With five predictors it can try every combination, so the values are exact for that background. We explain the 150 test patients. Asking <code>predict()</code> for <code>type = "prob"</code> gives SHAP values for both columns, <code>.pred_neg</code> and <code>.pred_pos</code>; <strong>shapviz</strong> stores them, and we keep the ones for <code>.pred_pos</code>. This takes about 15 seconds.</p>
+<p>Start from the <strong>baseline</strong>: the average prediction. A patient’s SHAP values share out the gap between the baseline and that patient’s prediction, one piece per variable. A positive value pushes the risk <strong>up</strong>; a negative value pushes it <strong>down</strong>. Added together, they give the prediction exactly:</p>
+<p><strong>baseline + the SHAP values of all variables = the prediction.</strong></p>
+<p><strong>kernelshap</strong> computes SHAP values for any model. A variable we “do not know” is filled in from a <strong>background</strong> sample of 100 training patients. We explain the 150 test patients, and <strong>shapviz</strong> keeps the values for the probability of <code>pos</code>. This takes about 15 seconds.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>background <span class="ot">&lt;-</span> train <span class="sc">|&gt;</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_sample</span>(<span class="at">n =</span> <span class="dv">100</span>) <span class="sc">|&gt;</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>diabetes)</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>shap_rf <span class="ot">&lt;-</span> <span class="fu">kernelshap</span>(rf_fit, <span class="at">X =</span> test <span class="sc">|&gt;</span> <span class="fu">select</span>(<span class="sc">-</span>diabetes), <span class="at">bg_X =</span> background,</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>                      <span class="at">type =</span> <span class="st">"prob"</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>sv_pos <span class="ot">&lt;-</span> <span class="fu">shapviz</span>(shap_rf)<span class="sc">$</span>.pred_pos       <span class="co"># SHAP values for the probability of pos</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(<span class="fu">get_shap_values</span>(sv_pos))               <span class="co"># one row per patient, one column per predictor</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>background <span class="ot">&lt;-</span> train <span class="sc">|&gt;</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_sample</span>(<span class="at">n =</span> <span class="dv">100</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>diabetes)</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>shap_rf <span class="ot">&lt;-</span> <span class="fu">kernelshap</span>(rf_fit, <span class="at">X =</span> test <span class="sc">|&gt;</span> <span class="fu">select</span>(<span class="sc">-</span>diabetes), <span class="at">bg_X =</span> background,</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>                      <span class="at">type =</span> <span class="st">"prob"</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>sv_pos <span class="ot">&lt;-</span> <span class="fu">shapviz</span>(shap_rf)<span class="sc">$</span>.pred_pos       <span class="co"># SHAP values for the probability of pos</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(<span class="fu">get_shap_values</span>(sv_pos))               <span class="co"># one row per patient, one column per predictor</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; [1] 150   5</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">get_baseline</span>(sv_pos)                       <span class="co"># the average prediction</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">get_baseline</span>(sv_pos)                       <span class="co"># the average prediction</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; [1] 0.4002135</code></pre>
+<pre><code>#&gt; [1] 0.364168</code></pre>
 </div>
 </div>
-<p>The baseline is 0.400: the mean predicted probability over the background patients. (Python’s TreeExplainer averages over all the training rows and gets 0.367; the forests differ too, so the two languages’ SHAP values differ a little.)</p>
-<p><strong>Check additivity</strong> for the first test patient: the baseline plus the five SHAP values should give that patient’s predicted probability.</p>
+<p>The baseline is 0.364. Now check that it adds up for the first test patient.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>patient_shap <span class="ot">&lt;-</span> <span class="fu">get_shap_values</span>(sv_pos)[<span class="dv">1</span>, ]</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>patient_shap</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="fu">get_baseline</span>(sv_pos) <span class="sc">+</span> <span class="fu">______</span>(patient_shap)</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>test_preds<span class="sc">$</span>.pred_pos[<span class="dv">1</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>patient_shap <span class="ot">&lt;-</span> <span class="fu">get_shap_values</span>(sv_pos)[<span class="dv">1</span>, ]</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>patient_shap</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="fu">get_baseline</span>(sv_pos) <span class="sc">+</span> <span class="fu">______</span>(patient_shap)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>test_preds<span class="sc">$</span>.pred_pos[<span class="dv">1</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-2-contents" aria-controls="callout-2" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
+<span class="screen-reader-only">Tip</span>Stuck?
 </div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
+<div id="callout-2" class="callout-2-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<ul>
-<li>A SHAP value is one variable’s contribution to one patient’s prediction, measured from the baseline (the average prediction).</li>
-<li>Baseline + the SHAP values of all variables = the prediction, exactly.</li>
-<li>Positive values push the predicted risk up, negative values push it down.</li>
-</ul>
+<p>You want to add up the five SHAP values in <code>patient_shap</code>. The R function that adds up a vector is <code>sum()</code>.</p>
+</div>
 </div>
 </div>
 <hr>
 </section>
-<section id="part-2-global-summaries-bar-plot-and-beeswarm" class="level3">
-<h3 class="anchored" data-anchor-id="part-2-global-summaries-bar-plot-and-beeswarm">Part 2 — Global summaries: bar plot and beeswarm</h3>
-<p>We now have 150 × 5 SHAP values. Two summaries turn them into a picture of the whole model. The first is the <strong>mean absolute SHAP value</strong> of each variable: how far, on average, the variable moves a patient’s prediction, in either direction. It is a variable importance, in units of probability.</p>
+<section id="part-2-the-global-view-bar-plot-and-beeswarm" class="level3">
+<h3 class="anchored" data-anchor-id="part-2-the-global-view-bar-plot-and-beeswarm">Part 2 — The global view: bar plot and beeswarm</h3>
+<p>We now have 150 × 5 SHAP values. The <strong>mean absolute SHAP value</strong> of a variable says how far, on average, it moves a patient’s prediction, up or down. It is a variable importance, in units of probability.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>shap_importance <span class="ot">&lt;-</span> <span class="fu">get_shap_values</span>(sv_pos) <span class="sc">|&gt;</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">abs</span>() <span class="sc">|&gt;</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">colMeans</span>()</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="fu">sort</span>(shap_importance, <span class="at">decreasing =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">get_shap_values</span>(sv_pos) <span class="sc">|&gt;</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">abs</span>() <span class="sc">|&gt;</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">colMeans</span>() <span class="sc">|&gt;</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">sort</span>(<span class="at">decreasing =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;    glucose       mass        age   pregnant   pedigree 
-#&gt; 0.13861888 0.05699040 0.05698846 0.04405057 0.02577296</code></pre>
+#&gt; 0.16201681 0.06579994 0.05498385 0.04724774 0.02651746</code></pre>
 </div>
 </div>
+<p>Glucose moves a prediction by 0.162 on average. The other four variables move it by between 0.027 and 0.066.</p>
+<p>The bar plot draws the same numbers:</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sv_importance</span>(sv_pos, <span class="at">fill =</span> <span class="st">"steelblue"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sv_importance</span>(sv_pos, <span class="at">fill =</span> <span class="st">"steelblue"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="day6-02-shap_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+<p><img src="day6-02-shap_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
 </figure>
 </div>
 </div>
 </div>
-<p>On average glucose moves a patient’s predicted probability by 0.139; the other four variables by between 0.026 and 0.057. The ranking is close to the permutation importance of Exercise 9.1.</p>
-<p>The second summary, the <strong>beeswarm</strong>, shows every patient. Each dot is one patient’s SHAP value for one variable; the colour is the patient’s value of that variable (from low to high).</p>
+<p>The <strong>beeswarm</strong> shows every patient. Each dot is one patient’s SHAP value for one variable. The colour is the patient’s value of that variable, from low to high.</p>
 <div class="cell" data-layout-align="center">
 <details class="code-fold">
 <summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sv_importance</span>(sv_pos, <span class="at">kind =</span> <span class="st">"beeswarm"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</details>
-<div class="cell-output-display">
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="day6-02-shap_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
-</figure>
-</div>
-</div>
-</div>
-<p><strong>Question!</strong> Read the glucose row of the beeswarm. Where are the patients with high glucose, and where are those with low glucose? Is the same true of age?</p>
-<p>High glucose sits on the right (pushes the risk up) and low glucose on the left. Glucose can move a prediction a long way in either direction: from about −0.3 to about +0.36 in R, and to +0.40 in Python. Age points the same way, older patients mostly on the right, but more weakly (about ±0.2). Nothing told the forest that either relation should go one way; it found the direction in the data, and SHAP makes it visible. This is what a bar of importances cannot show.</p>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>The mean absolute SHAP value of a variable is a global importance, measured in units of the prediction.</li>
-<li>The beeswarm shows, for every patient, how large the contribution is and in which direction, coloured by the variable’s value.</li>
-<li>Unlike impurity or permutation importance, SHAP shows the direction of an effect.</li>
-</ul>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-3-one-patient-the-waterfall-plot" class="level3">
-<h3 class="anchored" data-anchor-id="part-3-one-patient-the-waterfall-plot">Part 3 — One patient: the waterfall plot</h3>
-<p>A <strong>local</strong> explanation answers: <em>why did the model give this patient this risk?</em> Take the first test patient:</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">|&gt;</span></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pregnant, glucose, mass, pedigree, age, diabetes, .pred_pos)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; # A tibble: 1 × 7
-#&gt;   pregnant glucose  mass pedigree   age diabetes .pred_pos
-#&gt;      &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt; &lt;dbl&gt; &lt;fct&gt;        &lt;dbl&gt;
-#&gt; 1        0     194  28.5     0.24    28 neg          0.690</code></pre>
-</div>
-</div>
-<p>A 28-year-old with no pregnancies, a BMI of 28.5 and a glucose of 194 mg/dL, who does <strong>not</strong> have diabetes. The model gives her a probability of 0.69 (0.690 in R, 0.688 in Python). The waterfall plot starts at the baseline at the bottom and adds one SHAP value at a time, up to her prediction at the top:</p>
-<div class="cell" data-layout-align="center">
-<details class="code-fold">
-<summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sv_waterfall</span>(sv_pos, <span class="at">row_id =</span> <span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sv_importance</span>(sv_pos, <span class="at">kind =</span> <span class="st">"beeswarm"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
@@ -413,18 +371,49 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
-<p>Her very high glucose adds about 0.31 (R) or 0.35 (Python) to the baseline; her other values change little. At a threshold of 0.5 she is a false positive, and the explanation says why: the model has learned that a glucose of 194 usually means diabetes. Nothing in the explanation says the model is <em>right</em>; it says what the model did.</p>
-<p>The same information can be drawn as a <strong>force plot</strong> (R: <code>sv_force()</code>; Python: <code>shap.plots.force()</code>): one horizontal bar with the pushes up and down facing each other.</p>
+<p><strong>Question!</strong> In the glucose row, where are the patients with high glucose, and where are those with low glucose?</p>
+<p>High glucose sits on the right: it pushes the risk up, by as much as 0.424. Low glucose sits on the left and pushes it down, by as much as 0.362. The bar plot gives only the size of each effect. The beeswarm also gives its direction, patient by patient.</p>
+<hr>
+</section>
+<section id="part-3-one-patient-the-waterfall-plot" class="level3">
+<h3 class="anchored" data-anchor-id="part-3-one-patient-the-waterfall-plot">Part 3 — One patient: the waterfall plot</h3>
+<p>A <strong>local</strong> explanation answers: <em>why did the model give this patient this risk?</em> Take the first test patient again:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">|&gt;</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pregnant, glucose, mass, pedigree, age, diabetes, .pred_pos)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; # A tibble: 1 × 7
+#&gt;   pregnant glucose  mass pedigree   age diabetes .pred_pos
+#&gt;      &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt; &lt;dbl&gt; &lt;fct&gt;        &lt;dbl&gt;
+#&gt; 1        0     194  28.5     0.24    28 neg          0.706</code></pre>
+</div>
+</div>
+<p>She is 28, with no pregnancies, a BMI of 28.5 and a glucose of 194 mg/dL, and she does <strong>not</strong> have diabetes. The waterfall plot starts at the baseline at the bottom and adds one SHAP value at a time, up to her prediction at the top.</p>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sv_waterfall</span>(sv_pos, <span class="at">row_id =</span> <span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-02-shap_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Read in words: the average patient has a predicted risk of 0.364. Her very high glucose adds 0.353. Her other values change it by 0.035 or less. Her predicted risk is 0.706, so at a threshold of 0.5 she is a false positive. The explanation tells us what the model did, not whether it was right.</p>
 <p><strong>Your turn.</strong> Draw the waterfall for the test patient the model thinks is at <strong>highest</strong> risk.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>highest <span class="ot">&lt;-</span> <span class="fu">which.max</span>(test_preds<span class="sc">$</span>______)     <span class="co"># the row number of the highest probability</span></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span> <span class="fu">slice</span>(highest)</span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="fu">sv_waterfall</span>(sv_pos, <span class="at">row_id =</span> ______)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>highest <span class="ot">&lt;-</span> <span class="fu">which.max</span>(test_preds<span class="sc">$</span>______)     <span class="co"># the row number of the highest probability</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>test_preds <span class="sc">|&gt;</span> <span class="fu">slice</span>(highest)</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="fu">sv_waterfall</span>(sv_pos, <span class="at">row_id =</span> ______)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-4-contents" aria-controls="callout-4" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-3-contents" aria-controls="callout-3" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -433,166 +422,27 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-4" class="callout-4-contents callout-collapse collapse">
+<div id="callout-3" class="callout-3-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p><code>which.max()</code> returns the position of the largest value in a vector; the vector you want is the predicted probability of <code>pos</code>. Then pass that position as <code>row_id</code>.</p>
+<p><code>which.max()</code> returns the position of the largest value in a vector. The vector you want is the predicted probability of <code>pos</code>. Then pass that position as <code>row_id</code>.</p>
 </div>
 </div>
 </div>
-<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
+<span class="screen-reader-only">Tip</span>Key points
 </div>
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>A local explanation breaks one patient’s prediction into contributions that add up from the baseline to the prediction.</li>
-<li>It explains what the model did for this patient, not whether the model was right.</li>
-<li>Different patients can be at high risk for different reasons, which a global ranking cannot show.</li>
-</ul>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-4-logistic-regression-and-all-the-measures-side-by-side" class="level3">
-<h3 class="anchored" data-anchor-id="part-4-logistic-regression-and-all-the-measures-side-by-side">Part 4 — Logistic regression, and all the measures side by side</h3>
-<p>A logistic regression on the same five predictors is a model we can read directly: each coefficient is the change in the log-odds of diabetes for one unit more of that predictor, the others held fixed.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>log_fit <span class="ot">&lt;-</span> <span class="fu">logistic_reg</span>() <span class="sc">|&gt;</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"glm"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fit</span>(diabetes <span class="sc">~</span> ., <span class="at">data =</span> train)</span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="fu">tidy</span>(log_fit)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; # A tibble: 6 × 5
-#&gt;   term        estimate std.error statistic  p.value
-#&gt;   &lt;chr&gt;          &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;
-#&gt; 1 (Intercept)  -7.89     0.745      -10.6  3.59e-26
-#&gt; 2 pregnant      0.0604   0.0374       1.62 1.06e- 1
-#&gt; 3 glucose       0.0320   0.00343      9.34 9.23e-21
-#&gt; 4 mass          0.0659   0.0150       4.41 1.05e- 5
-#&gt; 5 pedigree      0.590    0.263        2.24 2.51e- 2
-#&gt; 6 age           0.0126   0.0120       1.05 2.94e- 1</code></pre>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">predict</span>(log_fit, <span class="at">new_data =</span> test, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(test) <span class="sc">|&gt;</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">roc_auc</span>(<span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; # A tibble: 1 × 3
-#&gt;   .metric .estimator .estimate
-#&gt;   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
-#&gt; 1 roc_auc binary         0.830</code></pre>
-</div>
-</div>
-<p>The logistic regression reaches a test AUC of 0.830, against 0.826 (R) and 0.824 (Python) for the forest: on these five predictors the black box buys little or nothing. Every coefficient is positive: more of each predictor, more risk, the same directions the beeswarm showed.</p>
-<p><strong>Question!</strong> The largest coefficient by far is for the pedigree function (0.590), and the smallest is for age (0.0126). Does that make the pedigree function the most important predictor?</p>
-<p>No.&nbsp;A coefficient is <em>per unit</em>, and the units differ: the pedigree function runs from about 0.1 to 2.4, glucose from about 50 to 200. To put them on a common footing, multiply each coefficient by the standard deviation of its predictor in the training rows: the change in log-odds for <strong>one standard deviation</strong> more.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>predictor_sd <span class="ot">&lt;-</span> train <span class="sc">|&gt;</span></span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>diabetes) <span class="sc">|&gt;</span></span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="fu">across</span>(<span class="fu">everything</span>(), sd)) <span class="sc">|&gt;</span></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">everything</span>(), <span class="at">names_to =</span> <span class="st">"term"</span>, <span class="at">values_to =</span> <span class="st">"sd"</span>)</span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>coefs <span class="ot">&lt;-</span> <span class="fu">tidy</span>(log_fit) <span class="sc">|&gt;</span></span>
-<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(term <span class="sc">!=</span> <span class="st">"(Intercept)"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(predictor_sd, <span class="at">by =</span> <span class="st">"term"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">per_sd =</span> estimate <span class="sc">*</span> ______)</span>
-<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>coefs <span class="sc">|&gt;</span> <span class="fu">select</span>(term, estimate, sd, per_sd)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-<p>Finally, put the four measures side by side: impurity importance and permutation importance (Exercise 9.1), mean absolute SHAP, and the size of the per-SD logistic coefficient. Their units have nothing in common, so divide each by its own largest value: the top variable of each measure scores 1. The permutation loop is the one from Exercise 9.1.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>auc_before <span class="ot">&lt;-</span> <span class="fu">roc_auc</span>(test_preds, <span class="at">truth =</span> diabetes, .pred_pos,</span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>                      <span class="at">event_level =</span> <span class="st">"second"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(.estimate)</span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>perm_results <span class="ot">&lt;-</span> <span class="fu">data.frame</span>()</span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (variable <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>)) {</span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (repeat_number <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">20</span>) {</span>
-<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>    test_shuffled <span class="ot">&lt;-</span> test</span>
-<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>    test_shuffled[[variable]] <span class="ot">&lt;-</span> <span class="fu">sample</span>(test_shuffled[[variable]])</span>
-<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>    auc_after <span class="ot">&lt;-</span> <span class="fu">predict</span>(rf_fit, <span class="at">new_data =</span> test_shuffled, <span class="at">type =</span> <span class="st">"prob"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>      <span class="fu">bind_cols</span>(test_shuffled) <span class="sc">|&gt;</span></span>
-<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>      <span class="fu">roc_auc</span>(<span class="at">truth =</span> diabetes, .pred_pos, <span class="at">event_level =</span> <span class="st">"second"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pull</span>(.estimate)</span>
-<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>    perm_results <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(perm_results,</span>
-<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>                              <span class="fu">data.frame</span>(<span class="at">variable =</span> variable,</span>
-<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>                                     <span class="at">auc_drop =</span> auc_before <span class="sc">-</span> auc_after))</span>
-<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a>comparison <span class="ot">&lt;-</span> <span class="fu">vi</span>(rf_fit) <span class="sc">|&gt;</span></span>
-<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="at">variable =</span> Variable, <span class="at">impurity =</span> Importance) <span class="sc">|&gt;</span></span>
-<span id="cb21-26"><a href="#cb21-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(perm_results <span class="sc">|&gt;</span></span>
-<span id="cb21-27"><a href="#cb21-27" aria-hidden="true" tabindex="-1"></a>              <span class="fu">group_by</span>(variable) <span class="sc">|&gt;</span></span>
-<span id="cb21-28"><a href="#cb21-28" aria-hidden="true" tabindex="-1"></a>              <span class="fu">summarise</span>(<span class="at">permutation =</span> <span class="fu">mean</span>(auc_drop)),</span>
-<span id="cb21-29"><a href="#cb21-29" aria-hidden="true" tabindex="-1"></a>            <span class="at">by =</span> <span class="st">"variable"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb21-30"><a href="#cb21-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(<span class="fu">data.frame</span>(<span class="at">variable =</span> <span class="fu">names</span>(shap_importance), <span class="at">shap =</span> shap_importance),</span>
-<span id="cb21-31"><a href="#cb21-31" aria-hidden="true" tabindex="-1"></a>            <span class="at">by =</span> <span class="st">"variable"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb21-32"><a href="#cb21-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(coefs <span class="sc">|&gt;</span> <span class="fu">select</span>(<span class="at">variable =</span> term, <span class="at">logistic =</span> per_sd),</span>
-<span id="cb21-33"><a href="#cb21-33" aria-hidden="true" tabindex="-1"></a>            <span class="at">by =</span> <span class="st">"variable"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb21-34"><a href="#cb21-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">impurity    =</span> impurity <span class="sc">/</span> <span class="fu">max</span>(impurity),</span>
-<span id="cb21-35"><a href="#cb21-35" aria-hidden="true" tabindex="-1"></a>         <span class="at">permutation =</span> permutation <span class="sc">/</span> <span class="fu">max</span>(permutation),</span>
-<span id="cb21-36"><a href="#cb21-36" aria-hidden="true" tabindex="-1"></a>         <span class="at">shap        =</span> shap <span class="sc">/</span> <span class="fu">max</span>(shap),</span>
-<span id="cb21-37"><a href="#cb21-37" aria-hidden="true" tabindex="-1"></a>         <span class="at">logistic    =</span> <span class="fu">abs</span>(logistic) <span class="sc">/</span> <span class="fu">max</span>(<span class="fu">abs</span>(logistic)))</span>
-<span id="cb21-38"><a href="#cb21-38" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-39"><a href="#cb21-39" aria-hidden="true" tabindex="-1"></a>comparison</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; # A tibble: 5 × 5
-#&gt;   variable impurity permutation  shap logistic
-#&gt;   &lt;chr&gt;       &lt;dbl&gt;       &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt;
-#&gt; 1 glucose     1          1      1        1    
-#&gt; 2 mass        0.550      0.235  0.411    0.457
-#&gt; 3 age         0.488      0.202  0.411    0.147
-#&gt; 4 pedigree    0.475      0.0255 0.186    0.216
-#&gt; 5 pregnant    0.279      0.0721 0.318    0.231</code></pre>
-</div>
-</div>
-<div class="cell" data-layout-align="center">
-<details class="code-fold">
-<summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>comparison <span class="sc">|&gt;</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="sc">-</span>variable, <span class="at">names_to =</span> <span class="st">"measure"</span>, <span class="at">values_to =</span> <span class="st">"relative"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">measure =</span> <span class="fu">factor</span>(measure, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"impurity"</span>, <span class="st">"permutation"</span>,</span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>                                              <span class="st">"shap"</span>, <span class="st">"logistic"</span>))) <span class="sc">|&gt;</span></span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> relative, <span class="at">y =</span> <span class="fu">reorder</span>(variable, relative), <span class="at">fill =</span> measure)) <span class="sc">+</span></span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">position =</span> <span class="st">"dodge"</span>) <span class="sc">+</span></span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Importance relative to the top variable of each measure"</span>,</span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="cn">NULL</span>, <span class="at">fill =</span> <span class="st">"Measure"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</details>
-<div class="cell-output-display">
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="day6-02-shap_files/figure-html/unnamed-chunk-18-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="1050"></p>
-</figure>
-</div>
-</div>
-</div>
-<p>All four put glucose first by a wide margin. Below it they disagree. Impurity importance gives BMI, age and the pedigree function around half of glucose’s score or more; permutation importance gives them a quarter or less, and the pedigree function almost nothing; SHAP lies in between. The logistic regression agrees that BMI comes second but gives age the least weight of all. Age and the number of pregnancies are strongly correlated (0.74), and a model that holds one fixed while moving the other has to share the credit between them in some way; the forest and the logistic regression share it differently.</p>
-<p><strong>Question!</strong> You are asked to report “the most important risk factors” in the model. Which of these measures would you use, and what would you say about the variables below glucose?</p>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>A coefficient is per unit of its predictor; multiply by the predictor’s standard deviation before comparing sizes.</li>
-<li>Impurity importance, permutation importance, mean absolute SHAP and standardised coefficients answer different questions; agreement at the top does not mean agreement below it.</li>
-<li>Say which measure you used, and what question it answers, whenever you report an importance.</li>
+<li>A SHAP value is one variable’s push on one patient’s prediction, up or down from the baseline (the average prediction).</li>
+<li>Baseline + the SHAP values of all variables = the prediction, exactly.</li>
+<li>Mean absolute SHAP ranks the variables; the beeswarm also shows the direction of each effect.</li>
+<li>The waterfall plot explains one patient’s prediction. It says what the model did, not whether the model was right.</li>
 </ul>
 </div>
 </div>
@@ -603,208 +453,77 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="packages-and-data-1" class="level3">
 <h3 class="anchored" data-anchor-id="packages-and-data-1">Packages and data</h3>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Packages for this exercise. If one is missing, install it once from a terminal</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="co"># (in a Jupyter notebook, type %pip instead of pip):</span></span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="co"># pip install pandas numpy matplotlib scikit-learn shap</span></span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> shap</span>
-<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.ensemble <span class="im">import</span> RandomForestClassifier</span>
-<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> LogisticRegression</span>
-<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> roc_auc_score</span>
-<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.inspection <span class="im">import</span> permutation_importance</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Packages for this exercise. If one is missing, install it once from a terminal</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="co"># (in a Jupyter notebook, type %pip instead of pip):</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="co"># pip install pandas numpy matplotlib scikit-learn shap</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> shap</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.model_selection <span class="im">import</span> train_test_split</span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.ensemble <span class="im">import</span> RandomForestClassifier</span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> roc_auc_score</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>The same data (<a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>), split, predictors and random forest as Exercise 9.1.</p>
+<p>The same data (<a href="data/diabetes_clean.csv"><code>data/diabetes_clean.csv</code></a>), outcome and five predictors as Exercise 9.1.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes_clean.csv"</span>)</span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes[[<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>, <span class="st">"diabetes"</span>]]</span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>diabetes[<span class="st">"diabetes"</span>] <span class="op">=</span> (diabetes[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"pos"</span>).astype(<span class="bu">int</span>)       <span class="co"># 1 = pos, 0 = neg</span></span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>is_test <span class="op">=</span> diabetes.index <span class="op">%</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span>               <span class="co"># every fifth person is held back</span></span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> diabetes[<span class="op">~</span>is_test]</span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>test  <span class="op">=</span> diabetes[is_test]</span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>predictors <span class="op">=</span> [<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>]</span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> RandomForestClassifier(n_estimators<span class="op">=</span><span class="dv">500</span>, random_state<span class="op">=</span><span class="dv">1</span>)</span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> rf.fit(train[predictors], train[<span class="st">"diabetes"</span>])</span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>test_prob <span class="op">=</span> rf.predict_proba(test[predictors])[:, <span class="dv">1</span>]    <span class="co"># probability of diabetes</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> pd.read_csv(<span class="st">"data/diabetes_clean.csv"</span>)</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>diabetes <span class="op">=</span> diabetes[[<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>, <span class="st">"diabetes"</span>]]</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>diabetes[<span class="st">"diabetes"</span>] <span class="op">=</span> (diabetes[<span class="st">"diabetes"</span>] <span class="op">==</span> <span class="st">"pos"</span>).astype(<span class="bu">int</span>)       <span class="co"># 1 = pos, 0 = neg</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>predictors <span class="op">=</span> [<span class="st">"pregnant"</span>, <span class="st">"glucose"</span>, <span class="st">"mass"</span>, <span class="st">"pedigree"</span>, <span class="st">"age"</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
+<p>As always, 80% of the people are used for training and 20% are held back as the test set.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>train, test <span class="op">=</span> train_test_split(diabetes, test_size<span class="op">=</span><span class="fl">0.2</span>, random_state<span class="op">=</span><span class="dv">42</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The same random forest as Exercise 9.1, fitted on the training rows and evaluated once on the test rows.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> RandomForestClassifier(n_estimators<span class="op">=</span><span class="dv">500</span>, random_state<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> rf.fit(train[predictors], train[<span class="st">"diabetes"</span>])</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>test_prob <span class="op">=</span> rf.predict_proba(test[predictors])[:, <span class="dv">1</span>]    <span class="co"># probability of diabetes</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"test AUC:"</span>, <span class="bu">round</span>(roc_auc_score(test[<span class="st">"diabetes"</span>], test_prob), <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; test AUC: 0.794</code></pre>
+</div>
+</div>
+<p>The forest reaches a test AUC of 0.794.</p>
 <hr>
 </section>
 <section id="part-1-shap-values-for-the-test-patients-1" class="level3">
 <h3 class="anchored" data-anchor-id="part-1-shap-values-for-the-test-patients-1">Part 1 — SHAP values for the test patients</h3>
-<p>SHAP (SHapley Additive exPlanations) borrows an idea from game theory. Think of the five predictors as players who together produce a payout: this patient’s predicted probability, minus the average prediction (the <strong>baseline</strong>). The <strong>Shapley value</strong> of a player is its contribution averaged over every order in which the players could have joined the team. For a variable, that means: how much does the prediction change when we learn this patient’s value of the variable, averaged over all the combinations of the other variables we might already know?</p>
-<p>Shapley values have properties that make them easy to read:</p>
-<ul>
-<li><strong>Additivity (efficiency):</strong> baseline + the SHAP values of all variables = the prediction for that patient, exactly.</li>
-<li><strong>Symmetry:</strong> two variables that contribute the same get the same value.</li>
-<li><strong>Dummy:</strong> a variable that never changes the prediction gets zero.</li>
-</ul>
-<p>A positive SHAP value pushes this patient’s risk <strong>up</strong>; a negative one pushes it <strong>down</strong>.</p>
-<p>In Python, the <strong>shap</strong> package’s <code>TreeExplainer</code> uses the structure of the trees to compute exact SHAP values quickly, without a background sample: the “unknown” variables are averaged over the training rows that went down each branch. We explain the 150 test patients. The result has one set of values for each class; we keep class 1, diabetes.</p>
+<p>Start from the <strong>baseline</strong>: the average prediction. A patient’s SHAP values share out the gap between the baseline and that patient’s prediction, one piece per variable. A positive value pushes the risk <strong>up</strong>; a negative value pushes it <strong>down</strong>. Added together, they give the prediction exactly:</p>
+<p><strong>baseline + the SHAP values of all variables = the prediction.</strong></p>
+<p>The <strong>shap</strong> package’s <code>TreeExplainer</code> uses the structure of the trees to compute exact SHAP values in under a second. We explain the 150 test patients and keep the values for class 1, diabetes.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>explainer <span class="op">=</span> shap.TreeExplainer(rf)</span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>explanation <span class="op">=</span> explainer(test[predictors])</span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>shap_pos <span class="op">=</span> explanation[:, :, <span class="dv">1</span>]            <span class="co"># SHAP values for class 1 (diabetes)</span></span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"shape:   "</span>, shap_pos.values.shape)  <span class="co"># one row per patient, one column per predictor</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>explainer <span class="op">=</span> shap.TreeExplainer(rf)</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>explanation <span class="op">=</span> explainer(test[predictors])</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>shap_pos <span class="op">=</span> explanation[:, :, <span class="dv">1</span>]            <span class="co"># SHAP values for class 1 (diabetes)</span></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"shape:   "</span>, shap_pos.values.shape)  <span class="co"># one row per patient, one column per predictor</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; shape:    (150, 5)</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"baseline:"</span>, <span class="bu">round</span>(shap_pos.base_values[<span class="dv">0</span>], <span class="dv">3</span>))   <span class="co"># the average prediction</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"baseline:"</span>, <span class="bu">round</span>(shap_pos.base_values[<span class="dv">0</span>], <span class="dv">3</span>))   <span class="co"># the average prediction</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>#&gt; baseline: 0.367</code></pre>
+<pre><code>#&gt; baseline: 0.359</code></pre>
 </div>
 </div>
-<p>The baseline is 0.367: the forest’s average prediction over the training rows. (The R tab fills the unknown variables from a sample of 100 training rows and gets 0.400; the forests differ too, so the two languages’ SHAP values differ a little.)</p>
-<p><strong>Check additivity</strong> for the first test patient: the baseline plus the five SHAP values should give that patient’s predicted probability.</p>
+<p>The baseline is 0.359. Now check that it adds up for the first test patient.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>patient_shap <span class="op">=</span> shap_pos.values[<span class="dv">0</span>]</span>
-<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(np.<span class="bu">round</span>(patient_shap, <span class="dv">3</span>))</span>
-<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(shap_pos.base_values[<span class="dv">0</span>] <span class="op">+</span> patient_shap.______())</span>
-<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(test_prob[<span class="dv">0</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>A SHAP value is one variable’s contribution to one patient’s prediction, measured from the baseline (the average prediction).</li>
-<li>Baseline + the SHAP values of all variables = the prediction, exactly.</li>
-<li>Positive values push the predicted risk up, negative values push it down.</li>
-</ul>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-2-global-summaries-bar-plot-and-beeswarm-1" class="level3">
-<h3 class="anchored" data-anchor-id="part-2-global-summaries-bar-plot-and-beeswarm-1">Part 2 — Global summaries: bar plot and beeswarm</h3>
-<p>We now have 150 × 5 SHAP values. Two summaries turn them into a picture of the whole model. The first is the <strong>mean absolute SHAP value</strong> of each variable: how far, on average, the variable moves a patient’s prediction, in either direction. It is a variable importance, in units of probability.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>shap_importance <span class="op">=</span> pd.Series(np.<span class="bu">abs</span>(shap_pos.values).mean(axis<span class="op">=</span><span class="dv">0</span>), index<span class="op">=</span>predictors)</span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>shap_importance.sort_values(ascending<span class="op">=</span><span class="va">False</span>).<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; glucose     0.136
-#&gt; age         0.064
-#&gt; mass        0.062
-#&gt; pregnant    0.050
-#&gt; pedigree    0.028
-#&gt; dtype: float64</code></pre>
-</div>
-</div>
-<div class="cell" data-layout-align="center">
-<details class="code-fold">
-<summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>shap.plots.bar(shap_pos, show<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
-<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</details>
-<div class="cell-output-display">
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="day6-02-shap_files/figure-html/unnamed-chunk-25-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="768"></p>
-</figure>
-</div>
-</div>
-</div>
-<p>On average glucose moves a patient’s predicted probability by 0.136; the other four variables by between 0.028 and 0.064. The ranking is close to the permutation importance of Exercise 9.1.</p>
-<p>The second summary, the <strong>beeswarm</strong>, shows every patient. Each dot is one patient’s SHAP value for one variable; the colour is the patient’s value of that variable (blue low, red high).</p>
-<div class="cell" data-layout-align="center">
-<details class="code-fold">
-<summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>shap.plots.beeswarm(shap_pos, show<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</details>
-<div class="cell-output-display">
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="day6-02-shap_files/figure-html/unnamed-chunk-26-3.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="768"></p>
-</figure>
-</div>
-</div>
-</div>
-<p><strong>Question!</strong> Read the glucose row of the beeswarm. Where are the patients with high glucose, and where are those with low glucose? Is the same true of age?</p>
-<p>High glucose sits on the right (pushes the risk up) and low glucose on the left. Glucose can move a prediction a long way in either direction: from about −0.3 to about +0.36 in R, and to +0.40 in Python. Age points the same way, older patients mostly on the right, but more weakly (about ±0.2). Nothing told the forest that either relation should go one way; it found the direction in the data, and SHAP makes it visible. This is what a bar of importances cannot show.</p>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>The mean absolute SHAP value of a variable is a global importance, measured in units of the prediction.</li>
-<li>The beeswarm shows, for every patient, how large the contribution is and in which direction, coloured by the variable’s value.</li>
-<li>Unlike impurity or permutation importance, SHAP shows the direction of an effect.</li>
-</ul>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-3-one-patient-the-waterfall-plot-1" class="level3">
-<h3 class="anchored" data-anchor-id="part-3-one-patient-the-waterfall-plot-1">Part 3 — One patient: the waterfall plot</h3>
-<p>A <strong>local</strong> explanation answers: <em>why did the model give this patient this risk?</em> Take the first test patient:</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>patient <span class="op">=</span> test.iloc[[<span class="dv">0</span>]]                   <span class="co"># double brackets keep it a one-row table</span></span>
-<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(patient)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt;    pregnant  glucose  mass  pedigree  age  diabetes
-#&gt; 0         0      194  28.5      0.24   28         0</code></pre>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"predicted probability:"</span>, <span class="bu">round</span>(test_prob[<span class="dv">0</span>], <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; predicted probability: 0.688</code></pre>
-</div>
-</div>
-<p>A 28-year-old with no pregnancies, a BMI of 28.5 and a glucose of 194 mg/dL, who does <strong>not</strong> have diabetes. The model gives her a probability of 0.69 (0.690 in R, 0.688 in Python). The waterfall plot starts at the baseline at the bottom and adds one SHAP value at a time, up to her prediction at the top:</p>
-<div class="cell" data-layout-align="center">
-<details class="code-fold">
-<summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>shap.plots.waterfall(shap_pos[<span class="dv">0</span>], show<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
-<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</details>
-<div class="cell-output-display">
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="day6-02-shap_files/figure-html/unnamed-chunk-28-5.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="768"></p>
-</figure>
-</div>
-</div>
-</div>
-<p>Her very high glucose adds about 0.31 (R) or 0.35 (Python) to the baseline; her other values change little. At a threshold of 0.5 she is a false positive, and the explanation says why: the model has learned that a glucose of 194 usually means diabetes. Nothing in the explanation says the model is <em>right</em>; it says what the model did.</p>
-<p>The same information can be drawn as a <strong>force plot</strong> (R: <code>sv_force()</code>; Python: <code>shap.plots.force()</code>): one horizontal bar with the pushes up and down facing each other.</p>
-<p><strong>Your turn.</strong> Draw the waterfall for the test patient the model thinks is at <strong>highest</strong> risk.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>highest <span class="op">=</span> test_prob.______()                <span class="co"># the position of the highest probability</span></span>
-<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(test.iloc[[highest]])</span>
-<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>shap.plots.waterfall(shap_pos[______], show<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
-<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>patient_shap <span class="op">=</span> shap_pos.values[<span class="dv">0</span>]</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(np.<span class="bu">round</span>(patient_shap, <span class="dv">3</span>))</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(shap_pos.base_values[<span class="dv">0</span>] <span class="op">+</span> patient_shap.______())</span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(test_prob[<span class="dv">0</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-9-contents" aria-controls="callout-9" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-5-contents" aria-controls="callout-5" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -813,127 +532,140 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-9" class="callout-9-contents callout-collapse collapse">
+<div id="callout-5" class="callout-5-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>You want to add up the five SHAP values in <code>patient_shap</code>. NumPy arrays have a <code>.sum()</code> method.</p>
+</div>
+</div>
+</div>
+<hr>
+</section>
+<section id="part-2-the-global-view-bar-plot-and-beeswarm-1" class="level3">
+<h3 class="anchored" data-anchor-id="part-2-the-global-view-bar-plot-and-beeswarm-1">Part 2 — The global view: bar plot and beeswarm</h3>
+<p>We now have 150 × 5 SHAP values. The <strong>mean absolute SHAP value</strong> of a variable says how far, on average, it moves a patient’s prediction, up or down. It is a variable importance, in units of probability.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>shap_importance <span class="op">=</span> pd.Series(np.<span class="bu">abs</span>(shap_pos.values).mean(axis<span class="op">=</span><span class="dv">0</span>), index<span class="op">=</span>predictors)</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>shap_importance.sort_values(ascending<span class="op">=</span><span class="va">False</span>).<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; glucose     0.159
+#&gt; age         0.066
+#&gt; mass        0.060
+#&gt; pregnant    0.049
+#&gt; pedigree    0.034
+#&gt; dtype: float64</code></pre>
+</div>
+</div>
+<p>Glucose moves a prediction by 0.159 on average. The other four variables move it by between 0.034 and 0.066.</p>
+<p>The bar plot draws the same numbers:</p>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>shap.plots.bar(shap_pos, show<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-02-shap_files/figure-html/unnamed-chunk-24-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="768"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>The <strong>beeswarm</strong> shows every patient. Each dot is one patient’s SHAP value for one variable. The colour is the patient’s value of that variable, blue low and red high.</p>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>shap.plots.beeswarm(shap_pos, show<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-02-shap_files/figure-html/unnamed-chunk-25-3.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="768"></p>
+</figure>
+</div>
+</div>
+</div>
+<p><strong>Question!</strong> In the glucose row, where are the patients with high glucose, and where are those with low glucose?</p>
+<p>High glucose sits on the right: it pushes the risk up, by as much as 0.480. Low glucose sits on the left and pushes it down, by as much as 0.313. The bar plot gives only the size of each effect. The beeswarm also gives its direction, patient by patient.</p>
+<hr>
+</section>
+<section id="part-3-one-patient-the-waterfall-plot-1" class="level3">
+<h3 class="anchored" data-anchor-id="part-3-one-patient-the-waterfall-plot-1">Part 3 — One patient: the waterfall plot</h3>
+<p>A <strong>local</strong> explanation answers: <em>why did the model give this patient this risk?</em> Take the first test patient again:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>patient <span class="op">=</span> test.iloc[[<span class="dv">0</span>]]                   <span class="co"># double brackets keep it a one-row table</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(patient)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt;      pregnant  glucose  mass  pedigree  age  diabetes
+#&gt; 506         6      115  28.8     0.368   35         0</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"predicted probability:"</span>, <span class="bu">round</span>(test_prob[<span class="dv">0</span>], <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>#&gt; predicted probability: 0.276</code></pre>
+</div>
+</div>
+<p>She is 35, with 6 pregnancies, a BMI of 28.8 and a glucose of 115 mg/dL, and she does <strong>not</strong> have diabetes. The waterfall plot starts at the baseline at the bottom and adds one SHAP value at a time, up to her prediction at the top.</p>
+<div class="cell" data-layout-align="center">
+<details class="code-fold">
+<summary>Code for this plot (optional)</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>shap.plots.waterfall(shap_pos[<span class="dv">0</span>], show<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="day6-02-shap_files/figure-html/unnamed-chunk-27-5.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="768"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Read in words: the average patient has a predicted risk of 0.359. Her ordinary glucose takes 0.139 off. Her age, BMI and pregnancies each add a little (0.032 or less), and her pedigree function takes off 0.021. Her predicted risk is 0.276: below 0.5, so she is correctly predicted as <code>neg</code>.</p>
+<p><strong>Your turn.</strong> Draw the waterfall for the test patient the model thinks is at <strong>highest</strong> risk.</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>highest <span class="op">=</span> test_prob.______()                <span class="co"># the position of the highest probability</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(test.iloc[[highest]])</span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>shap.plots.waterfall(shap_pos[______], show<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-6-contents" aria-controls="callout-6" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Stuck?
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-6" class="callout-6-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <p>NumPy arrays have <code>.argmax()</code>, the position of the largest value. Then use that position to pick the patient out of <code>shap_pos</code>.</p>
 </div>
 </div>
 </div>
-<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
+<span class="screen-reader-only">Tip</span>Key points
 </div>
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>A local explanation breaks one patient’s prediction into contributions that add up from the baseline to the prediction.</li>
-<li>It explains what the model did for this patient, not whether the model was right.</li>
-<li>Different patients can be at high risk for different reasons, which a global ranking cannot show.</li>
-</ul>
-</div>
-</div>
-<hr>
-</section>
-<section id="part-4-logistic-regression-and-all-the-measures-side-by-side-1" class="level3">
-<h3 class="anchored" data-anchor-id="part-4-logistic-regression-and-all-the-measures-side-by-side-1">Part 4 — Logistic regression, and all the measures side by side</h3>
-<p>A logistic regression on the same five predictors is a model we can read directly: each coefficient is the change in the log-odds of diabetes for one unit more of that predictor, the others held fixed.</p>
-<p><code>C=np.inf</code> switches off scikit-learn’s default penalty, so the coefficients match R’s <code>glm</code>.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>log_fit <span class="op">=</span> LogisticRegression(C<span class="op">=</span>np.inf, max_iter<span class="op">=</span><span class="dv">5000</span>)</span>
-<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>log_fit <span class="op">=</span> log_fit.fit(train[predictors], train[<span class="st">"diabetes"</span>])</span>
-<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>coefs <span class="op">=</span> pd.DataFrame({<span class="st">"term"</span>: predictors, <span class="st">"estimate"</span>: log_fit.coef_[<span class="dv">0</span>]})</span>
-<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"intercept:"</span>, <span class="bu">round</span>(log_fit.intercept_[<span class="dv">0</span>], <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; intercept: -7.886</code></pre>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(coefs.<span class="bu">round</span>(<span class="dv">4</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt;        term  estimate
-#&gt; 0  pregnant    0.0604
-#&gt; 1   glucose    0.0320
-#&gt; 2      mass    0.0659
-#&gt; 3  pedigree    0.5903
-#&gt; 4       age    0.0126</code></pre>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>auc_log <span class="op">=</span> roc_auc_score(test[<span class="st">"diabetes"</span>], log_fit.predict_proba(test[predictors])[:, <span class="dv">1</span>])</span>
-<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"test AUC:"</span>, <span class="bu">round</span>(auc_log, <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt; test AUC: 0.83</code></pre>
-</div>
-</div>
-<p>The logistic regression reaches a test AUC of 0.830, against 0.826 (R) and 0.824 (Python) for the forest: on these five predictors the black box buys little or nothing. Every coefficient is positive: more of each predictor, more risk, the same directions the beeswarm showed.</p>
-<p><strong>Question!</strong> The largest coefficient by far is for the pedigree function (0.590), and the smallest is for age (0.0126). Does that make the pedigree function the most important predictor?</p>
-<p>No.&nbsp;A coefficient is <em>per unit</em>, and the units differ: the pedigree function runs from about 0.1 to 2.4, glucose from about 50 to 200. To put them on a common footing, multiply each coefficient by the standard deviation of its predictor in the training rows: the change in log-odds for <strong>one standard deviation</strong> more.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace every ______ below, then run this cell.</span></span>
-<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>coefs[<span class="st">"sd"</span>] <span class="op">=</span> train[predictors].std().values</span>
-<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>coefs[<span class="st">"per_sd"</span>] <span class="op">=</span> coefs[<span class="st">"estimate"</span>] <span class="op">*</span> ______</span>
-<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a>coefs.<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-<p>Finally, put the four measures side by side: impurity importance and permutation importance (Exercise 9.1), mean absolute SHAP, and the size of the per-SD logistic coefficient. Their units have nothing in common, so divide each by its own largest value: the top variable of each measure scores 1.</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb48"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a>perm <span class="op">=</span> permutation_importance(rf, test[predictors], test[<span class="st">"diabetes"</span>],</span>
-<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>                              scoring<span class="op">=</span><span class="st">"roc_auc"</span>, n_repeats<span class="op">=</span><span class="dv">20</span>, random_state<span class="op">=</span><span class="dv">1</span>)</span>
-<span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb48-4"><a href="#cb48-4" aria-hidden="true" tabindex="-1"></a>comparison <span class="op">=</span> pd.DataFrame({</span>
-<span id="cb48-5"><a href="#cb48-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"impurity"</span>:    rf.feature_importances_,</span>
-<span id="cb48-6"><a href="#cb48-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"permutation"</span>: perm.importances_mean,</span>
-<span id="cb48-7"><a href="#cb48-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"shap"</span>:        shap_importance.values,</span>
-<span id="cb48-8"><a href="#cb48-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">"logistic"</span>:    np.<span class="bu">abs</span>(coefs[<span class="st">"per_sd"</span>].values)}, index<span class="op">=</span>predictors)</span>
-<span id="cb48-9"><a href="#cb48-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb48-10"><a href="#cb48-10" aria-hidden="true" tabindex="-1"></a>comparison <span class="op">=</span> comparison <span class="op">/</span> comparison.<span class="bu">max</span>()        <span class="co"># each column divided by its largest value</span></span>
-<span id="cb48-11"><a href="#cb48-11" aria-hidden="true" tabindex="-1"></a>comparison.<span class="bu">round</span>(<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>#&gt;           impurity  permutation  shap  logistic
-#&gt; pregnant      0.33         0.11  0.37      0.23
-#&gt; glucose       1.00         1.00  1.00      1.00
-#&gt; mass          0.68         0.25  0.46      0.46
-#&gt; pedigree      0.63         0.05  0.21      0.22
-#&gt; age           0.58         0.22  0.47      0.15</code></pre>
-</div>
-</div>
-<div class="cell" data-layout-align="center">
-<details class="code-fold">
-<summary>Code for this plot (optional)</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb50"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>ordered <span class="op">=</span> comparison.sort_values(<span class="st">"shap"</span>)</span>
-<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">7</span>, <span class="dv">4</span>))</span>
-<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>ordered.plot(kind<span class="op">=</span><span class="st">"barh"</span>, ax<span class="op">=</span>ax, width<span class="op">=</span><span class="fl">0.8</span>)</span>
-<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Importance relative to the top variable of each measure"</span>)</span>
-<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a>ax.legend(title<span class="op">=</span><span class="st">"Measure"</span>)</span>
-<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
-<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</details>
-<div class="cell-output-display">
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="day6-02-shap_files/figure-html/unnamed-chunk-35-9.png" class="img-fluid quarto-figure quarto-figure-center figure-img" width="672"></p>
-</figure>
-</div>
-</div>
-</div>
-<p>All four put glucose first by a wide margin. Below it they disagree. Impurity importance gives BMI, age and the pedigree function around half of glucose’s score or more; permutation importance gives them a quarter or less, and the pedigree function almost nothing; SHAP lies in between. The logistic regression agrees that BMI comes second but gives age the least weight of all. Age and the number of pregnancies are strongly correlated (0.74), and a model that holds one fixed while moving the other has to share the credit between them in some way; the forest and the logistic regression share it differently.</p>
-<p><strong>Question!</strong> You are asked to report “the most important risk factors” in the model. Which of these measures would you use, and what would you say about the variables below glucose?</p>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Learning points
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>A coefficient is per unit of its predictor; multiply by the predictor’s standard deviation before comparing sizes.</li>
-<li>Impurity importance, permutation importance, mean absolute SHAP and standardised coefficients answer different questions; agreement at the top does not mean agreement below it.</li>
-<li>Say which measure you used, and what question it answers, whenever you report an importance.</li>
+<li>A SHAP value is one variable’s push on one patient’s prediction, up or down from the baseline (the average prediction).</li>
+<li>Baseline + the SHAP values of all variables = the prediction, exactly.</li>
+<li>Mean absolute SHAP ranks the variables; the beeswarm also shows the direction of each effect.</li>
+<li>The waterfall plot explains one patient’s prediction. It says what the model did, not whether the model was right.</li>
 </ul>
 </div>
 </div>
@@ -941,37 +673,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
-<section id="stretch" class="level2">
-<h2 class="anchored" data-anchor-id="stretch">Stretch</h2>
-<div class="callout callout-style-simple callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>Stretch — SHAP values for the logistic regression
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>Compute SHAP values for <code>log_fit</code> instead of the forest (R: <code>kernelshap()</code> with the same background; Python: <code>shap.Explainer(log_fit.predict_proba, train[predictors])</code>). For a model that is a straight line on the log-odds scale, what does the beeswarm look like for glucose? Why are the dots for glucose ordered by colour so neatly?</p>
-</div>
-</div>
-<div class="callout callout-style-simple callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>Stretch — does the background matter?
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>In R, rerun <code>kernelshap()</code> with a background of 20 patients instead of 100, or of 100 patients <em>with</em> diabetes only. What happens to the baseline and to the SHAP values of the first test patient? What does the baseline now stand for?</p>
-</div>
-</div>
 
 
-</section>
 
 </main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">

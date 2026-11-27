@@ -8,10 +8,10 @@ output: html_document
 *Open it in RStudio and run it a chunk at a time. Keep it in the folder that holds your `data` folder. This version has the worked answers filled in.*
 
 Exercises 9.1 and 9.2 used a different package for each explanation. The
-**DALEX** package collects these methods, and more, behind one interface: you
-wrap the fitted model once in an **explainer**, then ask the explainer for
-whatever you want to know. The same package exists in R (with **DALEXtra**
-for tidymodels) and in Python (`dalex`), with the same function names.
+**DALEX** package puts them behind one interface. You wrap the fitted model
+once in an **explainer**, then ask the explainer each question. The package
+exists in R (with **DALEXtra** for tidymodels) and in Python (`dalex`), with
+the same function names.
 
 > **The plots are for looking at**
 >
@@ -32,51 +32,62 @@ theme_set(theme_bw())          # white background for every plot
 options(pillar.sigfig = 3)     # show three significant figures in tables
 ```
 
-------------------------------------------------------------------------
-
-### Part 1 — The model and the explainer
-
-The black box is the random forest of Exercises 9.1 and 9.2: the same data
-([`data/diabetes_clean.csv`](data/diabetes_clean.csv)), split and five predictors. The
-predictors stay in their own units. A forest splits on one variable at a time,
-so it does not need them scaled, and the plots below are easier to read in
-mg/dL and years than in standard deviations.
+The data are the 750 people in
+[`data/diabetes_clean.csv`](data/diabetes_clean.csv), as in Exercises 9.1 and
+9.2. The outcome is `diabetes` (`neg` or `pos`); the predictors are pregnant,
+glucose, mass, pedigree and age, in their own units. As always, 80% of the
+people are used for training and 20% are held back as the test set.
 
 ```{r}
 diabetes <- read_csv("data/diabetes_clean.csv") |>
   select(pregnant, glucose, mass, pedigree, age, diabetes) |>
   mutate(diabetes = factor(diabetes, levels = c("neg", "pos")))
 
-test_rows <- seq(1, nrow(diabetes), by = 5)     # every fifth person is held back
-train <- diabetes[-test_rows, ]
-test  <- diabetes[test_rows, ]
+set.seed(42)
+split <- initial_split(diabetes, prop = 0.8)
+train <- training(split)
+test  <- testing(split)
+```
+
+------------------------------------------------------------------------
+
+### Part 1 — The model and the explainer
+
+The black box is the random forest of Exercises 9.1 and 9.2. Fit it on the
+training rows:
+
+```{r}
+rf_spec <- rand_forest(trees = 500) |>
+  set_engine("ranger", importance = "impurity") |>
+  set_mode("classification")
 
 set.seed(1)
-rf_fit <- rand_forest(trees = 500) |>
-  set_engine("ranger", importance = "impurity") |>
-  set_mode("classification") |>
+rf_fit <- rf_spec |>
   fit(diabetes ~ ., data = train)
 ```
 
-Evaluate it on the test set, with the predicted classes (threshold 0.5):
+Evaluate it once on the test set:
 
 ```{r}
-test_preds <- predict(rf_fit, new_data = test, type = "prob") |>
-  bind_cols(predict(rf_fit, new_data = test)) |>     # adds .pred_class
-  bind_cols(test)
+test_preds <- test |>
+  bind_cols(predict(rf_fit, new_data = test, type = "prob"),
+            predict(rf_fit, new_data = test))
 
-test_preds |>
-  metrics(truth = diabetes, estimate = .pred_class)
+test_preds |> accuracy(truth = diabetes, estimate = .pred_class)
+test_preds |> roc_auc(truth = diabetes, .pred_pos, event_level = "second")
 ```
 
-Accuracy 0.767 and Cohen's kappa 0.459 (kappa is accuracy corrected for
-the agreement expected by chance). The Python forest is grown from different
-random numbers and gets 0.760 and 0.451.
+Accuracy 0.720 and AUC 0.753 on the 150 test patients.
 
 Now wrap the model in an explainer. `explain_tidymodels()` needs the model,
-the predictors of the data to explain it on (the 150 test patients), and the
-true outcome `y` **as numbers, 1 for diabetes and 0 for none**. Give the
-explainer a label; it appears on every result.
+the predictors of the people to explain it on (the test patients), and the
+true outcome `y` **as numbers, 1 for diabetes and 0 for none**.
+
+> **Stuck?**
+>
+> `y` must be 1 for the people with diabetes. Which level of `diabetes` is that?
+> `as.numeric(test$diabetes)` on its own would give 1 and **2** (the positions
+> of the levels), and every explanation would then be wrong.
 
 > **Worked answer**
 
@@ -90,46 +101,23 @@ explainer <- explain_tidymodels(
 )
 ```
 
-> With `verbose = FALSE` the explainer is built silently. Leave that argument
-> out and it prints a report of what it found: the number of rows and columns,
-> and the minimum, mean and maximum of the predicted values. The check that
-> matters, that it predicts the probability of diabetes, is the AUC in the next
-> cell.
-
-> **Stuck?**
->
-> `y` must be 1 for the people with diabetes. Which level of `diabetes` is that?
-> Note that `as.numeric(test$diabetes)` on its own would give 1 and **2** (the
-> positions of the levels), and the explainer would then compare probabilities
-> with the wrong numbers.
-
-Ask the explainer how well the model performs:
+A quick check that the explainer is set up right: its AUC should be the one
+you just computed.
 
 ```{r}
-performance <- model_performance(explainer)
-performance$measures |> as.data.frame()
+model_performance(explainer)$measures |> as.data.frame()
 ```
 
-The AUC, 0.826, is the same as `roc_auc()` gives: a quick check that the
-explainer is using the probability of `pos`. Recall, precision, F1 and
-accuracy use a threshold of 0.5.
-
-> **Learning points**
->
-> - An explainer wraps a fitted model with the data to explain it on and the true outcome; every explanation is then one function call.
-> - The outcome must be numeric, 1 for the event and 0 otherwise; check the explainer's report and the AUC before going on.
+It is, 0.753.
 
 ------------------------------------------------------------------------
 
-### Part 2 — Global: which variables matter?
+### Part 2 — Which variables matter?
 
-`model_parts()` computes the **permutation importance** of Exercise 9.1:
-shuffle one variable, measure how much worse the model gets, repeat
-(10 times by default) and average. DALEX measures "worse" with a **loss**,
-which by default for a classifier is $1 - \text{AUC}$, so a larger loss is a
-worse model. Two reference rows come with the result: `_full_model_`, the loss
-with nothing shuffled, and `_baseline_`, the loss when *every* variable is
-shuffled at once (a model that knows nothing, AUC about 0.5).
+`model_parts()` is the **permutation importance** of Exercise 9.1: shuffle one
+variable in the test set, see how much worse the model gets, repeat 10 times
+and average. DALEX measures "worse" as $1 - \text{AUC}$, so a larger number is
+a worse model. `_full_model_` is the value with nothing shuffled.
 
 ```{r}
 set.seed(1)
@@ -137,81 +125,37 @@ importance_dalex <- model_parts(explainer)
 
 importance_dalex |>
   as.data.frame() |>
-  filter(permutation == 0) |>        # permutation 0 is the average over the 10 shuffles
+  filter(permutation == 0) |>        # permutation 0 is the average of the 10 shuffles
   select(variable, dropout_loss)
 ```
 
-```{r}
-#| fig-height: 3.5
-full_loss <- importance_dalex |>
-  as.data.frame() |>
-  filter(variable == "_full_model_", permutation == 0) |>
-  pull(dropout_loss)
-
-importance_dalex |>
-  as.data.frame() |>
-  filter(permutation > 0, !variable %in% c("_full_model_", "_baseline_")) |>
-  ggplot(aes(x = dropout_loss, y = reorder(variable, dropout_loss))) +
-  geom_boxplot(fill = "coral", alpha = 0.6) +
-  geom_vline(xintercept = full_loss, linetype = "dashed") +
-  labs(x = "1 - AUC after shuffling the variable (dashed: no variable shuffled)",
-       y = NULL, title = "Random forest: permutation importance (DALEX)")
-
-# DALEX's own plot gives the same picture: plot(importance_dalex)
-```
-
-The full model has a loss of 0.174 (an AUC of 0.826). Shuffling glucose
-raises it to 0.334; shuffling any other variable raises it by between
-0.002 (pedigree) and 0.036 (BMI). This is the ranking of Exercise 9.1, Part 3, reached with
+With nothing shuffled the loss is 0.247. Shuffling glucose raises it to
+0.380; shuffling any other variable raises it by 0.033 at most (BMI). Glucose
+is by far the most important variable, as in Exercise 9.1, and here it took
 one line of code.
-
-> **Learning points**
->
-> - `model_parts()` is permutation importance; its loss for a classifier is 1 − AUC, so higher means the model got worse.
-> - `_full_model_` and `_baseline_` frame the result: the loss with nothing shuffled, and with everything shuffled.
 
 ------------------------------------------------------------------------
 
-### Part 3 — How does the prediction change with one variable?
+### Part 3 — How does the prediction change with glucose?
 
-An importance says *how much* a variable matters, not *how*. A
-**partial dependence profile** shows how: set glucose to 60 for every test
-patient, keeping everything else about them as it is, and average the
-predicted probabilities; then set it to 61, and so on, up to 199. The curve of
-these averages is what the model predicts, on average, at each glucose level.
+An importance says *how much* a variable matters, not *how*. For one patient,
+set her glucose to 57, then a little higher, and so on up to 194, keep everything else about
+her as it is, and predict each time. The curve you get is her **ICE profile**
+(individual conditional expectation). The average of the 150 ICE profiles is
+the **partial dependence profile**: what the model predicts, on average, at
+each glucose level. `model_profile()` computes both.
 
-One patient's curve on its own (every other variable held at her values) is
-an **individual conditional expectation (ICE)** or **ceteris-paribus** profile
-("all else being equal"). The partial dependence profile is the average of the
-150 ICE profiles.
+> **Stuck?**
+>
+> Give the name of the variable as a string, in quotes.
+
+> **Worked answer**
 
 ```{r}
 pdp_glucose <- model_profile(explainer, variables = "glucose", type = "partial",
                              N = NULL,                         # use all 150 patients
                              variable_splits_type = "uniform") # an evenly spaced grid
-
-pdp_glucose$agr_profiles |>
-  as.data.frame() |>
-  slice(seq(1, 101, by = 20))          # every 20th of the 101 grid points
 ```
-
-```{r}
-#| fig-height: 3.5
-pdp_glucose$agr_profiles |>
-  ggplot(aes(x = `_x_`, y = `_yhat_`)) +
-  geom_line(colour = "steelblue", linewidth = 1) +
-  labs(x = "Glucose (mg/dL)", y = "Average predicted probability of diabetes",
-       title = "Partial dependence profile: glucose")
-
-# DALEX's own plot: plot(pdp_glucose)
-```
-
-Up to a glucose of about 90 the curve stays between about 0.16 and 0.21. It
-then climbs, gradually up to about 140 and steeply between 140 and 160, to
-about 0.6, and stays between 0.6 and 0.66 above that. A logistic regression would have drawn a smooth S; the forest draws
-steps, because it is made of splits.
-
-Now the ICE profiles behind the average. They are stored in `cp_profiles`:
 
 ```{r}
 #| fig-height: 3.5
@@ -223,54 +167,26 @@ pdp_glucose$cp_profiles |>
             aes(x = `_x_`, y = `_yhat_`, group = NULL),
             colour = "steelblue", linewidth = 1.2) +
   labs(x = "Glucose (mg/dL)", y = "Predicted probability of diabetes",
-       title = "ICE profiles (grey) and their average (blue)")
-
-# DALEX's own plot: plot(pdp_glucose, geom = "profiles")
+       title = "ICE profiles (grey) and partial dependence (blue)")
 ```
 
-**Question!** Do all the grey curves have the same shape as the blue one? What
-would it mean if some went up steeply and others hardly moved?
+**Question!** Describe the blue curve in words. Do all the grey curves have
+the same shape?
 
-They rise in roughly the same place but by very different amounts, and they
-start at different heights. Where ICE curves have different shapes, the effect
-of glucose depends on the patient's other values: an **interaction**. The
-average curve hides that, which is why it is worth drawing both.
-
-**Your turn.** Draw the partial dependence profiles for the pedigree function
-and for age. `model_profile()` takes several variables at once.
-
-> **Worked answer**
-
-```{r}
-pdp_more <- model_profile(explainer, variables = c("pedigree", "age"), type = "partial",
-                          N = NULL, variable_splits_type = "uniform")
-
-pdp_more$agr_profiles |>
-  ggplot(aes(x = `_x_`, y = `_yhat_`)) +
-  geom_line(colour = "steelblue", linewidth = 1) +
-  facet_wrap(~ `_vname_`, scales = "free_x") +
-  labs(x = NULL, y = "Average predicted probability of diabetes")
-```
-
-> In both languages the average prediction rises with the pedigree function,
-> from about 0.3 to about 0.5, most of the rise between 0.5 and 1.3. With age
-> it rises from about 0.25 at 21 to about 0.45 between 40 and 55, then falls
-> back to about 0.35. Only 6 of the 150 test patients are over 60 (and only 3
-> have a pedigree function above 1.2), so the right-hand ends of both curves
-> rest on very few people.
-
-> **Learning points**
->
-> - A partial dependence profile is the average prediction as one variable is moved through its range, everything else about each patient held fixed.
-> - ICE (ceteris-paribus) profiles are the individual curves behind that average; when their shapes differ, the variable interacts with others.
-> - A forest's profiles are step-shaped, because the forest is made of splits.
+Below a glucose of about 100 the average prediction stays low, between 0.14
+and 0.24. It climbs gradually to about 0.40 at 140, rises steeply between 145
+and 157 to about 0.68, and stays between 0.66 and 0.73 above that. The steps
+come from the forest's splits. Every grey curve ends higher than it starts, but they start at different
+heights (from 0.07 to 0.47) and rise by very different amounts (from 0.15 to
+0.75). How much
+glucose matters depends on a patient's other values; the average curve hides
+that.
 
 ------------------------------------------------------------------------
 
-### Part 4 — One patient: break-down and SHAP
+### Part 4 — One patient
 
-`predict_parts()` explains one prediction. Take the first test patient again,
-the 28-year-old with a glucose of 194 from Exercise 9.2.
+`predict_parts()` explains one prediction. Take the first test patient:
 
 ```{r}
 new_observation <- test |>
@@ -281,9 +197,15 @@ new_observation
 predict(explainer, new_observation)          # her predicted probability
 ```
 
-**SHAP**, as in Exercise 9.2. DALEX estimates the Shapley values by adding the
-variables in 25 random orders and averaging each variable's contribution, with
-the 150 test patients as the background:
+Ask for her **SHAP values**, as in Exercise 9.2. DALEX estimates them from 25
+random orders of the variables, with the test patients as the background.
+
+> **Stuck?**
+>
+> The type is a string, the name of the method in lower case. See
+> `?predict_parts`.
+
+> **Worked answer**
 
 ```{r}
 set.seed(1)
@@ -292,95 +214,21 @@ shap_patient <- predict_parts(explainer, new_observation = new_observation,
 
 shap_patient |>
   as.data.frame() |>
-  filter(B == 0) |>                    # B = 0 holds the average over the 25 orders
+  filter(B == 0) |>                    # B = 0 holds the average of the 25 orders
   select(variable, contribution) |>
   arrange(desc(abs(contribution)))
 ```
 
-```{r}
-#| fig-height: 3
-shap_patient |>
-  as.data.frame() |>
-  filter(B == 0) |>
-  ggplot(aes(x = contribution, y = reorder(variable, abs(contribution)),
-             fill = contribution > 0)) +
-  geom_col(show.legend = FALSE) +
-  scale_fill_manual(values = c("steelblue", "firebrick")) +
-  labs(x = "SHAP contribution to the predicted probability", y = NULL,
-       title = "SHAP values for the first test patient (DALEX)")
+She is 28, with a glucose of 194, and the forest gives her 0.706. The
+average prediction over the test patients is 0.379. Her glucose adds +0.361;
+each of the other four variables moves it by 0.04 or less. As
+in Exercise 9.2, the contributions add up from the average to her prediction.
+With `type = "break_down"` DALEX adds the variables in one fixed order instead
+of averaging over many.
 
-# DALEX's own plot, with boxplots over the 25 orders: plot(shap_patient)
-```
-
-Glucose contributes +0.354, much as in Exercise 9.2 (+0.308
-there). The numbers are not identical: the background is the test patients
-rather than 100 training rows, and 25 random orders give an estimate, not the
-exact value.
-
-**Break-down** is the simplest way to share out a prediction: start from the
-average prediction (the *intercept*), add the variables **one at a time** in a
-fixed order, and record how much the average prediction moves at each step.
-SHAP is the average of break-downs over many orders.
-
-> **Worked answer**
-
-```{r}
-breakdown_patient <- predict_parts(explainer, new_observation = new_observation,
-                                   type = "break_down")
-
-breakdown_patient |>
-  as.data.frame() |>
-  select(variable, contribution, cumulative)
-```
-
-> R: the intercept (the mean prediction over the 150 test patients) is 0.340;
-> glucose adds 0.324, then pedigree −0.013, pregnancies +0.019, age +0.076 and
-> BMI −0.055, ending at the prediction, 0.690. Python: intercept 0.338, glucose
-> +0.322, age +0.098, pregnancies −0.001, BMI +0.005, pedigree −0.073, ending
-> at 0.688. DALEX chooses the order itself, most influential first, so glucose
-> comes first in both and gets about the same contribution as its SHAP value.
-> The two forests order the remaining variables differently, and their
-> contributions change with the order.
-
-> **Stuck?**
+> **Key points**
 >
-> The type is written as a string, with an underscore: look at the SHAP cell
-> above and at `?predict_parts`.
-
-**Question!** In the break-down, which variable comes first, and why does the
-order matter? Would age get the same contribution if it were added first?
-
-The contribution of a variable depends on what is already known when it is
-added: knowing that a patient is 28 means something different before and
-after you know her glucose is 194. Break-down picks one order; SHAP averages
-over many, which is why it is the safer summary when variables interact.
-
-All of these explanations, and more, can be browsed together in an
-interactive dashboard:
-
-```{r}
-# Optional, not run here: an interactive dashboard of everything above
-# library(modelStudio)
-# modelStudio(explainer)
-```
-
-> **Learning points**
->
-> - `predict_parts()` explains one prediction; `type = "break_down"` adds the variables in one order, `type = "shap"` averages over many orders.
-> - When variables interact, a break-down depends on the order; SHAP removes that dependence by averaging.
-> - One explainer, four questions: how good is the model, which variables matter, how does the prediction change with a variable, and why did this patient get this prediction.
-
-## Stretch
-
-> **Stretch — explain the logistic regression too**
->
-> Fit the logistic regression of Exercise 9.2 on the same five predictors, wrap
-> it in a second explainer with the label `"Logistic regression"`, and pass both
-> `model_parts()` results (or both `model_profile()` results) to one plot. Where
-> do the two models' glucose profiles agree, and where not?
-
-> **Stretch — more repetitions**
->
-> `model_parts()` uses 10 shuffles per variable by default. Run it with `B = 50`
-> (R) or `B=50` (Python), twice with different seeds. Does the order of
-> pregnancies, age and BMI stay the same?
+> - Wrap the fitted model once in an explainer, with the test patients and `y` coded 1 for diabetes and 0 for none. Every explanation is then one function call.
+> - `model_parts()` is the permutation importance of Exercise 9.1: glucose matters most.
+> - `model_profile()` gives the partial dependence profile (the average) and the ICE profiles (one per patient) for one variable. Read both: the average can hide patients who differ.
+> - `predict_parts()` explains one patient, with SHAP values as in Exercise 9.2.
